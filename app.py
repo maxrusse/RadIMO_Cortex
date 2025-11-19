@@ -164,6 +164,68 @@ DEFAULT_BALANCER = {
 }
 
 
+def _normalize_skill_fallback_entries(entries: Any) -> List[Any]:
+    """Normalize fallback tiers to support strings or nested groups."""
+
+    normalized: List[Any] = []
+    if not isinstance(entries, list):
+        return normalized
+
+    for entry in entries:
+        if isinstance(entry, list):
+            group: List[str] = []
+            seen: set = set()
+            for candidate in entry:
+                if isinstance(candidate, str) and candidate not in seen:
+                    group.append(candidate)
+                    seen.add(candidate)
+            if group:
+                normalized.append(group)
+        elif isinstance(entry, str):
+            normalized.append(entry)
+
+    return normalized
+
+
+def _normalize_modality_fallback_entries(
+    entries: Any,
+    source_modality: str,
+    valid_modalities: List[str],
+) -> List[Any]:
+    normalized: List[Any] = []
+    if not isinstance(entries, list):
+        return normalized
+
+    valid_set = {m.lower(): m for m in valid_modalities}
+    source_key = source_modality.lower()
+
+    def _resolve(value: str) -> Optional[str]:
+        key = value.lower()
+        if key == source_key:
+            return None
+        return valid_set.get(key)
+
+    for entry in entries:
+        if isinstance(entry, list):
+            group: List[str] = []
+            seen: set = set()
+            for candidate in entry:
+                if not isinstance(candidate, str):
+                    continue
+                resolved = _resolve(candidate)
+                if resolved and resolved not in seen:
+                    group.append(resolved)
+                    seen.add(resolved)
+            if group:
+                normalized.append(group)
+        elif isinstance(entry, str):
+            resolved = _resolve(entry)
+            if resolved:
+                normalized.append(resolved)
+
+    return normalized
+
+
 def _coerce_float(value: Any, default: float = 1.0) -> float:
     try:
         return float(value)
@@ -187,39 +249,6 @@ def _load_raw_config() -> Dict[str, Any]:
     except Exception as exc:
         selection_logger.warning("Failed to load config.yaml: %s", exc)
         return {}
-
-
-def _write_predefined_config(final_config: Dict[str, Any], output_path: str = 'config.predefined.yaml') -> None:
-    """Persist the fully merged configuration so operators can reuse it."""
-    try:
-        with open(output_path, 'w', encoding='utf-8') as handle:
-            yaml.safe_dump(final_config, handle, sort_keys=False, allow_unicode=True)
-    except Exception as exc:
-        selection_logger.warning("Unable to write %s: %s", output_path, exc)
-
-
-def ensure_predefined_config(final_config: Dict[str, Any], output_path: str = 'config.predefined.yaml') -> bool:
-    """
-    Ensure the predefined configuration on disk matches ``final_config``.
-
-    Returns ``True`` when the existing file already matches (no rewrite was
-    necessary) and ``False`` when the file had to be created or updated.
-    """
-    disk_config = None
-    try:
-        with open(output_path, 'r', encoding='utf-8') as existing:
-            disk_config = yaml.safe_load(existing) or {}
-    except FileNotFoundError:
-        disk_config = None
-    except Exception as exc:
-        selection_logger.warning("Unable to read %s: %s", output_path, exc)
-        disk_config = None
-
-    if disk_config == final_config:
-        return True
-
-    _write_predefined_config(final_config, output_path)
-    return False
 
 
 def _build_app_config() -> Dict[str, Any]:
@@ -269,7 +298,8 @@ def _build_app_config() -> Dict[str, Any]:
         values.setdefault('optional', False)
         values.setdefault('special', False)
         values.setdefault('always_visible', False)
-        values.setdefault('fallback', DEFAULT_FALLBACK_CHAIN.get(key, []))
+        fallback_value = values.get('fallback', DEFAULT_FALLBACK_CHAIN.get(key, []))
+        values['fallback'] = _normalize_skill_fallback_entries(fallback_value)
         values['display_order'] = _coerce_int(values.get('display_order', 0))
         slug = values.get('slug') or key.lower().replace(' ', '_')
         values['slug'] = slug
@@ -285,11 +315,13 @@ def _build_app_config() -> Dict[str, Any]:
                 merged_fallback = {}
                 all_skills = set(DEFAULT_FALLBACK_CHAIN) | set(value)
                 for skill in all_skills:
-                    merged_fallback[skill] = list(DEFAULT_FALLBACK_CHAIN.get(skill, []))
+                    merged_fallback[skill] = _normalize_skill_fallback_entries(
+                        list(DEFAULT_FALLBACK_CHAIN.get(skill, []))
+                    )
 
                 for skill, overrides in value.items():
                     if isinstance(overrides, list):
-                        merged_fallback[skill] = [str(item) for item in overrides]
+                        merged_fallback[skill] = _normalize_skill_fallback_entries(overrides)
                     else:
                         merged_fallback[skill] = merged_fallback.get(skill, [])
 
@@ -299,20 +331,19 @@ def _build_app_config() -> Dict[str, Any]:
     config['balancer'] = balancer_settings
 
     modality_fallbacks = raw_config.get('modality_fallbacks')
-    normalized_fallbacks: Dict[str, List[str]] = {}
+    normalized_fallbacks: Dict[str, List[Any]] = {}
     if isinstance(modality_fallbacks, dict):
         for mod, fallback_list in modality_fallbacks.items():
-            if not isinstance(fallback_list, list):
-                continue
-            normalized_fallbacks[mod.lower()] = [
-                str(entry).lower() for entry in fallback_list if isinstance(entry, str)
-            ]
+            normalized_fallbacks[mod.lower()] = _normalize_modality_fallback_entries(
+                fallback_list,
+                mod,
+                list(merged_modalities.keys()),
+            )
     config['modality_fallbacks'] = normalized_fallbacks
     return config
 
 
 APP_CONFIG = _build_app_config()
-ensure_predefined_config(APP_CONFIG)
 MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
 allowed_modalities = list(MODALITY_SETTINGS.keys()) or list(DEFAULT_MODALITIES.keys())
@@ -365,24 +396,24 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
 
 SKILL_COLUMNS, SKILL_SLUG_MAP, SKILL_FORM_KEYS, SKILL_TEMPLATES, skill_weights = _build_skill_metadata(SKILL_SETTINGS)
 BALANCER_SETTINGS = APP_CONFIG.get('balancer', DEFAULT_BALANCER)
-BALANCER_FALLBACK_CHAIN = BALANCER_SETTINGS.get('fallback_chain', DEFAULT_FALLBACK_CHAIN)
+raw_balancer_chain = BALANCER_SETTINGS.get('fallback_chain', DEFAULT_FALLBACK_CHAIN)
+BALANCER_FALLBACK_CHAIN = {}
+if isinstance(raw_balancer_chain, dict):
+    for skill, entries in raw_balancer_chain.items():
+        BALANCER_FALLBACK_CHAIN[skill] = _normalize_skill_fallback_entries(entries)
+else:
+    BALANCER_FALLBACK_CHAIN = {k: _normalize_skill_fallback_entries(v) for k, v in DEFAULT_FALLBACK_CHAIN.items()}
+
+BALANCER_SETTINGS['fallback_chain'] = BALANCER_FALLBACK_CHAIN
 RAW_MODALITY_FALLBACKS = APP_CONFIG.get('modality_fallbacks', {})
 MODALITY_FALLBACK_CHAIN = {}
 for mod in allowed_modalities:
     configured = RAW_MODALITY_FALLBACKS.get(mod, RAW_MODALITY_FALLBACKS.get(mod.lower(), []))
-    if not isinstance(configured, list):
-        configured = []
-
-    normalized: List[str] = []
-    for entry in configured:
-        if not isinstance(entry, str):
-            continue
-        entry_lower = entry.lower()
-        if entry_lower == mod:
-            continue
-        if entry_lower in allowed_modalities and entry_lower not in normalized:
-            normalized.append(entry_lower)
-    MODALITY_FALLBACK_CHAIN[mod] = normalized
+    MODALITY_FALLBACK_CHAIN[mod] = _normalize_modality_fallback_entries(
+        configured,
+        mod,
+        allowed_modalities,
+    )
 
 # -----------------------------------------------------------
 # NEW: Global worker data structure for cross-modality tracking
@@ -711,6 +742,34 @@ def attempt_initialize_data(
 # -----------------------------------------------------------
 # Active Data Filtering and Weighted-Selection Logic
 # -----------------------------------------------------------
+def _get_effective_assignment_load(
+    worker: str,
+    column: str,
+    modality: str,
+    skill_counts: Optional[dict] = None,
+) -> float:
+    """Return the worker's current load for the balancer logic.
+
+    A worker may appear "fresh" for the active column even though they have been
+    helping another modality via fallback assignments.  To avoid sending the same
+    person every time, we combine the local skill counter with the global weighted
+    total across all modalities.  The global total already includes the
+    weight/modifier math from ``update_global_assignment`` and therefore reflects
+    the true amount of recent work performed by the canonical worker ID.
+    """
+
+    if skill_counts is None:
+        skill_counts = modality_data[modality]['skill_counts'].get(column, {})
+
+    local_count = skill_counts.get(worker, 0)
+    canonical_id = get_canonical_worker_id(worker)
+    global_weighted_total = get_global_weighted_count(canonical_id)
+
+    # Using max() ensures that any work performed elsewhere (tracked via the
+    # weighted total) counts against the minimum-balancer checks.
+    return max(float(local_count), float(global_weighted_total))
+
+
 def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: str) -> pd.DataFrame:
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
@@ -722,13 +781,20 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if not skill_counts:
         return filtered_df
 
-    prioritized = filtered_df[filtered_df['PPL'].apply(lambda w: skill_counts.get(w, 0) < min_required)]
+    prioritized = filtered_df[
+        filtered_df['PPL'].apply(
+            lambda worker: _get_effective_assignment_load(worker, column, modality, skill_counts)
+            < min_required
+        )
+    ]
     if prioritized.empty:
         return filtered_df
     return prioritized
 
 
 def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modality: str) -> bool:
+    if not isinstance(column, str):
+        return False
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return False
     if not BALANCER_SETTINGS.get('allow_fallback_on_imbalance', True):
@@ -742,7 +808,10 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
     if not skill_counts:
         return False
 
-    worker_counts = [skill_counts.get(worker, 0) for worker in filtered_df['PPL'].unique()]
+    worker_counts = [
+        _get_effective_assignment_load(worker, column, modality, skill_counts)
+        for worker in filtered_df['PPL'].unique()
+    ]
     if len(worker_counts) < 2:
         return False
 
@@ -762,21 +831,39 @@ def _attempt_column_selection(active_df: pd.DataFrame, column: str, modality: st
     if filtered_df.empty:
         return None
     balanced_df = _apply_minimum_balancer(filtered_df, column, modality)
-    if balanced_df.empty:
-        return filtered_df
-    return balanced_df
+    result_df = balanced_df if not balanced_df.empty else filtered_df
+    result_df = result_df.copy()
+    result_df['__skill_source'] = column
+    return result_df
 
 
 def _try_configured_fallback(active_df: pd.DataFrame, current_column: str, modality: str):
     fallback_chain = BALANCER_FALLBACK_CHAIN.get(current_column, [])
     for fallback in fallback_chain:
-        result = _attempt_column_selection(active_df, fallback, modality)
-        if result is not None:
-            return result, fallback
+        if isinstance(fallback, list):
+            combined_frames = []
+            for fallback_column in fallback:
+                result = _attempt_column_selection(active_df, fallback_column, modality)
+                if result is not None:
+                    combined_frames.append(result)
+            if combined_frames:
+                merged = pd.concat(combined_frames, ignore_index=True)
+                if 'PPL' in merged.columns:
+                    merged = merged.drop_duplicates(subset=['PPL'])
+                return merged, fallback
+        else:
+            result = _attempt_column_selection(active_df, fallback, modality)
+            if result is not None:
+                return result, fallback
     return None, current_column
 
 
-def get_active_df_for_role(active_df: pd.DataFrame, role: str, modality: str):
+def get_active_df_for_role(
+    active_df: pd.DataFrame,
+    role: str,
+    modality: str,
+    allow_fallback: bool = True,
+):
     role_map = {
         'normal':  'Normal',
         'notfall': 'Notfall',
@@ -798,17 +885,23 @@ def get_active_df_for_role(active_df: pd.DataFrame, role: str, modality: str):
         filtered_df = None
         used_column = primary_column
 
-    if filtered_df is None:
+    if filtered_df is None and allow_fallback:
         filtered_df, used_column = _try_configured_fallback(active_df, primary_column, modality)
 
-    if filtered_df is None:
-        filtered_df = _attempt_column_selection(active_df, 'Normal', modality)
-        used_column = 'Normal'
+    if filtered_df is None and allow_fallback:
+        normal_df = _attempt_column_selection(active_df, 'Normal', modality)
+        if normal_df is not None:
+            filtered_df = normal_df
+            used_column = 'Normal'
 
     if filtered_df is None:
         return active_df.iloc[0:0], primary_column
 
-    if _should_balance_via_fallback(filtered_df, used_column, modality):
+    if (
+        allow_fallback
+        and isinstance(used_column, str)
+        and _should_balance_via_fallback(filtered_df, used_column, modality)
+    ):
         fallback_df, fallback_column = _try_configured_fallback(active_df, used_column, modality)
         if fallback_df is not None:
             filtered_df = fallback_df
@@ -816,7 +909,12 @@ def get_active_df_for_role(active_df: pd.DataFrame, role: str, modality: str):
 
     return filtered_df, used_column
 
-def _select_worker_for_modality(current_dt: datetime, role='normal', modality=default_modality):
+def _select_worker_for_modality(
+    current_dt: datetime,
+    role='normal',
+    modality=default_modality,
+    allow_fallback: bool = True,
+):
     d = modality_data[modality]
     if d['working_hours_df'] is None:
         selection_logger.info(f"No working hours data for modality {modality}")
@@ -832,7 +930,12 @@ def _select_worker_for_modality(current_dt: datetime, role='normal', modality=de
         selection_logger.info(f"No active workers at time {tnow} for modality {modality}")
         return None
 
-    filtered_df, used_column = get_active_df_for_role(active_df, role, modality)
+    filtered_df, used_column = get_active_df_for_role(
+        active_df,
+        role,
+        modality,
+        allow_fallback=allow_fallback,
+    )
     
     if filtered_df.empty:
         selection_logger.info(f"No workers found for role {role} (using column {used_column}) at time {tnow}")
@@ -862,30 +965,73 @@ def _select_worker_for_modality(current_dt: datetime, role='normal', modality=de
         return None
 
     best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
-    candidate = filtered_df[filtered_df['PPL'] == best_person].iloc[0]
+    candidate = filtered_df[filtered_df['PPL'] == best_person].iloc[0].copy()
+    candidate['__modality_source'] = modality
+    candidate['__selection_ratio'] = weighted_ratio(best_person)
     selection_logger.info(f"Selected candidate: {best_person}")
     return candidate, used_column
 
 
-def get_next_available_worker(current_dt: datetime, role='normal', modality=default_modality):
+def get_next_available_worker(
+    current_dt: datetime,
+    role='normal',
+    modality=default_modality,
+    allow_fallback: bool = True,
+):
     visited = set()
-    search_order = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
 
-    for target_modality in search_order:
+    def _attempt_modality(target_modality: str):
         if target_modality in visited or target_modality not in modality_data:
-            continue
+            return None
         visited.add(target_modality)
-        result = _select_worker_for_modality(current_dt, role, target_modality)
-        if result is not None:
-            candidate, used_column = result
-            if target_modality != modality:
-                selection_logger.info(
-                    "Fallback modality %s used for role %s (requested %s)",
-                    target_modality,
-                    role,
-                    modality,
-                )
-            return candidate, used_column, target_modality
+        result = _select_worker_for_modality(
+            current_dt,
+            role,
+            target_modality,
+            allow_fallback=allow_fallback,
+        )
+        if result is None:
+            return None
+        candidate, used_column = result
+        return candidate, used_column, target_modality
+
+    if allow_fallback:
+        search_order = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
+    else:
+        search_order = [modality]
+
+    for entry in search_order:
+        if isinstance(entry, list):
+            candidate_pool = []
+            for target_modality in entry:
+                attempt = _attempt_modality(target_modality)
+                if attempt is None:
+                    continue
+                candidate, used_column, source_modality = attempt
+                ratio = candidate.get('__selection_ratio', float('inf'))
+                candidate_pool.append((ratio, candidate, used_column, source_modality))
+            if candidate_pool:
+                ratio, candidate, used_column, source_modality = min(candidate_pool, key=lambda item: item[0])
+                if source_modality != modality:
+                    selection_logger.info(
+                        "Fallback modality %s used for role %s (requested %s)",
+                        source_modality,
+                        role,
+                        modality,
+                    )
+                return candidate, used_column, source_modality
+        else:
+            attempt = _attempt_modality(entry)
+            if attempt is not None:
+                candidate, used_column, source_modality = attempt
+                if source_modality != modality:
+                    selection_logger.info(
+                        "Fallback modality %s used for role %s (requested %s)",
+                        source_modality,
+                        role,
+                        modality,
+                    )
+                return candidate, used_column, source_modality
 
     selection_logger.info(
         "No workers available for role %s across modality fallback chain starting with %s",
@@ -1276,30 +1422,55 @@ def assign_worker_api(modality, role):
         return jsonify({"error": "Invalid modality"}), 400
     return _assign_worker(modality, role)
 
-def _assign_worker(modality: str, role: str):
+
+@app.route('/api/<modality>/<role>/strict', methods=['GET'])
+def assign_worker_strict_api(modality, role):
+    modality = modality.lower()
+    if modality not in modality_data:
+        return jsonify({"error": "Invalid modality"}), 400
+    return _assign_worker(modality, role, allow_fallback=False)
+
+def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
     try:
         requested_data = modality_data[modality]
         now = get_local_berlin_now()
-        selection_logger.info(f"Assignment request: modality={modality}, role={role}, time={now.strftime('%H:%M:%S')}")
+        selection_logger.info(
+            "Assignment request: modality=%s, role=%s, strict=%s, time=%s",
+            modality,
+            role,
+            not allow_fallback,
+            now.strftime('%H:%M:%S'),
+        )
 
         with lock:
-            result = get_next_available_worker(now, role=role, modality=modality)
+            result = get_next_available_worker(
+                now,
+                role=role,
+                modality=modality,
+                allow_fallback=allow_fallback,
+            )
             if result is not None:
                 candidate, used_column, source_modality = result
-                actual_skill = used_column or role
                 actual_modality = source_modality or modality
                 d = modality_data[actual_modality]
-                selection_logger.info(
-                    "Selected worker: %s using column %s (modality %s)",
-                    candidate['PPL'],
-                    actual_skill,
-                    actual_modality,
-                )
 
                 candidate = candidate.to_dict() if hasattr(candidate, "to_dict") else dict(candidate)
                 if "PPL" not in candidate:
                     raise ValueError("Candidate row is missing the 'PPL' field")
                 person = candidate['PPL']
+
+                actual_skill = candidate.get('__skill_source')
+                if not actual_skill and isinstance(used_column, str):
+                    actual_skill = used_column
+                if not actual_skill:
+                    actual_skill = role
+
+                selection_logger.info(
+                    "Selected worker: %s using column %s (modality %s)",
+                    person,
+                    actual_skill,
+                    actual_modality,
+                )
 
                 d['draw_counts'][person] = d['draw_counts'].get(person, 0) + 1
                 if actual_skill in SKILL_COLUMNS:
@@ -1349,6 +1520,8 @@ def _assign_worker(modality: str, role: str):
                     "modality_used": actual_modality,
                     "skill_used": actual_skill,
                     "modality_requested": modality,
+                    "fallback_allowed": allow_fallback,
+                    "strict_request": not allow_fallback,
                 }
                 for skill in SKILL_COLUMNS:
                     result_data[skill] = skill_counts.get(skill, {})
@@ -1358,14 +1531,22 @@ def _assign_worker(modality: str, role: str):
                 skill_counts = {skill: empty_counts.copy() for skill in SKILL_COLUMNS}
                 sum_counts = {w: 0 for w in d['draw_counts']}
 
+                message = (
+                    "Bitte nochmal klicken"
+                    if allow_fallback
+                    else "Keine Person in dieser Gruppe verfügbar"
+                )
+
                 result_data = {
                     "Draw Time": now.strftime('%H:%M:%S'),
-                    "Assigned Person": "Bitte nochmal klicken",
+                    "Assigned Person": message,
                     "Summe": sum_counts,
                     "Global": {},
                     "modality_requested": modality,
                     "modality_used": None,
                     "skill_used": None,
+                    "fallback_allowed": allow_fallback,
+                    "strict_request": not allow_fallback,
                 }
                 for skill in SKILL_COLUMNS:
                     result_data[skill] = skill_counts.get(skill, {})

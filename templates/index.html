@@ -113,6 +113,12 @@
       margin-bottom: 1rem;
     }
 
+    .skill-button-wrapper {
+      display: flex;
+      width: 100%;
+      gap: 0.4rem;
+    }
+
     .btn {
       border: none;
       border-radius: 8px;
@@ -147,6 +153,22 @@
       min-height: 60px;
       font-size: 1.8rem;
       padding: 1rem;
+    }
+
+    .skill-main-btn {
+      flex: 1 1 66%;
+    }
+
+    .skill-strict-btn {
+      flex: 0 0 34%;
+      min-height: 120px;
+      font-size: 1.4rem;
+      padding: 0.5rem;
+      background: var(--btn-bg, var(--primary-color));
+      filter: brightness(0.85);
+      color: #fff;
+      font-weight: 700;
+      border: 2px dashed rgba(255, 255, 255, 0.6);
     }
     
     .result-panel {
@@ -262,14 +284,21 @@
         {% if skill.optional and not available_specialties.get(skill.slug, False) %}
           {% set style_parts = style_parts + ['display: none;'] %}
         {% endif %}
-        <button id="skill-btn-{{ skill.slug }}"
-          data-skill-name="{{ skill.name }}"
-          data-skill-slug="{{ skill.slug }}"
-          onclick="getNextAssignment('{{ skill.name }}')"
-          class="btn assignment-btn {% if skill.special %}special-btn{% endif %}"
-          style="{{ '; '.join(style_parts) }}">
-          {{ skill.label }}
-        </button>
+        <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}" style="{{ '; '.join(style_parts) }}">
+          <button id="skill-btn-{{ skill.slug }}"
+            data-skill-name="{{ skill.name }}"
+            onclick="getNextAssignment('{{ skill.name }}')"
+            class="btn assignment-btn skill-main-btn {% if skill.special %}special-btn{% endif %}">
+            {{ skill.label }}
+          </button>
+          <button type="button"
+            class="btn assignment-btn skill-strict-btn"
+            onclick="getNextAssignment('{{ skill.name }}', true)"
+            aria-label="Nur diese Gruppe (kein Fallback)"
+            title="Nur diese Gruppe">
+            *
+          </button>
+        </div>
       {% endfor %}
     </div>
     <div id="result"></div>
@@ -338,10 +367,10 @@
     let currentModality = "{{ modality }}";
     
     const skillButtonMap = {};
-    document.querySelectorAll('.assignment-btn').forEach(button => {
-      const slug = button.dataset.skillSlug;
+    document.querySelectorAll('.skill-button-wrapper').forEach(wrapper => {
+      const slug = wrapper.dataset.skillSlug;
       if (slug) {
-        skillButtonMap[slug] = button;
+        skillButtonMap[slug] = wrapper;
       }
     });
 
@@ -355,17 +384,20 @@
         .then(response => response.json())
         .then(data => {
           for (const [slug, isAvailable] of Object.entries(data.available_buttons)) {
-            const button = skillButtonMap[slug];
-            if (button) button.style.display = isAvailable ? '' : 'none';
+            const wrapper = skillButtonMap[slug];
+            if (wrapper) wrapper.style.display = isAvailable ? '' : 'none';
           }
         })
         .catch(e => console.error("Quick reload error:", e));
     }
-    
-    function getNextAssignment(skill) {
+
+    function getNextAssignment(skill, forcePrimary = false) {
       if (requestInProgress) return;
       updateButtonsState(true);
-      fetch(`/api/${currentModality}/${skill}`)
+      const endpoint = forcePrimary
+        ? `/api/${currentModality}/${skill}/strict`
+        : `/api/${currentModality}/${skill}`;
+      fetch(endpoint)
         .then(response => response.json())
         .then(data => {
           if (data['Assigned Person']) {

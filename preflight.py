@@ -13,7 +13,7 @@ except ModuleNotFoundError as exc:
     print("Bitte 'pip install pyyaml' ausführen und den Befehl erneut starten.")
     raise SystemExit(1) from exc
 
-from app import APP_CONFIG, DEFAULT_CONFIG, ensure_predefined_config
+from app import APP_CONFIG, DEFAULT_CONFIG
 
 CheckResult = Tuple[str, str]
 
@@ -39,13 +39,6 @@ def check_config_yaml() -> CheckResult:
     except yaml.YAMLError as exc:
         return 'ERROR', f"config.yaml ist ungültig: {exc}"
     return 'OK', "config.yaml lässt sich erfolgreich laden."
-
-
-def check_predefined_export() -> CheckResult:
-    is_in_sync = ensure_predefined_config(APP_CONFIG)
-    if is_in_sync:
-        return 'OK', "config.predefined.yaml ist auf dem aktuellen Stand."
-    return 'FIXED', "config.predefined.yaml wurde neu geschrieben, um die aktuelle Konfiguration widerzuspiegeln."
 
 
 def check_upload_directory() -> CheckResult:
@@ -74,7 +67,6 @@ def main() -> int:
     _print_header()
     checks: List[Callable[[], CheckResult]] = [
         check_config_yaml,
-        check_predefined_export,
         check_upload_directory,
         check_admin_password,
     ]

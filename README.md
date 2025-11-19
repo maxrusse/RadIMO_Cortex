@@ -16,10 +16,15 @@ teams share staff and overflow logic must be transparent.
 - **Weighted workload tracking** – modifiers, modality factors, and skill
   weights are combined inside `update_global_assignment` to keep global totals
   fair across teams (`app.py`).
+- **Strict group draws** – each skill button exposes a star `*` control that
+  forces the request through `/api/<modality>/<role>/strict`, ensuring no
+  fallback columns or modalities are used when you need a dedicated worker.
 - **Automatic backups & reset flow** – every upload produces a live backup and a
   07:30 CET daily reset consumes scheduled files, guaranteeing recoverability.
-- **REST API** – `/api/<modality>/<role>` drives remote dashboards or bots, and
-  `/api/quick_reload` exposes assignment statistics for tooling integrations.
+- **REST API** – `/api/<modality>/<role>` drives remote dashboards or bots,
+  `/api/<modality>/<role>/strict` enforces "no fallback" pulls for that role,
+  and `/api/quick_reload` exposes assignment statistics for tooling
+  integrations.
 
 ## Running the Application
 
@@ -100,14 +105,15 @@ cross-modality surge absorption. Both behaviors are data-driven via YAML.
   the modular overflow path for `get_next_available_worker`.
 - **admin_password** – protects `/upload` via the simple login form.
 
-Any change to `config.yaml` is merged with defaults and persisted into
-`config.predefined.yaml` for traceability.
+Any change to `config.yaml` is merged with defaults when the app starts, so you
+only have to maintain a single configuration file.
 
 ## API Surface
 
 | Endpoint | Purpose |
 | --- | --- |
 | `/api/<modality>/<role>` | Draws and logs the next worker for the given modality & skill. |
+| `/api/<modality>/<role>/strict` | Same as above but refuses skill/modality fallbacks for the request. |
 | `/api/quick_reload` | Returns live stats, available buttons, and operational check results. |
 | `/timetable` | Visualizes current working-hours windows per modality. |
 
