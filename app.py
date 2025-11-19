@@ -711,6 +711,34 @@ def attempt_initialize_data(
 # -----------------------------------------------------------
 # Active Data Filtering and Weighted-Selection Logic
 # -----------------------------------------------------------
+def _get_effective_assignment_load(
+    worker: str,
+    column: str,
+    modality: str,
+    skill_counts: Optional[dict] = None,
+) -> float:
+    """Return the worker's current load for the balancer logic.
+
+    A worker may appear "fresh" for the active column even though they have been
+    helping another modality via fallback assignments.  To avoid sending the same
+    person every time, we combine the local skill counter with the global weighted
+    total across all modalities.  The global total already includes the
+    weight/modifier math from ``update_global_assignment`` and therefore reflects
+    the true amount of recent work performed by the canonical worker ID.
+    """
+
+    if skill_counts is None:
+        skill_counts = modality_data[modality]['skill_counts'].get(column, {})
+
+    local_count = skill_counts.get(worker, 0)
+    canonical_id = get_canonical_worker_id(worker)
+    global_weighted_total = get_global_weighted_count(canonical_id)
+
+    # Using max() ensures that any work performed elsewhere (tracked via the
+    # weighted total) counts against the minimum-balancer checks.
+    return max(float(local_count), float(global_weighted_total))
+
+
 def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: str) -> pd.DataFrame:
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
@@ -722,7 +750,12 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if not skill_counts:
         return filtered_df
 
-    prioritized = filtered_df[filtered_df['PPL'].apply(lambda w: skill_counts.get(w, 0) < min_required)]
+    prioritized = filtered_df[
+        filtered_df['PPL'].apply(
+            lambda worker: _get_effective_assignment_load(worker, column, modality, skill_counts)
+            < min_required
+        )
+    ]
     if prioritized.empty:
         return filtered_df
     return prioritized
@@ -742,7 +775,10 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
     if not skill_counts:
         return False
 
-    worker_counts = [skill_counts.get(worker, 0) for worker in filtered_df['PPL'].unique()]
+    worker_counts = [
+        _get_effective_assignment_load(worker, column, modality, skill_counts)
+        for worker in filtered_df['PPL'].unique()
+    ]
     if len(worker_counts) < 2:
         return False
 
