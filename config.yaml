@@ -20,8 +20,8 @@ modalities:
     factor: 0.33
 modality_fallbacks:
   xray:
-    - ct
-    - mr
+    - - ct
+      - mr
   ct:
     - mr
   mr: []
@@ -62,7 +62,8 @@ skills:
     display_order: 2
     fallback:
       - Notfall
-      - Normal
+      - - Normal
+        - Herz
     slug: privat
     form_key: privat
   Herz:
@@ -75,8 +76,8 @@ skills:
     always_visible: false
     display_order: 3
     fallback:
-      - Notfall
-      - Normal
+      - - Notfall
+        - Normal
     slug: herz
     form_key: herz
   Msk:
@@ -117,8 +118,8 @@ balancer:
     Notfall:
       - Normal
     Herz:
-      - Notfall
-      - Normal
+      - - Notfall
+        - Normal
     Privat:
       - Notfall
       - Normal

@@ -9,8 +9,8 @@ balancer:
     Notfall:
       - Normal
     Herz:
-      - Notfall
-      - Normal
+      - - Notfall
+        - Normal
     Privat:
       - Notfall
       - Normal
