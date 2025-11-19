@@ -3,6 +3,11 @@
 ## Table of Contents
 1. [Excel File Handling - Complete Analysis](#excel-file-handling---complete-analysis)
 2. [Distribution Logic & Balancing Report](#distribution-logic--balancing-report)
+   - [The Three Selection Paths](#the-three-selection-paths)
+   - [Balancing Mechanisms](#balancing-mechanisms)
+   - [Skill Value System (-1, 0, 1)](#skill-value-system)
+   - [Fallback Mechanisms](#fallback-mechanisms)
+   - [Global Cross-Modality Tracking](#global-cross-modality-tracking)
 3. [Modular Architecture Report](#modular-architecture-report)
 
 ---
@@ -88,6 +93,49 @@ The RadIMO SBZ system manages Excel-based worker schedules with sophisticated fi
         │ 4. Update live       │
         └──────────────────────┘
 ```
+
+---
+
+## 📝 Excel File Structure
+
+### Required Columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| **PPL** | Text | Worker name (unique identifier) |
+| **von** | Time | Shift start time (HH:MM format) |
+| **bis** | Time | Shift end time (HH:MM format) |
+| **Normal** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Notfall** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Privat** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Herz** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Msk** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Chest** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Modifier** | Float | Worker-specific weight modifier (default: 1.0) |
+
+### Skill Value Meanings
+
+- **1** = Active (used for primary requests and fallback)
+- **0** = Passive (only used in fallback, not for primary)
+- **-1** = Excluded (not available in fallback)
+
+See [Skill Value System](#skill-value-system) for detailed explanation and examples.
+
+### Example Excel File
+
+```
+| PPL  | von  | bis  | Normal | Notfall | Privat | Herz | Msk | Chest | Modifier |
+|------|------|------|--------|---------|--------|------|-----|-------|----------|
+| Anna | 8:00 | 16:00|   1    |    1    |   0    |  1   |  1  |   0   |   1.0    |
+| Max  | 8:00 | 16:00|   1    |   -1    |   1    |  0   |  1  |   1   |   1.0    |
+| Lisa | 9:00 | 17:00|   1    |    1    |   1    |  1   |  0  |   1   |   1.1    |
+```
+
+### Sheet Structure
+
+Excel files must contain at minimum:
+- **Tabelle1**: Main worker schedule data (required)
+- **Tabelle2**: Optional info texts/notes (preserved during backup)
 
 ---
 
@@ -775,6 +823,131 @@ Worker C: 5 weighted assignments, 4 hours → ratio = 5/4 = 1.250
 
 Result: Worker C selected (lowest ratio = most available)
 ```
+
+---
+
+## 🎚️ Skill Value System
+
+### Worker Skill Values
+**Location:** Excel files, skill columns (Normal, Notfall, Privat, Herz, Msk, Chest)
+
+Workers can have three different values for each skill column:
+
+| Value | Name | Behavior | Use Case |
+|-------|------|----------|----------|
+| **1** | **Active** | Available for both primary requests AND fallback | Standard worker assignment |
+| **0** | **Passive** | Available ONLY in fallback, NOT for primary requests | Worker can help if needed but shouldn't be first choice |
+| **-1** | **Excluded** | NOT available in fallback (has skill but excluded) | Worker has skill but is reserved/unavailable |
+
+### Selection Logic
+**Function:** `_attempt_column_selection()`
+**Location:** `app.py:830-859`
+
+```python
+def _attempt_column_selection(active_df, column, modality, is_primary=True):
+    if is_primary:
+        # Primary selection: only workers with value >= 1 (active workers)
+        filtered_df = active_df[active_df[column] >= 1]
+    else:
+        # Fallback selection: workers with value >= 0 (includes passive, excludes -1)
+        filtered_df = active_df[active_df[column] >= 0]
+```
+
+### Practical Examples
+
+#### Example 1: Passive Workers (Value = 0)
+```
+Worker: Anna
+Skill: Privat = 0
+
+Request: /api/ct/privat (primary request for Privat)
+Result: Anna NOT selected (value 0 < 1, not active for primary)
+
+Request: /api/ct/herz (primary request for Herz, fallback to Privat)
+Result: Anna CAN be selected (value 0 >= 0, available in fallback)
+```
+
+**Use Case:** Anna knows Privat but prefers other skills. Use her only when no active Privat workers available.
+
+#### Example 2: Excluded Workers (Value = -1)
+```
+Worker: Max
+Skill: Notfall = -1
+
+Request: /api/ct/notfall (primary request for Notfall)
+Result: Max NOT selected (value -1 < 1, not active)
+
+Request: /api/ct/herz (primary request for Herz, fallback to Notfall)
+Result: Max NOT selected (value -1 < 0, excluded from fallback)
+```
+
+**Use Case:** Max has Notfall certification but is currently in training and should not be assigned to Notfall cases.
+
+#### Example 3: Mixed Values
+```
+Workers:
+  - Lisa: Privat = 1  (active)
+  - Tom:  Privat = 0  (passive)
+  - Sara: Privat = -1 (excluded)
+
+Request: /api/ct/privat
+Result: Only Lisa eligible for primary selection
+
+Request: /api/ct/herz → fallback to Privat
+Result: Lisa AND Tom eligible for fallback (Sara excluded)
+```
+
+### Implementation Details
+
+**Primary vs. Fallback Detection:**
+```python
+# In modality_priority and pool_priority strategies:
+for skill_to_try in skill_chain:
+    is_primary_skill = (skill_to_try == primary_skill)  # True only for first skill
+    selection = _attempt_column_selection(
+        active_df,
+        skill_to_try,
+        target_modality,
+        is_primary=is_primary_skill  # Changes filtering behavior
+    )
+```
+
+**Fallback Chain Handling:**
+```python
+# In _try_configured_fallback():
+for fallback_column in fallback_chain:
+    # Always use is_primary=False for fallback chains
+    result = _attempt_column_selection(
+        active_df,
+        fallback_column,
+        modality,
+        is_primary=False  # Allows passive workers (value 0)
+    )
+```
+
+### Configuration in Excel
+
+**Example Excel Structure:**
+```
+| PPL  | von  | bis  | Normal | Notfall | Privat | Herz | Modifier |
+|------|------|------|--------|---------|--------|------|----------|
+| Anna | 8:00 | 16:00|   1    |    1    |   0    |  1   |   1.0    |
+| Max  | 8:00 | 16:00|   1    |   -1    |   1    |  0   |   1.0    |
+| Lisa | 9:00 | 17:00|   1    |    1    |   1    |  1   |   1.0    |
+```
+
+**Interpretation:**
+- **Anna:** Active for Normal, Notfall, Herz; Passive for Privat
+- **Max:** Active for Normal, Privat; Passive for Herz; Excluded from Notfall
+- **Lisa:** Active for all skills
+
+### Benefits
+
+1. **Fine-Grained Control:** Manage worker availability at skill level
+2. **Training Support:** Mark workers as passive (0) during training period
+3. **Temporary Exclusions:** Use -1 for workers on leave or restricted duties
+4. **Fallback Optimization:** Passive workers (0) provide backup without being primary choice
+5. **No Configuration Changes:** All controlled through Excel file values
 
 ---
 

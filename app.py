@@ -827,10 +827,29 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
     return imbalance >= (threshold_pct / 100.0)
 
 
-def _attempt_column_selection(active_df: pd.DataFrame, column: str, modality: str):
+def _attempt_column_selection(active_df: pd.DataFrame, column: str, modality: str, is_primary: bool = True):
+    """
+    Select workers from a specific skill column.
+
+    Skill values:
+    - 1 = Active (available for primary and fallback)
+    - 0 = Passive (only available in fallback, not for primary requests)
+    - -1 = Excluded (has skill but NOT available in fallback)
+
+    Args:
+        is_primary: True if selecting for primary skill, False if selecting for fallback
+    """
     if column not in active_df.columns:
         return None
-    filtered_df = active_df[active_df[column] > 0]
+
+    # Filter based on primary vs fallback mode
+    if is_primary:
+        # Primary selection: only workers with value >= 1 (active workers)
+        filtered_df = active_df[active_df[column] >= 1]
+    else:
+        # Fallback selection: workers with value >= 0 (includes passive, excludes -1)
+        filtered_df = active_df[active_df[column] >= 0]
+
     if filtered_df.empty:
         return None
     balanced_df = _apply_minimum_balancer(filtered_df, column, modality)
@@ -846,7 +865,8 @@ def _try_configured_fallback(active_df: pd.DataFrame, current_column: str, modal
         if isinstance(fallback, list):
             combined_frames = []
             for fallback_column in fallback:
-                result = _attempt_column_selection(active_df, fallback_column, modality)
+                # is_primary=False: fallback mode allows skill value 0
+                result = _attempt_column_selection(active_df, fallback_column, modality, is_primary=False)
                 if result is not None:
                     combined_frames.append(result)
             if combined_frames:
@@ -855,7 +875,8 @@ def _try_configured_fallback(active_df: pd.DataFrame, current_column: str, modal
                     merged = merged.drop_duplicates(subset=['PPL'])
                 return merged, fallback
         else:
-            result = _attempt_column_selection(active_df, fallback, modality)
+            # is_primary=False: fallback mode allows skill value 0
+            result = _attempt_column_selection(active_df, fallback, modality, is_primary=False)
             if result is not None:
                 return result, fallback
     return None, current_column
@@ -880,7 +901,8 @@ def get_active_df_for_role(
         role_lower = 'normal'
     primary_column = role_map[role_lower]
 
-    selection = _attempt_column_selection(active_df, primary_column, modality)
+    # Primary selection: is_primary=True (requires skill value >= 1)
+    selection = _attempt_column_selection(active_df, primary_column, modality, is_primary=True)
     if selection is not None:
         filtered_df = selection
         used_column = primary_column
@@ -892,7 +914,8 @@ def get_active_df_for_role(
         filtered_df, used_column = _try_configured_fallback(active_df, primary_column, modality)
 
     if filtered_df is None and allow_fallback:
-        normal_df = _attempt_column_selection(active_df, 'Normal', modality)
+        # Ultimate fallback to Normal: is_primary=False (allows skill value 0)
+        normal_df = _attempt_column_selection(active_df, 'Normal', modality, is_primary=False)
         if normal_df is not None:
             filtered_df = normal_df
             used_column = 'Normal'
@@ -1111,6 +1134,9 @@ def _get_worker_modality_priority(
             unique_modality_search,
         )
 
+        # Determine if this is primary or fallback mode
+        is_primary_skill = (skill_to_try == primary_skill)
+
         candidate_pool = []
         for target_modality in unique_modality_search:
             d = modality_data[target_modality]
@@ -1126,8 +1152,9 @@ def _get_worker_modality_priority(
             if active_df.empty:
                 continue
 
-            # Try this specific skill in this specific modality (no further fallbacks)
-            selection = _attempt_column_selection(active_df, skill_to_try, target_modality)
+            # Try this specific skill in this specific modality
+            # is_primary=True for requested skill, False for fallbacks
+            selection = _attempt_column_selection(active_df, skill_to_try, target_modality, is_primary=is_primary_skill)
             if selection is None or selection.empty:
                 continue
 
@@ -1243,6 +1270,9 @@ def _get_worker_pool_priority(
     candidate_pool = []
 
     for skill_to_try in skill_chain:
+        # Determine if this is primary or fallback mode
+        is_primary_skill = (skill_to_try == primary_skill)
+
         for target_modality in unique_modality_search:
             d = modality_data[target_modality]
             if d['working_hours_df'] is None:
@@ -1258,7 +1288,8 @@ def _get_worker_pool_priority(
                 continue
 
             # Try this specific skill in this specific modality
-            selection = _attempt_column_selection(active_df, skill_to_try, target_modality)
+            # is_primary=True for requested skill, False for fallbacks
+            selection = _attempt_column_selection(active_df, skill_to_try, target_modality, is_primary=is_primary_skill)
             if selection is None or selection.empty:
                 continue
 
