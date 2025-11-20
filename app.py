@@ -529,6 +529,21 @@ for mod in allowed_modalities:
         'last_reset_date': None
     }
 
+# -----------------------------------------------------------
+# Staged data: separate structure for next-day planning
+# -----------------------------------------------------------
+staged_modality_data = {}
+for mod in allowed_modalities:
+    staged_modality_data[mod] = {
+        'working_hours_df': None,
+        'info_texts': [],
+        'total_work_hours': {},
+        'worker_modifiers': {},
+        'last_uploaded_filename': f"SBZ_{mod.upper()}_staged.xlsx",
+        'staged_file_path': os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"SBZ_{mod.upper()}_staged.xlsx"),
+        'last_modified': None
+    }
+
 
 @app.context_processor
 def inject_modality_settings():
@@ -2141,28 +2156,33 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     return canonical_id
 
 # -----------------------------------------------------------
-# Helper: Live Backup of DataFrame
+# Helper: Live Backup of DataFrame (with staging support)
 # -----------------------------------------------------------
-def backup_dataframe(modality: str):
+def backup_dataframe(modality: str, use_staged: bool = False):
     """
-    Writes the current working_hours_df for the given modality to a live backup Excel file.
+    Writes the current working_hours_df for the given modality to a backup Excel file.
     The backup file will include:
       - "Tabelle1": containing the working_hours_df data without extra columns.
       - "Tabelle2": containing the info_texts (if available).
-      
+
     This version removes the columns 'start_time', 'end_time', and 'shift_duration'.
+
+    Args:
+        modality: The modality to back up
+        use_staged: If True, back up staged data. If False, back up live data.
     """
-    d = modality_data[modality]
+    d = staged_modality_data[modality] if use_staged else modality_data[modality]
     if d['working_hours_df'] is not None:
         backup_dir = os.path.join(app.config['UPLOAD_FOLDER'], "backups")
         os.makedirs(backup_dir, exist_ok=True)
-        backup_file = os.path.join(backup_dir, f"SBZ_{modality.upper()}_live.xlsx")
+        suffix = "_staged" if use_staged else "_live"
+        backup_file = os.path.join(backup_dir, f"SBZ_{modality.upper()}{suffix}.xlsx")
         try:
             # Remove unwanted columns from backup
             cols_to_backup = [col for col in d['working_hours_df'].columns
-                              if col not in ['start_time', 'end_time', 'shift_duration']]
+                              if col not in ['start_time', 'end_time', 'shift_duration', 'canonical_id']]
             df_backup = d['working_hours_df'][cols_to_backup].copy()
-            
+
             with pd.ExcelWriter(backup_file, engine='openpyxl') as writer:
                 # Write the filtered DataFrame into sheet "Tabelle1"
                 df_backup.to_excel(writer, sheet_name='Tabelle1', index=False)
@@ -2170,9 +2190,75 @@ def backup_dataframe(modality: str):
                 if d.get('info_texts'):
                     df_info = pd.DataFrame({'Info': d['info_texts']})
                     df_info.to_excel(writer, sheet_name='Tabelle2', index=False)
-            selection_logger.info(f"Live backup updated for modality {modality} at {backup_file}")
+
+            mode_label = "staged" if use_staged else "live"
+            selection_logger.info(f"{mode_label.capitalize()} backup updated for modality {modality} at {backup_file}")
+
+            # Update last_modified timestamp for staged data
+            if use_staged:
+                d['last_modified'] = get_local_berlin_now()
         except Exception as e:
-            selection_logger.info(f"Error backing up DataFrame for modality {modality}: {e}")
+            mode_label = "staged" if use_staged else "live"
+            selection_logger.info(f"Error backing up {mode_label} DataFrame for modality {modality}: {e}")
+
+
+def load_staged_dataframe(modality: str) -> bool:
+    """
+    Load staged data from file into staged_modality_data structure.
+
+    Returns:
+        True if loaded successfully, False otherwise
+    """
+    d = staged_modality_data[modality]
+    staged_file = d['staged_file_path']
+
+    if not os.path.exists(staged_file):
+        selection_logger.info(f"No staged file found for {modality}: {staged_file}")
+        return False
+
+    try:
+        from app import attempt_initialize_data  # Import here to avoid circular dependency
+        # Temporarily load into staged structure
+        # We'll use a modified version that doesn't overwrite modality_data
+
+        with pd.ExcelFile(staged_file, engine='openpyxl') as xls:
+            if 'Tabelle1' in xls.sheet_names:
+                df = pd.read_excel(xls, sheet_name='Tabelle1')
+
+                # Parse TIME column and add start_time, end_time, shift_duration
+                if 'TIME' in df.columns:
+                    time_data = df['TIME'].apply(parse_time_range)
+                    df['start_time'] = time_data.apply(lambda x: x[0])
+                    df['end_time'] = time_data.apply(lambda x: x[1])
+
+                    # Calculate shift_duration
+                    df['shift_duration'] = df.apply(
+                        lambda row: (datetime.combine(datetime.min, row['end_time']) -
+                                   datetime.combine(datetime.min, row['start_time'])).total_seconds() / 3600.0,
+                        axis=1
+                    )
+
+                # Add canonical_id
+                if 'PPL' in df.columns:
+                    df['canonical_id'] = df['PPL'].apply(get_canonical_worker_id)
+
+                d['working_hours_df'] = df
+                d['total_work_hours'] = df.groupby('PPL')['shift_duration'].sum().to_dict() if 'shift_duration' in df.columns else {}
+
+                # Load info texts if available
+                if 'Tabelle2' in xls.sheet_names:
+                    df_info = pd.read_excel(xls, sheet_name='Tabelle2')
+                    if 'Info' in df_info.columns:
+                        d['info_texts'] = df_info['Info'].tolist()
+
+                d['last_modified'] = datetime.fromtimestamp(os.path.getmtime(staged_file))
+                selection_logger.info(f"Loaded staged data for {modality} from {staged_file}")
+                return True
+    except Exception as e:
+        selection_logger.error(f"Error loading staged data for {modality}: {e}")
+        return False
+
+    return False
 
 
 # -----------------------------------------------------------
@@ -2801,13 +2887,24 @@ def prep_next_day():
 @admin_required
 def get_prep_data():
     """
-    Get current working_hours_df data for all modalities.
+    Get staged working_hours_df data for all modalities (for next-day planning).
     Returns data in format suitable for edit table.
     """
     result = {}
 
     for modality in allowed_modalities:
-        d = modality_data[modality]
+        # Try to load staged data if not already loaded
+        if staged_modality_data[modality]['working_hours_df'] is None:
+            # Try to load from staged file
+            if not load_staged_dataframe(modality):
+                # If no staged data, copy from live as starting point
+                if modality_data[modality]['working_hours_df'] is not None:
+                    staged_modality_data[modality]['working_hours_df'] = modality_data[modality]['working_hours_df'].copy()
+                    staged_modality_data[modality]['info_texts'] = modality_data[modality]['info_texts'].copy()
+                    # Save the initial staged copy
+                    backup_dataframe(modality, use_staged=True)
+
+        d = staged_modality_data[modality]
         df = d.get('working_hours_df')
 
         if df is not None and not df.empty:
@@ -2839,7 +2936,7 @@ def get_prep_data():
 @admin_required
 def update_prep_row():
     """
-    Update a single worker row in working_hours_df.
+    Update a single worker row in STAGED working_hours_df (next-day planning).
     """
     try:
         data = request.json
@@ -2847,10 +2944,10 @@ def update_prep_row():
         row_index = data.get('row_index')
         updates = data.get('updates', {})
 
-        if modality not in modality_data:
+        if modality not in staged_modality_data:
             return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+        df = staged_modality_data[modality]['working_hours_df']
 
         if df is None or row_index >= len(df):
             return jsonify({'error': 'Invalid row index'}), 400
@@ -2867,8 +2964,9 @@ def update_prep_row():
                 # Update skill or modifier
                 df.at[row_index, col] = value
             elif col == 'PPL':
-                # Update worker name
+                # Update worker name and canonical_id
                 df.at[row_index, col] = value
+                df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
 
         # Recalculate shift_duration if times changed
         if 'start_time' in updates or 'end_time' in updates:
@@ -2881,6 +2979,16 @@ def update_prep_row():
                     end_dt += timedelta(days=1)
                 df.at[row_index, 'shift_duration'] = (end_dt - start_dt).seconds / 3600
 
+        # Update TIME column to reflect changes
+        if 'start_time' in updates or 'end_time' in updates:
+            start = df.at[row_index, 'start_time']
+            end = df.at[row_index, 'end_time']
+            if 'TIME' in df.columns:
+                df.at[row_index, 'TIME'] = f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
+
+        # Save staged data after update
+        backup_dataframe(modality, use_staged=True)
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -2891,25 +2999,30 @@ def update_prep_row():
 @admin_required
 def add_prep_worker():
     """
-    Add a new worker row to working_hours_df.
+    Add a new worker row to STAGED working_hours_df (next-day planning).
     """
     try:
         data = request.json
         modality = data.get('modality')
         worker_data = data.get('worker_data', {})
 
-        if modality not in modality_data:
+        if modality not in staged_modality_data:
             return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+        df = staged_modality_data[modality]['working_hours_df']
 
         # Build new row
+        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
         new_row = {
-            'PPL': worker_data.get('PPL', 'Neuer Worker (NW)'),
+            'PPL': ppl_name,
+            'canonical_id': get_canonical_worker_id(ppl_name),
             'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), '%H:%M').time(),
             'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), '%H:%M').time(),
             'Modifier': float(worker_data.get('Modifier', 1.0)),
         }
+
+        # Add TIME column
+        new_row['TIME'] = f"{new_row['start_time'].strftime('%H:%M')}-{new_row['end_time'].strftime('%H:%M')}"
 
         # Add skill columns
         for skill in SKILL_COLUMNS:
@@ -2924,11 +3037,14 @@ def add_prep_worker():
 
         # Append to DataFrame
         if df is None or df.empty:
-            modality_data[modality]['working_hours_df'] = pd.DataFrame([new_row])
+            staged_modality_data[modality]['working_hours_df'] = pd.DataFrame([new_row])
         else:
-            modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            staged_modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-        return jsonify({'success': True, 'row_index': len(modality_data[modality]['working_hours_df']) - 1})
+        # Save staged data after adding
+        backup_dataframe(modality, use_staged=True)
+
+        return jsonify({'success': True, 'row_index': len(staged_modality_data[modality]['working_hours_df']) - 1})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2938,28 +3054,120 @@ def add_prep_worker():
 @admin_required
 def delete_prep_worker():
     """
-    Delete a worker row from working_hours_df.
+    Delete a worker row from STAGED working_hours_df (next-day planning).
     """
     try:
         data = request.json
         modality = data.get('modality')
         row_index = data.get('row_index')
 
-        if modality not in modality_data:
+        if modality not in staged_modality_data:
             return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+        df = staged_modality_data[modality]['working_hours_df']
 
         if df is None or row_index >= len(df):
             return jsonify({'error': 'Invalid row index'}), 400
 
         # Delete row
-        modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
+        staged_modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
+
+        # Save staged data after deletion
+        backup_dataframe(modality, use_staged=True)
 
         return jsonify({'success': True})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prep-next-day/activate', methods=['POST'])
+@admin_required
+def activate_staged_schedule():
+    """
+    Activate staged schedule: Copy staged data → live data.
+    This promotes tomorrow's planned schedule to today's live schedule.
+    CRITICAL: This resets ALL assignment counters!
+    """
+    try:
+        data = request.json
+        modalities_to_activate = data.get('modalities', allowed_modalities)
+
+        if not isinstance(modalities_to_activate, list):
+            modalities_to_activate = [modalities_to_activate]
+
+        activated = []
+        errors = []
+
+        for modality in modalities_to_activate:
+            if modality not in staged_modality_data:
+                errors.append(f"Invalid modality: {modality}")
+                continue
+
+            staged = staged_modality_data[modality]
+            if staged['working_hours_df'] is None or staged['working_hours_df'].empty:
+                errors.append(f"No staged data for {modality}")
+                continue
+
+            try:
+                # Copy staged → live
+                d = modality_data[modality]
+                d['working_hours_df'] = staged['working_hours_df'].copy()
+                d['info_texts'] = staged['info_texts'].copy() if staged['info_texts'] else []
+                d['total_work_hours'] = staged['total_work_hours'].copy()
+                d['worker_modifiers'] = staged['worker_modifiers'].copy()
+
+                # CRITICAL: Reset all counters for new day
+                d['draw_counts'] = {}
+                d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
+                d['WeightedCounts'] = {}
+                global_worker_data['weighted_counts_per_mod'][modality] = {}
+                global_worker_data['assignments_per_mod'][modality] = {}
+
+                # Initialize counters for all workers
+                for worker in d['working_hours_df']['PPL'].unique():
+                    d['draw_counts'][worker] = 0
+                    d['WeightedCounts'][worker] = 0.0
+                    for skill in SKILL_COLUMNS:
+                        if skill not in d['skill_counts']:
+                            d['skill_counts'][skill] = {}
+                        d['skill_counts'][skill][worker] = 0
+
+                # Update last_reset_date
+                d['last_reset_date'] = get_local_berlin_now()
+
+                # Save live backup
+                backup_dataframe(modality, use_staged=False)
+
+                activated.append(modality)
+                selection_logger.warning(
+                    f"Staged schedule activated for {modality}: "
+                    f"{len(d['working_hours_df'])} workers, counters reset"
+                )
+
+            except Exception as e:
+                errors.append(f"Error activating {modality}: {str(e)}")
+                selection_logger.error(f"Error activating staged schedule for {modality}: {e}")
+
+        if not activated:
+            return jsonify({
+                'success': False,
+                'error': 'No modalities activated',
+                'errors': errors
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'message': f"Activated staged schedule for: {', '.join(activated)}",
+            'activated_modalities': activated,
+            'total_workers': sum(len(modality_data[m]['working_hours_df']) for m in activated),
+            'errors': errors if errors else None,
+            'warning': 'All assignment counters have been reset!'
+        })
+
+    except Exception as e:
+        selection_logger.error(f"Error in activate_staged_schedule: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/<modality>/<role>', methods=['GET'])

@@ -244,6 +244,61 @@
       gap: 1rem;
       flex-wrap: wrap;
     }
+
+    .staging-banner {
+      background: #fff3cd;
+      border: 3px solid #ffc107;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+
+    .staging-banner h2 {
+      color: #856404;
+      margin-bottom: 0.5rem;
+      font-size: 1.5rem;
+    }
+
+    .staging-banner p {
+      color: #856404;
+      margin: 0.5rem 0;
+    }
+
+    .activate-section {
+      background: #d1ecf1;
+      border: 2px solid #0c5460;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+
+    .activate-section h3 {
+      color: #0c5460;
+      margin-bottom: 1rem;
+    }
+
+    .btn-activate {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-activate:hover {
+      background: #218838;
+      transform: scale(1.05);
+    }
+
+    .btn-activate:active {
+      transform: scale(0.98);
+    }
   </style>
 </head>
 <body>
@@ -262,10 +317,32 @@
 
   <div id="message-container"></div>
 
+  <!-- Staging Banner -->
+  <div class="staging-banner">
+    <h2>🔶 STAGING MODE - Kein Live-Effekt</h2>
+    <p><strong>Wichtig:</strong> Alle Änderungen auf dieser Seite werden im <strong>STAGED-Bereich</strong> gespeichert.</p>
+    <p>Diese Änderungen betreffen <strong>NICHT</strong> die laufenden Live-Zuteilungen!</p>
+    <p>Um diese Änderungen zu aktivieren, verwenden Sie die Schaltfläche "Aktivieren" unten.</p>
+  </div>
+
+  <!-- Activation Section -->
+  <div class="activate-section">
+    <h3>⚡ Staged Schedule aktivieren</h3>
+    <p>Wenn Sie bereit sind, den vorbereiteten Plan zu aktivieren, klicken Sie hier:</p>
+    <p><strong>⚠️ WARNUNG:</strong> Dies kopiert den Staged-Plan → Live und setzt alle Zähler zurück!</p>
+    <button class="btn-activate" onclick="activateStagedSchedule()">
+      🚀 JETZT AKTIVIEREN (Staged → Live)
+    </button>
+    <p style="margin-top: 1rem; font-size: 0.9rem; color: #0c5460;">
+      Normalerweise wird dies automatisch um 7:30 Uhr morgens durchgeführt.
+    </p>
+  </div>
+
   <div class="card">
     <div class="info-box">
-      <strong>ℹ️ Nächsten Tag bearbeiten</strong>
+      <strong>ℹ️ Nächsten Tag bearbeiten (Staging)</strong>
       <p>Hier können Sie den Dienstplan für morgen anpassen. <strong>Keine Zuteilungen vorhanden</strong> - Sie arbeiten mit einem sauberen Zustand.</p>
+      <p><strong>Änderungen werden im STAGED-Bereich gespeichert</strong> und müssen explizit aktiviert werden.</p>
     </div>
 
     <!-- Mode Toggle -->
@@ -606,6 +683,44 @@
       setTimeout(() => {
         container.innerHTML = '';
       }, 5000);
+    }
+
+    // Activate staged schedule (staged → live)
+    async function activateStagedSchedule() {
+      if (!confirm('⚠️ WARNUNG!\n\nDies wird den STAGED-Plan zum LIVE-Plan machen und alle Zähler zurücksetzen!\n\nSind Sie sicher?')) {
+        return;
+      }
+
+      if (!confirm('Letzte Bestätigung: Alle laufenden Zuteilungszähler werden auf 0 zurückgesetzt. Wirklich aktivieren?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/prep-next-day/activate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            modalities: ['ct', 'mr', 'xray']  // Activate all modalities
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          showMessage('success',
+            `✅ Erfolg! Staged → Live aktiviert!\n\n` +
+            `Modalitäten: ${result.activated_modalities.join(', ')}\n` +
+            `Gesamt Workers: ${result.total_workers}\n\n` +
+            `⚠️ ${result.warning}`
+          );
+        } else {
+          showMessage('error', `Fehler: ${result.error || 'Unbekannter Fehler'}`);
+        }
+      } catch (error) {
+        showMessage('error', `Fehler beim Aktivieren: ${error.message}`);
+      }
     }
 
     // Load data on page load
