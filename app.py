@@ -21,6 +21,7 @@ from threading import Lock
 import pandas as pd
 import pytz
 import yaml
+import json
 from functools import wraps
 from typing import Dict, Any, Optional
 
@@ -57,6 +58,10 @@ lock = Lock()
 
 # Scheduler for auto-preload (initialized later after modality_data is loaded)
 scheduler = None
+
+# JSON worker skill roster (loaded from worker_skill_overrides.json)
+# Takes priority over YAML config.worker_skill_roster
+worker_skill_json_roster = {}
 
 # -----------------------------------------------------------
 # Global constants & modality-/skill-specific factors
@@ -261,6 +266,60 @@ def _load_raw_config() -> Dict[str, Any]:
     except Exception as exc:
         selection_logger.warning("Failed to load config.yaml: %s", exc)
         return {}
+
+
+def load_worker_skill_json() -> Dict[str, Any]:
+    """Load worker skill overrides from JSON file."""
+    try:
+        with open('worker_skill_overrides.json', 'r', encoding='utf-8') as json_file:
+            data = json.load(json_file)
+            selection_logger.info(f"Loaded worker skill overrides from JSON: {len(data)} workers")
+            return data
+    except FileNotFoundError:
+        selection_logger.info("No worker_skill_overrides.json found, using YAML config only")
+        return {}
+    except Exception as exc:
+        selection_logger.warning(f"Failed to load worker_skill_overrides.json: {exc}")
+        return {}
+
+
+def save_worker_skill_json(roster_data: Dict[str, Any]) -> bool:
+    """Save worker skill overrides to JSON file."""
+    try:
+        with open('worker_skill_overrides.json', 'w', encoding='utf-8') as json_file:
+            json.dump(roster_data, json_file, indent=2, ensure_ascii=False)
+        selection_logger.info(f"Saved worker skill overrides to JSON: {len(roster_data)} workers")
+        return True
+    except Exception as exc:
+        selection_logger.error(f"Failed to save worker_skill_overrides.json: {exc}")
+        return False
+
+
+def get_merged_worker_roster(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get merged worker skill roster from YAML config and JSON overrides.
+    JSON takes priority over YAML.
+    """
+    # Start with YAML config
+    yaml_roster = config.get('worker_skill_roster', {})
+
+    # Merge with JSON roster (JSON has priority)
+    merged = copy.deepcopy(yaml_roster)
+
+    for worker_id, worker_data in worker_skill_json_roster.items():
+        if worker_id in merged:
+            # Merge worker data (JSON overrides YAML)
+            for key, value in worker_data.items():
+                if isinstance(value, dict) and key in merged[worker_id]:
+                    # Deep merge for default/modality-specific sections
+                    merged[worker_id][key].update(value)
+                else:
+                    merged[worker_id][key] = value
+        else:
+            # New worker only in JSON
+            merged[worker_id] = copy.deepcopy(worker_data)
+
+    return merged
 
 
 def _build_app_config() -> Dict[str, Any]:
@@ -805,7 +864,7 @@ def build_working_hours_from_medweb(
 
     # Get mapping config
     mapping_rules = config.get('medweb_mapping', {}).get('rules', [])
-    worker_roster = config.get('worker_skill_roster', {})
+    worker_roster = get_merged_worker_roster(config)
 
     # Get weekday name for exclusion schedule lookup
     weekday_name = get_weekday_name_german(target_date.date())
@@ -3269,6 +3328,92 @@ def quick_reload():
     return jsonify(payload)
 
 
+# ============================================================================
+# Worker Skill Roster Management API
+# ============================================================================
+
+@app.route('/api/admin/skill_roster', methods=['GET'])
+@admin_required
+def get_skill_roster():
+    """Get current worker skill roster (merged JSON + YAML)."""
+    try:
+        config = _build_app_config()
+        merged_roster = get_merged_worker_roster(config)
+
+        # Also get available skills from config
+        skills = list(config.get('skills', {}).keys())
+        modalities = list(config.get('modalities', {}).keys())
+
+        return jsonify({
+            'success': True,
+            'roster': merged_roster,
+            'skills': skills,
+            'modalities': modalities
+        })
+    except Exception as exc:
+        selection_logger.error(f"Error getting skill roster: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/skill_roster', methods=['POST'])
+@admin_required
+def save_skill_roster():
+    """Save worker skill roster to JSON."""
+    global worker_skill_json_roster
+
+    try:
+        data = request.get_json()
+        if not data or 'roster' not in data:
+            return jsonify({'success': False, 'error': 'No roster data provided'}), 400
+
+        roster_data = data['roster']
+
+        # Validate roster structure (basic validation)
+        if not isinstance(roster_data, dict):
+            return jsonify({'success': False, 'error': 'Roster must be a dictionary'}), 400
+
+        # Save to JSON file
+        if save_worker_skill_json(roster_data):
+            # Reload into memory
+            worker_skill_json_roster = roster_data
+            selection_logger.info(f"Worker skill roster updated: {len(roster_data)} workers")
+
+            return jsonify({
+                'success': True,
+                'message': f'Roster saved successfully ({len(roster_data)} workers)'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save roster to JSON'}), 500
+
+    except Exception as exc:
+        selection_logger.error(f"Error saving skill roster: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/skill_roster/reload', methods=['POST'])
+@admin_required
+def reload_skill_roster():
+    """Reload worker skill roster from JSON file."""
+    global worker_skill_json_roster
+
+    try:
+        worker_skill_json_roster = load_worker_skill_json()
+        return jsonify({
+            'success': True,
+            'message': f'Roster reloaded ({len(worker_skill_json_roster)} workers)'
+        })
+    except Exception as exc:
+        selection_logger.error(f"Error reloading skill roster: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/skill_roster')
+@admin_required
+def skill_roster_page():
+    """Admin page for managing worker skill roster."""
+    return render_template('skill_roster.html')
+
+
 @app.route('/timetable')
 def timetable():
     modality = resolve_modality_from_request()
@@ -3290,6 +3435,13 @@ def timetable():
 
 app.config['DEBUG'] = True
 
+# Initialize worker skill JSON roster
+def init_worker_skill_roster():
+    """Load worker skill overrides from JSON on startup."""
+    global worker_skill_json_roster
+    worker_skill_json_roster = load_worker_skill_json()
+
+
 # Initialize scheduler for auto-preload
 def init_scheduler():
     """Initialize and start background scheduler for auto-preload."""
@@ -3306,6 +3458,9 @@ def init_scheduler():
         )
         scheduler.start()
         selection_logger.info("Scheduler started: Auto-preload will run daily at 7:30 AM")
+
+# Initialize worker skill roster from JSON
+init_worker_skill_roster()
 
 # Start scheduler when app starts
 init_scheduler()
