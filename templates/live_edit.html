@@ -269,6 +269,14 @@
 
   <div class="warning-banner">
     <span>⚠️ WARNING:</span> Changes made here take effect IMMEDIATELY and will affect ongoing assignments. Use with caution!
+    <br><br>
+    <strong>What you can do:</strong>
+    <ul style="margin: 0.5rem 0 0 1.5rem;">
+      <li>✏️ <strong>Edit times</strong> - Worker leaving early? Adjust their end time</li>
+      <li>➕ <strong>Add new entry</strong> - Worker available for 1 hour? Add them back</li>
+      <li>🗑️ <strong>Delete entry</strong> - Take worker out completely (e.g., called in sick)</li>
+      <li>⚙️ <strong>Modify skills</strong> - Emergency skill adjustments</li>
+    </ul>
   </div>
 
   <div class="modality-tabs">
@@ -278,9 +286,93 @@
   </div>
 
   <div class="content-box">
+    <!-- Add New Worker Form -->
+    <form id="addForm" class="edit-form" style="border-color: #28a745;" onsubmit="submitAdd(event)">
+      <h3 style="color: #28a745;">➕ Add New Worker Entry</h3>
+      <p style="margin: 0 0 1rem 0; color: #666;">Add a worker for a specific time slot (e.g., worker available for just 1 hour)</p>
+      <input type="hidden" id="addModality" name="modality">
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="addPerson">Person (PPL) *</label>
+          <input type="text" id="addPerson" name="person" placeholder="e.g., AAn or Full Name (AAn)" required>
+        </div>
+
+        <div class="form-group">
+          <label for="addTime">Time Range (Start-End) *</label>
+          <input type="text" id="addTime" name="time" placeholder="08:00-16:00" required>
+          <small style="color: #666;">Format: HH:MM-HH:MM</small>
+        </div>
+
+        <div class="form-group">
+          <label for="addModifier">Modifier</label>
+          <input type="number" id="addModifier" name="modifier" step="0.1" value="1.0">
+        </div>
+
+        <div class="form-group">
+          <label for="addNormal">Normal</label>
+          <select id="addNormal" name="normal">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0">0 (Passive)</option>
+            <option value="1" selected>1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="addNotfall">Notfall</label>
+          <select id="addNotfall" name="notfall">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="addPrivat">Privat</label>
+          <select id="addPrivat" name="privat">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="addHerz">Herz</label>
+          <select id="addHerz" name="herz">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="addMsk">MSK</label>
+          <select id="addMsk" name="msk">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="addChest">Chest</label>
+          <select id="addChest" name="chest">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" style="background: #28a745; border-color: #28a745;">Add Worker</button>
+        <button type="button" class="btn btn-secondary" onclick="cancelAdd()">Cancel</button>
+      </div>
+    </form>
+
     <!-- Edit Form (hidden until edit is clicked) -->
     <form id="editForm" class="edit-form" onsubmit="submitEdit(event)">
-      <h3>Edit Worker Entry</h3>
+      <h3>✏️ Edit Worker Entry</h3>
       <input type="hidden" id="editIndex" name="index">
       <input type="hidden" id="editModality" name="modality">
 
@@ -291,8 +383,9 @@
         </div>
 
         <div class="form-group">
-          <label for="editTime">Time</label>
-          <input type="text" id="editTime" name="time" placeholder="HH:MM:SS" required>
+          <label for="editTime">Time Range (Start-End)</label>
+          <input type="text" id="editTime" name="time" placeholder="08:00-16:00" required>
+          <small style="color: #666;">Format: HH:MM-HH:MM (adjust end time if leaving early)</small>
         </div>
 
         <div class="form-group">
@@ -363,7 +456,10 @@
 
     <!-- CT Modality -->
     <div id="ct-content" class="modality-content active">
-      <h2>CT Workers</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">CT Workers</h2>
+        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      </div>
       <div id="ct-loading" class="loading">Loading CT workers...</div>
       <div id="ct-table-container" style="display: none;">
         <table class="workers-table">
@@ -386,7 +482,10 @@
 
     <!-- MR Modality -->
     <div id="mr-content" class="modality-content">
-      <h2>MR Workers</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">MR Workers</h2>
+        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      </div>
       <div id="mr-loading" class="loading">Loading MR workers...</div>
       <div id="mr-table-container" style="display: none;">
         <table class="workers-table">
@@ -409,7 +508,10 @@
 
     <!-- XRAY Modality -->
     <div id="xray-content" class="modality-content">
-      <h2>X-RAY Workers</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">X-RAY Workers</h2>
+        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      </div>
       <div id="xray-loading" class="loading">Loading X-RAY workers...</div>
       <div id="xray-table-container" style="display: none;">
         <table class="workers-table">
@@ -466,8 +568,9 @@
         loadWorkers(modality);
       }
 
-      // Cancel any active edit
+      // Cancel any active edit or add forms
       cancelEdit();
+      cancelAdd();
     }
 
     async function loadWorkers(modality) {
@@ -533,14 +636,76 @@
       });
     }
 
+    function showAddForm() {
+      // Hide edit form if showing
+      cancelEdit();
+
+      // Set modality for add form
+      document.getElementById('addModality').value = currentModality;
+
+      // Reset form
+      document.getElementById('addForm').reset();
+      document.getElementById('addModality').value = currentModality;
+
+      // Show form
+      document.getElementById('addForm').classList.add('active');
+
+      // Scroll to form
+      document.getElementById('addForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function cancelAdd() {
+      document.getElementById('addForm').classList.remove('active');
+    }
+
+    async function submitAdd(event) {
+      event.preventDefault();
+
+      const formData = new FormData(event.target);
+      const modality = formData.get('modality');
+
+      // Remove index field for adding new entry
+      formData.delete('index');
+
+      try {
+        const response = await fetch('/edit', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          showStatus('✅ Worker added successfully (IMMEDIATELY ACTIVE)', 'success');
+
+          // Reload workers data
+          await loadWorkers(modality);
+
+          // Hide add form
+          cancelAdd();
+        } else {
+          const text = await response.text();
+          showStatus('Failed to add worker: ' + text, 'error');
+        }
+      } catch (error) {
+        showStatus('Error adding worker: ' + error.message, 'error');
+      }
+    }
+
     function editWorker(modality, index) {
       const worker = workersData[modality][index];
+
+      // Hide add form if showing
+      cancelAdd();
+
+      // Format time as "start-end"
+      const timeRange = (worker.start_time && worker.end_time)
+        ? `${worker.start_time}-${worker.end_time}`
+        : '';
 
       // Populate form
       document.getElementById('editIndex').value = index;
       document.getElementById('editModality').value = modality;
       document.getElementById('editPerson').value = worker.PPL;
-      document.getElementById('editTime').value = worker.start_time || '';
+      document.getElementById('editTime').value = timeRange;
       document.getElementById('editModifier').value = worker.Modifier || 1.0;
       document.getElementById('editNormal').value = worker.Normal || 0;
       document.getElementById('editNotfall').value = worker.Notfall || 0;
