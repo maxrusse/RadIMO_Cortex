@@ -17,8 +17,8 @@ RadIMO orchestrates workload distribution for radiology teams across multiple mo
 - 📱 Two UI modes: by modality or by skill
 - 📈 Cross-modality workload tracking and overflow management
 - 🔮 **Config-driven medweb CSV integration** with automated daily preload
-- 📝 **Next-day schedule preparation** with simple and advanced editing modes
-- ⚙️ **Worker skill roster admin portal** with JSON-based real-time updates
+- 📋 **Three-page admin system**: Planning (staged), Prep (tomorrow), Live Edit (immediate)
+- ⚙️ **Worker skill roster admin portal** with JSON-based staged/active workflow
 - ⏱️ **Time exclusion system** for boards, meetings, and teaching activities
 
 ---
@@ -137,25 +137,67 @@ Shift 2: 17:00-21:00  (available for assignments)
 - ✅ Prep time automatically added
 - ✅ Multiple exclusions per worker supported
 
-### Worker Skill Admin Portal
+### Three-Page Admin System
 
-**Challenge:** Skills change frequently (rotations, training, specialization)
-- MSK rotation starts → need to activate MSK=1
-- Rotation ends → set back to MSK=0
-- Emergency certifications expire → set Notfall=0
+RadIMO provides three distinct admin interfaces for different operational needs:
 
-**RadIMO Solution:** Web-based skill roster editor
-- Simple table: rows=workers, columns=skills
+#### 1. 📋 **Skill Roster** (`/skill_roster`) - Planning Mode
+
+**Purpose:** Plan worker skill changes for rotations and long-term scheduling
+- Changes are **STAGED** - no immediate effect on current assignments
 - Edit values: -1 (excluded), 0 (fallback), 1 (active)
-- Save changes → **applies immediately (no restart needed)**
-- JSON storage separate from config (easy backup/restore)
+- Click "Save to Staging" → saves to `worker_skill_overrides_staged.json`
+- Click "Activate Changes" → applies staged changes to active roster
+- Perfect for: Weekly rotation planning, training certifications, scheduled changes
 
 **Use Case:**
 1. Go to `/skill_roster` (admin password protected)
 2. Find worker "AAn" in table
-3. Change MSK from 0 → 1 (started MSK rotation)
-4. Click "Save Changes"
-5. **Instantly active** - next MSK request can assign this worker
+3. Change MSK from 0 → 1 (MSK rotation starts next week)
+4. Click "Save to Staging" - **no immediate effect**
+5. When ready: Click "Activate Changes" - **now applied to assignments**
+
+#### 2. 📝 **Prep Next Day** (`/prep-next-day`) - Tomorrow's Schedule
+
+**Purpose:** Prepare and preview tomorrow's worker schedule
+- Upload new medweb CSV for next day
+- Simple mode: Upload CSV, let system auto-parse
+- Advanced mode: Edit individual workers, adjust times, modify skills
+- Changes affect **tomorrow's date only** - no impact on today
+- Perfect for: Daily schedule preparation, next-day corrections
+
+#### 3. ⚠️ **Live Edit** (`/admin/live-edit`) - Emergency Same-Day Changes
+
+**Purpose:** Make immediate changes to current day's assignments
+- Changes take effect **IMMEDIATELY** - no staging
+- Edit worker hours, names, skills, modifiers
+- Delete worker entries
+- Modality tabs (CT/MR/XRAY) for organized editing
+- Big warning banners about immediate impact
+- Perfect for: Emergency substitutions, last-minute schedule changes, same-day corrections
+
+**⚠️ WARNING:** Use Live Edit with caution - changes are instant!
+
+### Workflow Separation
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  PLANNING (Future)          Skill Roster                 │
+│  ├─ Staged changes          (Planning Mode)              │
+│  ├─ Review before apply                                  │
+│  └─ Activate when ready                                  │
+├──────────────────────────────────────────────────────────┤
+│  PREP (Tomorrow)            Prep Next Day                │
+│  ├─ Upload CSV for next day                              │
+│  ├─ Preview and adjust                                   │
+│  └─ No effect on current day                             │
+├──────────────────────────────────────────────────────────┤
+│  OPERATIONAL (Now)          Live Edit                    │
+│  ├─ Immediate effect        (DANGER ZONE)               │
+│  ├─ Emergency changes only                               │
+│  └─ Careful: impacts ongoing assignments                 │
+└──────────────────────────────────────────────────────────┘
+```
 
 ### Business Value
 
@@ -215,12 +257,16 @@ flask --app app run --debug
 
 ### Access Points
 
-- **Main Interface**: `http://localhost:5000/` - By modality view
-- **Skill View**: `http://localhost:5000/by-skill` - By skill view
-- **Admin Panel**: `http://localhost:5000/upload` - Upload medweb CSV & manage schedules
-- **Prep Page**: `http://localhost:5000/prep-next-day` - Prepare tomorrow's schedule
-- **Skill Roster**: `http://localhost:5000/skill_roster` - Manage worker skill assignments (admin only)
-- **Timeline**: `http://localhost:5000/timetable` - Visualize shifts
+**Operational Pages (Public):**
+- **Main Interface**: `http://localhost:5000/` - By modality view (CT/MR/XRAY)
+- **Skill View**: `http://localhost:5000/by-skill` - By skill view (Normal/Notfall/Herz/etc.)
+- **Timeline**: `http://localhost:5000/timetable` - Visualize shifts and schedules
+
+**Admin Pages (Password Protected):**
+- **Admin Panel**: `http://localhost:5000/upload` - Upload medweb CSV & system management hub
+- **Skill Roster**: `http://localhost:5000/skill_roster` - Plan skill changes (STAGED mode)
+- **Prep Next Day**: `http://localhost:5000/prep-next-day` - Prepare tomorrow's schedule
+- **Live Edit**: `http://localhost:5000/admin/live-edit` - Emergency same-day edits (⚠️ IMMEDIATE EFFECT)
 
 ---
 
@@ -789,9 +835,13 @@ Use force refresh when significant staffing changes occur mid-day (e.g., half th
 ### v18 (November 2025)
 - ✨ **Config-driven medweb CSV integration** - Direct CSV ingestion with mapping rules
 - 🔀 **Multi-modality support** - Sub-specialty teams across multiple modalities (e.g., MSK in xray/ct/mr)
+- 📋 **Three-page admin system** - Separated planning (staged), prep (tomorrow), and live editing (immediate)
+  - **Skill Roster**: Staged changes with activation workflow (planning mode)
+  - **Prep Next Day**: Tomorrow's schedule preparation (no current-day impact)
+  - **Live Edit**: Emergency same-day edits (immediate effect with warnings)
+- ⚖️ **Conditional modifier application** - Optional `modifier_applies_to_active_only` setting (fair fallback behavior)
 - ⏰ **Automatic daily preload** - 7:30 AM auto-preload via APScheduler
 - 📝 **Next-day schedule preparation** - Advanced edit page with simple/advanced modes
-- 👥 **Worker skill roster admin portal** - Web UI for real-time skill management (JSON-based)
 - ⏱️ **Time exclusion system** - Day-specific board/meeting schedules with auto shift-splitting
 - 🔄 **Force refresh capability** - Emergency same-day schedule reload
 - 🗑️ **Excel upload removal** - Simplified to single CSV-driven workflow
