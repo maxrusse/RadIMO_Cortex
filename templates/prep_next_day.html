@@ -253,7 +253,9 @@
       <p>Datum: <strong>{{ target_date_german }}</strong> ({{ target_date }})</p>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('upload_file') }}">← Zurück zu Upload</a>
+      <a href="{{ url_for('upload_file') }}">Admin Panel</a>
+      <a href="{{ url_for('skill_roster_page') }}">📋 Skill Roster</a>
+      <a href="{{ url_for('live_edit_page') }}">⚠️ Live Edit</a>
       <a href="{{ url_for('index', modality='ct') }}">Zur Zuteilung</a>
     </div>
   </div>

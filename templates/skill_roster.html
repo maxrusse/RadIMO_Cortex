@@ -236,16 +236,21 @@
 </head>
 <body>
   <div class="header">
-    <h1>Worker Skill Roster Management</h1>
+    <h1>Worker Skill Roster Management <span style="color: #ff9800; font-size: 1.2rem;">(Planning Mode)</span></h1>
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="window.location.href='/'">Back to Main</button>
-      <button class="btn btn-secondary" onclick="reloadRoster()">Reload from JSON</button>
-      <button class="btn btn-success" onclick="saveRoster()">Save Changes</button>
+      <button class="btn btn-secondary" onclick="window.location.href='/upload'">Admin Panel</button>
+      <button class="btn btn-secondary" onclick="window.location.href='/prep-next-day'">Prep Next Day</button>
+      <button class="btn btn-secondary" onclick="window.location.href='/admin/live-edit'">Live Edit</button>
+      <button class="btn btn-secondary" onclick="reloadRoster()">Reload Staged</button>
+      <button class="btn btn-primary" onclick="saveRoster()">Save to Staging</button>
+      <button class="btn btn-success" onclick="activateRoster()">Activate Changes</button>
     </div>
   </div>
 
   <div class="content-box">
     <div class="legend">
+      <strong>⚠️ Planning Mode:</strong> Changes here are STAGED only and do NOT affect current assignments until you click "Activate Changes".
+      <br><br>
       <strong>Legend:</strong>
       <div class="legend-item"><code>-1</code> = Excluded (never use)</div>
       <div class="legend-item"><code>0</code> = Passive (fallback only)</div>
@@ -438,7 +443,7 @@
       // Clear input
       document.getElementById('newWorkerId').value = '';
 
-      showStatus('Worker added successfully. Remember to save changes!', 'success');
+      showStatus('Worker added successfully. Remember to save to staging and activate!', 'success');
     }
 
     function removeWorker(workerId) {
@@ -449,7 +454,7 @@
       delete rosterData[workerId];
       renderRosterTable();
 
-      showStatus('Worker removed. Remember to save changes!', 'success');
+      showStatus('Worker removed from staging. Remember to save and activate!', 'success');
     }
 
     async function saveRoster() {
@@ -475,7 +480,7 @@
     }
 
     async function reloadRoster() {
-      if (!confirm('Reload roster from JSON file? Unsaved changes will be lost.')) {
+      if (!confirm('Reload staged roster from JSON file? Unsaved changes will be lost.')) {
         return;
       }
 
@@ -495,6 +500,28 @@
         }
       } catch (error) {
         showStatus('Error reloading roster: ' + error.message, 'error');
+      }
+    }
+
+    async function activateRoster() {
+      if (!confirm('⚠️ ACTIVATE staged changes?\n\nThis will make your staged roster changes IMMEDIATELY ACTIVE for all assignments.\n\nContinue?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/admin/skill_roster/activate', {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showStatus(data.message + ' - Changes are NOW ACTIVE!', 'success');
+        } else {
+          showStatus('Failed to activate: ' + data.error, 'error');
+        }
+      } catch (error) {
+        showStatus('Error activating roster: ' + error.message, 'error');
       }
     }
 

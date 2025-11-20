@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Edit - RadIMO</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f0f0;
+      padding: 1rem;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: #fff;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+
+    .warning-banner {
+      background: #fff3cd;
+      border: 2px solid #ff9800;
+      border-left: 6px solid #ff6b00;
+      padding: 1rem 1.5rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      color: #856404;
+      font-size: 1.1rem;
+    }
+
+    .warning-banner span {
+      color: #d32f2f;
+      font-size: 1.3rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+
+    .btn-secondary {
+      background: #777;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #555;
+    }
+
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c82333;
+    }
+
+    .btn-primary {
+      background: #004892;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #003670;
+    }
+
+    .modality-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .modality-tab {
+      padding: 0.75rem 1.5rem;
+      background: #e0e0e0;
+      border: none;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .modality-tab:hover {
+      background: #d0d0d0;
+    }
+
+    .modality-tab.active {
+      background: #004892;
+      color: white;
+    }
+
+    .modality-content {
+      display: none;
+    }
+
+    .modality-content.active {
+      display: block;
+    }
+
+    .content-box {
+      background: #fff;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .workers-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    .workers-table th,
+    .workers-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border: 1px solid #ddd;
+    }
+
+    .workers-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .workers-table tr:hover {
+      background: #f5f5f5;
+    }
+
+    .skill-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      margin: 0.1rem;
+      border-radius: 3px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .skill-badge.active {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .skill-badge.passive {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .skill-badge.excluded {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .edit-form {
+      display: none;
+      background: #f8f9fa;
+      padding: 1.5rem;
+      border: 2px solid #004892;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+
+    .edit-form.active {
+      display: block;
+    }
+
+    .edit-form h3 {
+      margin-top: 0;
+      color: #004892;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #004892;
+      box-shadow: 0 0 3px rgba(0, 72, 146, 0.3);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .status-message {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .status-message.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+
+    .status-message.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Live Edit <span style="color: #d32f2f; font-size: 1.2rem;">(IMMEDIATE EFFECT)</span></h1>
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="window.location.href='/upload'">Admin Panel</button>
+      <button class="btn btn-secondary" onclick="window.location.href='/skill_roster'">Skill Roster</button>
+      <button class="btn btn-secondary" onclick="window.location.href='/prep-next-day'">Prep Next Day</button>
+    </div>
+  </div>
+
+  <div class="warning-banner">
+    <span>⚠️ WARNING:</span> Changes made here take effect IMMEDIATELY and will affect ongoing assignments. Use with caution!
+  </div>
+
+  <div class="modality-tabs">
+    <button class="modality-tab active" onclick="switchModality('ct')">CT</button>
+    <button class="modality-tab" onclick="switchModality('mr')">MR</button>
+    <button class="modality-tab" onclick="switchModality('xray')">X-RAY</button>
+  </div>
+
+  <div class="content-box">
+    <!-- Edit Form (hidden until edit is clicked) -->
+    <form id="editForm" class="edit-form" onsubmit="submitEdit(event)">
+      <h3>Edit Worker Entry</h3>
+      <input type="hidden" id="editIndex" name="index">
+      <input type="hidden" id="editModality" name="modality">
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="editPerson">Person (PPL)</label>
+          <input type="text" id="editPerson" name="person" required>
+        </div>
+
+        <div class="form-group">
+          <label for="editTime">Time</label>
+          <input type="text" id="editTime" name="time" placeholder="HH:MM:SS" required>
+        </div>
+
+        <div class="form-group">
+          <label for="editModifier">Modifier</label>
+          <input type="number" id="editModifier" name="modifier" step="0.1" value="1.0">
+        </div>
+
+        <div class="form-group">
+          <label for="editNormal">Normal</label>
+          <select id="editNormal" name="normal">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0">0 (Passive)</option>
+            <option value="1" selected>1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="editNotfall">Notfall</label>
+          <select id="editNotfall" name="notfall">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="editPrivat">Privat</label>
+          <select id="editPrivat" name="privat">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="editHerz">Herz</label>
+          <select id="editHerz" name="herz">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="editMsk">MSK</label>
+          <select id="editMsk" name="msk">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="editChest">Chest</label>
+          <select id="editChest" name="chest">
+            <option value="-1">-1 (Excluded)</option>
+            <option value="0" selected>0 (Passive)</option>
+            <option value="1">1 (Active)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+      </div>
+    </form>
+
+    <!-- CT Modality -->
+    <div id="ct-content" class="modality-content active">
+      <h2>CT Workers</h2>
+      <div id="ct-loading" class="loading">Loading CT workers...</div>
+      <div id="ct-table-container" style="display: none;">
+        <table class="workers-table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Skills</th>
+              <th>Modifier</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ct-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MR Modality -->
+    <div id="mr-content" class="modality-content">
+      <h2>MR Workers</h2>
+      <div id="mr-loading" class="loading">Loading MR workers...</div>
+      <div id="mr-table-container" style="display: none;">
+        <table class="workers-table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Skills</th>
+              <th>Modifier</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="mr-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- XRAY Modality -->
+    <div id="xray-content" class="modality-content">
+      <h2>X-RAY Workers</h2>
+      <div id="xray-loading" class="loading">Loading X-RAY workers...</div>
+      <div id="xray-table-container" style="display: none;">
+        <table class="workers-table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+              <th>Skills</th>
+              <th>Modifier</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="xray-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="statusMessage" class="status-message"></div>
+  </div>
+
+  <script>
+    let currentModality = 'ct';
+    let workersData = {
+      ct: null,
+      mr: null,
+      xray: null
+    };
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      loadWorkers('ct');
+    });
+
+    function switchModality(modality) {
+      // Update tab styling
+      document.querySelectorAll('.modality-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      event.target.classList.add('active');
+
+      // Update content visibility
+      document.querySelectorAll('.modality-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.getElementById(modality + '-content').classList.add('active');
+
+      currentModality = modality;
+
+      // Load data if not already loaded
+      if (!workersData[modality]) {
+        loadWorkers(modality);
+      }
+
+      // Cancel any active edit
+      cancelEdit();
+    }
+
+    async function loadWorkers(modality) {
+      try {
+        const response = await fetch(`/api/live_edit/workers?modality=${modality}`);
+        const data = await response.json();
+
+        if (data.success) {
+          workersData[modality] = data.workers;
+          renderWorkersTable(modality);
+
+          document.getElementById(`${modality}-loading`).style.display = 'none';
+          document.getElementById(`${modality}-table-container`).style.display = 'block';
+        } else {
+          showStatus('Failed to load workers: ' + data.error, 'error');
+        }
+      } catch (error) {
+        showStatus('Error loading workers: ' + error.message, 'error');
+      }
+    }
+
+    function renderWorkersTable(modality) {
+      const tbody = document.getElementById(`${modality}-tbody`);
+      tbody.innerHTML = '';
+
+      const workers = workersData[modality];
+      if (!workers || workers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #777;">No workers scheduled</td></tr>';
+        return;
+      }
+
+      workers.forEach((worker, index) => {
+        const row = document.createElement('tr');
+
+        // Skills badges
+        const skillBadges = [];
+        const skills = ['Normal', 'Notfall', 'Privat', 'Herz', 'Msk', 'Chest'];
+        skills.forEach(skill => {
+          const value = worker[skill];
+          if (value === 1) {
+            skillBadges.push(`<span class="skill-badge active">${skill}</span>`);
+          } else if (value === 0) {
+            skillBadges.push(`<span class="skill-badge passive">${skill}</span>`);
+          } else if (value === -1) {
+            skillBadges.push(`<span class="skill-badge excluded">${skill}</span>`);
+          }
+        });
+
+        row.innerHTML = `
+          <td><strong>${worker.PPL}</strong></td>
+          <td>${worker.start_time || 'N/A'}</td>
+          <td>${worker.end_time || 'N/A'}</td>
+          <td>${worker.shift_duration ? worker.shift_duration.toFixed(1) + 'h' : 'N/A'}</td>
+          <td>${skillBadges.join(' ')}</td>
+          <td>${worker.Modifier || 1.0}</td>
+          <td>
+            <button class="btn btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="editWorker('${modality}', ${index})">Edit</button>
+            <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="deleteWorker('${modality}', ${index})">Delete</button>
+          </td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    }
+
+    function editWorker(modality, index) {
+      const worker = workersData[modality][index];
+
+      // Populate form
+      document.getElementById('editIndex').value = index;
+      document.getElementById('editModality').value = modality;
+      document.getElementById('editPerson').value = worker.PPL;
+      document.getElementById('editTime').value = worker.start_time || '';
+      document.getElementById('editModifier').value = worker.Modifier || 1.0;
+      document.getElementById('editNormal').value = worker.Normal || 0;
+      document.getElementById('editNotfall').value = worker.Notfall || 0;
+      document.getElementById('editPrivat').value = worker.Privat || 0;
+      document.getElementById('editHerz').value = worker.Herz || 0;
+      document.getElementById('editMsk').value = worker.Msk || 0;
+      document.getElementById('editChest').value = worker.Chest || 0;
+
+      // Show form
+      document.getElementById('editForm').classList.add('active');
+
+      // Scroll to form
+      document.getElementById('editForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function cancelEdit() {
+      document.getElementById('editForm').classList.remove('active');
+    }
+
+    async function submitEdit(event) {
+      event.preventDefault();
+
+      const formData = new FormData(event.target);
+      const modality = formData.get('modality');
+
+      try {
+        const response = await fetch('/edit', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          showStatus('✅ Worker updated successfully (IMMEDIATELY ACTIVE)', 'success');
+
+          // Reload workers data
+          await loadWorkers(modality);
+
+          // Hide edit form
+          cancelEdit();
+        } else {
+          const text = await response.text();
+          showStatus('Failed to update worker: ' + text, 'error');
+        }
+      } catch (error) {
+        showStatus('Error updating worker: ' + error.message, 'error');
+      }
+    }
+
+    async function deleteWorker(modality, index) {
+      if (!confirm('⚠️ DELETE this worker entry?\n\nThis will take effect IMMEDIATELY.\n\nContinue?')) {
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('index', index);
+        formData.append('modality', modality);
+
+        const response = await fetch('/delete', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          showStatus('✅ Worker deleted successfully (IMMEDIATELY ACTIVE)', 'success');
+
+          // Reload workers data
+          await loadWorkers(modality);
+        } else {
+          const text = await response.text();
+          showStatus('Failed to delete worker: ' + text, 'error');
+        }
+      } catch (error) {
+        showStatus('Error deleting worker: ' + error.message, 'error');
+      }
+    }
+
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('statusMessage');
+      statusEl.textContent = message;
+      statusEl.className = 'status-message ' + type;
+      statusEl.style.display = 'block';
+
+      setTimeout(() => {
+        statusEl.style.display = 'none';
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
