@@ -1,197 +1,371 @@
-# RadIMO SBZ Coordinator
+# RadIMO SBZ - Radiology Workload Coordinator
 
-RadIMO orchestrates modality-specific reading workloads for radiology teams. The
-Flask application ingests structured Excel schedules, tracks how often each
-radiologist has been assigned to Normal, Notfall, Privat, Herz, Msk, and Chest
-cases, and automatically balances future assignments across modalities. The tool
-is designed for medical workload distribution scenarios where CT, MR, and X-Ray
-teams share staff and overflow logic must be transparent.
+**Radiology: Innovation, Management & Orchestration**
 
-## Key Features
+Smart worker assignment system for radiology teams with automatic load balancing, flexible fallback strategies, and overlapping shift support.
 
-- **Excel-based roster ingestion** – upload or schedule modality-specific XLSX
-  files that define people, time windows, modifiers, and per-skill capacities.
-- **Real-time coordinator UI** – modality tabs, skill buttons, and live status
-  indicators show who can be assigned at any moment (`templates/index.html`).
-- **Weighted workload tracking** – modifiers, modality factors, and skill
-  weights are combined inside `update_global_assignment` to keep global totals
-  fair across teams (`app.py`).
-- **Strict group draws** – each skill button exposes a star `*` control that
-  forces the request through `/api/<modality>/<role>/strict`, ensuring no
-  fallback columns or modalities are used when you need a dedicated worker.
-- **Automatic backups & reset flow** – every upload produces a live backup and a
-  07:30 CET daily reset consumes scheduled files, guaranteeing recoverability.
-- **REST API** – `/api/<modality>/<role>` drives remote dashboards or bots,
-  `/api/<modality>/<role>/strict` enforces "no fallback" pulls for that role,
-  and `/api/quick_reload` exposes assignment statistics for tooling
-  integrations.
+---
 
-## Running the Application
+## 🎯 What is RadIMO SBZ?
 
-1. **Install dependencies** (Flask, pandas, openpyxl, PyYAML).
+RadIMO orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY) and skills (Normal, Notfall, Privat, Herz, Msk, Chest). It automatically balances assignments to ensure fair distribution while respecting worker availability and skill levels.
 
-   ```bash
-   pip install -r requirements.txt  # or install the packages manually
-   ```
+**Key Capabilities:**
+- 📊 Real-time worker assignment with automatic load balancing
+- 🔄 Smart fallback strategies for overload situations
+- ⏰ Dynamic shift handling with work-hour-adjusted balancing
+- 📱 Two UI modes: by modality or by skill
+- 📈 Cross-modality workload tracking and overflow management
+- 📁 Excel-based schedule management with automatic backup
 
-2. **Inspect operational readiness** (optional):
+---
 
-   ```bash
-   python ops_check.py
-   ```
+## 🚀 Quick Start
 
-   The script loads `app.py`, prints configured modalities/skills, and runs the
-   inline operational checks.
+### Installation
 
-3. **Start the coordinator**:
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-   ```bash
-   flask --app app run --debug
-   ```
+# Check system readiness
+python ops_check.py
 
-   Upload live rosters via `/upload` (admin login) or monitor assignments via
-   `/`.
+# Start the application
+flask --app app run --debug
+```
 
-## Upload & Scheduling Workflow
+### Access Points
 
-- Each modality has a default upload (`uploads/SBZ_<MOD>.xlsx`) plus an optional
-  scheduled file (`uploads/SBZ_<MOD>_scheduled.xlsx`).
-- Uploads immediately reset draw counters, skill counters, and weighted counts
-  before re-importing (`upload_file` view).
-- Daily at 07:30 CET, `check_and_perform_daily_reset` consumes scheduled files,
-  backs them up, and refreshes live data without manual interaction.
+- **Main Interface**: `http://localhost:5000/` - By modality view
+- **Skill View**: `http://localhost:5000/by-skill` - By skill view
+- **Admin Panel**: `http://localhost:5000/upload` - Upload schedules & statistics
+- **Timeline**: `http://localhost:5000/timetable` - Visualize shifts
 
-## Overflow & Modular Fallback Logic
+---
 
-1. **Skill-level overflow detection**
+## ✨ Key Features
 
-   - `_apply_minimum_balancer` favors workers who have been assigned fewer times
-     than `balancer.min_assignments_per_skill` for the active skill column.
-   - `_should_balance_via_fallback` compares the max/min draw counts for all
-     workers who can currently serve a skill. If the imbalance exceeds
-     `balancer.imbalance_threshold_pct`, the system temporarily routes the
-     request to a fallback skill column.
+### 1. **Dual View Modes**
 
-2. **Skill fallback chains**
+Choose your workflow:
 
-   - `_try_configured_fallback` iterates through the ordered list defined in
-     `balancer.fallback_chain` (defaults live in `config.yaml`).
-   - `get_active_df_for_role` will transparently switch to the first fallback
-     column that still has capacity, so "Herz" can borrow "Notfall" workers and
-     ultimately "Normal" staff when demand spikes.
+- **By Modality** (default): Navigate by modality (CT/MR/XRAY) → assign by skill
+- **By Skill** (new): Navigate by skill (Normal/Notfall/Herz) → assign by modality
 
-3. **Modality-level overflow chains**
+Toggle between views with one click!
 
-   - The `modality_fallbacks` map (see `config.yaml`) describes which other
-     modalities can cover a shortage (e.g., XRAY → CT → MR).
-   - `get_next_available_worker` now walks `[requested_modality] + fallback
-     chain`, calling `_select_worker_for_modality` at each step until a worker
-     is found. The response clearly states the modality actually used so the UI
-     can highlight cross-team support.
+### 2. **Smart Load Balancing**
 
-4. **Fallback strategy modes** (configurable via `balancer.fallback_strategy`)
+- **Work-hour-adjusted ratios**: Balances workload based on hours worked, not just assignment count
+- **Overlapping shift support**: Handles early/late starters fairly
+- **30% imbalance threshold**: Automatic fallback when workload becomes unfair
+- **Minimum assignments**: Ensures everyone gets at least 5 assignments before overloading others
 
-   - **`skill_priority` mode** (default): Exhausts all skill fallbacks within
-     each modality before moving to the next modality. This minimizes
-     cross-modality borrowing and keeps teams working within their own modality
-     whenever possible.
+### 3. **Flexible Fallback Strategies**
 
-     Example for "Herz" in XRAY:
-     ```
-     XRAY: Herz → Notfall → Normal
-     CT:   Herz → Notfall → Normal
-     MR:   Herz → Notfall → Normal
-     ```
+Three modes to handle overflow:
 
-   - **`modality_priority` mode**: Tries each skill across all modalities
-     before moving to the next skill fallback. This prioritizes skill
-     specialization over modality boundaries, ensuring specialized workers are
-     used across all teams before falling back to generalists.
+| Strategy | Best For | Behavior |
+|----------|----------|----------|
+| **skill_priority** | Modality expertise | Try all skills in CT before moving to MR |
+| **modality_priority** | Skill expertise | Try Herz in all modalities before trying Notfall |
+| **pool_priority** | Maximum fairness | Evaluate all options globally, pick least loaded |
 
-     Example for "Herz" in XRAY:
-     ```
-     Herz:    XRAY → CT → MR
-     Notfall: XRAY → CT → MR
-     Normal:  XRAY → CT → MR
-     ```
+Configure in `config.yaml`:
+```yaml
+balancer:
+  fallback_strategy: skill_priority  # or modality_priority, pool_priority
+  imbalance_threshold_pct: 30
+  min_assignments_per_skill: 5
+```
 
-   - **`pool_priority` mode**: Collects ALL possible (skill, modality)
-     combinations into a single pool, evaluates the load for each candidate,
-     and selects the globally optimal worker. This approach ignores
-     fixed fallback paths entirely and instead performs true load balancing
-     across all available resources.
+### 4. **Skill Value System**
 
-     Example for "Herz" in XRAY:
-     ```
-     Pool of all 9 combinations:
-     1. XRAY/Herz     → Worker A (ratio: 0.5)
-     2. XRAY/Notfall  → Worker B (ratio: 0.3) ← BEST
-     3. XRAY/Normal   → Worker C (ratio: 0.7)
-     4. CT/Herz       → Worker D (ratio: 0.6)
-     5. CT/Notfall    → Worker E (ratio: 0.4)
-     6. CT/Normal     → Worker F (ratio: 0.8)
-     7. MR/Herz       → Worker G (ratio: 0.9)
-     8. MR/Notfall    → Worker H (ratio: 0.5)
-     9. MR/Normal     → Worker I (ratio: 1.0)
+Fine-tune worker availability:
 
-     → Selects Worker B (XRAY/Notfall) with lowest ratio
-     ```
+| Value | Name | Behavior |
+|-------|------|----------|
+| **1** | Active | Available for primary requests + fallback |
+| **0** | Passive | Available ONLY in fallback (training, backup) |
+| **-1** | Excluded | NOT available (on leave, restricted) |
 
-     This mode is ideal when load balancing is more important than preserving
-     modality or skill preferences. It ensures no worker becomes overloaded
-     while valid alternatives exist elsewhere.
+### 5. **Automatic Scheduling**
 
-Together, these layers give planners a modular control surface: per-skill
-fallbacks handle intra-modality overloads, while modality fallback chains enable
-cross-modality surge absorption. The fallback strategy determines the priority
-order. All behaviors are data-driven via YAML.
+- **Immediate upload**: Replace schedule instantly via admin panel
+- **Scheduled upload**: Stage files for 07:30 CET daily reset
+- **Automatic backup**: Every upload backed up for recovery
+- **Cross-modality tracking**: Global workload statistics across all teams
 
-## Configuration Reference (`config.yaml`)
+---
 
-- **modalities** – label, colors, and weighting factor per modality.
-- **skills** – label, colors, weight, optional/special flags, form_key/slug, and
-  `display_order` for UI ordering. Skills inherit sensible defaults from
-  `DEFAULT_SKILLS` if a field is omitted.
-- **balancer** – enable/disable minimum assignment logic, imbalance thresholds,
-  and skill fallback chains.
-  - **fallback_strategy** – controls the order in which skill and modality
-    fallbacks are attempted. Valid values:
-    - `skill_priority` (default): Try all skill fallbacks within the requested
-      modality before moving to the next modality. Example: For "Herz" in XRAY,
-      try Herz→Notfall→Normal in XRAY, then try Herz→Notfall→Normal in CT, etc.
-    - `modality_priority`: Try each skill across all modalities before moving
-      to the next skill fallback. Example: For "Herz" in XRAY, try Herz in
-      XRAY→CT→MR, then try Notfall in XRAY→CT→MR, then Normal in XRAY→CT→MR.
-    - `pool_priority`: Collect all (skill, modality) combinations and select
-      the globally optimal worker based on load. Ignores sequential paths and
-      performs true load balancing across all fallback options.
-- **modality_fallbacks** – ordered arrays such as `xray: [ct, mr]` that define
-  the modular overflow path for `get_next_available_worker`.
-- **admin_password** – protects `/upload` via the simple login form.
+## 📊 How It Works
 
-Any change to `config.yaml` is merged with defaults when the app starts, so you
-only have to maintain a single configuration file.
+### Assignment Flow
 
-## API Surface
+```
+Request: CT/Herz
+    ↓
+1. Check available workers (shift times, skill values)
+2. Calculate workload ratio = weighted_assignments / hours_worked_so_far
+3. Check imbalance (30% threshold)
+    ↓
+    If balanced: Select worker with lowest ratio
+    If imbalanced: Try fallback (Herz → Notfall → Normal)
+    ↓
+4. Update counters (skill-specific, global, weighted)
+5. Return assigned worker
+```
 
-| Endpoint | Purpose |
-| --- | --- |
-| `/api/<modality>/<role>` | Draws and logs the next worker for the given modality & skill. |
-| `/api/<modality>/<role>/strict` | Same as above but refuses skill/modality fallbacks for the request. |
-| `/api/quick_reload` | Returns live stats, available buttons, and operational check results. |
-| `/timetable` | Visualizes current working-hours windows per modality. |
+### Workload Calculation
 
-Responses contain the assigned person, updated totals, and any fallback
-information so downstream systems can mirror the UI.
+```python
+# Dynamic ratio adjusted for shift progress
+ratio = weighted_assignments / hours_worked_till_now
 
-## Usage Ideas for Medical Workload Distribution
+# Weighted assignments consider:
+- Skill weight (Notfall=1.1, Privat=1.2, Normal=1.0, etc.)
+- Modality factor (MR=1.2, CT=1.0, XRAY=0.33)
+- Worker modifier (individual multipliers from Excel)
 
-- **Central dispatcher consoles** – run the UI on a modality workstations so coordinators
-  can trigger assignments in real time.
-- **Operations analytics** – poll `/api/quick_reload` to feed dashboards that
-  highlight when certain skills or modalities routinely overflow.
-- **Cross-site coordination** – configure modality fallbacks to point to other
-  campuses, enabling remote coverage when local staff is exhausted.
+# Lower ratio = less loaded = selected
+```
 
-These scenarios all benefit from RadIMO's transparent overflow logic and the
-ability to encode modality/skill relationships declaratively.
+### Example: Overlapping Shifts
+
+**At 10:00 AM:**
+```
+Worker A: 07:00-13:00, 10 assignments, 3h worked → ratio = 10/3 = 3.33
+Worker B: 09:00-17:00,  7 assignments, 1h worked → ratio = 7/1 = 7.00
+
+→ Worker A selected (lower ratio = less loaded per hour)
+```
+
+---
+
+## 🔧 Configuration
+
+### `config.yaml` Structure
+
+```yaml
+# Modalities
+modalities:
+  ct:
+    label: CT
+    nav_color: '#1a5276'
+    factor: 1.0
+  mr:
+    label: MR
+    factor: 1.2
+  xray:
+    label: XRAY
+    factor: 0.33
+
+# Skills
+skills:
+  Normal:
+    weight: 1.0
+    optional: false
+  Notfall:
+    weight: 1.1
+    optional: false
+  Herz:
+    weight: 1.2
+    optional: true
+    special: true
+
+# Balancing
+balancer:
+  enabled: true
+  min_assignments_per_skill: 5
+  imbalance_threshold_pct: 30
+  allow_fallback_on_imbalance: true
+  fallback_strategy: skill_priority  # skill_priority | modality_priority | pool_priority
+
+  fallback_chain:
+    Normal: []
+    Notfall: [Normal]
+    Herz: [[Notfall, Normal]]  # Parallel fallback
+
+# Modality overflow
+modality_fallbacks:
+  xray: [[ct, mr]]  # XRAY can borrow from both CT and MR
+  ct: [mr]          # CT can borrow from MR
+  mr: []            # MR cannot borrow
+```
+
+---
+
+## 📡 API Reference
+
+### Worker Assignment
+
+```bash
+# Assign with fallback support
+GET /api/{modality}/{skill}
+Example: curl http://localhost:5000/api/ct/herz
+
+# Strict mode (no fallback)
+GET /api/{modality}/{skill}/strict
+Example: curl http://localhost:5000/api/ct/herz/strict
+```
+
+**Response:**
+```json
+{
+  "Assigned Person": "Dr. Anna Müller (AM)",
+  "Draw Time": "14:23:45",
+  "Modality": "ct",
+  "Requested Skill": "Herz",
+  "Used Skill": "Herz",
+  "Fallback Used": false
+}
+```
+
+### Statistics & Status
+
+```bash
+# Get live statistics (modality-based view)
+GET /api/quick_reload?modality=ct
+
+# Get live statistics (skill-based view)
+GET /api/quick_reload?skill=herz
+```
+
+---
+
+## 📁 Project Structure
+
+```
+RadIMO_SBZ_DEV/
+├── app.py                      # Main Flask application
+├── config.yaml                 # Configuration file
+├── ops_check.py               # Pre-deployment checks
+├── requirements.txt           # Python dependencies
+├── templates/
+│   ├── index.html             # By-modality view
+│   ├── index_by_skill.html    # By-skill view
+│   ├── upload.html            # Admin panel
+│   ├── timetable.html         # Timeline visualization
+│   └── login.html             # Authentication
+├── static/
+│   ├── vis.js                 # Timeline library
+│   └── favicon.ico
+├── uploads/                   # Excel schedule files
+│   ├── SBZ_ct.xlsx           # Current CT schedule
+│   ├── SBZ_mr.xlsx           # Current MR schedule
+│   └── SBZ_xray.xlsx         # Current XRAY schedule
+└── docs/                      # Documentation
+    ├── SYSTEM_ANALYSIS.md     # Complete technical analysis
+    ├── FRONTEND_ARCHITECTURE.md  # UI architecture details
+    └── TESTING_GUIDE.md       # Testing strategies
+```
+
+---
+
+## 📖 Documentation
+
+Comprehensive documentation available in the `docs/` folder:
+
+- **[SYSTEM_ANALYSIS.md](docs/SYSTEM_ANALYSIS.md)** - Complete system analysis, fallback strategies, balancing algorithms
+- **[FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md)** - UI structure, templates, API integration
+- **[TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing strategies, edge cases, validation
+
+---
+
+## 🎨 Excel File Format
+
+### Tabelle1 (Schedule Data)
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| PPL | Worker name | Dr. Anna Müller |
+| Kürzel | Abbreviation | AM |
+| VON | Start time | 07:00 |
+| BIS | End time | 13:00 |
+| Modifier | Individual weight | 1.0 |
+| Normal | Skill value (1/0/-1) | 1 |
+| Notfall | Skill value (1/0/-1) | 1 |
+| Privat | Skill value (1/0/-1) | 0 |
+| Herz | Skill value (1/0/-1) | 1 |
+| Msk | Skill value (1/0/-1) | -1 |
+| Chest | Skill value (1/0/-1) | 0 |
+
+### Tabelle2 (Info Texts)
+
+Display messages on the main interface (one message per row).
+
+---
+
+## 🔐 Security
+
+- **Admin password**: Configure in `config.yaml` (change default for production!)
+- **Session-based auth**: Admin routes protected by login
+- **No user registration**: Simple password-based access
+
+---
+
+## 🚦 Operational Checks
+
+Run system health checks before deployment:
+
+```bash
+python ops_check.py
+```
+
+**Checks:**
+- ✅ Config file validity
+- ✅ Admin password configured
+- ✅ Upload folder writable
+- ✅ Modalities configured
+- ✅ Skills configured
+- ✅ Worker data loaded
+
+---
+
+## 💡 Use Cases
+
+### Central Dispatcher Console
+Run on modality workstations for real-time assignments by coordinators.
+
+### Operations Analytics
+Poll `/api/quick_reload` to feed dashboards showing overflow patterns.
+
+### Cross-Site Coordination
+Configure modality fallbacks to point to other campuses for remote coverage.
+
+### Training & Backup Staff
+Use passive skill values (0) for workers who can help but shouldn't be primary choice.
+
+---
+
+## 🔄 Recent Updates
+
+### v17 (November 2025)
+- ✨ Added skill-based navigation view (`/by-skill`)
+- 🔧 Implemented work-hour-adjusted ratio balancing for overlapping shifts
+- 📊 Enhanced imbalance detection to use dynamic ratios
+- ✅ Implemented `run_operational_checks()` for system validation
+- 📝 Fixed skill value documentation (corrected -1/0/1 system)
+
+---
+
+## 📄 License & Contact
+
+**RadIMO v17** - Radiology: Innovation, Management & Orchestration
+
+For more information, see [EULA.txt](static/EULA.txt) or contact **Dr. M. Russe**.
+
+---
+
+## 🤝 Contributing
+
+This is a specialized medical workload distribution system. For questions or suggestions:
+
+1. Review the [System Analysis](docs/SYSTEM_ANALYSIS.md) documentation
+2. Check the [Testing Guide](docs/TESTING_GUIDE.md) for validation strategies
+3. Understand the [Frontend Architecture](docs/FRONTEND_ARCHITECTURE.md)
+
+---
+
+**Made with ❤️ for radiology teams**
