@@ -643,6 +643,132 @@ def build_ppl_from_row(row: pd.Series) -> str:
     code = str(row.get('Code des Mitarbeiters', 'UNK'))
     return f"{name} ({code})"
 
+def get_weekday_name_german(target_date: date) -> str:
+    """
+    Get German weekday name for a date.
+
+    Returns: Montag, Dienstag, Mittwoch, Donnerstag, Freitag, Samstag, Sonntag
+    """
+    weekday_names = [
+        "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+        "Freitag", "Samstag", "Sonntag"
+    ]
+    return weekday_names[target_date.weekday()]
+
+def parse_duration(duration_str: str) -> timedelta:
+    """
+    Parse duration string to timedelta.
+
+    Examples:
+        "1h30m" → timedelta(hours=1, minutes=30)
+        "2h" → timedelta(hours=2)
+        "30m" → timedelta(minutes=30)
+    """
+    hours = 0
+    minutes = 0
+
+    # Match hours
+    h_match = re.search(r'(\d+)h', duration_str)
+    if h_match:
+        hours = int(h_match.group(1))
+
+    # Match minutes
+    m_match = re.search(r'(\d+)m', duration_str)
+    if m_match:
+        minutes = int(m_match.group(1))
+
+    return timedelta(hours=hours, minutes=minutes)
+
+def apply_exclusions_to_shifts(
+    work_shifts: List[dict],
+    exclusions: List[dict],
+    target_date: date
+) -> List[dict]:
+    """
+    Apply time exclusions to work shifts (split/truncate as needed).
+
+    Args:
+        work_shifts: List of shift dicts with start_time, end_time
+        exclusions: List of exclusion dicts with start_time, end_time
+        target_date: Date for datetime calculations
+
+    Returns:
+        List of modified shift dicts with exclusions applied
+    """
+    if not exclusions:
+        return work_shifts
+
+    result_shifts = []
+
+    for shift in work_shifts:
+        shift_start = shift['start_time']
+        shift_end = shift['end_time']
+
+        # Convert to datetime for comparison
+        shift_start_dt = datetime.combine(target_date, shift_start)
+        shift_end_dt = datetime.combine(target_date, shift_end)
+        if shift_end_dt < shift_start_dt:
+            shift_end_dt += timedelta(days=1)
+
+        # Collect all exclusion periods that overlap with this shift
+        overlapping_exclusions = []
+        for excl in exclusions:
+            excl_start = excl['start_time']
+            excl_end = excl['end_time']
+
+            excl_start_dt = datetime.combine(target_date, excl_start)
+            excl_end_dt = datetime.combine(target_date, excl_end)
+            if excl_end_dt < excl_start_dt:
+                excl_end_dt += timedelta(days=1)
+
+            # Check for overlap
+            if excl_start_dt < shift_end_dt and excl_end_dt > shift_start_dt:
+                overlapping_exclusions.append((excl_start_dt, excl_end_dt))
+
+        if not overlapping_exclusions:
+            # No exclusions, keep shift as-is
+            result_shifts.append(shift)
+            continue
+
+        # Sort exclusions by start time
+        overlapping_exclusions.sort(key=lambda x: x[0])
+
+        # Split shift at exclusion boundaries
+        current_start = shift_start_dt
+        for excl_start_dt, excl_end_dt in overlapping_exclusions:
+            # Add segment before exclusion (if any)
+            if current_start < excl_start_dt:
+                segment_start = current_start.time()
+                segment_end = excl_start_dt.time()
+                segment_duration = (excl_start_dt - current_start).seconds / 3600
+
+                if segment_duration >= 0.1:  # Minimum 6 minutes
+                    result_shifts.append({
+                        **shift,
+                        'start_time': segment_start,
+                        'end_time': segment_end,
+                        'shift_duration': segment_duration
+                    })
+
+            # Move current_start to after exclusion
+            current_start = max(current_start, excl_end_dt)
+
+        # Add remaining segment after all exclusions (if any)
+        if current_start < shift_end_dt:
+            segment_start = current_start.time()
+            segment_end = shift_end_dt.time()
+            segment_duration = (shift_end_dt - current_start).seconds / 3600
+
+            if segment_duration >= 0.1:  # Minimum 6 minutes
+                result_shifts.append({
+                    **shift,
+                    'start_time': segment_start,
+                    'end_time': segment_end,
+                    'shift_duration': segment_duration
+                })
+
+    return result_shifts
+
 def build_working_hours_from_medweb(
     csv_path: str,
     target_date: datetime,
@@ -681,10 +807,14 @@ def build_working_hours_from_medweb(
     mapping_rules = config.get('medweb_mapping', {}).get('rules', [])
     worker_roster = config.get('worker_skill_roster', {})
 
+    # Get weekday name for exclusion schedule lookup
+    weekday_name = get_weekday_name_german(target_date.date())
+
     # Prepare data structures
     rows_per_modality = {mod: [] for mod in allowed_modalities}
+    exclusions_per_worker = {}  # {canonical_id: [{start_time, end_time, activity}, ...]}
 
-    # Process each activity
+    # FIRST PASS: Process each activity (collect work shifts AND exclusions)
     for _, row in day_df.iterrows():
         activity_desc = str(row.get('Beschreibung der Aktivität', ''))
 
@@ -693,17 +823,74 @@ def build_working_hours_from_medweb(
         if not rule:
             continue  # Not SBZ-relevant or not mapped
 
-        modality = normalize_modality(rule['modality'])
+        # Build PPL and get canonical ID (needed for both work and exclusions)
+        ppl_str = build_ppl_from_row(row)
+        canonical_id = get_canonical_worker_id(ppl_str)
+
+        # Check if this is a time exclusion (board, meeting, etc.)
+        if rule.get('exclusion', False):
+            # Get schedule for this exclusion
+            schedule = rule.get('schedule', {})
+
+            # Check if exclusion applies to today's weekday
+            if weekday_name not in schedule:
+                # Exclusion doesn't apply today, skip
+                continue
+
+            # Parse time range from schedule
+            time_range_str = schedule[weekday_name]
+            try:
+                start_str, end_str = time_range_str.split('-')
+                excl_start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
+                excl_end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
+            except Exception as e:
+                selection_logger.warning(
+                    f"Could not parse exclusion time range '{time_range_str}' for {activity_desc}: {e}"
+                )
+                continue
+
+            # Apply prep_time if configured
+            prep_time = rule.get('prep_time', {})
+            if prep_time:
+                # Extend exclusion start backwards (prep before)
+                if 'before' in prep_time:
+                    prep_before = parse_duration(prep_time['before'])
+                    excl_start_dt = datetime.combine(target_date.date(), excl_start_time)
+                    excl_start_dt -= prep_before
+                    excl_start_time = excl_start_dt.time()
+
+                # Extend exclusion end forwards (cleanup after)
+                if 'after' in prep_time:
+                    prep_after = parse_duration(prep_time['after'])
+                    excl_end_dt = datetime.combine(target_date.date(), excl_end_time)
+                    excl_end_dt += prep_after
+                    excl_end_time = excl_end_dt.time()
+
+            # Store exclusion for this worker
+            if canonical_id not in exclusions_per_worker:
+                exclusions_per_worker[canonical_id] = []
+
+            exclusions_per_worker[canonical_id].append({
+                'start_time': excl_start_time,
+                'end_time': excl_end_time,
+                'activity': activity_desc
+            })
+
+            selection_logger.info(
+                f"Time exclusion for {ppl_str} ({weekday_name}): "
+                f"{excl_start_time.strftime('%H:%M')}-{excl_end_time.strftime('%H:%M')} "
+                f"({activity_desc})"
+            )
+            continue  # Don't add to work shifts
+
+        # Normal work activity (not exclusion)
+        modality = normalize_modality(rule.get('modality'))
         if modality not in allowed_modalities:
             continue
 
         # Base skills from rule
         base_skills = {s: 0 for s in SKILL_COLUMNS}
         base_skills.update(rule.get('base_skills', {}))
-
-        # Build PPL and get canonical ID
-        ppl_str = build_ppl_from_row(row)
-        canonical_id = get_canonical_worker_id(ppl_str)
 
         # Apply roster overrides (config > worker mapping)
         final_skills = apply_roster_overrides(
@@ -731,6 +918,38 @@ def build_working_hours_from_medweb(
                 'Modifier': 1.0,  # Can be extended with modifier_overrides
                 **final_skills
             })
+
+    # SECOND PASS: Apply exclusions to split/truncate shifts
+    if exclusions_per_worker:
+        selection_logger.info(
+            f"Applying time exclusions for {len(exclusions_per_worker)} workers on {weekday_name}"
+        )
+
+        for modality in rows_per_modality:
+            if not rows_per_modality[modality]:
+                continue
+
+            # Group shifts by worker
+            shifts_by_worker = {}
+            for shift in rows_per_modality[modality]:
+                worker_id = shift['canonical_id']
+                if worker_id not in shifts_by_worker:
+                    shifts_by_worker[worker_id] = []
+                shifts_by_worker[worker_id].append(shift)
+
+            # Apply exclusions per worker and rebuild shift list
+            new_shifts = []
+            for worker_id, worker_shifts in shifts_by_worker.items():
+                if worker_id in exclusions_per_worker:
+                    # Apply exclusions to this worker's shifts
+                    worker_shifts = apply_exclusions_to_shifts(
+                        worker_shifts,
+                        exclusions_per_worker[worker_id],
+                        target_date.date()
+                    )
+                new_shifts.extend(worker_shifts)
+
+            rows_per_modality[modality] = new_shifts
 
     # Convert to DataFrames
     result = {}

@@ -186,22 +186,39 @@ medweb_mapping:
 
     # Time exclusions (boards, meetings, teaching) - NEW
     # These punch out time from work shifts (worker completely unavailable)
+    # Schedule is day-specific (Montag, Dienstag, Mittwoch, Donnerstag, Freitag)
+    - match: "Kopf-Hals-Board"
+      exclusion: true
+      schedule:
+        Montag: "15:30-17:00"
+      prep_time:
+        before: "30m"  # Optional: exclude 15:00-15:30 as prep
+        after: "15m"   # Optional: exclude 17:00-17:15 as cleanup
+
     - match: "Board"
       exclusion: true
-      duration: "1h30m"  # Default duration if not parsed from description
-      # Examples: "Kopf-Hals-Board (Mo 15:30)", "CT-Board", etc.
+      schedule:
+        Dienstag: "15:00-17:00"
+        Mittwoch: "10:00-12:00"
+        Donnerstag: "14:00-16:00"
 
     - match: "Besprechung"
       exclusion: true
-      duration: "1h"
+      schedule:
+        Montag: "09:00-10:00"
+        Mittwoch: "14:00-15:00"
+        Freitag: "13:00-14:00"
 
     - match: "Fortbildung"
       exclusion: true
-      duration: "2h"
+      schedule:
+        Donnerstag: "13:00-15:00"
 
     - match: "Aufklärung"
       exclusion: true
-      duration: "1h"
+      schedule:
+        Dienstag: "10:00-11:00"
+        Donnerstag: "10:00-11:00"
 
     # SBZ Aufklärung - uses shifts logic
     - match: "SBZ Aufklärung"
