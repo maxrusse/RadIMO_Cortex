@@ -1,3 +1,4 @@
+# Flask imports
 from flask import (
     Flask,
     jsonify,
@@ -5,31 +6,30 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    session,
     url_for,
 )
-from flask import session
-import pandas as pd
-from datetime import datetime, time, timedelta, date
-import pytz
-import os
+
+# Standard library imports
 import copy
-import shutil
+import json
+import logging
+import os
 import re
+import shutil
+from datetime import datetime, time, timedelta, date
+from functools import wraps
 from pathlib import Path
 from threading import Lock
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+# Third-party imports
 import pandas as pd
 import pytz
 import yaml
-import json
-from functools import wraps
-from typing import Dict, Any, Optional
-
-import logging
-from logging.handlers import RotatingFileHandler
-from typing import Any, Callable, Dict, List, Optional, Tuple
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from logging.handlers import RotatingFileHandler
 
 os.makedirs('logs', exist_ok=True)
 
@@ -612,7 +612,24 @@ def get_local_berlin_now() -> datetime:
     naive_now = aware_now.replace(tzinfo=None)
     return naive_now
 
-def parse_time_range(time_range: str):
+def parse_time_range(time_range: str) -> Tuple[time, time]:
+    """
+    Parse a time range string into start and end time objects.
+
+    Args:
+        time_range: Time range in format "HH:MM-HH:MM" (e.g., "08:00-16:00")
+
+    Returns:
+        Tuple of (start_time, end_time) as datetime.time objects
+
+    Raises:
+        ValueError: If time_range format is invalid
+
+    Example:
+        >>> start, end = parse_time_range("08:00-16:00")
+        >>> start
+        datetime.time(8, 0)
+    """
     start_str, end_str = time_range.split('-')
     start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
     end_time   = datetime.strptime(end_str.strip(), '%H:%M').time()
@@ -621,10 +638,24 @@ def parse_time_range(time_range: str):
 # -----------------------------------------------------------
 # Worker identification helper functions (NEW)
 # -----------------------------------------------------------
-def get_canonical_worker_id(worker_name):
+def get_canonical_worker_id(worker_name: str) -> str:
     """
     Get the canonical worker ID from any name variation.
-    If not found, create a new canonical ID.
+
+    Maps worker name variations (e.g., "Full Name (ABK)" and "ABK") to a single
+    canonical identifier for consistent tracking across the system.
+
+    Args:
+        worker_name: Worker name in any format (abbreviated or full)
+
+    Returns:
+        Canonical worker ID (usually the abbreviated form)
+
+    Example:
+        >>> get_canonical_worker_id("John Doe (JD)")
+        "JD"
+        >>> get_canonical_worker_id("JD")
+        "JD"
     """
     if worker_name in global_worker_data['worker_ids']:
         return global_worker_data['worker_ids'][worker_name]
@@ -2217,10 +2248,7 @@ def load_staged_dataframe(modality: str) -> bool:
         return False
 
     try:
-        from app import attempt_initialize_data  # Import here to avoid circular dependency
-        # Temporarily load into staged structure
-        # We'll use a modified version that doesn't overwrite modality_data
-
+        # Load staged data directly from Excel file
         with pd.ExcelFile(staged_file, engine='openpyxl') as xls:
             if 'Tabelle1' in xls.sheet_names:
                 df = pd.read_excel(xls, sheet_name='Tabelle1')
@@ -3086,8 +3114,44 @@ def delete_prep_worker():
 def activate_staged_schedule():
     """
     Activate staged schedule: Copy staged data → live data.
+
     This promotes tomorrow's planned schedule to today's live schedule.
-    CRITICAL: This resets ALL assignment counters!
+    Typically called manually or automatically at the start of each day.
+
+    CRITICAL: This operation:
+    - Copies staged_modality_data → modality_data for specified modalities
+    - Resets ALL assignment counters to 0 (fresh start for new day)
+    - Updates live backup files
+    - Cannot be undone
+
+    Expected JSON body:
+        {
+            "modalities": ["ct", "mr", "xray"]  # Optional, defaults to all
+        }
+
+    Returns:
+        JSON response with:
+        - success: bool
+        - activated_modalities: list of modality names
+        - total_workers: int (total across all activated modalities)
+        - errors: list (if any modalities failed)
+        - warning: str (about counter reset)
+
+    Security:
+        Requires admin authentication (@admin_required)
+
+    Example:
+        POST /api/prep-next-day/activate
+        {"modalities": ["ct", "mr"]}
+
+        Response:
+        {
+            "success": true,
+            "message": "Activated staged schedule for: ct, mr",
+            "activated_modalities": ["ct", "mr"],
+            "total_workers": 15,
+            "warning": "All assignment counters have been reset!"
+        }
     """
     try:
         data = request.json
