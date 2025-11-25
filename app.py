@@ -530,6 +530,87 @@ for mod in allowed_modalities:
     }
 
 # -----------------------------------------------------------
+# State Persistence: Save/Load fairness state to prevent data loss on restart
+# -----------------------------------------------------------
+STATE_FILE_PATH = os.path.join(app.config['UPLOAD_FOLDER'], 'fairness_state.json')
+
+def save_state():
+    """
+    Persist fairness algorithm state to disk.
+    Saves draw_counts, WeightedCounts, global_worker_data, and last_reset_date.
+    Called after every assignment to ensure state is not lost on restart.
+    """
+    try:
+        state = {
+            'global_worker_data': {
+                'worker_ids': global_worker_data['worker_ids'],
+                'weighted_counts_per_mod': global_worker_data['weighted_counts_per_mod'],
+                'assignments_per_mod': global_worker_data['assignments_per_mod'],
+                'last_reset_date': global_worker_data['last_reset_date'].isoformat() if global_worker_data['last_reset_date'] else None
+            },
+            'modality_data': {}
+        }
+
+        for mod in allowed_modalities:
+            d = modality_data[mod]
+            state['modality_data'][mod] = {
+                'draw_counts': d['draw_counts'],
+                'skill_counts': d['skill_counts'],
+                'WeightedCounts': d['WeightedCounts'],
+                'last_reset_date': d['last_reset_date'].isoformat() if d['last_reset_date'] else None,
+                'last_uploaded_filename': d['last_uploaded_filename']
+            }
+
+        with open(STATE_FILE_PATH, 'w') as f:
+            json.dump(state, f, indent=2)
+
+        selection_logger.debug("State saved successfully")
+    except Exception as e:
+        selection_logger.error(f"Failed to save state: {str(e)}", exc_info=True)
+
+def load_state():
+    """
+    Load fairness algorithm state from disk on startup.
+    Restores draw_counts, WeightedCounts, global_worker_data, and last_reset_date.
+    """
+    if not os.path.exists(STATE_FILE_PATH):
+        selection_logger.info("No saved state found, starting fresh")
+        return
+
+    try:
+        with open(STATE_FILE_PATH, 'r') as f:
+            state = json.load(f)
+
+        # Restore global_worker_data
+        if 'global_worker_data' in state:
+            gwd = state['global_worker_data']
+            global_worker_data['worker_ids'] = gwd.get('worker_ids', {})
+            global_worker_data['weighted_counts_per_mod'] = gwd.get('weighted_counts_per_mod', {mod: {} for mod in allowed_modalities})
+            global_worker_data['assignments_per_mod'] = gwd.get('assignments_per_mod', {mod: {} for mod in allowed_modalities})
+
+            last_reset_str = gwd.get('last_reset_date')
+            if last_reset_str:
+                global_worker_data['last_reset_date'] = datetime.fromisoformat(last_reset_str).date()
+
+        # Restore modality_data counters
+        if 'modality_data' in state:
+            for mod in allowed_modalities:
+                if mod in state['modality_data']:
+                    mod_state = state['modality_data'][mod]
+                    modality_data[mod]['draw_counts'] = mod_state.get('draw_counts', {})
+                    modality_data[mod]['skill_counts'] = mod_state.get('skill_counts', {skill: {} for skill in SKILL_COLUMNS})
+                    modality_data[mod]['WeightedCounts'] = mod_state.get('WeightedCounts', {})
+                    modality_data[mod]['last_uploaded_filename'] = mod_state.get('last_uploaded_filename', f"SBZ_{mod.upper()}.xlsx")
+
+                    last_reset_str = mod_state.get('last_reset_date')
+                    if last_reset_str:
+                        modality_data[mod]['last_reset_date'] = datetime.fromisoformat(last_reset_str).date()
+
+        selection_logger.info("State loaded successfully from disk")
+    except Exception as e:
+        selection_logger.error(f"Failed to load state: {str(e)}", exc_info=True)
+
+# -----------------------------------------------------------
 # Staged data: separate structure for next-day planning
 # -----------------------------------------------------------
 staged_modality_data = {}
@@ -858,14 +939,15 @@ def apply_exclusions_to_shifts(
             if current_start < excl_start_dt:
                 segment_start = current_start.time()
                 segment_end = excl_start_dt.time()
-                segment_duration = (excl_start_dt - current_start).seconds / 3600
+                segment_timedelta = excl_start_dt - current_start
 
-                if segment_duration >= 0.1:  # Minimum 6 minutes
+                # Minimum 6 minutes (360 seconds) - use timedelta for precision
+                if segment_timedelta >= timedelta(minutes=6):
                     result_shifts.append({
                         **shift,
                         'start_time': segment_start,
                         'end_time': segment_end,
-                        'shift_duration': segment_duration
+                        'shift_duration': segment_timedelta.total_seconds() / 3600
                     })
 
             # Move current_start to after exclusion
@@ -875,14 +957,15 @@ def apply_exclusions_to_shifts(
         if current_start < shift_end_dt:
             segment_start = current_start.time()
             segment_end = shift_end_dt.time()
-            segment_duration = (shift_end_dt - current_start).seconds / 3600
+            segment_timedelta = shift_end_dt - current_start
 
-            if segment_duration >= 0.1:  # Minimum 6 minutes
+            # Minimum 6 minutes (360 seconds) - use timedelta for precision
+            if segment_timedelta >= timedelta(minutes=6):
                 result_shifts.append({
                     **shift,
                     'start_time': segment_start,
                     'end_time': segment_end,
-                    'shift_duration': segment_duration
+                    'shift_duration': segment_timedelta.total_seconds() / 3600
                 })
 
     return result_shifts
@@ -1159,6 +1242,10 @@ def preload_next_workday(csv_path: str, config: dict) -> dict:
     """
     Preload schedule for next workday from medweb CSV.
 
+    CRITICAL: This function ONLY saves the schedule to scheduled files.
+    It does NOT update modality_data in memory to avoid wiping the current day's schedule.
+    The memory update happens later via check_and_perform_daily_reset when the date actually changes.
+
     Returns:
         {
             'success': bool,
@@ -1187,40 +1274,47 @@ def preload_next_workday(csv_path: str, config: dict) -> dict:
                 'message': f'Keine SBZ-Daten für {date_str} gefunden'
             }
 
-        # Reset all counters and apply to modality_data
+        # CRITICAL FIX: Do NOT update modality_data directly.
+        # Instead, save to the scheduled file path for the daily reset logic to pick up later.
+        saved_modalities = []
+        total_workers = 0
+
         for modality, df in modality_dfs.items():
             d = modality_data[modality]
+            target_path = d['scheduled_file_path']
 
-            # Reset counters
-            d['draw_counts'] = {}
-            d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
-            d['WeightedCounts'] = {}
-            global_worker_data['weighted_counts_per_mod'][modality] = {}
-            global_worker_data['assignments_per_mod'][modality] = {}
+            try:
+                # Prepare DataFrame for Excel export (reconstruct TIME column)
+                export_df = df.copy()
+                export_df['TIME'] = export_df['start_time'].apply(lambda x: x.strftime('%H:%M')) + '-' + \
+                                    export_df['end_time'].apply(lambda x: x.strftime('%H:%M'))
 
-            # Load DataFrame
-            d['working_hours_df'] = df
+                # Save to scheduled file path
+                with pd.ExcelWriter(target_path, engine='openpyxl') as writer:
+                    export_df.to_excel(writer, sheet_name='Tabelle1', index=False)
 
-            # Initialize counters
-            for worker in df['PPL'].unique():
-                d['draw_counts'][worker] = 0
-                d['WeightedCounts'][worker] = 0.0
-                for skill in SKILL_COLUMNS:
-                    if skill not in d['skill_counts']:
-                        d['skill_counts'][skill] = {}
-                    d['skill_counts'][skill][worker] = 0
+                selection_logger.info(f"Scheduled file saved for {modality} at {target_path}")
+                saved_modalities.append(modality)
+                total_workers += len(df['PPL'].unique())
 
-            # Set info texts
-            d['info_texts'] = []
-            d['last_uploaded_filename'] = f"medweb_{next_day.strftime('%Y%m%d')}.csv"
+            except Exception as e:
+                selection_logger.error(f"Failed to save scheduled file for {modality}: {str(e)}")
+                # Continue with other modalities even if one fails
+
+        if not saved_modalities:
+            return {
+                'success': False,
+                'target_date': next_day.strftime('%Y-%m-%d'),
+                'message': 'Fehler beim Speichern der Preload-Dateien'
+            }
 
         date_str = next_day.strftime('%Y-%m-%d')
         return {
             'success': True,
             'target_date': date_str,
-            'modalities_loaded': list(modality_dfs.keys()),
-            'total_workers': sum(len(df) for df in modality_dfs.values()),
-            'message': f'Preload erfolgreich für {date_str}'
+            'modalities_loaded': saved_modalities,
+            'total_workers': total_workers,
+            'message': f'Preload erfolgreich gespeichert (wird am {date_str} aktiviert)'
         }
 
     except Exception as e:
@@ -1489,6 +1583,14 @@ def _get_effective_assignment_load(
 
 
 def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: str) -> pd.DataFrame:
+    """
+    Apply minimum balancer to prioritize workers with fewer assignments.
+
+    IMPORTANT: This function should not cause "clumping" where one worker gets
+    hammered with all assignments until reaching min_required. Instead, it should
+    distribute work more evenly by prioritizing the worker with the FEWEST assignments,
+    ensuring round-robin-like behavior even below the minimum threshold.
+    """
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
     min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 0)
@@ -1499,12 +1601,28 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if not skill_counts:
         return filtered_df
 
+    # Get all workers with their counts
+    below_min_workers = []
+    for _, row in filtered_df.iterrows():
+        worker = row['PPL']
+        count = _get_effective_assignment_load(worker, column, modality, skill_counts)
+        if count < min_required:
+            below_min_workers.append((worker, count))
+
+    # If no workers below minimum, return all
+    if not below_min_workers:
+        return filtered_df
+
+    # Find the minimum count among below-min workers
+    min_count = min(count for _, count in below_min_workers)
+
+    # Return only workers with the minimum count (ensures round-robin distribution)
     prioritized = filtered_df[
         filtered_df['PPL'].apply(
-            lambda worker: _get_effective_assignment_load(worker, column, modality, skill_counts)
-            < min_required
+            lambda worker: _get_effective_assignment_load(worker, column, modality, skill_counts) == min_count
         )
     ]
+
     if prioritized.empty:
         return filtered_df
     return prioritized
@@ -1548,7 +1666,11 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
         if hours_worked <= 0:
             continue
 
-        ratio = weighted_assignments / hours_worked
+        # Protection against division by zero (should not happen here, but safe)
+        if hours_worked > 0:
+            ratio = weighted_assignments / hours_worked
+        else:
+            ratio = weighted_assignments * 2  # Fallback: high number
         worker_ratios.append(ratio)
 
     if len(worker_ratios) < 2:
@@ -1660,7 +1782,9 @@ def get_active_df_for_role(
     if filtered_df is None:
         return active_df.iloc[0:0], primary_column
 
-    if isinstance(used_column, str) and _should_balance_via_fallback(filtered_df, used_column, modality):
+    # CRITICAL FIX: Only trigger fallback on imbalance if allow_fallback is True
+    # If strict mode (allow_fallback=False), skip the imbalance check entirely
+    if allow_fallback and isinstance(used_column, str) and _should_balance_via_fallback(filtered_df, used_column, modality):
         fallback_df, fallback_column = _try_configured_fallback(active_df, used_column, modality)
         if fallback_df is not None:
             filtered_df = fallback_df
@@ -1715,7 +1839,9 @@ def _select_worker_for_modality(
         canonical_id = get_canonical_worker_id(person)
         h = hours_map.get(canonical_id, 0)
         w = get_global_weighted_count(canonical_id)
-        return w / h if h > 0 else w
+        # Smoothing: use max(h, 0.5) to prevent extreme volatility in first hour
+        # This prevents one worker from being hammered just because they started 1 minute ago
+        return w / max(h, 0.5) if h > 0 else w
 
     available_workers = filtered_df['PPL'].unique()
 
@@ -1906,7 +2032,8 @@ def _get_worker_modality_priority(
                 canonical_id = get_canonical_worker_id(person)
                 h = hours_map.get(canonical_id, 0)
                 w = get_global_weighted_count(canonical_id)
-                return w / h if h > 0 else w
+                # Smoothing: use max(h, 0.5) to prevent extreme volatility in first hour
+                return w / max(h, 0.5) if h > 0 else w
 
             available_workers = result_df['PPL'].unique()
             if len(available_workers) == 0:
@@ -2041,7 +2168,8 @@ def _get_worker_pool_priority(
                 canonical_id = get_canonical_worker_id(person)
                 h = hours_map.get(canonical_id, 0)
                 w = get_global_weighted_count(canonical_id)
-                return w / h if h > 0 else w
+                # Smoothing: use max(h, 0.5) to prevent extreme volatility in first hour
+                return w / max(h, 0.5) if h > 0 else w
 
             available_workers = result_df['PPL'].unique()
             if len(available_workers) == 0:
@@ -2103,6 +2231,7 @@ def check_and_perform_daily_reset():
         )
         if should_reset_global:
             global_worker_data['last_reset_date'] = today
+            save_state()  # Persist reset date to disk
             selection_logger.info("Performed global reset based on modality scheduled uploads.")
         
     for mod, d in modality_data.items():
@@ -2155,6 +2284,7 @@ def check_and_perform_daily_reset():
             d['last_reset_date'] = today
             global_worker_data['weighted_counts_per_mod'][mod] = {}
             global_worker_data['assignments_per_mod'][mod] = {}
+            save_state()  # Persist reset to disk
             
 @app.before_request
 def before_request():
@@ -2183,6 +2313,9 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     assignments = _get_or_create_assignments(modality, canonical_id)
     assignments[role] += 1
     assignments['total'] += 1
+
+    # Persist state after every assignment to prevent data loss on restart
+    save_state()
 
     return canonical_id
 
@@ -2641,7 +2774,7 @@ def upload_file():
         try:
             file.save(csv_path)
 
-            # Parse medweb CSV
+            # Parse medweb CSV (CPU intensive, do outside lock)
             modality_dfs = build_working_hours_from_medweb(
                 csv_path,
                 target_date,
@@ -2651,34 +2784,39 @@ def upload_file():
             if not modality_dfs:
                 return jsonify({"error": f"Keine SBZ-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
 
-            # Reset all counters and apply to modality_data
-            for modality, df in modality_dfs.items():
-                d = modality_data[modality]
+            # CRITICAL: Acquire lock before modifying global state
+            with lock:
+                # Reset all counters and apply to modality_data
+                for modality, df in modality_dfs.items():
+                    d = modality_data[modality]
 
-                # Reset counters
-                d['draw_counts'] = {}
-                d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
-                d['WeightedCounts'] = {}
-                global_worker_data['weighted_counts_per_mod'][modality] = {}
-                global_worker_data['assignments_per_mod'][modality] = {}
+                    # Reset counters
+                    d['draw_counts'] = {}
+                    d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
+                    d['WeightedCounts'] = {}
+                    global_worker_data['weighted_counts_per_mod'][modality] = {}
+                    global_worker_data['assignments_per_mod'][modality] = {}
 
-                # Load DataFrame
-                d['working_hours_df'] = df
+                    # Load DataFrame
+                    d['working_hours_df'] = df
 
-                # Initialize counters
-                for worker in df['PPL'].unique():
-                    d['draw_counts'][worker] = 0
-                    d['WeightedCounts'][worker] = 0.0
-                    for skill in SKILL_COLUMNS:
-                        if skill not in d['skill_counts']:
-                            d['skill_counts'][skill] = {}
-                        d['skill_counts'][skill][worker] = 0
+                    # Initialize counters
+                    for worker in df['PPL'].unique():
+                        d['draw_counts'][worker] = 0
+                        d['WeightedCounts'][worker] = 0.0
+                        for skill in SKILL_COLUMNS:
+                            if skill not in d['skill_counts']:
+                                d['skill_counts'][skill] = {}
+                            d['skill_counts'][skill][worker] = 0
 
-                # Set info texts (empty for now, can be extended)
-                d['info_texts'] = []
-                d['last_uploaded_filename'] = f"medweb_{target_date.strftime('%Y%m%d')}.csv"
+                    # Set info texts (empty for now, can be extended)
+                    d['info_texts'] = []
+                    d['last_uploaded_filename'] = f"medweb_{target_date.strftime('%Y%m%d')}.csv"
 
-            # Save to master CSV for auto-preload
+                # Persist state after reset
+                save_state()
+
+            # Save to master CSV for auto-preload (outside lock, I/O operation)
             shutil.copy2(csv_path, MASTER_CSV_PATH)
             selection_logger.info(f"Master CSV updated: {MASTER_CSV_PATH}")
 
@@ -3854,6 +3992,10 @@ def init_scheduler():
 
 # Initialize worker skill roster from JSON
 init_worker_skill_roster()
+
+# Load persisted state on startup to restore fairness counters
+load_state()
+selection_logger.info("Fairness state loaded from disk")
 
 # Start scheduler when app starts
 init_scheduler()
