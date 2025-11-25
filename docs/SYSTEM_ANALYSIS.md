@@ -917,20 +917,50 @@ def _get_effective_assignment_load(worker, column, modality):
 
 ---
 
-### 2. Minimum Balancer
+### 2. Minimum Balancer (Two-Phase)
 **Function:** `_apply_minimum_balancer()`
-**Location:** `app.py:776-795`
+**Location:** `app.py:1585-1660`
 
-Ensures fair distribution by prioritizing underutilized workers:
+Ensures fair distribution using a **two-phase approach** to prevent worker overload:
+
+#### Phase 1: No-Overflow Mode
+Until **ALL ACTIVE workers** (skill >= 1) for this skill have at least `min_required` **WEIGHTED** assignments, restrict selection to only workers below the threshold. This ensures round-robin distribution where everyone gets their fair share before anyone gets overloaded.
+
+#### Phase 2: Normal Mode
+Once all active workers with this skill have the minimum weighted assignments, return all currently active workers and allow normal weighted selection with overflow based on hours worked.
 
 ```python
 def _apply_minimum_balancer(filtered_df, column, modality):
     if not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
 
-    min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 5)
+    min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 0)
 
-    # Prioritize workers below minimum
+    # Get working_hours_df to check skill values
+    working_hours_df = modality_data[modality].get('working_hours_df')
+    skill_counts = modality_data[modality]['skill_counts'].get(column, {})
+
+    # Check ONLY ACTIVE workers (skill >= 1)
+    # Workers with skill = 0 (passive) are NOT counted toward minimums
+    any_below_minimum = False
+    for worker in skill_counts.keys():
+        worker_rows = working_hours_df[working_hours_df['PPL'] == worker]
+        skill_value = worker_rows[column].iloc[0]
+
+        if skill_value < 1:  # Skip passive (0) and excluded (-1)
+            continue
+
+        # Check weighted assignment load
+        count = _get_effective_assignment_load(worker, column, modality)
+        if count < min_required:
+            any_below_minimum = True
+            break
+
+    # Phase 2: All active workers have minimum → return full pool
+    if not any_below_minimum:
+        return filtered_df
+
+    # Phase 1: Some active workers below minimum → restrict pool
     prioritized = filtered_df[
         filtered_df['PPL'].apply(
             lambda worker: _get_effective_assignment_load(worker, column, modality) < min_required
@@ -940,10 +970,25 @@ def _apply_minimum_balancer(filtered_df, column, modality):
     return prioritized if not prioritized.empty else filtered_df
 ```
 
+**Key Features:**
+- ✅ **Only counts ACTIVE workers** (skill >= 1) - Passive (0) and excluded (-1) workers are NOT counted
+- ✅ **Uses WEIGHTED assignments** - Task with weight 1.5 counts as 1.5, not "1"
+- ✅ **Checks ALL workers with skill** - Not just currently active (prevents midday shift issues)
+- ✅ **Two-phase logic** - No-overflow until minimum reached, then normal mode
+
 **Configuration:** `config.yaml:113`
 ```yaml
-min_assignments_per_skill: 5  # Workers must reach this before others get more
+min_assignments_per_skill: 3.0  # Weighted assignments required (recommended: 2-3)
 ```
+
+**Example Scenario:**
+With `min_required=3.0` (weighted):
+- Worker A (Normal=1): 2.5 weighted → below minimum (Phase 1)
+- Worker B (Normal=1): 3.5 weighted → above minimum
+- Worker C (Normal=0): 0.0 weighted → NOT counted (passive worker)
+- **Result:** System stays in Phase 1, restricts pool to workers below 3.0
+
+Once Worker A reaches 3.0 weighted, Phase 2 activates and all currently active workers are eligible for normal weighted selection.
 
 ---
 

@@ -361,7 +361,12 @@ Toggle between views with one click!
 - **Work-hour-adjusted ratios**: Balances workload based on hours worked, not just assignment count
 - **Overlapping shift support**: Handles early/late starters fairly
 - **30% imbalance threshold**: Automatic fallback when workload becomes unfair
-- **Minimum assignments**: Ensures everyone gets at least 5 assignments before overloading others
+- **Minimum assignments (Two-Phase)**:
+  - **Phase 1 (No-Overflow)**: Until all ACTIVE workers (skill >= 1) reach minimum weighted assignments, restrict pool to underutilized workers
+  - **Phase 2 (Normal Mode)**: Once everyone has minimum, allow normal weighted overflow
+  - Only counts active workers (skill >= 1), not passive (0) or excluded (-1)
+  - Uses WEIGHTED assignments (task weight 1.5 = 1.5 toward minimum, not "1")
+  - Recommended: 2-3 weighted assignments
 
 ### 7. **Flexible Fallback Strategies**
 
@@ -502,10 +507,17 @@ skills:
 # Balancing
 balancer:
   enabled: true
-  min_assignments_per_skill: 5
+  min_assignments_per_skill: 3.0  # Weighted assignments (recommended: 2-3)
   imbalance_threshold_pct: 30
   allow_fallback_on_imbalance: true
   fallback_strategy: skill_priority  # skill_priority | modality_priority | pool_priority
+
+  # Two-Phase Minimum Balancer:
+  # Phase 1 (No-Overflow): Until ALL ACTIVE workers (skill >= 1) reach min_assignments_per_skill,
+  #                        restrict pool to underutilized workers (round-robin distribution)
+  # Phase 2 (Normal Mode): Once all active workers have minimum, allow normal weighted overflow
+  # Note: Only counts ACTIVE workers (skill >= 1), not passive (0) or excluded (-1)
+  #       Uses WEIGHTED assignments (not raw counts)
 
   fallback_chain:
     Normal: []
