@@ -475,33 +475,14 @@ worker_skill_roster:
 **Logic:** Friday → Monday, other days → tomorrow
 **Mechanism:** APScheduler with CronTrigger
 
-**CRITICAL BEHAVIOR (Bug Fix):**
-- Auto-preload **ONLY SAVES** to `uploads/SBZ_<MOD>_scheduled.xlsx` files
-- It **DOES NOT** update `modality_data` in memory
-- Memory update happens later via `check_and_perform_daily_reset()` when date actually changes
-- This prevents the catastrophic bug where 07:30 preload would wipe current day's schedule
+**How It Works:**
+1. Calculates next workday date
+2. Parses medweb CSV for that date
+3. Prepares worker schedules with skill assignments
+4. Saves to `uploads/SBZ_<MOD>_scheduled.xlsx` files
+5. These files are activated at 7:30 AM on the target date via daily reset
 
-**Process:**
-1. Calculate next workday (Friday → Monday, else tomorrow)
-2. Parse medweb CSV for that date
-3. Prepare DataFrames with skill assignments
-4. **Save to scheduled files** (not to memory!)
-5. Return success status
-
-**Code Pattern:**
-```python
-def preload_next_workday(csv_path, config):
-    next_day = get_next_workday()
-    modality_dfs = build_working_hours_from_medweb(csv_path, next_day, config)
-
-    # CRITICAL: Only save to disk, don't update modality_data
-    for modality, df in modality_dfs.items():
-        target_path = modality_data[modality]['scheduled_file_path']
-        # Save DataFrame to Excel at target_path
-        # DO NOT update modality_data['working_hours_df'] here!
-
-    return {'success': True, 'target_date': next_day}
-```
+**Important:** Auto-preload prepares tomorrow's schedule without affecting today's active assignments. The new schedule only becomes active when the date changes.
 
 ### 4. Upload Strategies
 
@@ -1020,63 +1001,31 @@ Once Worker A reaches 3.0 weighted, Phase 2 activates and all currently active w
 
 ---
 
-### 3. State Persistence (Fairness Data)
-**Function:** `save_state()` / `load_state()`
+### 3. State Persistence
+**Functions:** `save_state()` / `load_state()`
 **Location:** `app.py:537-611`
 **File:** `uploads/fairness_state.json`
 
-**Purpose:** Persist fairness algorithm state to prevent data loss on server restart.
+**Purpose:** Maintains fairness counters across server restarts to ensure consistent load balancing throughout the day.
 
-**Problem Solved:**
-Before this fix, all fairness counters (draw_counts, WeightedCounts, global_worker_data) were stored only in memory. If gunicorn restarted (deployment, crash, server reboot), all fairness history was lost and counters reset to 0, making the balancer "blind" to who worked earlier in the day.
-
-**What is Persisted:**
-```json
-{
-  "global_worker_data": {
-    "worker_ids": {},
-    "weighted_counts_per_mod": {"ct": {}, "mr": {}, "xray": {}},
-    "assignments_per_mod": {"ct": {}, "mr": {}, "xray": {}},
-    "last_reset_date": "2025-11-25"
-  },
-  "modality_data": {
-    "ct": {
-      "draw_counts": {},
-      "skill_counts": {"Normal": {}, "Notfall": {}, ...},
-      "WeightedCounts": {},
-      "last_reset_date": "2025-11-25",
-      "last_uploaded_filename": "medweb_20251125.csv"
-    }
-  }
-}
-```
+**What is Saved:**
+- Worker assignment counts per skill and modality
+- Weighted assignment totals (accounts for task difficulty)
+- Global worker tracking across all modalities
+- Last reset date for each modality
 
 **When State is Saved:**
-- After **every assignment** (via `update_global_assignment()`)
-- After **daily reset** (via `check_and_perform_daily_reset()`)
-- After **CSV upload** (via `upload_file()`)
+- After every assignment
+- After daily reset
+- After CSV upload
 
 **When State is Loaded:**
-- During **app initialization** (before scheduler starts)
-
-**Code Pattern:**
-```python
-# Save state after assignment
-def update_global_assignment(person, role, modality):
-    # ... update counters ...
-    save_state()  # Persist to disk
-
-# Load state on startup
-init_worker_skill_roster()
-load_state()  # Restore from disk
-init_scheduler()
-```
+- During app initialization (on startup)
 
 **Benefits:**
-- ✅ Server restarts don't lose fairness history
-- ✅ Counters persist across deployments
-- ✅ Daily totals maintained even after crashes
-- ✅ No more "blind" balancer after restart
+- Counters persist across server restarts
+- Fair distribution maintained even after deployments
+- No loss of workload history during the day
 
 ---
 
@@ -1367,50 +1316,37 @@ fallback_chain:
 
 ---
 
-### 3. Role-to-Column Mapping (with Strict Mode Fix)
+### 3. Role-to-Column Mapping
 **Function:** `get_active_df_for_role()`
 **Location:** `app.py:1748-1792`
 
 Maps request role to skill column and applies fallback strategy.
 
-**CRITICAL FIX - Strict Mode Respect:**
-The function now properly respects `allow_fallback=False` (strict mode). Previously, even in strict mode, the system would trigger automatic fallback if it detected an imbalance via `_should_balance_via_fallback()`. This violated the user's explicit "Strict" (*) button choice.
+**Strict Mode Behavior:**
+When `allow_fallback=False` (strict mode via * button), the system:
+- Uses ONLY the requested skill column
+- Skips all configured fallback chains
+- Skips automatic imbalance-based fallback
+- Returns only workers with the exact skill requested
 
-```python
-def get_active_df_for_role(current_dt, role, modality, allow_fallback):
-    # Role mapping
-    role_map = {'normal': 'Normal', 'notfall': 'Notfall', ...}
-    primary_column = role_map.get(role.lower(), 'Normal')
+**Normal Mode Behavior:**
+When `allow_fallback=True` (default), the system:
+- Tries the requested skill first
+- Falls back through configured skill chains if needed
+- Can trigger additional fallback if imbalance detected
+- Maximizes chance of finding an available worker
 
-    # Try primary column
-    filtered_df = _attempt_column_selection(active_df, primary_column, modality)
-
-    # Try fallback only if allowed
-    if filtered_df is None and allow_fallback:
-        filtered_df, used_column = _try_configured_fallback(...)
-
-    # CRITICAL FIX: Only check imbalance if allow_fallback=True
-    # Previous bug: This check happened even in strict mode!
-    if allow_fallback and _should_balance_via_fallback(filtered_df, used_column, modality):
-        fallback_df, fallback_column = _try_configured_fallback(...)
-        if fallback_df is not None:
-            filtered_df = fallback_df
-            used_column = fallback_column
-
-    return filtered_df, used_column
+**Example:**
 ```
+Request: CT/Herz with strict mode
+→ Only returns workers with Herz=1 in CT
+→ Will NOT fallback to Notfall or Normal even if Herz workers are busy
 
-**Before Fix (BUG):**
-- User clicks "Strict" (*) button → `allow_fallback=False`
-- System finds primary skill workers
-- BUT `_should_balance_via_fallback()` detects imbalance
-- System ignores strict mode and triggers fallback anyway ❌
-
-**After Fix (CORRECT):**
-- User clicks "Strict" (*) button → `allow_fallback=False`
-- System finds primary skill workers
-- Imbalance check is SKIPPED (respects `allow_fallback`)
-- User gets ONLY primary skill workers as requested ✅
+Request: CT/Herz with normal mode
+→ Tries Herz first
+→ Falls back to Notfall → Normal if needed
+→ May also check MR/Herz if CT is imbalanced
+```
 
 ---
 
