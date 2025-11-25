@@ -1,0 +1,5538 @@
+====== BEGIN README.md ======
+# RadIMO SBZ - Radiology Workload Coordinator
+
+**Radiology: Innovation, Management & Orchestration**
+
+Smart worker assignment system for radiology teams with automatic load balancing, flexible fallback strategies, and config-driven medweb CSV integration.
+
+---
+
+## 🎯 What is RadIMO SBZ?
+
+RadIMO orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY) and skills (Normal, Notfall, Privat, Herz, Msk, Chest). It automatically balances assignments to ensure fair distribution while respecting worker availability and skill levels.
+
+**Key Capabilities:**
+- 📊 Real-time worker assignment with automatic load balancing
+- 🔄 Smart fallback strategies for overload situations
+- ⏰ Dynamic shift handling with work-hour-adjusted balancing
+- 📱 Two UI modes: by modality or by skill
+- 📈 Cross-modality workload tracking and overflow management
+- 🔮 **Config-driven medweb CSV integration** with automated daily preload
+- 📋 **Three-page admin system**: Planning (staged), Prep (tomorrow), Live Edit (immediate)
+- ⚙️ **Worker skill roster admin portal** with JSON-based staged/active workflow
+- ⏱️ **Time exclusion system** for boards, meetings, and teaching activities
+
+---
+
+## 📊 High-Level System Overview (For Presentations)
+
+### The Problem
+Radiology departments face complex daily staffing challenges:
+- **Multiple modalities** require specialized coverage (CT, MR, X-ray)
+- **Variable skills** within teams (emergency, cardiac, MSK specialists)
+- **Changing schedules** with rotations, meetings, and boards
+- **Fair workload distribution** across overlapping shifts
+- **Real-time coordination** needed to match workers to incoming studies
+
+Traditional manual assignment leads to:
+- ❌ Overloading of experienced staff
+- ❌ Inefficient use of specialist skills
+- ❌ No visibility into cross-modality workload
+- ❌ Time-consuming schedule preparation
+
+### The Solution: RadIMO SBZ
+
+RadIMO is an **intelligent workload orchestration system** that automates fair worker assignment while respecting expertise, availability, and rotation schedules.
+
+**Core Workflow:**
+```
+Medical Scheduling System (medweb)
+        ↓
+Export monthly CSV with all worker activities
+        ↓
+RadIMO Import (one-time upload + daily auto-refresh at 7:30 AM)
+        ↓
+Intelligent Parsing:
+  • Activity → Modality mapping (e.g., "CT Spätdienst" → CT evening shift)
+  • Automatic skill assignment based on activity patterns
+  • Time exclusions for boards/meetings (auto-splits shifts)
+  • Worker-specific skill overrides for specialists
+        ↓
+Real-Time Assignment Engine (web interface)
+  • Coordinator requests: "Need CT cardiac specialist"
+  • System selects least-loaded qualified worker
+  • Updates counters, tracks fairness metrics
+  • Supports cross-modality overflow automatically
+        ↓
+Result: Fair distribution, specialist utilization, real-time visibility
+```
+
+### Key Innovation: Config-Driven Intelligence
+
+**Before RadIMO:**
+- Manual Excel file creation per modality
+- Static schedules with no real-time adaptation
+- No automatic fairness balancing
+- Separate tools for tracking and assignment
+
+**With RadIMO v18:**
+- **Single CSV source** from existing medweb system
+- **Configuration-based mapping** (add new activities without coding)
+- **Automatic daily updates** (7:30 AM refresh)
+- **Real-time fairness engine** (work-hour-adjusted balancing)
+- **Intelligent fallback** (finds qualified alternatives automatically)
+- **Admin portal for skill management** (update worker qualifications in seconds)
+
+### Concrete Example
+
+**Scenario:** It's 2 PM on Tuesday. CT is swamped, needs cardiac specialist.
+
+**RadIMO's Decision Process:**
+1. **Request:** Coordinator clicks "CT → Herz (Cardiac)" button
+2. **Check availability:**
+   - Dr. Müller: On shift, Herz=1 (active), ratio=2.1 (10 cases / 4.7 hours worked)
+   - Dr. Schmidt: On shift, Herz=1 (active), ratio=1.8 (9 cases / 5.0 hours worked)
+   - Dr. Weber: On shift, Herz=0 (fallback only), ratio=1.5
+3. **Apply rules:**
+   - Dr. Weber excluded (Herz=0 means passive, only for overflow)
+   - Dr. Schmidt has lower ratio → selected (less loaded per hour worked)
+4. **Fallback if needed:**
+   - If both at max capacity → try Herz in MR/X-ray
+   - If no Herz available → fallback to Notfall → Normal
+5. **Update & track:**
+   - Dr. Schmidt counter +1
+   - Global stats updated
+   - Fairness metrics recalculated
+
+**Result:** Dr. Schmidt assigned, fair distribution maintained automatically.
+
+### Time Exclusion Innovation
+
+**Problem:** Workers need time for boards, meetings, teaching during their shift
+- Traditional: Create multiple schedule entries (before/after meeting)
+- RadIMO: Automatic shift splitting based on weekday schedules
+
+**Example:**
+```yaml
+# Config: Tuesday board 15:00-17:00 with 30min prep
+medweb_mapping:
+  rules:
+    - match: "Kopf-Hals-Board"
+      exclusion: true
+      schedule:
+        Dienstag: "15:00-17:00"  # Tuesday only
+      prep_time:
+        before: "30m"             # Prep starts 14:30
+
+# CSV: Dr. Müller has "Kopf-Hals-Board" + regular CT shift (07:00-21:00)
+
+# RadIMO automatically creates:
+Shift 1: 07:00-14:30  (available for assignments)
+EXCLUDED: 14:30-17:00  (board + prep time)
+Shift 2: 17:00-21:00  (available for assignments)
+```
+
+**Benefits:**
+- ✅ Day-specific rules (same board, different times per weekday)
+- ✅ No manual CSV editing needed
+- ✅ Prep time automatically added
+- ✅ Multiple exclusions per worker supported
+
+### Three-Page Admin System
+
+RadIMO provides three distinct admin interfaces for different operational needs:
+
+#### 1. 📋 **Skill Roster** (`/skill_roster`) - Planning Mode
+
+**Purpose:** Plan worker skill changes for rotations and long-term scheduling
+- Changes are **STAGED** - no immediate effect on current assignments
+- Edit values: -1 (excluded), 0 (fallback), 1 (active)
+- Click "Save to Staging" → saves to `worker_skill_overrides_staged.json`
+- Click "Activate Changes" → applies staged changes to active roster
+- Perfect for: Weekly rotation planning, training certifications, scheduled changes
+
+**Use Case:**
+1. Go to `/skill_roster` (admin password protected)
+2. Find worker "AAn" in table
+3. Change MSK from 0 → 1 (MSK rotation starts next week)
+4. Click "Save to Staging" - **no immediate effect**
+5. When ready: Click "Activate Changes" - **now applied to assignments**
+
+#### 2. 📝 **Prep Next Day** (`/prep-next-day`) - Tomorrow's Schedule
+
+**Purpose:** Prepare and preview tomorrow's worker schedule
+- Upload new medweb CSV for next day
+- Simple mode: Upload CSV, let system auto-parse
+- Advanced mode: Edit individual workers, adjust times, modify skills
+- Changes affect **tomorrow's date only** - no impact on today
+- Perfect for: Daily schedule preparation, next-day corrections
+
+#### 3. ⚠️ **Live Edit** (`/admin/live-edit`) - Emergency Same-Day Changes
+
+**Purpose:** Make immediate changes to current day's assignments
+- Changes take effect **IMMEDIATELY** - no staging
+- Edit worker hours, names, skills, modifiers
+- Delete worker entries
+- Modality tabs (CT/MR/XRAY) for organized editing
+- Big warning banners about immediate impact
+- Perfect for: Emergency substitutions, last-minute schedule changes, same-day corrections
+
+**⚠️ WARNING:** Use Live Edit with caution - changes are instant!
+
+### Workflow Separation
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  PLANNING (Future)          Skill Roster                 │
+│  ├─ Staged changes          (Planning Mode)              │
+│  ├─ Review before apply                                  │
+│  └─ Activate when ready                                  │
+├──────────────────────────────────────────────────────────┤
+│  PREP (Tomorrow)            Prep Next Day                │
+│  ├─ Upload CSV for next day                              │
+│  ├─ Preview and adjust                                   │
+│  └─ No effect on current day                             │
+├──────────────────────────────────────────────────────────┤
+│  OPERATIONAL (Now)          Live Edit                    │
+│  ├─ Immediate effect        (DANGER ZONE)               │
+│  ├─ Emergency changes only                               │
+│  └─ Careful: impacts ongoing assignments                 │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Business Value
+
+**Efficiency Gains:**
+- ⏱️ **Setup time:** 5 minutes monthly (CSV upload) vs. daily Excel editing
+- ⏱️ **Assignment time:** 2 seconds automated vs. 30+ seconds manual coordination
+- ⏱️ **Schedule updates:** Real-time via web portal vs. file editing + restart
+
+**Quality Improvements:**
+- 📊 **Fair distribution:** Automatic work-hour-adjusted balancing
+- 🎯 **Specialist utilization:** Intelligent skill matching with fallback
+- 👁️ **Visibility:** Real-time dashboards show workload across all modalities
+- 🔄 **Adaptability:** Handles rotations, meetings, overflow automatically
+
+**Risk Reduction:**
+- ✅ Single source of truth (medweb CSV)
+- ✅ Configuration version control (Git-tracked)
+- ✅ Audit trail in logs (who assigned what, when)
+- ✅ GDPR-compliant (documented in verfahrensverzeichniss.txt)
+
+### Technical Highlights
+
+**Modern Stack:**
+- **Backend:** Python Flask with APScheduler for automation
+- **Frontend:** Vanilla JavaScript (no heavy frameworks)
+- **Data:** Pandas for CSV processing, JSON for runtime config
+- **Deployment:** Gunicorn + systemd, runs on local network
+
+**Scalability:**
+- Handles 50+ workers across 3 modalities
+- Thousands of daily assignments
+- Sub-second response times
+- Minimal resource footprint
+
+**Maintainability:**
+- Config-driven (90% of changes need no code)
+- Comprehensive documentation (5 detailed guides)
+- Operational health checks (ops_check.py)
+- Clear separation: config.yaml (static), JSON (dynamic)
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Check system readiness
+python ops_check.py
+
+# Start the application
+flask --app app run --debug
+```
+
+### Access Points
+
+**Operational Pages (Public):**
+- **Main Interface**: `http://localhost:5000/` - By modality view (CT/MR/XRAY)
+- **Skill View**: `http://localhost:5000/by-skill` - By skill view (Normal/Notfall/Herz/etc.)
+- **Timeline**: `http://localhost:5000/timetable` - Visualize shifts and schedules
+
+**Admin Pages (Password Protected):**
+- **Admin Panel**: `http://localhost:5000/upload` - Upload medweb CSV & system management hub
+- **Skill Roster**: `http://localhost:5000/skill_roster` - Plan skill changes (STAGED mode)
+- **Prep Next Day**: `http://localhost:5000/prep-next-day` - Prepare tomorrow's schedule
+- **Live Edit**: `http://localhost:5000/admin/live-edit` - Emergency same-day edits (⚠️ IMMEDIATE EFFECT)
+
+---
+
+## ✨ Key Features
+
+### 1. **Config-Driven Medweb CSV Integration** ⭐ NEW
+
+Directly ingest medweb CSV schedules with configuration-based activity mapping:
+
+```yaml
+medweb_mapping:
+  rules:
+    # Single modality (traditional)
+    - match: "CT Spätdienst"
+      modality: "ct"
+      shift: "Spaetdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+    - match: "MR Assistent 1. Monat"
+      modality: "mr"
+      shift: "Fruehdienst"
+      base_skills: {Normal: 1, Notfall: 0, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+    # Multi-modality (sub-specialty teams) - NEW
+    - match: "MSK Assistent"
+      modalities: ["xray", "ct", "mr"]  # Available in all three modalities
+      shift: "Fruehdienst"
+      base_skills: {Normal: 0, Notfall: 0, Msk: 1, Privat: 0, Herz: 0, Chest: 0}
+```
+
+**Benefits:**
+- No manual Excel file creation needed
+- Activity → modality/skill mapping in config.yaml
+- **Multi-modality support:** Sub-specialty teams across multiple modalities
+- Extensible: add new activities by updating config
+- Single CSV upload populates all modalities
+
+### 2. **Automatic Daily Preload** ⏰ NEW
+
+System automatically preloads the next workday schedule at **7:30 AM CET**:
+
+- **Auto-preload**: Runs daily via APScheduler
+- **Next workday logic**: Friday → Monday, other days → tomorrow
+- **Master CSV**: Last uploaded CSV becomes source for auto-preload
+- **Seamless workflow**: No manual intervention required
+
+### 3. **Next-Day Schedule Preparation** 📝 NEW
+
+Advanced edit interface for preparing tomorrow's schedule:
+
+**Two Modes:**
+- **Simple Mode**: Click any cell to edit inline (spreadsheet-like UX)
+- **Advanced Mode**: Add/delete workers, bulk skill operations
+
+**Features:**
+- Modality tabs (CT/MR/XRAY) for easy navigation
+- Color-coded skill values: 🟢 Active (1), 🟡 Passive (0), 🔴 Excluded (-1)
+- Real-time change tracking with batch save
+- Auto-recalculate shift durations when times change
+- Completely separate from same-day editing (preserves assignment stability)
+
+### 4. **Worker Skill Roster System** 👥 NEW
+
+Per-worker skill overrides with modality-specific configuration:
+
+```yaml
+worker_skill_roster:
+  AA:  # Any Arzt
+    default:
+      Msk: 1      # MSK specialist
+
+  AN:  # Any NewArzt
+    default:
+      Chest: 1    # Chest specialist
+    ct:
+      Notfall: 0  # Only fallback for CT Notfall
+```
+
+**Configuration Precedence**: `worker_skill_roster` > `medweb_mapping` > worker mapping
+
+### 5. **Dual View Modes**
+
+Choose your workflow:
+
+- **By Modality** (default): Navigate by modality (CT/MR/XRAY) → assign by skill
+- **By Skill**: Navigate by skill (Normal/Notfall/Herz) → assign by modality
+
+Toggle between views with one click!
+
+### 6. **Smart Load Balancing**
+
+- **Work-hour-adjusted ratios**: Balances workload based on hours worked, not just assignment count
+- **Overlapping shift support**: Handles early/late starters fairly
+- **30% imbalance threshold**: Automatic fallback when workload becomes unfair
+- **Minimum assignments**: Ensures everyone gets at least 5 assignments before overloading others
+
+### 7. **Flexible Fallback Strategies**
+
+Three modes to handle overflow:
+
+| Strategy | Best For | Behavior |
+|----------|----------|----------|
+| **skill_priority** | Modality expertise | Try all skills in CT before moving to MR |
+| **modality_priority** | Skill expertise | Try Herz in all modalities before trying Notfall |
+| **pool_priority** | Maximum fairness | Evaluate all options globally, pick least loaded |
+
+Configure in `config.yaml`:
+```yaml
+balancer:
+  fallback_strategy: skill_priority  # or modality_priority, pool_priority
+  imbalance_threshold_pct: 30
+  min_assignments_per_skill: 5
+```
+
+### 8. **Skill Value System**
+
+Fine-tune worker availability:
+
+| Value | Name | Behavior |
+|-------|------|----------|
+| **1** | Active | Available for primary requests + fallback |
+| **0** | Passive | Available ONLY in fallback (training, backup) |
+| **-1** | Excluded | NOT available (on leave, restricted) |
+
+---
+
+## 📊 How It Works
+
+### Medweb CSV to Assignment Flow
+
+```
+medweb.csv (monthly schedule from medweb)
+    ↓
+Upload via /upload (manual) or auto-preload at 7:30 AM
+    ↓
+Config-driven parsing (medweb_mapping rules)
+    ↓
+Apply worker_skill_roster overrides
+    ↓
+Build working_hours_df per modality (CT/MR/XRAY)
+    ↓
+Optional: Edit via /prep-next-day
+    ↓
+Real-time assignment system (balancer)
+    ↓
+Request: CT/Herz → Assign worker with lowest ratio
+```
+
+### Assignment Flow
+
+```
+Request: CT/Herz
+    ↓
+1. Check available workers (shift times, skill values)
+2. Calculate workload ratio = weighted_assignments / hours_worked_so_far
+3. Check imbalance (30% threshold)
+    ↓
+    If balanced: Select worker with lowest ratio
+    If imbalanced: Try fallback (Herz → Notfall → Normal)
+    ↓
+4. Update counters (skill-specific, global, weighted)
+5. Return assigned worker
+```
+
+### Workload Calculation
+
+```python
+# Dynamic ratio adjusted for shift progress
+ratio = weighted_assignments / hours_worked_till_now
+
+# Weighted assignments consider:
+- Skill weight (Notfall=1.1, Privat=1.2, Normal=1.0, etc.)
+- Modality factor (MR=1.2, CT=1.0, XRAY=0.33)
+- Worker modifier (individual multipliers from config/CSV)
+
+# Lower ratio = less loaded = selected
+```
+
+### Example: Overlapping Shifts
+
+**At 10:00 AM:**
+```
+Worker A: 07:00-13:00, 10 assignments, 3h worked → ratio = 10/3 = 3.33
+Worker B: 09:00-17:00,  7 assignments, 1h worked → ratio = 7/1 = 7.00
+
+→ Worker A selected (lower ratio = less loaded per hour)
+```
+
+---
+
+## 🔧 Configuration
+
+### `config.yaml` Structure
+
+```yaml
+# Modalities
+modalities:
+  ct:
+    label: CT
+    nav_color: '#1a5276'
+    factor: 1.0
+  mr:
+    label: MR
+    factor: 1.2
+  xray:
+    label: XRAY
+    factor: 0.33
+
+# Skills
+skills:
+  Normal:
+    weight: 1.0
+    optional: false
+  Notfall:
+    weight: 1.1
+    optional: false
+  Herz:
+    weight: 1.2
+    optional: true
+    special: true
+  Privat:
+    weight: 1.2
+    optional: true
+  Msk:
+    weight: 1.1
+    optional: true
+    special: true
+  Chest:
+    weight: 1.1
+    optional: true
+    special: true
+
+# Balancing
+balancer:
+  enabled: true
+  min_assignments_per_skill: 5
+  imbalance_threshold_pct: 30
+  allow_fallback_on_imbalance: true
+  fallback_strategy: skill_priority  # skill_priority | modality_priority | pool_priority
+
+  fallback_chain:
+    Normal: []
+    Notfall: [Normal]
+    Privat: [Normal]
+    Herz: [[Notfall, Normal]]  # Parallel fallback
+    Msk: [[Notfall, Normal]]
+    Chest: [[Notfall, Normal]]
+
+# Modality overflow
+modality_fallbacks:
+  xray: [[ct, mr]]  # XRAY can borrow from both CT and MR
+  ct: [mr]          # CT can borrow from MR
+  mr: []            # MR cannot borrow
+
+# Medweb CSV mapping (NEW)
+medweb_mapping:
+  rules:
+    - match: "CT Spätdienst"
+      modality: "ct"
+      shift: "Spaetdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+    - match: "CT Assistent"
+      modality: "ct"
+      shift: "Fruehdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+    - match: "MR Assistent 1. Monat"
+      modality: "mr"
+      shift: "Fruehdienst"
+      base_skills: {Normal: 1, Notfall: 0, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+    - match: "Chir Assistent"
+      modality: "xray"  # Chir → xray mapping
+      shift: "Fruehdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+
+# Shift times (NEW)
+shift_times:
+  Fruehdienst:
+    default: "07:00-15:00"
+    friday: "07:00-13:00"
+  Spaetdienst:
+    default: "13:00-21:00"
+    friday: "13:00-19:00"
+
+# Worker skill roster (NEW)
+worker_skill_roster:
+  AAn:  # Any Arzt
+    default:
+      Msk: 1      # MSK specialist
+
+  AN:  # Any Newarzt
+    default:
+      Chest: 1    # Chest specialist
+    ct:
+      Notfall: 0  # Only fallback for CT Notfall
+
+  DEMO1:
+    default:
+      Herz: 1     # Cardiac specialist
+      Msk: -1     # Never for Msk
+
+  DEMO2:
+    default:
+      Privat: 1   # Private patients only
+      Normal: 0   # Only fallback for Normal
+
+  DEMO3:
+    default:
+      Notfall: -1  # First month assistant - no Notfall
+```
+
+---
+
+## 📡 API Reference
+
+### Worker Assignment
+
+```bash
+# Assign with fallback support
+GET /api/{modality}/{skill}
+Example: curl http://localhost:5000/api/ct/herz
+
+# Strict mode (no fallback)
+GET /api/{modality}/{skill}/strict
+Example: curl http://localhost:5000/api/ct/herz/strict
+```
+
+**Response:**
+```json
+{
+  "Assigned Person": "Dr. Anna Müller (AM)",
+  "Draw Time": "14:23:45",
+  "Modality": "ct",
+  "Requested Skill": "Herz",
+  "Used Skill": "Herz",
+  "Fallback Used": false
+}
+```
+
+### Statistics & Status
+
+```bash
+# Get live statistics (modality-based view)
+GET /api/quick_reload?modality=ct
+
+# Get live statistics (skill-based view)
+GET /api/quick_reload?skill=herz
+```
+
+### Medweb CSV Upload (NEW)
+
+```bash
+# Upload medweb CSV for specific date
+POST /upload
+Content-Type: multipart/form-data
+- file: medweb.csv
+- target_date: 2025-11-21
+
+# Preload next workday (Friday → Monday logic)
+POST /preload-next-day
+Content-Type: multipart/form-data
+- file: medweb.csv
+
+# Force refresh today (EMERGENCY - destroys all counters)
+POST /force-refresh-today
+Content-Type: multipart/form-data
+- file: medweb.csv
+```
+
+### Next-Day Preparation (NEW)
+
+```bash
+# Get current working_hours_df data for all modalities
+GET /api/prep-next-day/data
+
+# Update a single worker row
+POST /api/prep-next-day/update-row
+Content-Type: application/json
+{
+  "modality": "ct",
+  "row_index": 5,
+  "updates": {
+    "start_time": "08:00",
+    "end_time": "16:00",
+    "Normal": 1,
+    "Notfall": 0
+  }
+}
+
+# Add a new worker
+POST /api/prep-next-day/add-worker
+Content-Type: application/json
+{
+  "modality": "mr",
+  "worker_data": {
+    "PPL": "Neuer Worker (NW)",
+    "start_time": "07:00",
+    "end_time": "15:00",
+    "Normal": 1,
+    "Notfall": 1,
+    ...
+  }
+}
+
+# Delete a worker
+POST /api/prep-next-day/delete-worker
+Content-Type: application/json
+{
+  "modality": "xray",
+  "row_index": 3
+}
+```
+
+---
+
+## 📁 Project Structure
+
+```
+RadIMO_SBZ_DEV/
+├── app.py                      # Main Flask application
+├── config.yaml                 # Configuration file (medweb_mapping, roster, etc.)
+├── worker_skill_overrides.json # JSON-based worker skill roster (admin portal)
+├── ops_check.py               # Pre-deployment checks
+├── requirements.txt           # Python dependencies
+├── BACKUP.md                  # Rollback procedure for Excel upload code
+├── templates/
+│   ├── index.html             # By-modality view
+│   ├── index_by_skill.html    # By-skill view
+│   ├── upload.html            # Admin panel (medweb CSV upload)
+│   ├── prep_next_day.html     # Next-day schedule preparation
+│   ├── skill_roster.html      # Worker skill roster admin portal (NEW)
+│   ├── timetable.html         # Timeline visualization
+│   └── login.html             # Authentication
+├── static/
+│   ├── vis.js                 # Timeline library
+│   ├── favicon.ico
+│   └── verfahrensverzeichniss.txt  # GDPR compliance documentation
+├── uploads/                   # Medweb CSV storage
+│   └── master_medweb.csv      # Master CSV for auto-preload
+└── docs/                      # Documentation
+    ├── SYSTEM_ANALYSIS.md     # Complete technical analysis
+    ├── FRONTEND_ARCHITECTURE.md  # UI architecture details
+    ├── TESTING_GUIDE.md       # Testing strategies
+    ├── WORKFLOW.md            # Complete medweb CSV workflow
+    ├── INTEGRATION_COMPARISON.md  # Why config-driven approach
+    └── EXCEL_PATH_MIGRATION.md    # Why Excel upload was removed
+```
+
+---
+
+## 📖 Documentation
+
+Comprehensive documentation available in the `docs/` folder:
+
+- **[WORKFLOW.md](docs/WORKFLOW.md)** - Complete medweb CSV workflow, upload strategies, prep page usage
+- **[SYSTEM_ANALYSIS.md](docs/SYSTEM_ANALYSIS.md)** - Complete system analysis, fallback strategies, balancing algorithms
+- **[FRONTEND_ARCHITECTURE.md](docs/FRONTEND_ARCHITECTURE.md)** - UI structure, templates, API integration
+- **[TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing strategies, edge cases, validation
+- **[INTEGRATION_COMPARISON.md](docs/INTEGRATION_COMPARISON.md)** - Why config-driven CSV approach was chosen
+- **[EXCEL_PATH_MIGRATION.md](docs/EXCEL_PATH_MIGRATION.md)** - Why Excel upload path was removed
+
+---
+
+## 📋 Medweb CSV Format
+
+RadIMO ingests monthly schedules from medweb in CSV format:
+
+### Expected Columns
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| Datum | Date in DD.MM.YYYY | 20.11.2025 |
+| Tageszeit | Day period (ignored) | Tag |
+| Personalnummer | Employee number | 12345 |
+| Code des Mitarbeiters | Worker abbreviation | AM |
+| Name des Mitarbeiters | Worker full name | Dr. Anna Müller |
+| Beschreibung der Aktivität | Activity description | CT Spätdienst |
+
+### Activity Mapping
+
+Activities are mapped to modalities and skills via `config.yaml`:
+
+| Activity | Modality/Modalities | Shift | Example Skills |
+|----------|----------|-------|----------------|
+| CT Assistent | ct | Fruehdienst | Normal=1, Notfall=1 |
+| CT Spätdienst | ct | Spaetdienst | Normal=1, Notfall=1 |
+| MR Assistent | mr | Fruehdienst | Normal=1, Notfall=1 |
+| MR Assistent 1. Monat | mr | Fruehdienst | Normal=1, Notfall=0 |
+| Chir Assistent | xray | Fruehdienst | Normal=1, Notfall=1 |
+| SBZ: MRT-OA | mr | Fruehdienst | Privat=1 (PP role) |
+| **MSK Assistent** | **xray, ct, mr** ⭐ | Fruehdienst | **Msk=1** (sub-specialty team) |
+| **Herz Team** | **ct, mr** ⭐ | Fruehdienst | **Herz=1, Notfall=1** |
+
+⭐ **Multi-modality support (NEW):** Sub-specialty teams can be assigned across multiple modalities simultaneously.
+
+Add new activity mappings by updating `medweb_mapping.rules` in `config.yaml`.
+
+**Multi-modality syntax:**
+```yaml
+# Single modality (traditional)
+- match: "CT Assistent"
+  modality: "ct"
+  base_skills: {Normal: 1, Notfall: 1}
+
+# Multi-modality (sub-specialty teams)
+- match: "MSK Assistent"
+  modalities: ["xray", "ct", "mr"]  # Available in all three
+  base_skills: {Msk: 1, Normal: 0}
+```
+
+---
+
+## 🔐 Security
+
+- **Admin password**: Configure in `config.yaml` (change default for production!)
+- **Session-based auth**: Admin routes protected by login
+- **No user registration**: Simple password-based access
+
+---
+
+## 🚦 Operational Checks
+
+Run system health checks before deployment:
+
+```bash
+python ops_check.py
+```
+
+**Checks:**
+- ✅ Config file validity
+- ✅ Admin password configured
+- ✅ Upload folder writable
+- ✅ Modalities configured
+- ✅ Skills configured
+- ✅ Medweb mapping rules present
+- ✅ Worker data loaded
+
+---
+
+## 💡 Use Cases
+
+### Central Dispatcher Console
+Run on modality workstations for real-time assignments by coordinators.
+
+### Operations Analytics
+Poll `/api/quick_reload` to feed dashboards showing overflow patterns.
+
+### Cross-Site Coordination
+Configure modality fallbacks to point to other campuses for remote coverage.
+
+### Training & Backup Staff
+Use passive skill values (0) for workers who can help but shouldn't be primary choice.
+
+### Next-Day Planning
+Use prep page to review and adjust tomorrow's schedule before auto-preload activates.
+
+### Emergency Schedule Changes
+Use force refresh when significant staffing changes occur mid-day (e.g., half the staff calls in sick).
+
+---
+
+## 🔄 Recent Updates
+
+### v18 (November 2025)
+- ✨ **Config-driven medweb CSV integration** - Direct CSV ingestion with mapping rules
+- 🔀 **Multi-modality support** - Sub-specialty teams across multiple modalities (e.g., MSK in xray/ct/mr)
+- 📋 **Three-page admin system** - Separated planning (staged), prep (tomorrow), and live editing (immediate)
+  - **Skill Roster**: Staged changes with activation workflow (planning mode)
+  - **Prep Next Day**: Tomorrow's schedule preparation (no current-day impact)
+  - **Live Edit**: Emergency same-day edits (immediate effect with warnings)
+- ⚖️ **Conditional modifier application** - Optional `modifier_applies_to_active_only` setting (fair fallback behavior)
+- ⏰ **Automatic daily preload** - 7:30 AM auto-preload via APScheduler
+- 📝 **Next-day schedule preparation** - Advanced edit page with simple/advanced modes
+- ⏱️ **Time exclusion system** - Day-specific board/meeting schedules with auto shift-splitting
+- 🔄 **Force refresh capability** - Emergency same-day schedule reload
+- 🗑️ **Excel upload removal** - Simplified to single CSV-driven workflow
+- 📊 **Master CSV pattern** - Last upload becomes source for auto-preload
+
+### v17 (November 2025)
+- ✨ Added skill-based navigation view (`/by-skill`)
+- 🔧 Implemented work-hour-adjusted ratio balancing for overlapping shifts
+- 📊 Enhanced imbalance detection to use dynamic ratios
+- ✅ Implemented `run_operational_checks()` for system validation
+- 📝 Fixed skill value documentation (corrected -1/0/1 system)
+
+---
+
+## 🔧 Configuration Tips
+
+### Adding a New Activity Type
+
+1. Add rule to `config.yaml`:
+```yaml
+medweb_mapping:
+  rules:
+    - match: "Neue Aktivität"
+      modality: "ct"
+      shift: "Fruehdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+```
+
+2. Restart application (no code changes needed!)
+
+### Configuring Worker-Specific Skills
+
+1. Add to `worker_skill_roster` in `config.yaml`:
+```yaml
+worker_skill_roster:
+  NEUID:  # Worker abbreviation
+    default:  # Applies to all modalities
+      Normal: 1
+      Notfall: 1
+      Herz: 1      # This worker does Herz
+      Msk: -1      # Never for Msk
+    mr:            # MR-specific overrides
+      Herz: 0      # Only fallback for MR Herz
+```
+
+2. Restart application
+
+### Adjusting Shift Times
+
+1. Modify `shift_times` in `config.yaml`:
+```yaml
+shift_times:
+  Fruehdienst:
+    default: "07:30-15:30"  # Changed from 07:00-15:00
+    friday: "07:30-13:30"
+```
+
+2. Restart application
+
+---
+
+## 📄 License & Contact
+
+**RadIMO v18** - Radiology: Innovation, Management & Orchestration
+
+For more information, see [EULA.txt](static/EULA.txt) or contact **Dr. M. Russe**.
+
+---
+
+## 🤝 Contributing
+
+This is a specialized medical workload distribution system. For questions or suggestions:
+
+1. Review the [Complete Workflow](docs/WORKFLOW.md) documentation
+2. Check the [System Analysis](docs/SYSTEM_ANALYSIS.md) for technical details
+3. Understand the [Integration Comparison](docs/INTEGRATION_COMPARISON.md) for architectural decisions
+4. Read the [Testing Guide](docs/TESTING_GUIDE.md) for validation strategies
+
+---
+
+**Made with ❤️ for radiology teams**
+
+====== END README.md ======
+
+====== BEGIN docs/SYSTEM_ANALYSIS.md ======
+# RadIMO SBZ - Complete System Analysis
+
+**Note:** This document was originally created for v17 (Excel-based uploads). Some sections have been updated for v18 (medweb CSV integration).
+
+## Table of Contents
+1. [Medweb CSV Integration - v18](#medweb-csv-integration---v18) - Current workflow
+2. [Time Exclusion System - v18](#time-exclusion-system---v18) - Day-specific scheduling
+3. [Distribution Logic & Balancing Report](#distribution-logic--balancing-report) - Core assignment engine
+   - [The Three Selection Paths](#the-three-selection-paths)
+   - [Balancing Mechanisms](#balancing-mechanisms)
+   - [Skill Value System (-1, 0, 1)](#skill-value-system)
+   - [Fallback Mechanisms](#fallback-mechanisms)
+   - [Global Cross-Modality Tracking](#global-cross-modality-tracking)
+4. [Modular Architecture Report](#modular-architecture-report) - System structure
+
+---
+
+
+
+## 📊 Overview
+
+The RadIMO SBZ system manages Excel-based worker schedules with sophisticated file handling that supports immediate uploads, scheduled uploads, automatic daily resets, and crash recovery through backup systems.
+
+## 📁 File Locations
+
+| File Type | Path | Purpose |
+|-----------|------|---------|
+| **Default Upload** | `uploads/SBZ_<MOD>.xlsx` | Current active schedule |
+| **Scheduled Upload** | `uploads/SBZ_<MOD>_scheduled.xlsx` | Next day's schedule (activated at 7:30 AM) |
+| **Live Backup** | `uploads/backups/SBZ_<MOD>_live.xlsx` | Auto-saved after every change |
+| **Scheduled Backup** | `uploads/backups/SBZ_<MOD>_scheduled.xlsx` | Moved here after 7:30 reset |
+| **Invalid/Quarantine** | `uploads/invalid/SBZ_<MOD>_YYYYMMDD_HHMMSS.xlsx` | Corrupted files |
+
+---
+
+## 🔄 File Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    STARTUP (App Launch)                      │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌──────────────────────────────────────┐
+        │ Does live backup exist?               │
+        │ uploads/backups/SBZ_<MOD>_live.xlsx  │
+        └──────────────────────────────────────┘
+          YES │                           │ NO
+              ▼                           ▼
+        ┌──────────┐              ┌──────────────┐
+        │ Load it  │              │ Try default  │
+        └──────────┘              │ SBZ_<MOD>.xlsx│
+              │                   └──────────────┘
+              │                           │
+              ▼                           ▼
+        ┌──────────────────────────────────────┐
+        │ If load fails → quarantine file      │
+        └──────────────────────────────────────┘
+                            │
+                            ▼
+        ┌──────────────────────────────────────┐
+        │ If both fail → start empty           │
+        └──────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              MANUAL UPLOAD (Admin /upload)                   │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌──────────────────────────────────────┐
+        │ Immediate or Scheduled?               │
+        └──────────────────────────────────────┘
+          IMMEDIATE │                  │ SCHEDULED
+                    ▼                  ▼
+          ┌──────────────┐    ┌────────────────────┐
+          │ Reset counters│    │ Save to scheduled │
+          │ Load NOW      │    │ path (wait 7:30)  │
+          │ Create backup │    └────────────────────┘
+          └──────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│            DAILY RESET (Every request >= 7:30)               │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌──────────────────────────────────────┐
+        │ Is it a new day + time >= 7:30?      │
+        └──────────────────────────────────────┘
+          YES │                           │ NO
+              ▼                           ▼
+        ┌──────────────────────┐    ┌──────────┐
+        │ For each modality:   │    │ Continue │
+        │ 1. Reset counters    │    └──────────┘
+        │ 2. Load scheduled    │
+        │ 3. Move to backup    │
+        │ 4. Update live       │
+        └──────────────────────┘
+```
+
+---
+
+## 📝 Excel File Structure
+
+### Required Columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| **PPL** | Text | Worker name (unique identifier) |
+| **von** | Time | Shift start time (HH:MM format) |
+| **bis** | Time | Shift end time (HH:MM format) |
+| **Normal** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Notfall** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Privat** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Herz** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Msk** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Chest** | Integer | Skill value: 1=active, 0=passive, -1=excluded |
+| **Modifier** | Float | Worker-specific weight modifier (default: 1.0) |
+
+### Skill Value Meanings
+
+- **1** = Active (used for primary requests and fallback)
+- **0** = Passive (only used in fallback, not for primary)
+- **-1** = Excluded (not available in fallback)
+
+See [Skill Value System](#skill-value-system) for detailed explanation and examples.
+
+### Example Excel File
+
+```
+| PPL  | von  | bis  | Normal | Notfall | Privat | Herz | Msk | Chest | Modifier |
+|------|------|------|--------|---------|--------|------|-----|-------|----------|
+| Anna | 8:00 | 16:00|   1    |    1    |   0    |  1   |  1  |   0   |   1.0    |
+| Max  | 8:00 | 16:00|   1    |   -1    |   1    |  0   |  1  |   1   |   1.0    |
+| Lisa | 9:00 | 17:00|   1    |    1    |   1    |  1   |  0  |   1   |   1.1    |
+```
+
+### Sheet Structure
+
+Excel files must contain at minimum:
+- **Tabelle1**: Main worker schedule data (required)
+- **Tabelle2**: Optional info texts/notes (preserved during backup)
+
+---
+
+## ⚙️ File Operation Details
+
+### 1. Startup Initialization
+**Location:** `app.py:1457-1506`
+
+**Priority Order:**
+1. Try `uploads/backups/SBZ_<MOD>_live.xlsx`
+2. If fails, try `uploads/SBZ_<MOD>.xlsx`
+3. If both fail, start empty
+
+**Behavior:**
+- Corrupted files automatically quarantined
+- Logs every attempt with context
+- Gracefully handles missing files
+
+**Code:**
+```python
+for mod, d in modality_data.items():
+    backup_path = f"uploads/backups/SBZ_{mod.upper()}_live.xlsx"
+
+    if os.path.exists(backup_path):
+        if attempt_initialize_data(backup_path, mod, remove_on_failure=True):
+            # Success - backup loaded
+        else:
+            # Backup corrupted - try default
+
+    if not loaded and os.path.exists(d['default_file_path']):
+        # Try default file...
+```
+
+---
+
+### 2. Manual Upload
+**Location:** `app.py:1583-1622`
+
+#### **Immediate Upload** (`scheduled_upload=0`)
+
+**Process:**
+1. Validate file extension (.xlsx)
+2. Reset ALL counters (draw_counts, skill_counts, WeightedCounts, global)
+3. Save to `uploads/SBZ_<MOD>.xlsx`
+4. Parse and validate Excel structure
+5. Create live backup
+6. On error: Quarantine file, return error to user
+
+**Code:**
+```python
+if scheduled == '0':  # Immediate
+    # Reset counters BEFORE loading
+    d['draw_counts'] = {}
+    d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
+    d['WeightedCounts'] = {}
+    global_worker_data['weighted_counts_per_mod'][modality] = {}
+    global_worker_data['assignments_per_mod'][modality] = {}
+
+    # Save and load
+    file.save(d['default_file_path'])
+    initialize_data(file_path, modality)
+    backup_dataframe(modality)  # Create live backup
+```
+
+**Counter Reset Behavior:**
+- Resets happen BEFORE loading new file
+- Both local and global counters cleared
+- Prevents old assignments carrying over
+
+#### **Scheduled Upload** (`scheduled_upload=1`)
+
+**Process:**
+1. Validate file extension
+2. Save to `uploads/SBZ_<MOD>_scheduled.xlsx`
+3. Wait for daily reset at 7:30
+
+**Code:**
+```python
+if scheduled == '1':
+    file.save(d['scheduled_file_path'])  # Just save, don't load
+    return redirect(...)
+```
+
+**Important:** Scheduled files are NOT validated until 7:30 reset!
+
+---
+
+### 3. Daily Reset
+**Location:** `app.py:1325-1387`
+
+**Trigger:** `@app.before_request` on EVERY request
+
+**Conditions:**
+```python
+if global_worker_data['last_reset_date'] != today and now.time() >= time(7, 30):
+```
+
+**Process for Each Modality:**
+
+1. Check if `last_reset_date != today` and `time >= 7:30`
+2. Check if scheduled file exists
+3. Reset counters (draw_counts, skill_counts, WeightedCounts)
+4. Load scheduled file with `attempt_initialize_data(remove_on_failure=True)`
+5. Move scheduled file to `uploads/backups/SBZ_<MOD>_scheduled.xlsx`
+6. Create new live backup
+7. Update `last_reset_date = today`
+8. Reset global counters for modality
+
+**Code:**
+```python
+for mod, d in modality_data.items():
+    if d['last_reset_date'] == today:
+        continue  # Already reset today
+
+    if now.time() >= time(7, 30):
+        if os.path.exists(d['scheduled_file_path']):
+            # Reset counters
+            d['draw_counts'] = {}
+            d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
+            d['WeightedCounts'] = {}
+
+            # Load and move
+            success = attempt_initialize_data(d['scheduled_file_path'], mod, remove_on_failure=True)
+            if success:
+                shutil.move(d['scheduled_file_path'], backup_file)
+                backup_dataframe(mod)
+
+        # Mark as reset today
+        d['last_reset_date'] = today
+        global_worker_data['weighted_counts_per_mod'][mod] = {}
+        global_worker_data['assignments_per_mod'][mod] = {}
+```
+
+**Global Reset Logic:**
+```python
+# Global reset happens ONCE per day when ANY modality has a scheduled file
+if global_worker_data['last_reset_date'] != today and now.time() >= time(7, 30):
+    should_reset_global = any(
+        os.path.exists(modality_data[mod]['scheduled_file_path'])
+        for mod in allowed_modalities
+    )
+    if should_reset_global:
+        global_worker_data['last_reset_date'] = today
+```
+
+---
+
+### 4. File Quarantine
+**Location:** `app.py:696-715`
+
+**Purpose:** Isolate corrupted Excel files for inspection
+
+**Process:**
+1. Create `uploads/invalid/` directory
+2. Generate timestamped filename: `SBZ_<MOD>_YYYYMMDD_HHMMSS.xlsx`
+3. Move file (not copy) to quarantine
+4. Log warning with reason
+5. On move failure: Log warning but don't crash
+
+**Code:**
+```python
+def quarantine_excel(file_path: str, reason: str):
+    invalid_dir = Path(app.config['UPLOAD_FOLDER']) / 'invalid'
+    invalid_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    target = invalid_dir / f"{original.stem}_{timestamp}.xlsx"
+
+    shutil.move(str(original), str(target))
+    selection_logger.warning("Defekte Excel '%s' nach '%s' verschoben (%s)", ...)
+```
+
+**Triggered When:**
+- Startup: Corrupted live backup or default file
+- Upload: Invalid Excel structure
+- Daily reset: Corrupted scheduled file
+
+---
+
+### 5. Live Backup
+**Location:** `app.py:1422-1451`
+
+**Purpose:** Auto-save current state after changes
+
+**Process:**
+1. Create `uploads/backups/` directory
+2. Export DataFrame WITHOUT runtime columns (start_time, end_time, shift_duration)
+3. Write to `SBZ_<MOD>_live.xlsx`
+4. Include "Tabelle1" (data) and "Tabelle2" (info texts)
+
+**Triggered When:**
+- Immediate upload
+- Daily reset (after loading scheduled file)
+- Edit entry (after manual changes)
+- Delete entry
+
+**Code:**
+```python
+def backup_dataframe(modality: str):
+    # Remove runtime columns
+    cols_to_backup = [col for col in df.columns
+                      if col not in ['start_time', 'end_time', 'shift_duration']]
+    df_backup = d['working_hours_df'][cols_to_backup].copy()
+
+    with pd.ExcelWriter(backup_file, engine='openpyxl') as writer:
+        df_backup.to_excel(writer, sheet_name='Tabelle1', index=False)
+        if d.get('info_texts'):
+            df_info.to_excel(writer, sheet_name='Tabelle2', index=False)
+```
+
+---
+
+## 📋 File Lifecycle Summary
+
+### Typical Daily Flow
+
+```
+Day 1:
+08:00 - Admin uploads schedule for tomorrow (scheduled_upload=1)
+        → Saved to uploads/SBZ_CT_scheduled.xlsx
+        → Not validated or loaded yet
+
+Day 2:
+07:29:59 - Last assignments using Day 1 schedule
+07:30:00 - First request after 7:30
+           → check_and_perform_daily_reset() triggered
+           → Counters reset
+           → scheduled file loaded
+           → scheduled file moved to backups/
+           → live backup created
+07:30:01 - New assignments use Day 2 schedule
+
+12:00 - Admin makes manual edit
+        → live backup updated
+
+Day 3:
+07:30 - Repeat...
+```
+
+---
+
+## 📊 File Size & Performance
+
+**Typical Excel File:** ~50KB - 500KB
+**Live Backup:** Same size (no compression)
+**Startup Time:** ~100ms per modality to load Excel
+**Daily Reset:** ~200ms (load + move + backup)
+
+**Disk Usage Estimate** (3 modalities, 30 days):
+```
+Current files:      3 × 500KB = 1.5 MB
+Live backups:       3 × 500KB = 1.5 MB
+Daily backups:      3 × 30 × 500KB = 45 MB
+Quarantined files:  Variable (depends on errors)
+Total:             ~50 MB/month
+```
+
+---
+
+## 🔒 Security Considerations
+
+✅ **File Type Validation:** Only .xlsx allowed
+✅ **Admin Authentication:** Upload requires login
+✅ **Path Traversal:** Using Path() prevents ../.. attacks
+✅ **Quarantine Isolation:** Bad files moved to separate directory
+⚠️ **File Size Limits:** Not enforced (Flask default: 16MB)
+⚠️ **Malicious Excel:** No virus scanning (assumes trusted admins)
+
+</details>
+
+---
+
+# Medweb CSV Integration - v18
+
+## 📊 Overview
+
+RadIMO v18 uses **config-driven medweb CSV integration** to directly ingest worker schedules without manual Excel file creation. This approach provides better maintainability, flexibility, and automation.
+
+## 🔄 Architecture
+
+```
+medweb.csv (monthly schedule)
+    ↓
+Config-driven parsing (medweb_mapping rules)
+    ↓
+Worker skill roster overrides
+    ↓
+Time exclusion processing (boards, meetings)
+    ↓
+working_hours_df per modality
+    ↓
+Real-time assignment system
+```
+
+## ⚙️ Key Components
+
+### 1. Medweb Mapping Rules
+
+Activities from medweb CSV are mapped to modalities and skills via `config.yaml`:
+
+```yaml
+medweb_mapping:
+  rules:
+    - match: "CT Spätdienst"
+      modality: "ct"
+      shift: "Spaetdienst"
+      base_skills: {Normal: 1, Notfall: 1, Privat: 0, ...}
+```
+
+**How Matching Works:**
+- Case-insensitive substring matching
+- First matching rule wins
+- Unmapped activities are ignored
+
+### 2. Worker Skill Roster
+
+Per-worker skill overrides with modality-specific configuration:
+
+```yaml
+worker_skill_roster:
+  AAn:  # Worker abbreviation
+    default:  # All modalities
+      Msk: 1  # MSK specialist
+    ct:  # CT-specific override
+      Notfall: 0  # Only fallback for CT Notfall
+```
+
+**Precedence:** `worker_skill_roster` > `medweb_mapping` > system defaults
+
+### 3. Auto-Preload System
+
+**Schedule:** Daily at 7:30 AM CET
+**Source:** `uploads/master_medweb.csv`
+**Logic:** Friday → Monday, other days → tomorrow
+**Mechanism:** APScheduler with CronTrigger
+
+### 4. Upload Strategies
+
+- **Manual Upload:** Any date, immediate processing
+- **Preload Next Day:** Manual trigger for tomorrow
+- **Force Refresh:** Emergency same-day reload (destroys counters)
+
+**Detailed Documentation:** See [WORKFLOW.md](WORKFLOW.md)
+
+---
+
+# Time Exclusion System - v18
+
+## 📊 Overview
+
+The time exclusion system **punches out time** from worker shifts for boards, meetings, teaching, and other non-work activities. This allows workers to have complex schedules with interruptions.
+
+## 🔧 Configuration
+
+Time exclusions are **day-specific** - same activity can have different times per weekday:
+
+```yaml
+medweb_mapping:
+  rules:
+    - match: "Kopf-Hals-Board"
+      exclusion: true
+      schedule:
+        Montag: "15:30-17:00"  # Only applies on Mondays
+      prep_time:
+        before: "30m"  # Prep time: 15:00-15:30
+        after: "15m"   # Cleanup: 17:00-17:15
+
+    - match: "Board"
+      exclusion: true
+      schedule:
+        Dienstag: "15:00-17:00"
+        Mittwoch: "10:00-12:00"
+        Donnerstag: "14:00-16:00"
+```
+
+## ⚙️ How It Works
+
+### 1. CSV Entry Detection
+
+When CSV contains exclusion activity for a worker:
+```
+"24.11.2025","NM","ZANDERCH","CZ","Charlotte Dr Zander",...,"Kopf-Hals-Board",...
+```
+
+### 2. Schedule Lookup
+
+- Get weekday name: `get_weekday_name_german(target_date)` → "Montag"
+- Check if schedule exists: `schedule["Montag"]` → "15:30-17:00"
+- If no schedule for this weekday → activity ignored (doesn't apply today)
+
+### 3. Prep Time Extension (Optional)
+
+```
+Base exclusion:     [15:30 ───── 17:00]
+With prep_time:
+  before: "30m" →  [15:00
+  after: "15m"   →           17:15]
+
+Final exclusion:    [15:00 ────── 17:15]
+```
+
+### 4. Shift Splitting
+
+Worker's original shift: `07:00-21:00`
+After exclusion applied: `07:00-15:00` + `17:15-21:00`
+
+```
+Original:  [07:00 ────────────────────────── 21:00]
+Exclusion:              [15:00 ─── 17:15]
+
+Result:    [07:00 ──── 15:00] [17:15 ──── 21:00]
+```
+
+## 🔄 Processing Algorithm
+
+### Two-Pass System
+
+**FIRST PASS - Collect exclusions and work shifts:**
+1. For each CSV row:
+   - Match against `medweb_mapping.rules`
+   - If `exclusion: true`:
+     - Check if weekday in schedule
+     - Parse time range
+     - Apply prep_time extensions
+     - Store in `exclusions_per_worker[canonical_id]`
+     - Skip adding to work shifts
+   - If normal work:
+     - Add to `rows_per_modality[modality]`
+
+**SECOND PASS - Apply exclusions:**
+2. Group shifts by worker
+3. For workers with exclusions:
+   - Call `apply_exclusions_to_shifts()`
+   - Splits/truncates shifts at exclusion boundaries
+   - Handles multiple overlapping exclusions
+   - Minimum segment: 0.1h (6 minutes)
+
+### Example with Multiple Exclusions
+
+```
+Original shift:    [07:00 ────────────────────────── 21:00]
+
+Exclusions:
+  Board:                  [10:00 ── 12:00]
+  Fortbildung:                        [15:00 ──── 17:00]
+
+Result:            [07:00 ─ 10:00] [12:00 ─ 15:00] [17:00 ─ 21:00]
+```
+
+## 📝 Logging
+
+```
+INFO: Time exclusion for Charlotte Dr Zander (CZ) (Montag): 15:00-17:15 (Kopf-Hals-Board)
+INFO: Applying time exclusions for 3 workers on Montag
+```
+
+## ✅ Benefits
+
+- ✅ **No time parsing needed** - Time range in config, not CSV description
+- ✅ **Day-specific** - Board on Monday ≠ Board on Tuesday
+- ✅ **Prep time support** - Automatic before/after extension
+- ✅ **Multiple exclusions** - Handles overlapping correctly
+- ✅ **Config-driven** - Add new exclusions without code changes
+
+---
+
+# Distribution Logic & Balancing Report
+
+## 🎯 Overview
+
+The RadIMO SBZ system implements **three distinct worker selection strategies** (the "3 Paths") that can be configured via `config.yaml`. Each strategy optimizes for different prioritization goals while maintaining fair load distribution across workers.
+
+## 🔀 The Three Selection Paths
+
+### Configuration
+**Location:** `config.yaml` - Line 116
+```yaml
+balancer:
+  fallback_strategy: skill_priority  # Options: skill_priority, modality_priority, pool_priority
+```
+
+### Main Entry Point
+**Function:** `get_next_available_worker()`
+**Location:** `app.py:974-987`
+
+Routes incoming requests to the appropriate selection strategy:
+
+```python
+def get_next_available_worker(
+    current_dt: datetime,
+    role='normal',
+    modality=default_modality,
+    allow_fallback: bool = True,
+):
+    strategy = BALANCER_SETTINGS.get('fallback_strategy', 'skill_priority')
+
+    if strategy == 'modality_priority':
+        return _get_worker_modality_priority(...)
+    elif strategy == 'pool_priority':
+        return _get_worker_pool_priority(...)
+    else:
+        return _get_worker_skill_priority(...)
+```
+
+---
+
+## Path 1: SKILL_PRIORITY (Default Strategy)
+
+**Function:** `_get_worker_skill_priority()`
+**Location:** `app.py:990-1049`
+
+### Strategy
+**"Try all skill fallbacks per modality BEFORE moving to next modality"**
+
+### Search Order
+```
+For each modality in search chain:
+  └─ Try requested skill
+     └─ Try all skill fallbacks
+        └─ Return best match
+           └─ If none found, move to next modality
+```
+
+### How It Works
+1. Searches the requested modality first
+2. Uses the configured skill fallback chain for that modality
+3. Only moves to fallback modalities after exhausting all skills
+4. Returns first match found with best worker ratio
+
+### Example Flow
+**Request:** CT / Privat
+
+```
+1. Try CT → Privat
+2. Try CT → Notfall
+3. Try CT → Normal
+4. Try MR → Privat (if modality fallback configured)
+5. Try MR → Notfall
+6. Try MR → Normal
+```
+
+### Best For
+- **Primary modality-focused assignment**
+- Keep workers in their primary modality
+- Stay in CT and try all skills before going to MR
+- Typical radiology workflows where modality expertise matters
+
+### Code Structure
+```python
+def _get_worker_skill_priority(current_dt, role, modality, allow_fallback):
+    # Build modality search order
+    modality_chain = [modality] + get_modality_fallbacks(modality)
+
+    # Try each modality
+    for current_mod in modality_chain:
+        # Try primary role + all skill fallbacks
+        result = get_active_df_for_role(current_dt, role, current_mod, allow_fallback)
+        if result:
+            return result
+
+    return None  # No worker found
+```
+
+---
+
+## Path 2: MODALITY_PRIORITY (Cross-Modality Strategy)
+
+**Function:** `_get_worker_modality_priority()`
+**Location:** `app.py:1052-1178`
+
+### Strategy
+**"Try each skill across ALL modalities before moving to next skill fallback"**
+
+### Search Order
+```
+For each skill in fallback chain:
+  └─ Try across all modalities in parallel
+     └─ Return best match globally
+        └─ If none found, move to next skill
+```
+
+### How It Works
+1. Builds skill fallback sequence from the requested role
+2. Builds modality search order (primary + fallbacks)
+3. For EACH skill, searches ALL modalities simultaneously
+4. Returns best match when skill is found anywhere
+5. Logs when using fallback
+
+### Example Flow
+**Request:** CT / Privat
+
+```
+1. Try Privat across: CT, MR, XRAY (all modalities)
+   → Pick best from all candidates
+2. If none: Try Notfall across: CT, MR, XRAY
+   → Pick best from all candidates
+3. If none: Try Normal across: CT, MR, XRAY
+   → Pick best from all candidates
+```
+
+### Best For
+- **Skill-focused assignment**
+- When skill expertise is more important than modality
+- Ensure specific skill is used before falling back
+- Flexible cross-training environments
+
+### Code Structure
+```python
+def _get_worker_modality_priority(current_dt, role, modality, allow_fallback):
+    # Build skill fallback sequence
+    skill_fallback_sequence = _build_skill_fallback_sequence(role, modality, allow_fallback)
+
+    # Build modality search order
+    modality_search_order = [modality] + get_modality_fallbacks(modality)
+
+    # For each skill tier
+    for skill_tier in skill_fallback_sequence:
+        candidates = []
+
+        # Try across all modalities
+        for mod in modality_search_order:
+            result = _select_worker_for_modality(current_dt, skill_tier, mod, ...)
+            if result:
+                candidates.append((result, mod, skill_tier))
+
+        # Return best from all modalities
+        if candidates:
+            return _pick_best_candidate(candidates)
+
+    return None
+```
+
+---
+
+## Path 3: POOL_PRIORITY (Optimal Global Load Balancing)
+
+**Function:** `_get_worker_pool_priority()`
+**Location:** `app.py:1181-1322`
+
+### Strategy
+**"Build pool of all CONFIGURED (skill, modality) combinations and pick globally best worker"**
+
+### Search Order
+```
+Build skill chain from configured fallbacks
+Build modality chain from configured fallbacks
+Create pool: skill_chain × modality_chain (respecting config)
+Evaluate EVERY configured combination simultaneously
+Score each using weighted_ratio
+Return single globally-best candidate
+```
+
+### How It Works
+1. Builds skill fallback sequence from `BALANCER_FALLBACK_CHAIN` configuration
+2. Builds modality search order from `MODALITY_FALLBACK_CHAIN` configuration
+3. Creates combinations ONLY from these configured chains (not blind all×all)
+4. Evaluates every configured combination at once
+5. Uses `weighted_ratio` to score each combination
+6. Returns single globally-best candidate from entire pool
+7. Logs pool size and selection details
+
+### Example Flow
+**Request:** CT / Privat
+
+**With config.yaml:**
+```yaml
+balancer:
+  fallback_chain:
+    Privat: [Notfall, [Normal, Herz]]
+
+modality_fallbacks:
+  ct: [mr]
+```
+
+**Pool built:**
+```
+Skill chain: Privat → Notfall → Normal, Herz
+Modality chain: CT → MR
+
+Build pool from CONFIGURED combinations:
+  CT × Privat
+  CT × Notfall
+  CT × Normal
+  CT × Herz
+  MR × Privat
+  MR × Notfall
+  MR × Normal
+  MR × Herz
+
+Evaluate all 8 configured combinations
+Pick worker with lowest weighted_ratio across all
+```
+
+### Best For
+- **Optimal global load distribution**
+- Prevent repeated selection of same person
+- Balance work across ALL dimensions simultaneously
+- Maximum fairness across skills AND modalities
+
+### Key Advantage
+Compares against **global work across modalities**, preventing scenarios like:
+- Worker A: 10 CT assignments, 0 MR assignments
+- Worker B: 0 CT assignments, 0 MR assignments
+- System picks Worker B even though both available for CT
+
+### Code Structure
+```python
+def _get_worker_pool_priority(current_dt, role, modality, allow_fallback):
+    # Build skill fallback chain from BALANCER_FALLBACK_CHAIN config
+    primary_skill = role_map[role.lower()]
+    skill_chain = [primary_skill]
+
+    if allow_fallback:
+        configured_fallbacks = BALANCER_FALLBACK_CHAIN.get(primary_skill, [])
+        for fallback_entry in configured_fallbacks:
+            if isinstance(fallback_entry, list):
+                skill_chain.extend(fallback_entry)
+            else:
+                skill_chain.append(fallback_entry)
+
+    # Build modality search order from MODALITY_FALLBACK_CHAIN config
+    modality_search = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
+
+    # Build pool from CONFIGURED combinations only
+    candidate_pool = []
+    for skill_to_try in skill_chain:
+        for target_modality in modality_search:
+            # Filter active workers
+            active_df = d['working_hours_df'][
+                (d['working_hours_df']['start_time'] <= current_time) &
+                (d['working_hours_df']['end_time'] >= current_time)
+            ]
+
+            # Try this specific (skill, modality) combination
+            selection = _attempt_column_selection(active_df, skill_to_try, target_modality)
+            balanced_df = _apply_minimum_balancer(selection, skill_to_try, target_modality)
+
+            # Calculate weighted ratio for best worker in this combination
+            best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
+            ratio = weighted_ratio(best_person)
+
+            candidate_pool.append((ratio, candidate, skill_to_try, target_modality))
+
+    # Pick globally best from entire pool
+    if candidate_pool:
+        ratio, candidate, used_skill, source_modality = min(candidate_pool, key=lambda item: item[0])
+        return candidate, used_skill, source_modality
+
+    return None
+```
+
+---
+
+## 🔄 Balancing Mechanisms
+
+### 1. Effective Assignment Load Calculation
+**Function:** `_get_effective_assignment_load()`
+**Location:** `app.py:748-773`
+
+Combines local and global work tracking to avoid overworking anyone:
+
+```python
+def _get_effective_assignment_load(worker, column, modality):
+    # Local count: this modality/skill
+    local_count = skill_counts.get(worker, 0)
+
+    # Global count: all modalities weighted
+    canonical_id = get_canonical_worker_id(worker)
+    global_weighted_total = get_global_weighted_count(canonical_id)
+
+    # Use the HIGHER value
+    return max(local_count, global_weighted_total)
+```
+
+**Key Insight:** Using `max()` ensures work done in OTHER modalities counts against minimum balancer checks.
+
+---
+
+### 2. Minimum Balancer
+**Function:** `_apply_minimum_balancer()`
+**Location:** `app.py:776-795`
+
+Ensures fair distribution by prioritizing underutilized workers:
+
+```python
+def _apply_minimum_balancer(filtered_df, column, modality):
+    if not BALANCER_SETTINGS.get('enabled', True):
+        return filtered_df
+
+    min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 5)
+
+    # Prioritize workers below minimum
+    prioritized = filtered_df[
+        filtered_df['PPL'].apply(
+            lambda worker: _get_effective_assignment_load(worker, column, modality) < min_required
+        )
+    ]
+
+    return prioritized if not prioritized.empty else filtered_df
+```
+
+**Configuration:** `config.yaml:113`
+```yaml
+min_assignments_per_skill: 5  # Workers must reach this before others get more
+```
+
+---
+
+### 3. Imbalance Detection
+**Function:** `_should_balance_via_fallback()`
+**Location:** `app.py:798-827`
+
+Triggers fallback when assignment distribution becomes unfair:
+
+```python
+def _should_balance_via_fallback(worker_counts, modality):
+    if not BALANCER_SETTINGS.get('allow_fallback_on_imbalance', True):
+        return False
+
+    if len(worker_counts) < 2:
+        return False
+
+    threshold_pct = BALANCER_SETTINGS.get('imbalance_threshold_pct', 30)
+    max_count = max(worker_counts)
+    min_count = min(worker_counts)
+
+    # Calculate percentage imbalance
+    imbalance = (max_count - min_count) / max_count
+
+    return imbalance >= (threshold_pct / 100.0)
+```
+
+**Configuration:** `config.yaml:114`
+```yaml
+imbalance_threshold_pct: 30  # If 30% difference detected, use fallback
+```
+
+**Example:**
+- Worker A: 10 assignments
+- Worker B: 7 assignments
+- Imbalance = (10 - 7) / 10 = 30% → **TRIGGER FALLBACK**
+
+---
+
+### 4. Worker Selection for Specific Modality
+**Function:** `_select_worker_for_modality()`
+**Location:** `app.py:911-971`
+
+Core function that selects best worker from available pool:
+
+#### Process
+1. **Filter by Time:** Only active workers (current time within their shift)
+2. **Filter by Skill:** Apply role mapping to skill columns
+3. **Apply Minimum Balancer:** Prioritize underutilized workers
+4. **Calculate Weighted Ratio:** Score based on work hours and global weighted count
+5. **Select Best:** Pick worker with lowest ratio (least loaded)
+
+#### Key Calculation - Weighted Ratio
+**Location:** `app.py:954-958`
+
+```python
+def weighted_ratio(person):
+    canonical_id = get_canonical_worker_id(person)
+    h = hours_map.get(canonical_id, 0)  # Work hours this modality
+    w = get_global_weighted_count(canonical_id)  # Total weighted assignments
+    return w / h if h > 0 else w  # Normalize by available hours
+```
+
+**Formula:**
+```
+weighted_ratio = global_weighted_assignments / available_work_hours
+
+Lower ratio = more available = SELECTED
+```
+
+#### Example
+```
+Worker A: 15 weighted assignments, 8 hours → ratio = 15/8 = 1.875
+Worker B: 10 weighted assignments, 6 hours → ratio = 10/6 = 1.667
+Worker C: 5 weighted assignments, 4 hours → ratio = 5/4 = 1.250
+
+Result: Worker C selected (lowest ratio = most available)
+```
+
+---
+
+## 🎚️ Skill Value System
+
+### Worker Skill Values
+**Location:** Excel files, skill columns (Normal, Notfall, Privat, Herz, Msk, Chest)
+
+Workers can have three different values for each skill column:
+
+| Value | Name | Behavior | Use Case |
+|-------|------|----------|----------|
+| **1** | **Active** | Available for both primary requests AND fallback | Standard worker assignment |
+| **0** | **Passive** | Available ONLY in fallback, NOT for primary requests | Worker can help if needed but shouldn't be first choice |
+| **-1** | **Excluded** | NOT available in fallback (has skill but excluded) | Worker has skill but is reserved/unavailable |
+
+### Selection Logic
+**Function:** `_attempt_column_selection()`
+**Location:** `app.py:830-859`
+
+```python
+def _attempt_column_selection(active_df, column, modality, is_primary=True):
+    if is_primary:
+        # Primary selection: only workers with value >= 1 (active workers)
+        filtered_df = active_df[active_df[column] >= 1]
+    else:
+        # Fallback selection: workers with value >= 0 (includes passive, excludes -1)
+        filtered_df = active_df[active_df[column] >= 0]
+```
+
+### Practical Examples
+
+#### Example 1: Passive Workers (Value = 0)
+```
+Worker: Anna
+Skill: Privat = 0
+
+Request: /api/ct/privat (primary request for Privat)
+Result: Anna NOT selected (value 0 < 1, not active for primary)
+
+Request: /api/ct/herz (primary request for Herz, fallback to Privat)
+Result: Anna CAN be selected (value 0 >= 0, available in fallback)
+```
+
+**Use Case:** Anna knows Privat but prefers other skills. Use her only when no active Privat workers available.
+
+#### Example 2: Excluded Workers (Value = -1)
+```
+Worker: Max
+Skill: Notfall = -1
+
+Request: /api/ct/notfall (primary request for Notfall)
+Result: Max NOT selected (value -1 < 1, not active)
+
+Request: /api/ct/herz (primary request for Herz, fallback to Notfall)
+Result: Max NOT selected (value -1 < 0, excluded from fallback)
+```
+
+**Use Case:** Max has Notfall certification but is currently in training and should not be assigned to Notfall cases.
+
+#### Example 3: Mixed Values
+```
+Workers:
+  - Lisa: Privat = 1  (active)
+  - Tom:  Privat = 0  (passive)
+  - Sara: Privat = -1 (excluded)
+
+Request: /api/ct/privat
+Result: Only Lisa eligible for primary selection
+
+Request: /api/ct/herz → fallback to Privat
+Result: Lisa AND Tom eligible for fallback (Sara excluded)
+```
+
+### Implementation Details
+
+**Primary vs. Fallback Detection:**
+```python
+# In modality_priority and pool_priority strategies:
+for skill_to_try in skill_chain:
+    is_primary_skill = (skill_to_try == primary_skill)  # True only for first skill
+    selection = _attempt_column_selection(
+        active_df,
+        skill_to_try,
+        target_modality,
+        is_primary=is_primary_skill  # Changes filtering behavior
+    )
+```
+
+**Fallback Chain Handling:**
+```python
+# In _try_configured_fallback():
+for fallback_column in fallback_chain:
+    # Always use is_primary=False for fallback chains
+    result = _attempt_column_selection(
+        active_df,
+        fallback_column,
+        modality,
+        is_primary=False  # Allows passive workers (value 0)
+    )
+```
+
+### Configuration in Excel
+
+**Example Excel Structure:**
+```
+| PPL  | von  | bis  | Normal | Notfall | Privat | Herz | Modifier |
+|------|------|------|--------|---------|--------|------|----------|
+| Anna | 8:00 | 16:00|   1    |    1    |   0    |  1   |   1.0    |
+| Max  | 8:00 | 16:00|   1    |   -1    |   1    |  0   |   1.0    |
+| Lisa | 9:00 | 17:00|   1    |    1    |   1    |  1   |   1.0    |
+```
+
+**Interpretation:**
+- **Anna:** Active for Normal, Notfall, Herz; Passive for Privat
+- **Max:** Active for Normal, Privat; Passive for Herz; Excluded from Notfall
+- **Lisa:** Active for all skills
+
+### Benefits
+
+1. **Fine-Grained Control:** Manage worker availability at skill level
+2. **Training Support:** Mark workers as passive (0) during training period
+3. **Temporary Exclusions:** Use -1 for workers on leave or restricted duties
+4. **Fallback Optimization:** Passive workers (0) provide backup without being primary choice
+5. **No Configuration Changes:** All controlled through Excel file values
+
+---
+
+## 🔗 Fallback Mechanisms
+
+### 1. Column Selection (Skill Fallback)
+**Function:** `_attempt_column_selection()`
+**Location:** `app.py:830-840`
+
+Tries to select from a specific skill column:
+
+```python
+def _attempt_column_selection(current_dt, column, modality, primary_column):
+    # Check if column exists and has available workers
+    if column not in df.columns:
+        return None
+
+    if not (df[column] > 0).any():
+        return None
+
+    # Apply minimum balancer if enabled
+    result = _select_worker_for_modality(current_dt, column, modality, ...)
+
+    # Tag with source skill
+    if result:
+        result['source'] = column
+
+    return result
+```
+
+---
+
+### 2. Configured Fallback Chain
+**Function:** `_try_configured_fallback()`
+**Location:** `app.py:843-861`
+
+Walks through skill fallback chain defined in config:
+
+```python
+def _try_configured_fallback(current_dt, current_column, modality, allow_fallback):
+    if not allow_fallback:
+        return None
+
+    fallback_chain = BALANCER_FALLBACK_CHAIN.get(current_column, [])
+
+    for fallback in fallback_chain:
+        if isinstance(fallback, list):
+            # Grouped fallbacks (try all in parallel)
+            candidates = []
+            for fb_col in fallback:
+                result = _attempt_column_selection(current_dt, fb_col, modality, current_column)
+                if result:
+                    candidates.append(result)
+
+            # Return best from group
+            if candidates:
+                return min(candidates, key=lambda x: x.get('ratio', float('inf')))
+
+        else:
+            # Single fallback
+            result = _attempt_column_selection(current_dt, fallback, modality, current_column)
+            if result:
+                return result
+
+    return None
+```
+
+**Fallback Chain Example from config.yaml:**
+```yaml
+fallback_chain:
+  Privat:
+    - Notfall
+    - [Normal, Herz]  # Parallel group - try both, pick best
+  Herz:
+    - [Notfall, Normal]  # Parallel group
+  Msk:
+    - Notfall
+    - Normal
+```
+
+**Execution for Privat:**
+1. Try Privat (primary)
+2. Try Notfall (first fallback)
+3. Try Normal AND Herz in parallel, pick best (second fallback group)
+
+---
+
+### 3. Role-to-Column Mapping
+**Function:** `get_active_df_for_role()`
+**Location:** `app.py:864-909`
+
+Maps request role to skill column and applies fallback strategy:
+
+```python
+def get_active_df_for_role(current_dt, role, modality, allow_fallback):
+    # Role mapping
+    role_map = {
+        'normal': 'Normal',
+        'notfall': 'Notfall',
+        'herz': 'Herz',
+        'privat': 'Privat',
+        'msk': 'Msk',
+        'chest': 'Chest'
+    }
+
+    column = role_map.get(role.lower(), 'Normal')
+
+    # Try primary column
+    result = _attempt_column_selection(current_dt, column, modality, column)
+    if result:
+        return result
+
+    # Try configured fallback chain
+    return _try_configured_fallback(current_dt, column, modality, allow_fallback)
+```
+
+---
+
+## 🌍 Global Cross-Modality Tracking
+
+### Data Structure
+**Location:** `app.py:424-430`
+
+Tracks work across all modalities to prevent overassignment:
+
+```python
+global_worker_data = {
+    'worker_ids': {},  # name → canonical_id mapping
+    'weighted_counts_per_mod': {
+        'ct': {},   # canonical_id → weighted_count
+        'mr': {},
+        'xray': {}
+    },
+    'assignments_per_mod': {
+        'ct': {},   # canonical_id → raw_count
+        'mr': {},
+        'xray': {}
+    },
+    'last_reset_date': None  # Daily reset tracking
+}
+```
+
+---
+
+### Weight Calculation
+**Function:** `update_global_assignment()`
+**Location:** `app.py:1405-1419`
+
+```python
+def update_global_assignment(person, role, modality):
+    canonical_id = get_canonical_worker_id(person)
+
+    # Get worker-specific modifier from Excel
+    modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
+
+    # Get skill weight from config
+    skill_weights = {
+        'Normal': 1.0,
+        'Notfall': 1.1,
+        'Privat': 1.2,
+        'Herz': 1.2,
+        'Msk': 0.8,
+        'Chest': 0.8
+    }
+
+    # Get modality factor from config
+    modality_factors = {
+        'ct': 1.0,
+        'mr': 1.2,
+        'xray': 0.33
+    }
+
+    # Calculate weighted assignment
+    weight = (
+        skill_weights.get(role, 1.0) *
+        modifier *
+        modality_factors.get(modality, 1.0)
+    )
+
+    # Update global tracking
+    global_worker_data['weighted_counts_per_mod'][modality][canonical_id] += weight
+    global_worker_data['assignments_per_mod'][modality][canonical_id] += 1
+```
+
+**Example Calculation:**
+```
+Assignment: Worker "Max" → Privat skill → MR modality
+Modifier from Excel: 1.1
+Skill weight (Privat): 1.2
+Modality factor (MR): 1.2
+
+Weighted assignment = 1.2 × 1.1 × 1.2 = 1.584
+```
+
+---
+
+## 🎛️ API Endpoints for Selection
+
+### Assignment Endpoint
+**Route:** `/api/<modality>/<role>`
+**Location:** `app.py:1699-1704`
+
+```python
+@app.route('/api/<modality>/<role>')
+def api_assign(modality, role):
+    return _assign_worker(modality, role, allow_fallback=True)
+```
+
+**Features:**
+- Full fallback enabled
+- Uses configured `fallback_strategy`
+- Returns worker with metadata
+
+---
+
+### Strict Endpoint
+**Route:** `/api/<modality>/<role>/strict`
+**Location:** `app.py:1707-1712`
+
+```python
+@app.route('/api/<modality>/<role>/strict')
+def api_assign_strict(modality, role):
+    return _assign_worker(modality, role, allow_fallback=False)
+```
+
+**Features:**
+- No fallback allowed
+- Returns "no person in this group" if strict requirements not met
+- Used when specific skill is mandatory
+
+---
+
+## 📊 Balancing Configuration Summary
+
+**Location:** `config.yaml:112-132`
+
+```yaml
+balancer:
+  enabled: true                          # Activate load balancing
+  min_assignments_per_skill: 5           # Fair distribution minimum
+  imbalance_threshold_pct: 30            # Trigger fallback on imbalance
+  allow_fallback_on_imbalance: true      # Auto-fallback when imbalanced
+  fallback_strategy: skill_priority      # Which of the 3 paths to use
+
+  fallback_chain:
+    Normal: []
+    Notfall: [Normal]
+    Herz: [[Notfall, Normal]]            # Parallel group
+    Privat: [Notfall, [Normal, Herz]]    # Sequential + parallel
+    Msk: [Notfall, Normal]
+    Chest: [Notfall, Normal]
+```
+
+---
+
+## 📈 Strategy Comparison Table
+
+| Feature | Skill Priority | Modality Priority | Pool Priority |
+|---------|---------------|-------------------|---------------|
+| **Primary Goal** | Keep in modality | Find specific skill | Global optimization |
+| **Search Pattern** | Modality → Skills | Skill → Modalities | Configured combinations |
+| **Combinations** | Sequential | Parallel per skill | All configured fallbacks |
+| **Best For** | Modality expertise | Skill expertise | Maximum fairness |
+| **Complexity** | Low | Medium | High |
+| **Performance** | Fast | Medium | Slower (more checks) |
+| **Fallback Logic** | Sequential | Parallel per skill | Global pool comparison |
+| **Cross-modality** | Last resort | Preferred | Equal weight (if configured) |
+| **Config Respect** | Yes | Yes | Yes (builds pool from config) |
+
+---
+
+## 🎯 Selection Path Examples
+
+### Example Request: CT / Privat
+
+#### Skill Priority Path
+```
+1. CT → Privat ✓ Found Worker A (ratio: 1.5)
+   Return: Worker A
+```
+
+#### Modality Priority Path
+```
+1. Privat across all modalities:
+   - CT → Privat: Worker A (ratio: 1.5)
+   - MR → Privat: Worker B (ratio: 1.2)
+   - XRAY → Privat: Worker C (ratio: 2.0)
+   Return: Worker B (best ratio)
+```
+
+#### Pool Priority Path
+```
+With config:
+  fallback_chain: Privat → [Notfall, [Normal, Herz]]
+  modality_fallbacks: ct → [mr]
+
+Build pool from CONFIGURED combinations:
+  CT × Privat: Worker A (1.5)
+  CT × Notfall: Worker D (1.1)
+  CT × Normal: Worker E (0.9)
+  CT × Herz: Worker J (1.3)
+  MR × Privat: Worker B (1.2)
+  MR × Notfall: Worker F (1.0)
+  MR × Normal: Worker G (0.8)
+  MR × Herz: Worker K (1.4)
+
+Return: Worker G (lowest ratio across entire configured pool)
+Note: XRAY not included - not in configured modality fallbacks
+```
+
+---
+
+# Modular Architecture Report
+
+## 🏗️ System Architecture Overview
+
+The RadIMO SBZ system is organized into distinct functional modules, each responsible for specific aspects of worker assignment, file management, and system configuration.
+
+## 📦 Core Modules
+
+### 1. Configuration Management Module
+**Lines:** `app.py:55-372`
+
+#### Components
+- **Default Constants** (55-168)
+  - `DEFAULT_FALLBACK_CHAIN` - Skill fallback definitions
+  - `DEFAULT_SKILLS` - Skill properties and weights
+  - `DEFAULT_MODALITIES` - Modality properties and factors
+  - `DEFAULT_CONFIG` - Base configuration
+  - `DEFAULT_BALANCER` - Balancing settings
+
+- **Normalization Functions** (170-243)
+  - `_normalize_skill_fallback_entries()` - Process fallback chains
+  - `_normalize_modality_fallback_entries()` - Process modality fallbacks
+  - `_coerce_float()` - Type conversion
+  - `_coerce_int()` - Type conversion
+
+- **Config Loaders** (246-372)
+  - `_load_raw_config()` - Read YAML file
+  - `_merge_config()` - Merge with defaults
+  - `load_config()` - Main config loader
+  - `_build_modality_config()` - Process modalities
+  - `_build_skills_config()` - Process skills
+  - `_build_balancer_config()` - Process balancer settings
+
+#### Purpose
+Provides centralized configuration management with YAML-based customization, fallback to defaults, and type-safe value handling.
+
+---
+
+### 2. Data Structures Module
+**Lines:** `app.py:374-430`
+
+#### Global Data Structures
+
+**Modality Data Structure:**
+```python
+modality_data = {
+    'ct': {
+        'default_file_path': 'uploads/SBZ_CT.xlsx',
+        'scheduled_file_path': 'uploads/SBZ_CT_scheduled.xlsx',
+        'working_hours_df': DataFrame,
+        'draw_counts': {},
+        'skill_counts': {'Normal': {}, 'Notfall': {}, ...},
+        'WeightedCounts': {},
+        'worker_modifiers': {},
+        'last_reset_date': None,
+        'info_texts': {}
+    },
+    # ... mr, xray
+}
+```
+
+**Global Worker Data:**
+```python
+global_worker_data = {
+    'worker_ids': {},  # canonical ID mapping
+    'weighted_counts_per_mod': {
+        'ct': {},  # weighted assignments
+        'mr': {},
+        'xray': {}
+    },
+    'assignments_per_mod': {
+        'ct': {},  # raw counts
+        'mr': {},
+        'xray': {}
+    },
+    'last_reset_date': None
+}
+```
+
+#### Purpose
+Central storage for all runtime data, worker assignments, and cross-modality tracking.
+
+---
+
+### 3. Worker ID Management Module
+**Lines:** `app.py:433-500`
+
+#### Functions
+- `get_canonical_worker_id(worker_name)` (433-448)
+  - Normalizes worker names to canonical IDs
+  - Handles name variations
+
+- `get_global_weighted_count(canonical_id)` (451-459)
+  - Sums weighted assignments across all modalities
+  - Returns total workload
+
+- `update_global_assignment(person, role, modality)` (462-489)
+  - Calculates weighted assignment value
+  - Updates global tracking dictionaries
+  - Applies skill weights, modality factors, worker modifiers
+
+- `reset_global_data()` (492-500)
+  - Clears all global counters
+  - Resets worker ID mappings
+
+#### Purpose
+Manages worker identity across modalities and tracks global workload distribution.
+
+---
+
+### 4. Excel File Management Module
+**Lines:** `app.py:503-715`
+
+#### Components
+
+**DataFrame Initialization:**
+- `initialize_data(file_path, modality)` (503-649)
+  - Loads Excel file
+  - Validates structure
+  - Processes worker data
+  - Initializes counters
+
+- `attempt_initialize_data(file_path, modality, remove_on_failure)` (652-693)
+  - Wrapper with error handling
+  - Calls `quarantine_excel()` on failure
+
+**File Quarantine:**
+- `quarantine_excel(file_path, reason)` (696-715)
+  - Moves corrupted files to `uploads/invalid/`
+  - Timestamps quarantined files
+
+#### Purpose
+Handles all Excel file operations including loading, validation, and error recovery.
+
+---
+
+### 5. Worker Selection Module
+**Lines:** `app.py:718-1322`
+
+#### Sub-modules
+
+**A. Load Calculation** (748-827)
+- `_get_effective_assignment_load()` - Combine local + global load
+- `_apply_minimum_balancer()` - Prioritize underutilized workers
+- `_should_balance_via_fallback()` - Detect imbalance
+
+**B. Skill Fallback** (830-909)
+- `_attempt_column_selection()` - Try specific skill
+- `_try_configured_fallback()` - Walk fallback chain
+- `get_active_df_for_role()` - Map role to skills
+
+**C. Modality Selection** (911-971)
+- `_select_worker_for_modality()` - Core selection algorithm
+- Filters by time, skill, balancing
+- Calculates weighted ratio
+
+**D. Main Selection Entry** (974-987)
+- `get_next_available_worker()` - Routes to strategy
+
+**E. Strategy Implementations**
+- **Path 1:** `_get_worker_skill_priority()` (990-1049)
+- **Path 2:** `_get_worker_modality_priority()` (1052-1178)
+- **Path 3:** `_get_worker_pool_priority()` (1181-1322)
+
+#### Purpose
+Implements all worker selection logic with three configurable strategies and comprehensive balancing.
+
+---
+
+### 6. Daily Reset Module
+**Lines:** `app.py:1325-1387`
+
+#### Function
+- `check_and_perform_daily_reset()` (1325-1387)
+  - Triggered on every request via `@app.before_request`
+  - Checks if new day + time >= 7:30
+  - Resets counters for all modalities
+  - Loads scheduled files
+  - Moves files to backup
+  - Updates global reset date
+
+#### Purpose
+Automates daily schedule transitions at 7:30 AM.
+
+---
+
+### 7. Assignment Logic Module
+**Lines:** `app.py:1390-1419`
+
+#### Function
+- `_assign_worker(modality, role, allow_fallback)` (1390-1419)
+  - Main assignment orchestrator
+  - Validates modality
+  - Gets current Berlin time
+  - Calls selection strategy
+  - Updates counters
+  - Returns assignment result
+
+#### Purpose
+Coordinates worker assignment process from request to response.
+
+---
+
+### 8. Backup & Persistence Module
+**Lines:** `app.py:1422-1451`
+
+#### Function
+- `backup_dataframe(modality)` (1422-1451)
+  - Creates live backup Excel file
+  - Excludes runtime columns
+  - Includes info texts (Tabelle2)
+  - Handles errors gracefully
+
+#### Purpose
+Maintains crash recovery backups after every data modification.
+
+---
+
+### 9. Application Initialization Module
+**Lines:** `app.py:1454-1524`
+
+#### Function
+- `initialize_app()` (1454-1524)
+  - Creates upload directories
+  - Loads all modality files
+  - Initializes global data
+  - Logs startup status
+
+#### Purpose
+Bootstraps application on startup with proper error handling.
+
+---
+
+### 10. Web Routes Module
+**Lines:** `app.py:1527-1896`
+
+#### Components
+
+**Authentication:**
+- `login_required()` decorator (1527-1535)
+- `/login` (1538-1558)
+- `/logout` (1561-1565)
+
+**Pages:**
+- `/` - Main dashboard (1570-1580)
+- `/upload` - File upload page (1624-1626)
+- `/entries/<modality>` - View entries (1629-1639)
+- `/admin_view` - Admin overview (1673-1696)
+
+**API Endpoints:**
+- `/api/<modality>/<role>` - Assignment (1699-1704)
+- `/api/<modality>/<role>/strict` - Strict assignment (1707-1712)
+- `/api/update_entry/<modality>/<int:index>` - Edit entry (1738-1803)
+- `/api/delete_entry/<modality>/<int:index>` - Delete entry (1806-1844)
+- `/api/statistics` - Get stats (1849-1896)
+
+**File Upload:**
+- `/upload_file` - Handle uploads (1583-1622)
+
+#### Purpose
+Provides HTTP interface for all system functionality.
+
+---
+
+## 🔗 Module Dependencies
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Configuration Management                     │
+│              (Loads config.yaml)                         │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Provides settings
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│              Data Structures                              │
+│              (modality_data, global_worker_data)         │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Used by
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│         Worker ID Management                              │
+│         (Canonical IDs, Global Tracking)                 │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Used by
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│         Excel File Management                             │
+│         (Load, Validate, Quarantine)                     │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Populates
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│         Worker Selection Module                           │
+│         (3 Paths + Balancing Logic)                      │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Used by
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│         Assignment Logic                                  │
+│         (Orchestrate Selection + Update)                 │
+└────────────────────┬─────────────────────────────────────┘
+                     │ Called by
+                     ▼
+┌──────────────────────────────────────────────────────────┐
+│              Web Routes                                   │
+│              (API Endpoints + Pages)                     │
+└──────────────────────────────────────────────────────────┘
+
+         ┌─────────────────────────────────────┐
+         │  Daily Reset Module                  │
+         │  (Triggered by @before_request)     │
+         │  Updates: Data Structures Module    │
+         └─────────────────────────────────────┘
+
+         ┌─────────────────────────────────────┐
+         │  Backup & Persistence Module         │
+         │  (Triggered after modifications)    │
+         │  Creates: Live backup Excel files   │
+         └─────────────────────────────────────┘
+```
+
+---
+
+## 🎨 Design Patterns
+
+### 1. **Strategy Pattern**
+**Location:** Worker Selection Module
+
+Three interchangeable selection strategies (`skill_priority`, `modality_priority`, `pool_priority`) with common interface.
+
+### 2. **Fallback Chain Pattern**
+**Location:** Skill Fallback Module
+
+Configurable fallback sequences with support for parallel groups.
+
+### 3. **Template Method Pattern**
+**Location:** `_select_worker_for_modality()`
+
+Common selection algorithm with pluggable balancing and filtering steps.
+
+### 4. **Singleton Pattern**
+**Location:** Data Structures Module
+
+Global data structures shared across all requests (with thread lock for assignments).
+
+### 5. **Decorator Pattern**
+**Location:** Authentication
+
+`@login_required` decorator wraps route handlers.
+
+---
+
+## 📊 Module Interaction Flow
+
+### Assignment Request Flow
+```
+1. User → Web Routes → `/api/ct/privat`
+2. Web Routes → Assignment Logic → `_assign_worker()`
+3. Assignment Logic → Daily Reset → Check if reset needed
+4. Assignment Logic → Worker Selection → `get_next_available_worker()`
+5. Worker Selection → Strategy (e.g., skill_priority)
+6. Strategy → Modality Selection → `_select_worker_for_modality()`
+7. Modality Selection → Load Calculation → Get effective load
+8. Modality Selection → Minimum Balancer → Filter candidates
+9. Modality Selection → Calculate ratios → Pick best
+10. Worker Selection → Return result
+11. Assignment Logic → Update Counters → Worker ID Management
+12. Assignment Logic → Backup → Persistence Module
+13. Web Routes → Return JSON response
+```
+
+---
+
+## 🔧 Configuration Files
+
+### config.yaml Structure
+```yaml
+admin_password: "..."
+
+modalities:
+  ct:
+    label: "CT"
+    nav_color: "#1a5276"
+    factor: 1.0
+  # ... mr, xray
+
+skills:
+  Normal:
+    label: "Normal"
+    weight: 1.0
+    fallback: []
+  Notfall:
+    label: "Notfall"
+    weight: 1.1
+    fallback: ["Normal"]
+  # ... other skills
+
+balancer:
+  enabled: true
+  min_assignments_per_skill: 5
+  imbalance_threshold_pct: 30
+  allow_fallback_on_imbalance: true
+  fallback_strategy: skill_priority
+  fallback_chain:
+    Normal: []
+    Notfall: ["Normal"]
+    Privat: ["Notfall", ["Normal", "Herz"]]
+    # ... other skills
+
+modality_fallbacks:
+  ct: ["mr"]
+  mr: ["ct"]
+  # ... optional modality fallbacks
+```
+
+---
+
+## 📈 Code Metrics
+
+**Total Lines:** ~1,900 lines
+**Main Modules:** 10 distinct functional modules
+**Selection Strategies:** 3 (skill_priority, modality_priority, pool_priority)
+**API Endpoints:** 10+ routes
+**Configuration Options:** 20+ settings in config.yaml
+
+---
+
+## 🎯 Key Architectural Benefits
+
+### 1. **Modularity**
+Each module has clear responsibilities and minimal coupling.
+
+### 2. **Configurability**
+YAML-based configuration allows customization without code changes.
+
+### 3. **Extensibility**
+New selection strategies can be added without modifying existing code.
+
+### 4. **Resilience**
+Multiple fallback mechanisms and error handling at every level.
+
+### 5. **Observability**
+Comprehensive logging throughout all modules.
+
+### 6. **Fairness**
+Multiple balancing mechanisms ensure equitable work distribution.
+
+---
+
+## 🔍 Module Testing Recommendations
+
+### Configuration Management
+- Test YAML loading with missing files
+- Test default value fallbacks
+- Test invalid configuration values
+
+### Worker Selection
+- Test all 3 selection strategies
+- Test fallback chains
+- Test imbalance detection
+- Test minimum balancer
+
+### Excel File Management
+- Test corrupted file quarantine
+- Test scheduled file loading
+- Test backup creation
+- Test startup initialization
+
+### Daily Reset
+- Test reset at 7:30 trigger
+- Test counter clearing
+- Test file movements
+- Test multiple modalities
+
+### Assignment Logic
+- Test strict vs. normal mode
+- Test cross-modality tracking
+- Test weighted calculations
+- Test concurrent requests (thread safety)
+
+---
+
+## 📚 Related Documentation
+
+- **Testing Guide:** `TESTING_GUIDE.md`
+- **Configuration Reference:** `config.yaml`
+- **API Documentation:** See Web Routes Module section
+- **README:** `README.md`
+
+---
+
+**STATUS:** ✅ System architecture is well-modularized with clear separation of concerns
+**MAINTAINABILITY:** 🟢 HIGH - Each module can be tested and modified independently
+**EXTENSIBILITY:** 🟢 HIGH - New features can be added through configuration or new modules
+
+====== END docs/SYSTEM_ANALYSIS.md ======
+
+====== BEGIN docs/TESTING_GUIDE.md ======
+# Testing Guide: Fallback Strategy APIs
+
+## ✅ Health Check Results
+
+### Configuration Status
+- ✓ **fallback_strategy**: `skill_priority` (configured)
+- ✓ **modality_fallbacks**: xray → [ct, mr], ct → [mr], mr → []
+- ✓ **skill fallback chains**: All skills properly configured
+- ✓ **balancer settings**: All parameters valid
+
+### Code Structure Status
+- ✓ **get_next_available_worker**: Dispatcher function exists
+- ✓ **_get_worker_skill_priority**: Implemented
+- ✓ **_get_worker_modality_priority**: Implemented
+- ✓ **_get_worker_pool_priority**: Implemented
+- ✓ **API endpoints**: All 3 endpoints found and correct
+- ✓ **Strategy routing**: All three strategies properly routed
+
+### Documentation Status
+- ✓ **README.md**: All three strategies documented
+- ✓ **Configuration examples**: Present
+- ✓ **API surface**: Documented
+
+---
+
+## 🔧 API Endpoints
+
+### 1. **Normal Assignment** (respects fallback_strategy)
+```bash
+GET /api/<modality>/<role>
+```
+
+**Example:**
+```bash
+curl http://localhost:5000/api/ct/herz
+```
+
+**Response:**
+```json
+{
+  "Draw Time": "14:30:15",
+  "Assigned Person": "Worker Name",
+  "modality_requested": "ct",
+  "modality_used": "ct",
+  "skill_used": "Herz",
+  "fallback_allowed": true,
+  "strict_request": false,
+  "Summe": {...},
+  "Global": {...}
+}
+```
+
+### 2. **Strict Assignment** (NO fallbacks)
+```bash
+GET /api/<modality>/<role>/strict
+```
+
+**Example:**
+```bash
+curl http://localhost:5000/api/xray/herz/strict
+```
+
+**Response:**
+- Same format as above
+- `fallback_allowed`: false
+- `strict_request`: true
+- Will return "Keine Person in dieser Gruppe verfügbar" if no exact match
+
+### 3. **Quick Reload** (get current stats)
+```bash
+GET /api/quick_reload?modality=<modality>
+```
+
+**Example:**
+```bash
+curl http://localhost:5000/api/quick_reload?modality=ct
+```
+
+**Response:**
+```json
+{
+  "Draw Time": "14:30:15",
+  "Assigned Person": null,
+  "Summe": {...},
+  "Global": {...},
+  "GlobalWeighted": {...},
+  "available_buttons": {...},
+  "operational_checks": {...}
+}
+```
+
+---
+
+## 🧪 Testing Each Strategy
+
+### Test Setup
+1. Start the Flask application:
+   ```bash
+   flask --app app run --debug
+   ```
+
+2. Open a second terminal for log monitoring:
+   ```bash
+   tail -f logs/selection.log
+   ```
+
+3. Open a third terminal for API calls
+
+---
+
+### Strategy 1: `skill_priority` (Default)
+
+**Configuration:**
+```yaml
+balancer:
+  fallback_strategy: skill_priority
+```
+
+**Expected Behavior:**
+- Tries all skill fallbacks within XRAY before trying CT
+- Path: XRAY[Herz→Notfall→Normal] → CT[Herz→Notfall→Normal] → MR[...]
+
+**Test:**
+```bash
+curl http://localhost:5000/api/xray/herz
+```
+
+**Log Indicators:**
+```
+Assignment request: modality=xray, role=herz, strict=False
+Selected worker: <name> using column Notfall (modality xray)
+Fallback modality ct used for role herz (requested xray)
+```
+
+**What to verify:**
+- [ ] Tries Herz in XRAY first
+- [ ] Falls back to Notfall/Normal in XRAY before trying CT
+- [ ] Only moves to CT if XRAY skills exhausted
+
+---
+
+### Strategy 2: `modality_priority`
+
+**Configuration:**
+```yaml
+balancer:
+  fallback_strategy: modality_priority
+```
+
+**Expected Behavior:**
+- Tries Herz across all modalities before trying Notfall
+- Path: Herz[XRAY→CT→MR] → Notfall[XRAY→CT→MR] → Normal[...]
+
+**Test:**
+```bash
+# Restart Flask after config change
+curl http://localhost:5000/api/xray/herz
+```
+
+**Log Indicators:**
+```
+Trying skill Herz across modalities ['xray', 'ct', 'mr']
+Fallback used: skill=Herz, modality=ct (requested: skill=Herz, modality=xray)
+```
+
+**What to verify:**
+- [ ] Tries Herz in XRAY, CT, MR before trying Notfall
+- [ ] Log shows "Trying skill X across modalities"
+- [ ] Prioritizes skill specialization over modality locality
+
+---
+
+### Strategy 3: `pool_priority` (NEW!)
+
+**Configuration:**
+```yaml
+balancer:
+  fallback_strategy: pool_priority
+```
+
+**Expected Behavior:**
+- Evaluates ALL (skill, modality) combinations simultaneously
+- Selects globally optimal worker based on load
+- Ignores sequential fallback paths
+
+**Test:**
+```bash
+# Restart Flask after config change
+curl http://localhost:5000/api/xray/herz
+```
+
+**Log Indicators:**
+```
+Building candidate pool for role herz: skills=['Herz', 'Notfall', 'Normal'], modalities=['xray', 'ct', 'mr'] (pool_priority mode)
+Selected from pool of 9 candidates: skill=Notfall, modality=ct, person=WorkerX, ratio=0.1234
+```
+
+**What to verify:**
+- [ ] Log shows "Building candidate pool"
+- [ ] Pool size shown (e.g., "pool of 9 candidates")
+- [ ] May select any valid (skill, modality) combination
+- [ ] Selection based on lowest `ratio` (weighted_count / hours_worked)
+
+---
+
+## 🔍 Advanced Testing Scenarios
+
+### Scenario 1: Load Balancing Comparison
+
+**Setup:**
+1. Upload worker schedules with one heavily loaded worker
+2. Test same request with all three strategies
+3. Compare which worker gets assigned
+
+**Expected:**
+- `skill_priority`: May keep assigning same overloaded worker if they're in primary modality
+- `modality_priority`: May still pick overloaded specialist
+- `pool_priority`: **Should pick least loaded worker globally**
+
+### Scenario 2: Strict Mode
+
+**Test:**
+```bash
+# Request skill that doesn't exist in modality
+curl http://localhost:5000/api/xray/herz/strict
+```
+
+**Expected:**
+- Returns "Keine Person in dieser Gruppe verfügbar"
+- No fallback to other skills or modalities
+- Works same for all strategies (fallbacks disabled)
+
+### Scenario 3: Cross-Modality Surge
+
+**Setup:**
+1. Configure: `xray: [[ct, mr]]` in modality_fallbacks
+2. Make XRAY completely busy
+3. Request XRAY worker
+
+**Expected:**
+- `skill_priority`: XRAY[all skills] → CT[all skills] → MR[all skills]
+- `modality_priority`: Herz[XRAY→CT→MR] → Notfall[XRAY→CT→MR]
+- `pool_priority`: Evaluates all 9 combinations, picks best
+
+### Scenario 4: Imbalance Triggering
+
+**Setup:**
+1. Set `imbalance_threshold_pct: 30`
+2. Assign workers until one has 30% more assignments
+3. Make next request
+
+**Expected:**
+- System should trigger fallback even if primary skill available
+- Log shows imbalance detection
+- Works for all strategies
+
+---
+
+## 📊 Response Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Draw Time` | string | Time of assignment (HH:MM:SS) |
+| `Assigned Person` | string | Worker name or error message |
+| `modality_requested` | string | Modality in URL |
+| `modality_used` | string | Actual modality worker came from |
+| `skill_used` | string | Actual skill column used |
+| `fallback_allowed` | boolean | Whether fallbacks were enabled |
+| `strict_request` | boolean | Whether /strict endpoint was used |
+| `Summe` | object | Per-worker assignment totals for this modality |
+| `Global` | object | Per-worker cross-modality assignment counts |
+| `Normal`, `Notfall`, etc. | object | Per-skill assignment counts |
+
+---
+
+## 🐛 Troubleshooting
+
+### Issue: "No workers available"
+
+**Possible causes:**
+1. No workers scheduled at current time
+2. All workers exhausted (check imbalance settings)
+3. Strict mode used when skill doesn't exist
+
+**Debug:**
+```bash
+# Check current time workers
+curl http://localhost:5000/api/quick_reload?modality=ct | jq '.available_buttons'
+
+# Check logs
+tail -100 logs/selection.log | grep "No workers"
+```
+
+### Issue: Wrong strategy executing
+
+**Symptoms:**
+- Log doesn't show expected strategy messages
+- Wrong fallback order
+
+**Debug:**
+1. Check config.yaml: `grep fallback_strategy config.yaml`
+2. Restart Flask (config loaded at startup)
+3. Check logs for dispatcher: `grep "strategy" logs/selection.log`
+
+### Issue: Fallbacks not working
+
+**Possible causes:**
+1. `allow_fallback_on_imbalance: false` in config
+2. `balancer.enabled: false`
+3. Using /strict endpoint
+
+**Debug:**
+```bash
+# Check balancer config
+grep -A 10 "balancer:" config.yaml
+
+# Test without strict
+curl http://localhost:5000/api/ct/herz  # Should allow fallbacks
+```
+
+---
+
+## ✅ Testing Checklist
+
+Before deploying to production:
+
+- [ ] All three strategies tested with real data
+- [ ] Strict mode verified to block fallbacks
+- [ ] Cross-modality fallbacks working
+- [ ] Imbalance detection triggering correctly
+- [ ] Logs showing correct strategy execution
+- [ ] UI buttons reflect available workers
+- [ ] Global counters updating correctly
+- [ ] Weighted ratios calculating properly
+- [ ] Daily reset functioning (if testing over midnight)
+- [ ] Backup/restore working after assignments
+
+---
+
+## 📝 Expected Log Patterns
+
+### skill_priority mode:
+```
+Assignment request: modality=xray, role=herz, strict=False, time=14:30:15
+Selected worker: WorkerA using column Herz (modality xray)
+```
+
+### modality_priority mode:
+```
+Trying skill Herz across modalities ['xray', 'ct', 'mr']
+Fallback used: skill=Herz, modality=ct (requested: skill=Herz, modality=xray)
+Selected worker: WorkerB using column Herz (modality ct)
+```
+
+### pool_priority mode:
+```
+Building candidate pool for role herz: skills=['Herz', 'Notfall', 'Normal'], modalities=['xray', 'ct', 'mr'] (pool_priority mode)
+Selected from pool of 9 candidates: skill=Notfall, modality=ct, person=WorkerC, ratio=0.1234
+Fallback used: skill=Notfall, modality=ct (requested: skill=Herz, modality=xray)
+```
+
+---
+
+## 🚀 Quick Start Testing
+
+```bash
+# 1. Start the app
+flask --app app run --debug
+
+# 2. Test basic functionality
+curl http://localhost:5000/api/ct/normal
+
+# 3. Test each strategy
+# Edit config.yaml -> fallback_strategy: skill_priority
+# Restart Flask
+curl http://localhost:5000/api/xray/herz
+
+# Edit config.yaml -> fallback_strategy: modality_priority
+# Restart Flask
+curl http://localhost:5000/api/xray/herz
+
+# Edit config.yaml -> fallback_strategy: pool_priority
+# Restart Flask
+curl http://localhost:5000/api/xray/herz
+
+# 4. Compare logs
+tail -100 logs/selection.log
+```
+
+---
+
+## 🎯 Success Criteria
+
+The implementation is ready for production when:
+
+1. ✅ All three strategies execute without errors
+2. ✅ Strategy behavior matches documentation
+3. ✅ Fallback chains follow configured paths
+4. ✅ Load balancing prevents worker overload
+5. ✅ Strict mode correctly blocks fallbacks
+6. ✅ Logs clearly show strategy execution
+7. ✅ API responses include fallback information
+8. ✅ Cross-modality borrowing works as expected
+9. ✅ Global counters track correctly
+10. ✅ UI reflects real-time availability
+
+---
+
+**All systems GREEN and ready for testing! 🎉**
+
+====== END docs/TESTING_GUIDE.md ======
+
+====== BEGIN docs/WORKFLOW.md ======
+# RadIMO Medweb CSV Workflow
+
+**Complete guide to the config-driven medweb CSV integration system**
+
+---
+
+## 📋 Overview
+
+RadIMO uses a **config-driven architecture** to ingest medweb CSV schedules directly into the worker assignment system. This eliminates manual Excel file creation and provides flexible, maintainable activity-to-skill mappings.
+
+**Key Benefits:**
+- ✅ No manual Excel file creation
+- ✅ Single CSV upload populates all modalities (CT/MR/XRAY)
+- ✅ Config-based activity mappings (extensible without code changes)
+- ✅ Per-worker skill overrides via worker_skill_roster
+- ✅ Automatic daily preload at 7:30 AM
+- ✅ Next-day schedule preparation interface
+- ✅ Emergency force refresh capability
+
+---
+
+## 🔄 Complete Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Medweb CSV Source                           │
+│              (Monthly schedule from medweb)                     │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+   Manual Upload   Auto-Preload   Force Refresh
+   (any date)      (7:30 AM)      (emergency)
+        │                │                │
+        └────────────────┼────────────────┘
+                         │
+                         ▼
+        ┌────────────────────────────────┐
+        │  Config-Driven Parsing         │
+        │  • medweb_mapping rules        │
+        │  • shift_times calculation     │
+        │  • worker_skill_roster apply   │
+        └────────────────┬───────────────┘
+                         │
+                         ▼
+        ┌────────────────────────────────┐
+        │  working_hours_df per modality │
+        │  • CT: DataFrame               │
+        │  • MR: DataFrame               │
+        │  • XRAY: DataFrame             │
+        └────────────────┬───────────────┘
+                         │
+                         ▼
+              ┌──────────────────┐
+              │  Optional Edit   │
+              │  /prep-next-day  │
+              └────────┬─────────┘
+                       │
+                       ▼
+        ┌──────────────────────────────┐
+        │   Real-Time Assignment       │
+        │   • Load balancing           │
+        │   • Fallback strategies      │
+        │   • Ratio-based selection    │
+        └──────────────────────────────┘
+```
+
+---
+
+## 📤 Upload Strategies
+
+### 1. **Manual Upload** (On-Demand)
+
+**Use Case:** Upload schedule for a specific date immediately
+
+**Steps:**
+1. Navigate to **Admin Panel** (`/upload`)
+2. Select **"📤 Medweb CSV Upload"** section
+3. Choose CSV file
+4. Select target date (can be today, tomorrow, or any future date)
+5. Click **"⬆️ CSV Hochladen & Verarbeiten"**
+
+**What Happens:**
+- CSV is parsed for selected date
+- Config rules applied (`medweb_mapping`)
+- Worker roster overrides applied (`worker_skill_roster`)
+- `working_hours_df` populated for all modalities
+- Counters initialized (draw_counts, skill_counts, etc.)
+- CSV saved as `uploads/master_medweb.csv` for future auto-preload
+
+**When to Use:**
+- Setting up system for first time
+- Uploading updated schedule mid-day
+- Loading schedule for specific date other than tomorrow
+- Testing new config rules
+
+---
+
+### 2. **Auto-Preload** (Scheduled Daily)
+
+**Use Case:** Automatically load next workday schedule every morning
+
+**Schedule:** **7:30 AM CET** daily
+
+**Next Workday Logic:**
+- Monday-Thursday → Next day
+- Friday → Monday (skip weekend)
+- Holidays are NOT automatically skipped (manual intervention needed)
+
+**What Happens:**
+- Scheduler wakes up at 7:30 AM
+- Checks for `uploads/master_medweb.csv`
+- Calculates next workday
+- Parses CSV for next workday date
+- Applies config rules and roster overrides
+- Populates `working_hours_df` for all modalities
+- Initializes counters (fresh start for new day)
+- Logs result to `selection.log`
+
+**Requirements:**
+- Master CSV must exist (`uploads/master_medweb.csv`)
+- Master CSV should contain target date
+- Application must be running at 7:30 AM
+
+**Monitoring:**
+Check `selection.log` for messages like:
+```
+2025-11-21 07:30:00 - INFO - Auto-preload successful: 2025-11-22, modalities=['ct', 'mr', 'xray'], workers=15
+```
+
+**If Auto-Preload Fails:**
+- Check log: `selection.log`
+- Verify master CSV exists and contains next workday data
+- Manually upload via admin panel as fallback
+
+---
+
+### 3. **Preload Next Workday** (Manual Trigger)
+
+**Use Case:** Manually preload tomorrow's schedule ahead of time
+
+**Steps:**
+1. Navigate to **Admin Panel** (`/upload`)
+2. Select **"🔮 Preload Nächster Arbeitstag"** section
+3. Choose updated CSV file
+4. Click **"🔮 Nächsten Arbeitstag Preloaden"**
+5. System shows next workday date (e.g., Friday shows Monday)
+
+**What Happens:**
+- Same as auto-preload, but triggered manually
+- Useful for testing auto-preload behavior
+- Updates master CSV for tomorrow's auto-preload
+
+**When to Use:**
+- Want to preload tonight for tomorrow
+- Testing next-day workflow
+- Updating tomorrow's schedule before 7:30 AM
+
+---
+
+### 4. **Force Refresh** (Emergency)
+
+**Use Case:** Emergency same-day schedule reload (e.g., half the staff calls in sick)
+
+**⚠️ WARNING:** This **destroys ALL assignment history** for the current day!
+
+**Steps:**
+1. Navigate to **Admin Panel** (`/upload`)
+2. Select **"🔄 Force Refresh (Heute - NOTFALL)"** section
+3. Choose updated CSV file
+4. Read warning carefully
+5. Confirm destruction of existing assignments
+6. Click **"🔄 HEUTE Neu Laden (Notfall)"**
+
+**What Happens:**
+- All counters reset (draw_counts, skill_counts, WeightedCounts, etc.)
+- All assignment history deleted
+- New schedule loaded for TODAY
+- Fresh start as if day just began
+- Previous assignments NOT preserved
+
+**When to Use:**
+- Emergency staffing changes mid-day
+- Critical errors in schedule discovered after 7:30 AM
+- Major reorg of today's assignments needed
+
+**⚠️ Use Sparingly:** This is intentionally destructive. For tomorrow's schedule, use prep page instead.
+
+---
+
+## 📝 Next-Day Schedule Preparation
+
+### Overview
+
+The prep page (`/prep-next-day`) provides an advanced edit interface for preparing tomorrow's schedule without affecting today's assignments.
+
+**Access:** Admin Panel → **"📝 Nächsten Tag Bearbeiten"**
+
+**Key Difference from Same-Day Editing:**
+- **Same-day editing** (existing admin page): Preserves assignments, maintains distribution stability
+- **Next-day prep**: Clean slate, full editing freedom, no assignment history to preserve
+
+---
+
+### Two Editing Modes
+
+#### **Simple Mode** (Default) ✏️
+
+**For:** Quick edits, fixing typos, adjusting times
+
+**Features:**
+- Click any cell to edit inline (spreadsheet UX)
+- Edit worker names, times, skills, modifiers
+- Changes tracked automatically
+- Visual feedback: edited cells turn green
+- All changes batched, saved together on "Save All"
+
+**How to Use:**
+1. Click modality tab (CT/MR/XRAY)
+2. Click any cell
+3. Type new value
+4. Press Enter or click away
+5. Cell turns green (pending change)
+6. Repeat for all edits
+7. Click **"💾 Alle Änderungen Speichern"**
+
+**Editable Fields:**
+- **PPL**: Worker name/abbreviation
+- **Von/Bis**: Start/end times (HH:MM format)
+- **Skills**: Click to cycle -1 → 0 → 1
+- **Modifier**: Individual workload multiplier
+
+**Skill Value Colors:**
+- 🟢 Green (1): Active - primary + fallback
+- 🟡 Yellow (0): Passive - fallback only
+- 🔴 Red (-1): Excluded - never use
+
+---
+
+#### **Advanced Mode** (Power Users) 🔧
+
+**For:** Structural changes, adding/removing workers
+
+**Additional Features:**
+- **Add Worker**: ➕ button adds new worker row
+- **Delete Worker**: 🗑️ button per row (with confirmation)
+- **Bulk Skill Set**: Set all workers' skill value for specific skill
+- All simple mode features still available
+
+**How to Use:**
+
+**Add Worker:**
+1. Click **"➕ Worker Hinzufügen"**
+2. Enter worker name (e.g., "Neuer Worker (NW)")
+3. Default values applied (Normal=1, Notfall=1, times=07:00-15:00)
+4. Edit as needed
+5. Save
+
+**Delete Worker:**
+1. Click 🗑️ next to worker row
+2. Confirm deletion
+3. Worker removed from tomorrow's schedule
+
+**Bulk Skill Set:**
+1. Click **"🔄 Bulk Skill Setzen"**
+2. Enter skill name (e.g., "Msk")
+3. Enter value (-1, 0, or 1)
+4. All workers in current modality updated
+5. Save
+
+---
+
+### Workflow Example
+
+**Scenario:** Tomorrow's MR schedule has an error - one worker shouldn't do Notfall
+
+**Simple Mode Approach:**
+1. Navigate to `/prep-next-day`
+2. Click **MR** tab
+3. Find worker row
+4. Click **Notfall** cell (shows "1")
+5. Type "0" (passive) or "-1" (excluded)
+6. Cell turns green
+7. Click **"💾 Alle Änderungen Speichern"**
+8. Done! Worker's Notfall set to fallback-only or excluded
+
+**Alternative Advanced Mode:**
+1. Same as above, but can also use **"🔄 Bulk Skill Setzen"**
+2. Set Notfall=0 for ALL MR workers at once if needed
+
+---
+
+## ⚙️ Configuration
+
+### Medweb Mapping Rules
+
+Located in `config.yaml` under `medweb_mapping.rules`:
+
+```yaml
+medweb_mapping:
+  rules:
+    - match: "CT Spätdienst"          # Activity description substring
+      modality: "ct"                   # Target modality (ct/mr/xray)
+      shift: "Spaetdienst"            # Shift name (for time calculation)
+      base_skills:                     # Default skill values
+        Normal: 1                      # Active
+        Notfall: 1                     # Active
+        Privat: 0                      # Passive (fallback only)
+        Herz: 0                        # Passive
+        Msk: 0                         # Passive
+        Chest: 0                       # Passive
+```
+
+**How Matching Works:**
+- Case-insensitive substring matching
+- First matching rule wins
+- If no match, activity ignored (not SBZ-relevant)
+
+**Example Matches:**
+- "CT Spätdienst" matches "CT Spätdienst" ✅
+- "SBZ: CT Spätdienst Zusatz" matches "CT Spätdienst" ✅
+- "CT SPÄTDIENST" matches "CT Spätdienst" ✅
+- "MR Assistent" does NOT match "CT Spätdienst" ❌
+
+**Adding New Activity:**
+1. Open `config.yaml`
+2. Add new rule to `medweb_mapping.rules`
+3. Save file
+4. Restart application
+5. No code changes needed!
+
+---
+
+### Shift Times
+
+Located in `config.yaml` under `shift_times`:
+
+```yaml
+shift_times:
+  Fruehdienst:
+    default: "07:00-15:00"     # Monday-Thursday
+    friday: "07:00-13:00"      # Friday shorter shift
+  Spaetdienst:
+    default: "13:00-21:00"     # Monday-Thursday
+    friday: "13:00-19:00"      # Friday shorter shift
+```
+
+**How It Works:**
+- Each mapping rule references a shift name
+- System calculates times based on weekday
+- Friday automatically uses shorter times
+- Format: "HH:MM-HH:MM"
+
+**Adding New Shift:**
+```yaml
+shift_times:
+  Nachtdienst:
+    default: "21:00-07:00"     # Overnight shift
+    friday: "21:00-05:00"      # Shorter Friday night
+```
+
+---
+
+### Worker Skill Roster
+
+Located in `config.yaml` under `worker_skill_roster`:
+
+```yaml
+worker_skill_roster:
+  AAn:  # Worker canonical ID (abbreviation from CSV)
+    default:  # Applies to ALL modalities unless overridden
+      Msk: 1      # This worker IS an MSK specialist
+
+  AN:
+    default:
+      Chest: 1    # Chest specialist
+    ct:           # CT-specific override
+      Notfall: 0  # Only fallback for CT Notfall (not primary)
+```
+
+**Configuration Precedence:**
+1. **Modality-specific override** (highest priority)
+2. **Default override**
+3. **Mapping rule base_skills**
+4. **System defaults** (lowest priority)
+
+**Example:**
+```yaml
+# Worker: KRUE, Modality: CT, Activity: "CT Assistent"
+
+# Step 1: Mapping rule provides base_skills
+base_skills: {Normal: 1, Notfall: 1, Herz: 0, ...}
+
+# Step 2: Apply default roster overrides
+worker_skill_roster.KRUE.default: {Chest: 1}  # KRUE is Chest specialist
+→ {Normal: 1, Notfall: 1, Herz: 0, Chest: 1, ...}
+
+# Step 3: Apply CT-specific overrides
+worker_skill_roster.KRUE.ct: {Notfall: 0}  # Only fallback for CT Notfall
+→ {Normal: 1, Notfall: 0, Herz: 0, Chest: 1, ...}  # Final skills
+```
+
+**When to Use:**
+- Worker has special expertise (Msk, Chest, Herz specialist)
+- Worker excluded from certain skills (e.g., first month → Notfall=-1)
+- Worker only fallback for specific modality/skill combo
+
+---
+
+### Time Exclusions (NEW in v18)
+
+Time exclusions **punch out time** from worker shifts for boards, meetings, teaching, etc.
+
+Located in `config.yaml` under `medweb_mapping.rules`:
+
+```yaml
+medweb_mapping:
+  rules:
+    # Time exclusions - day-specific schedules
+    - match: "Kopf-Hals-Board"
+      exclusion: true
+      schedule:
+        Montag: "15:30-17:00"  # Only applies on Mondays
+      prep_time:
+        before: "30m"  # Prep: excludes 15:00-15:30
+        after: "15m"   # Cleanup: excludes 17:00-17:15
+
+    - match: "Board"
+      exclusion: true
+      schedule:
+        Dienstag: "15:00-17:00"   # Different times per day
+        Mittwoch: "10:00-12:00"
+        Donnerstag: "14:00-16:00"
+
+    - match: "Besprechung"
+      exclusion: true
+      schedule:
+        Montag: "09:00-10:00"
+        Mittwoch: "14:00-15:00"
+        Freitag: "13:00-14:00"
+```
+
+**How It Works:**
+
+1. **CSV Entry**: Worker has `"Kopf-Hals-Board"` in Beschreibung der Aktivität
+2. **Weekday Check**: Is today in the schedule? (e.g., "Montag")
+3. **Time Range**: Get schedule["Montag"] → "15:30-17:00"
+4. **Prep Time**: Apply before/after extensions → 15:00-17:15
+5. **Split Shift**: Worker's 07:00-21:00 becomes 07:00-15:00 + 17:15-21:00
+
+**Example:**
+
+```
+CSV Entry (Monday):
+"24.11.2025","NM","ZANDERCH","CZ","Charlotte Dr Zander",...,"Kopf-Hals-Board",...
+
+Original Shift:    [07:00 ────────────────────────── 21:00]
+Exclusion:                  [15:00 ────── 17:15]
+                           (with prep time)
+
+Result:            [07:00 ──── 15:00]  [17:15 ──── 21:00]
+```
+
+**Multiple Exclusions:**
+
+System handles multiple overlapping exclusions per worker:
+
+```
+Original:    [07:00 ────────────────────────── 21:00]
+
+Exclusions:
+  Board:              [10:00 ── 12:00]
+  Fortbildung:                    [15:00 ─── 17:00]
+
+Result:      [07:00─10:00] [12:00─15:00] [17:00─21:00]
+```
+
+**Key Benefits:**
+- ✅ Day-specific: Same activity, different times per weekday
+- ✅ No parsing: Time in config, not CSV description
+- ✅ Prep time: Automatic before/after extension
+- ✅ Config-driven: Add new exclusions without code changes
+- ✅ Flexible: Handles multiple overlapping exclusions
+
+**Adding New Exclusion:**
+1. Add rule to `medweb_mapping.rules` with `exclusion: true`
+2. Define `schedule` with weekday-specific times
+3. Optionally add `prep_time` (before/after)
+4. Restart application
+
+**Logging:**
+```log
+INFO: Time exclusion for Charlotte Dr Zander (CZ) (Montag): 15:00-17:15 (Kopf-Hals-Board)
+INFO: Applying time exclusions for 3 workers on Montag
+```
+
+---
+
+## 🔍 Troubleshooting
+
+### CSV Upload Issues
+
+**Problem:** "No data found for selected date"
+
+**Causes:**
+- CSV doesn't contain activities for that date
+- Date format mismatch (should be DD.MM.YYYY in CSV)
+- CSV encoding issues (should be comma or semicolon delimited, latin1 encoding)
+
+**Solutions:**
+- Verify CSV contains rows with target date in "Datum" column
+- Check date format: "20.11.2025" not "2025-11-20"
+- Try different date
+
+---
+
+**Problem:** "No workers loaded for any modality"
+
+**Causes:**
+- No medweb_mapping rules match activities in CSV
+- All activities filtered out (not SBZ-relevant)
+- Config syntax error
+
+**Solutions:**
+- Check `selection.log` for "No matching rule for activity: ..."
+- Add new rules to `medweb_mapping.rules` for missing activities
+- Validate config.yaml syntax (use YAML validator)
+
+---
+
+**Problem:** "Worker skills all zeros"
+
+**Causes:**
+- Mapping rule has base_skills all set to 0
+- Worker in roster with all skills set to -1 or 0
+
+**Solutions:**
+- Check mapping rule: at least one skill should be 1
+- Check worker_skill_roster: ensure not all excluded
+- Review config precedence (roster overrides mapping)
+
+---
+
+### Auto-Preload Issues
+
+**Problem:** Auto-preload didn't run
+
+**Causes:**
+- Application not running at 7:30 AM
+- Master CSV doesn't exist
+- Server clock incorrect
+- Scheduler not initialized
+
+**Solutions:**
+- Check `selection.log` for auto-preload messages
+- Verify `uploads/master_medweb.csv` exists
+- Check server time: `date` (should be Europe/Berlin timezone)
+- Restart application to reinitialize scheduler
+
+---
+
+**Problem:** Auto-preload failed with "No data for date"
+
+**Causes:**
+- Master CSV is old (doesn't contain next workday)
+- Next workday is holiday (CSV doesn't have activities)
+
+**Solutions:**
+- Upload fresh CSV covering next few weeks
+- Manually upload for specific date via admin panel
+- Check CSV date range
+
+---
+
+### Prep Page Issues
+
+**Problem:** Changes don't persist after save
+
+**Causes:**
+- Changes not actually saved (check for success message)
+- Browser cached old data
+- Server error during save
+
+**Solutions:**
+- Look for green "Änderungen gespeichert" message
+- Hard refresh browser (Ctrl+Shift+R)
+- Check browser console for errors
+- Check `selection.log` for server errors
+
+---
+
+**Problem:** Can't delete worker (delete button missing)
+
+**Causes:**
+- Still in Simple Mode (delete only in Advanced Mode)
+
+**Solutions:**
+- Click **"🔧 Erweitert"** button to switch to Advanced Mode
+- Delete button (🗑️) will appear next to each worker row
+
+---
+
+## 📊 Monitoring & Logs
+
+### Selection Log
+
+Located at: `selection.log`
+
+**What's Logged:**
+- Auto-preload results (success/failure, date, worker count)
+- CSV upload operations
+- Config rule matching
+- Worker assignment operations
+- Error messages and stack traces
+
+**Example Log Entries:**
+```
+2025-11-21 07:30:00 - INFO - Auto-preload successful: 2025-11-22, modalities=['ct', 'mr', 'xray'], workers=15
+2025-11-21 09:15:00 - WARNING - No matching rule for activity: "NUK Protokollieren"
+2025-11-21 14:23:00 - INFO - Manual upload successful: 2025-11-23, workers={'ct': 5, 'mr': 6, 'xray': 4}
+```
+
+**Monitoring Auto-Preload:**
+```bash
+# Watch log in real-time
+tail -f selection.log
+
+# Check today's auto-preload
+grep "Auto-preload" selection.log | grep "$(date +%Y-%m-%d)"
+
+# Check for errors
+grep "ERROR" selection.log | tail -20
+```
+
+---
+
+### Admin Panel Status
+
+**Check Current Schedule:**
+1. Navigate to main interface (`/` or `/by-skill`)
+2. View worker list for each modality
+3. Check shift times displayed
+4. Verify expected workers present
+
+**Check Stats:**
+- Draw counts per worker
+- Skill-specific assignments
+- Weighted counts
+- Overflow indicators
+
+---
+
+## 🔐 Security & Access
+
+### Admin Authentication
+
+**Required for:**
+- CSV upload operations
+- Prep page access
+- Force refresh
+- Statistics viewing
+
+**Credentials:**
+- Username: `admin`
+- Password: Set in `config.yaml` under `admin_credentials.password`
+
+**⚠️ Change Default Password:**
+```yaml
+admin_credentials:
+  password: "YOUR_SECURE_PASSWORD_HERE"  # Change this!
+```
+
+---
+
+### Route Protection
+
+**Public Routes:**
+- `/` (main interface) - read-only assignment requests
+- `/by-skill` - read-only skill-based view
+- `/api/{modality}/{skill}` - assignment API (read-only counter updates)
+
+**Admin Routes:**
+- `/upload` - requires login
+- `/prep-next-day` - requires login
+- `/force-refresh-today` - requires login
+- `/api/prep-next-day/*` - requires login
+
+---
+
+## 💡 Best Practices
+
+### 1. **CSV Upload Strategy**
+
+**Recommended:**
+- Upload monthly CSV covering next 4-6 weeks
+- Upload fresh CSV weekly (Friday afternoon for next week)
+- Let auto-preload handle daily schedule loading
+- Use prep page for corrections, not force refresh
+
+**Avoid:**
+- Uploading CSV daily manually (defeats auto-preload purpose)
+- Using force refresh for tomorrow's schedule (use prep page)
+- Forgetting to upload fresh CSV (auto-preload will fail)
+
+---
+
+### 2. **Config Management**
+
+**Recommended:**
+- Version control `config.yaml` (git commit after changes)
+- Test config changes in dev environment first
+- Document custom mapping rules (comments in YAML)
+- Keep worker_skill_roster up to date
+
+**Avoid:**
+- Editing config while application running (restart needed)
+- Syntax errors in YAML (validate before restart)
+- Deleting mapping rules without checking impact
+
+---
+
+### 3. **Worker Roster Updates**
+
+**When Workers Change:**
+1. Add new workers to `worker_skill_roster` if they have special skills
+2. Update existing workers if skills change
+3. Remove workers who left (or set all skills to -1)
+4. Restart application
+
+**Don't Forget:**
+- Worker canonical ID is abbreviation from CSV (e.g., "AM", "KRUE")
+- Use `default` for skills that apply to all modalities
+- Use modality keys (`ct`, `mr`, `xray`) for specific overrides
+
+---
+
+### 4. **Monitoring**
+
+**Daily:**
+- Check `selection.log` after 7:30 AM for auto-preload success
+- Verify expected workers present in main interface
+- Check for "No matching rule" warnings (indicates missing config)
+
+**Weekly:**
+- Review worker assignment patterns (balanced?)
+- Check for fallback usage (excessive fallback = understaffed?)
+- Upload fresh CSV for next week
+
+---
+
+### 5. **Backup**
+
+**Important Files:**
+- `config.yaml` - all configuration
+- `uploads/master_medweb.csv` - current schedule source
+- `selection.log` - operation history
+
+**Backup Strategy:**
+- Git commit `config.yaml` changes
+- Keep copy of master CSV outside uploads/ folder
+- Rotate logs weekly (compress old logs)
+
+---
+
+## 🚀 Migration from Excel Workflow
+
+### Old Workflow (Deprecated)
+```
+medweb CSV → SBZDashboard → 3 Excel files → Manual upload per modality
+```
+
+### New Workflow
+```
+medweb CSV → RadIMO upload → Auto-preload → Done
+```
+
+### Migration Steps
+
+**If you have Excel files:**
+- Excel upload path has been removed (see [EXCEL_PATH_MIGRATION.md](EXCEL_PATH_MIGRATION.md))
+- Backup commit: `e77525b` (see [BACKUP.md](../BACKUP.md) for rollback)
+- To continue using Excel, rollback to backup commit
+
+**Migrating to CSV:**
+1. Obtain medweb CSV (monthly export)
+2. Configure `medweb_mapping` rules for your activities
+3. Configure `worker_skill_roster` for special workers
+4. Upload CSV via admin panel (manual upload first time)
+5. Verify schedule correct in main interface
+6. Let auto-preload take over daily
+
+**Configuration Migration:**
+- Excel skill values (0/1) → medweb base_skills (-1/0/1)
+- Excel Modifier column → worker modifiers (preserved)
+- Excel TIME column → shift_times config
+- Excel Tabelle2 (info texts) → maintain separately (not in CSV)
+
+---
+
+## 📚 Related Documentation
+
+- **[README.md](../README.md)** - Overview, quick start, features
+- **[INTEGRATION_COMPARISON.md](INTEGRATION_COMPARISON.md)** - Why config-driven approach was chosen
+- **[EXCEL_PATH_MIGRATION.md](EXCEL_PATH_MIGRATION.md)** - Why Excel upload was removed
+- **[SYSTEM_ANALYSIS.md](SYSTEM_ANALYSIS.md)** - Technical deep dive, balancing algorithms
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Testing strategies, edge cases
+
+---
+
+**Document Version:** 1.0
+**Date:** November 2025
+**Status:** Current
+
+====== END docs/WORKFLOW.md ======
+
+====== BEGIN docs/FRONTEND_ARCHITECTURE.md ======
+# RadIMO SBZ Frontend Architecture - Comprehensive Analysis
+
+**Note:** This document describes the frontend UI structure (still current for v18). For backend changes in v18 (medweb CSV integration, time exclusions), see [WORKFLOW.md](WORKFLOW.md) and [SYSTEM_ANALYSIS.md](SYSTEM_ANALYSIS.md).
+
+## 1. CURRENT FRONTEND ORGANIZATION: Modality-Based with All Skills
+
+The RadIMO system is organized by **modality** (CT, MR, XRAY) with all skills available within each modality. Each user navigates to a specific modality view and can interact with all configured skills.
+
+### Frontend Navigation Structure:
+
+```
+Main Entry Point (/) ─────────────────────────────────────────
+    │
+    ├─── [Modality Selector Navigation Buttons]
+    │    CT | MR | XRAY
+    │
+    └─── Modality-Specific View
+         └─── Skill Buttons (all available skills)
+              Normal | Notfall | Privat | Herz | Msk | Chest
+              
+         └─── Admin Portal (/upload)
+         └─── Timetable (/timetable)
+```
+
+### Directory Structure:
+
+```
+/home/user/RadIMO_SBZ_DEV/
+├── app.py                    # Main Flask application (2141 lines)
+├── config.yaml              # Configuration for modalities, skills, balancer
+├── templates/               # HTML templates
+│   ├── index.html          # Main assignment interface
+│   ├── upload.html         # Admin panel with statistics
+│   ├── timetable.html      # Timeline visualization
+│   └── login.html          # Authentication
+└── static/                 # Static assets
+    ├── vis.js              # Timeline library (1.8MB unminified)
+    ├── vis.min.js          # Timeline library minified (675KB)
+    ├── vis.min.css         # Timeline styles
+    ├── favicon.ico         # App icon
+    └── EULA.txt, verfahrensverzeichniss.txt
+```
+
+---
+
+## 2. MAIN HTML TEMPLATES AND STRUCTURE
+
+### A. /templates/index.html - Main Assignment Interface
+
+**File Path:** `/home/user/RadIMO_SBZ_DEV/templates/index.html` (483 lines)
+
+**Purpose:** Primary interface where users request workers for specific skills/modalities.
+
+**Key Structure:**
+```html
+<body data-modality="{{ modality }}">
+  <!-- Premium Header with Modality Selector -->
+  <header class="premium-header">
+    <h1>RadIMO: {{ modality_labels[modality] }} Koordinator</h1>
+    <div class="modality-selector">
+      <!-- Dynamic links for each modality -->
+      {% for mod in modality_order %}
+        <a href="{{ url_for('index', modality=mod) }}" 
+           data-modality="{{ mod }}" 
+           class="{% if modality == mod %}active{% endif %}">
+          {{ modality_labels[mod] }}
+        </a>
+      {% endfor %}
+    </div>
+  </header>
+
+  <!-- Main Assignment Panel -->
+  <section class="card">
+    <div id="buttonGrid" class="button-grid">
+      <!-- Dynamic Skill Buttons -->
+      {% for skill in skill_definitions %}
+        <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}">
+          <button id="skill-btn-{{ skill.slug }}"
+                  data-skill-name="{{ skill.name }}"
+                  onclick="getNextAssignment('{{ skill.name }}')"
+                  class="btn assignment-btn skill-main-btn">
+            {{ skill.label }}
+          </button>
+          <!-- Strict mode button (no fallback) -->
+          <button onclick="getNextAssignment('{{ skill.name }}', true)"
+                  class="btn assignment-btn skill-strict-btn">
+            *
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Result Panel -->
+    <div id="result"></div>
+
+    <!-- Clipboard Note -->
+    <div class="clipboard-note">
+      <span>Kürzel wird automatisch kopiert...</span>
+      <div>
+        <a href="{{ url_for('timetable', modality=modality) }}" class="small-button">
+          Zeitplan
+        </a>
+        <a href="{{ url_for('upload_file', modality=modality) }}" class="small-button">
+          Admin
+        </a>
+      </div>
+    </div>
+
+    <!-- Info Texts Display -->
+    <div class="info-box">
+      <div class="info-texts">
+        {% for info in info_texts %}
+          <div class="info-item">{{ info }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Click History Visualization -->
+  <div class="click-history-wrapper">
+    <div id="clickHistory" class="click-history"></div>
+    <div class="click-history-text">
+      <div class="radimo">RadIMO v17</div>
+      <div class="subtitle">Radiology: Innovation, Management & Orchestration</div>
+    </div>
+  </div>
+</body>
+```
+
+**CSS Styling:**
+- CSS Variables for theme (modality colors)
+- 3-column grid layout for skill buttons
+- Responsive design with max-width 1000px
+- Dynamic modality background colors applied via data-attribute selector
+
+**Key CSS Classes:**
+```css
+.button-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.btn {
+  min-height: 120px;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.skill-button-wrapper {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.skill-main-btn { flex: 1 1 66%; }
+.skill-strict-btn { flex: 0 0 34%; filter: brightness(0.85); }
+
+.result-panel { text-align: center; padding: 1rem; }
+.assigned-person { font-size: 2rem; font-weight: 600; }
+```
+
+---
+
+### B. /templates/upload.html - Admin Panel
+
+**File Path:** `/home/user/RadIMO_SBZ_DEV/templates/upload.html` (963 lines)
+
+**Purpose:** Administrative interface for managing Excel files, viewing statistics, and editing shifts.
+
+**Key Sections:**
+
+1. **Operational Checks Section:**
+```html
+{% if operational_checks %}
+<section class="card operational-checks">
+  <h2>Systemchecks</h2>
+  <ul class="operational-checks-list">
+    {% for result in operational_checks.results %}
+      <li class="operational-check-item {{ result.status|lower }}">
+        <strong>{{ result.name }}</strong>
+        <span class="operational-check-status">{{ result.status }}</span>
+        <div class="operational-check-detail">{{ result.detail }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+  <div class="operational-check-timestamp">
+    Letzter Lauf ({{ operational_checks.context }}): 
+    {{ operational_checks.timestamp }}
+  </div>
+</section>
+{% endif %}
+```
+
+2. **Statistics Table:**
+```html
+<div class="card">
+  <h2>Statistiken</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>MA</th>
+        {% for skill in skill_definitions %}
+          <th>{{ skill.label }}</th>
+        {% endfor %}
+        <th>∑</th>
+        <th>W (Global)</th>
+      </tr>
+    </thead>
+    <tbody id="modalityStatsBody">
+      <!-- Dynamically populated by JavaScript -->
+    </tbody>
+  </table>
+</div>
+```
+
+3. **File Upload Section:**
+```html
+<div class="card file-upload-card">
+  <h2>Datei Upload</h2>
+  <form action="{{ url_for('upload_file', modality=modality) }}" 
+        method="post" 
+        enctype="multipart/form-data">
+    <input type="file" name="file" accept=".xlsx">
+    <label>
+      <input type="radio" name="scheduled_upload" value="0" checked> 
+      Sofort
+    </label>
+    <label>
+      <input type="radio" name="scheduled_upload" value="1"> 
+      07:30 (Scheduled)
+    </label>
+    <button type="submit" class="upload-button">Upload</button>
+    <a href="{{ url_for('download_file', modality=modality) }}">
+      Download Letzte
+    </a>
+    <a href="{{ url_for('download_latest', modality=modality) }}">
+      Download Live-Backup
+    </a>
+  </form>
+</div>
+```
+
+4. **Edit Entry Form:**
+```html
+<div class="card">
+  <h2>Bearbeiten der Einträge</h2>
+  <form action="{{ url_for('edit_entry') }}" method="post">
+    <input type="number" id="index" name="index" placeholder="Index">
+    <input type="text" id="person" name="person" placeholder="Name (Kürzel)">
+    <input type="text" id="time" name="time" placeholder="07:00-14:00">
+    <input type="text" id="modifier" name="modifier" placeholder="1.0">
+    
+    <!-- Skill toggles -->
+    {% for skill in skill_definitions %}
+      <label>{{ skill.label }}:</label>
+      <select name="{{ skill.form_key }}">
+        <option value="-1">-1</option>
+        <option value="0">0</option>
+        <option value="1">1</option>
+      </select>
+    {% endfor %}
+    
+    <button type="submit">Aktualisieren/Hinzufügen</button>
+    <button type="button" onclick="deleteEntry()">Löschen</button>
+  </form>
+</div>
+
+<!-- Legend: Skill Value Meaning -->
+<small>Gewichtung: -1 = Ausschluss, 0 = Nur Fallback (passiv), 1 = Aktiv</small>
+```
+
+5. **Timeline Visualization:**
+```html
+<div class="card timeline-card">
+  <h2>Zeitplan</h2>
+  <div id="timeline-container"></div>
+  <div class="legend">
+    {% for skill in skill_definitions %}
+      <div class="legend-item">
+        <div class="legend-box" style="background: {{ skill.button_color }};"></div>
+        {{ skill.label }}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+```
+
+6. **Summary Statistics (Full Stats):**
+```html
+<button onclick="toggleSummaryStats()" class="modality-button">
+  Full Stats
+</button>
+
+<div id="summaryStatsContainer" class="card" style="display: none;">
+  <h2>Zusammenfassung (Gesamtstatistik)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>MA</th>
+        {% for mod in modality_order %}
+          <th>{{ modality_labels[mod] }}</th>
+        {% endfor %}
+        <th>∑</th>
+        <th>W (Global)</th>
+      </tr>
+    </thead>
+    <tbody id="summaryStatsBody">
+      <!-- Cross-modality statistics -->
+    </tbody>
+  </table>
+</div>
+```
+
+---
+
+### C. /templates/timetable.html - Timeline View
+
+**File Path:** `/home/user/RadIMO_SBZ_DEV/templates/timetable.html` (293 lines)
+
+**Purpose:** Visual representation of worker schedules and skill availability over time.
+
+**Key Components:**
+```html
+<body data-modality="{{ modality }}">
+  <header class="premium-header">
+    <h1>Zeitplan - {{ modality_labels[modality] }}</h1>
+    <div class="modality-selector">
+      {% for mod in modality_order %}
+        <a href="{{ url_for('timetable', modality=mod) }}">
+          {{ modality_labels[mod] }}
+        </a>
+      {% endfor %}
+    </div>
+  </header>
+
+  <div class="card timeline-card">
+    <div id="timeline-container"></div>
+    <div class="legend">
+      {% for skill in skill_definitions %}
+        <div class="legend-item">
+          <div class="legend-box" style="background: {{ skill.button_color }};"></div>
+          {{ skill.label }}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+```
+
+**Uses:** VIS.js Timeline library for rendering time-based visualizations
+
+---
+
+### D. /templates/login.html - Authentication
+
+**File Path:** `/home/user/RadIMO_SBZ_DEV/templates/login.html` (152 lines)
+
+**Purpose:** Simple password authentication for admin access.
+
+**Structure:**
+```html
+<div class="card login-container">
+  <h2>Admin Login</h2>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+  <form method="post">
+    <input type="password" name="password" placeholder="Passwort" required>
+    <button type="submit" class="modality-button">Login</button>
+    <a href="{{ url_for('index', modality=modality) }}" class="modality-button">
+      Zurück
+    </a>
+  </form>
+</div>
+```
+
+---
+
+## 3. JAVASCRIPT/FRONTEND CODE HANDLING MODALITY-BASED VIEWS
+
+### A. Main Script in index.html
+
+**Location:** Inline JavaScript at bottom of index.html (lines 335-482)
+
+**Key Functions:**
+
+#### 1. Initialization and Auto-Reload
+```javascript
+document.addEventListener('DOMContentLoaded', function() {
+  setInterval(quickReload, 60000);  // Refresh every 60 seconds
+  quickReload();
+});
+
+function quickReload() {
+  fetch('/api/quick_reload?modality={{ modality }}')
+    .then(response => response.json())
+    .then(data => {
+      for (const [slug, isAvailable] of Object.entries(data.available_buttons)) {
+        const wrapper = skillButtonMap[slug];
+        if (wrapper) wrapper.style.display = isAvailable ? '' : 'none';
+      }
+    })
+    .catch(e => console.error("Quick reload error:", e));
+}
+```
+
+#### 2. Assignment Request Handler
+```javascript
+let requestInProgress = false;
+let timerInterval, lastClickTime, disableTimeout;
+let currentModality = "{{ modality }}";
+
+const skillButtonMap = {};
+document.querySelectorAll('.skill-button-wrapper').forEach(wrapper => {
+  const slug = wrapper.dataset.skillSlug;
+  if (slug) {
+    skillButtonMap[slug] = wrapper;
+  }
+});
+
+function getNextAssignment(skill, forcePrimary = false) {
+  if (requestInProgress) return;
+  updateButtonsState(true);
+  
+  const endpoint = forcePrimary
+    ? `/api/${currentModality}/${skill}/strict`
+    : `/api/${currentModality}/${skill}`;
+    
+  fetch(endpoint)
+    .then(response => response.json())
+    .then(data => {
+      if (data['Assigned Person']) {
+        showResult(data['Assigned Person']);
+      }
+    })
+    .catch(e => {
+      console.error("API error:", e);
+      alert('Fehler beim Abrufen.');
+    });
+}
+```
+
+#### 3. Result Display with Automatic Clipboard Copy
+```javascript
+function showResult(person) {
+  const resultDiv = document.getElementById('result');
+  if (!person || person === "") {
+    person = "Niemand verfügbar";
+  }
+  resultDiv.innerHTML = `
+    <div class="result-panel">
+      <div class="assigned-person">${person}</div>
+      <div class="timer" id="timer"></div>
+    </div>
+  `;
+  startTimer();
+  
+  // Extract abbreviation in parentheses and copy to clipboard
+  const match = person.match(/\(([^)]+)\)/);
+  if (match && match[1]) copyTextToClipboard(match[1]);
+}
+
+function copyTextToClipboard(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+  } catch (e) {
+    console.error(e);
+  }
+  document.body.removeChild(textarea);
+}
+```
+
+#### 4. Timer Display
+```javascript
+function startTimer() {
+  lastClickTime = new Date();
+  updateTimer();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+function updateTimer() {
+  const now = new Date();
+  const secondsElapsed = Math.floor((now - lastClickTime) / 1000);
+  const hours = Math.floor(secondsElapsed / 3600);
+  const minutes = Math.floor((secondsElapsed % 3600) / 60);
+  const seconds = secondsElapsed % 60;
+  
+  document.getElementById('timer').textContent =
+    "Zeit seit letzter Zuweisung: " +
+    hours.toString().padStart(2, '0') + ":" +
+    minutes.toString().padStart(2, '0') + ":" +
+    seconds.toString().padStart(2, '0');
+}
+```
+
+#### 5. Button State Management
+```javascript
+function updateButtonsState(disabled) {
+  if (!disabled && requestInProgress) return;
+  requestInProgress = disabled;
+  
+  document.querySelectorAll('.assignment-btn').forEach(button => {
+    button.disabled = disabled;
+    disabled ? button.classList.add('btn-disabled') : 
+             button.classList.remove('btn-disabled');
+  });
+  
+  if (disableTimeout) clearTimeout(disableTimeout);
+  if (disabled) {
+    disableTimeout = setTimeout(() => {
+      requestInProgress = false;
+      document.querySelectorAll('.assignment-btn').forEach(button => {
+        button.disabled = false;
+        button.classList.remove('btn-disabled');
+      });
+    }, 3000);  // Re-enable after 3 seconds
+  }
+}
+```
+
+#### 6. Click History Visualization
+```javascript
+const clickHistoryCount = 15;
+const modalityBg = getComputedStyle(document.body)
+  .getPropertyValue('--modality-bg').trim();
+let clickHistoryColors = new Array(clickHistoryCount)
+  .fill({ color: modalityBg });
+
+function updateClickHistory(newColor) {
+  const newEntry = { color: newColor };
+  clickHistoryColors.pop();
+  clickHistoryColors.unshift(newEntry);
+  document.querySelectorAll('#clickHistory .click-history-box')
+    .forEach((box, index) => {
+      box.style.backgroundColor = clickHistoryColors[index].color;
+      box.innerHTML = "";
+    });
+}
+
+document.getElementById('buttonGrid').addEventListener('click', function(e) {
+  const button = e.target.closest('button');
+  if (button) {
+    const bgColor = getComputedStyle(button).backgroundColor;
+    updateClickHistory(bgColor);
+  }
+});
+```
+
+---
+
+### B. Admin Panel JavaScript (upload.html)
+
+**Location:** Inline script in upload.html (lines 609-904)
+
+#### 1. File Upload Handler
+```javascript
+function updateFileName(input) {
+  var fileName = input.files.length ? input.files[0].name : "Keine ausgewählt";
+  document.getElementById("fileName").textContent = fileName;
+}
+```
+
+#### 2. Edit Entry Loading
+```javascript
+function loadEntry() {
+  const i = document.getElementById('index').value;
+  if (i !== '') {
+    fetch(`/get_entry?modality={{ modality }}&index=${i}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+        } else {
+          document.getElementById('person').value = data.person;
+          document.getElementById('time').value = data.time;
+          const fieldKeys = ['modifier', ...skillFormKeys];
+          fieldKeys.forEach(field => {
+            document.getElementById(field).value = 
+              (field in data) ? data[field] : 0;
+          });
+        }
+      });
+  }
+}
+```
+
+#### 3. Timeline Building
+```javascript
+function buildTimeline() {
+  const timelineContainer = document.getElementById('timeline-container');
+  let dfData = JSON.parse('{{ debug_data|safe }}');
+  
+  dfData = dfData.filter(entry => entry.TIME !== '00:00-00:00');
+  if (dfData.length === 0) {
+    timelineContainer.innerHTML = "<p>No active schedule entries found</p>";
+    return;
+  }
+  
+  const items = [];
+  const groups = [];
+  const groupMap = {};
+  
+  // Build groups from data
+  dfData.forEach((entry) => {
+    const groupId = entry.PPL;
+    const startTimeParts = entry.start_time.split(':');
+    const startDateTime = new Date();
+    startDateTime.setHours(parseInt(startTimeParts[0], 10), 
+                          parseInt(startTimeParts[1], 10), 0);
+    if (!groupMap[groupId]) {
+      groupMap[groupId] = { id: groupId, order: startDateTime };
+      groups.push(groupMap[groupId]);
+    }
+  });
+  
+  groups.sort((a, b) => a.order - b.order);
+  const finalGroups = groups.map(group => ({ id: group.id, content: group.id }));
+  
+  // Build timeline items with skill gradients
+  dfData.forEach((entry, index) => {
+    const startTimeParts = entry.start_time.split(':');
+    const endTimeParts = entry.end_time.split(':');
+    const startDateTime = new Date();
+    startDateTime.setHours(parseInt(startTimeParts[0], 10), 
+                          parseInt(startTimeParts[1], 10), 0);
+    const endDateTime = new Date();
+    endDateTime.setHours(parseInt(endTimeParts[0], 10), 
+                        parseInt(endTimeParts[1], 10), 0);
+    
+    // Determine active skills
+    const activeSkills = [];
+    skillColumns.forEach(skillName => {
+      if (entry[skillName] > 0) {
+        const slug = skillSlugMap[skillName] || skillName.toLowerCase();
+        activeSkills.push(slug);
+      }
+    });
+    
+    // Create dynamic styling for skill visualization
+    const customClass = `timeline-item-${index}`;
+    const customStyle = document.createElement('style');
+    customStyle.textContent = `.${customClass} { ${buildGradient(activeSkills)} }`;
+    document.head.appendChild(customStyle);
+    
+    items.push({
+      id: index,
+      group: entry.PPL,
+      start: startDateTime,
+      end: endDateTime,
+      content: '',
+      title: `${entry.PPL}<br>Zeit: ${entry.TIME}<br>Skills: ${activeSkills.join(', ')}`,
+      className: customClass
+    });
+  });
+  
+  const today = new Date();
+  const options = {
+    zoomable: false,
+    moveable: true,
+    stack: false,
+    min: new Date(today.setHours(7, 0, 0)),
+    max: new Date(today.setHours(20, 0, 0)),
+    showCurrentTime: true,
+    format: {
+      minorLabels: { hour: 'HH:mm', minute: 'HH:mm' }
+    },
+    orientation: { axis: 'top', item: 'top' },
+    margin: { item: { vertical: 10 } },
+    verticalScroll: true,
+  };
+  
+  const timeline = new vis.Timeline(timelineContainer, items, finalGroups, options);
+  setInterval(() => {
+    timeline.setCurrentTime(new Date());
+  }, 60000);
+}
+```
+
+#### 4. Skill Gradient Building for Timeline
+```javascript
+function buildGradient(skills) {
+  const stripeWidth = 10;
+  const gapWidth = 15;
+  if (!skills || skills.length === 0) {
+    return "background: #ffffff;";
+  }
+  const colors = skills.map(slug => skillColorMap[slug] || '#cccccc');
+  if (colors.length === 1) {
+    const color = colors[0];
+    return `background: repeating-linear-gradient(
+      90deg,
+      ${color} 0px,
+      ${color} ${stripeWidth}px,
+      #ffffff ${stripeWidth}px,
+      #ffffff ${stripeWidth + gapWidth}px
+    );`;
+  }
+  const stops = colors.map((color, idx) => {
+    const start = idx * stripeWidth;
+    const end = start + stripeWidth;
+    return `${color} ${start}px, ${color} ${end}px`;
+  });
+  const blockWidth = colors.length * stripeWidth;
+  stops.push(`#ffffff ${blockWidth}px, #ffffff ${blockWidth + gapWidth}px`);
+  const period = blockWidth + gapWidth;
+  return `background: repeating-linear-gradient(
+    90deg, ${stops.join(', ')}, #ffffff ${period}px
+  );`;
+}
+```
+
+#### 5. Statistics Update (Modality-Specific)
+```javascript
+function updateUploadStats() {
+  fetch(`/api/quick_reload?modality={{ modality }}`)
+    .then(response => response.json())
+    .then(data => {
+      let modalityRows = "";
+      const workers = Object.keys(data.Summe).sort((a, b) =>
+        data.Summe[b] - data.Summe[a] || a.localeCompare(b)
+      );
+
+      workers.forEach(worker => {
+        modalityRows += `<tr class="stats-row"><td>${worker}</td>`;
+
+        let totalForWorker = 0;
+
+        skillColumns.forEach(skill => {
+          const currentModCount = (data[skill] && data[skill][worker]) 
+            ? data[skill][worker] : 0;
+          const globalModCount = data.Global[worker]?.[skill] || 0;
+          const extraCount = globalModCount - currentModCount;
+
+          let displayValue = currentModCount;
+          if (extraCount > 0) {
+            displayValue += ` (+${extraCount})`;
+          }
+          modalityRows += `<td>${displayValue}</td>`;
+          totalForWorker += currentModCount;
+        });
+
+        const currentModTotal = data.Summe[worker] || 0;
+        const globalModTotal = data.Global[worker]?.total || 0;
+        const totalExtra = globalModTotal - currentModTotal;
+
+        let displayTotal = currentModTotal;
+        if (totalExtra > 0) {
+          displayTotal += ` (+${totalExtra})`;
+        }
+
+        const globalWeighted = (data.GlobalWeighted && 
+          data.GlobalWeighted[worker] !== undefined) 
+          ? parseFloat(data.GlobalWeighted[worker]).toFixed(1) 
+          : "N/A"; 
+
+        modalityRows += `<td>${displayTotal}</td><td>${globalWeighted}</td></tr>`;
+      });
+
+      document.getElementById("modalityStatsBody").innerHTML = modalityRows;
+    })
+    .catch(error => console.error("Error updating stats:", error));
+}
+```
+
+#### 6. Summary Statistics (Cross-Modality)
+```javascript
+const summaryModalities = {{ modality_order|tojson }};
+
+function updateSummaryTable() {
+  const fetchPromises = summaryModalities.map(mod =>
+    fetch(`/api/quick_reload?modality=${mod}`)
+      .then(r => r.json())
+      .catch(error => {
+        console.error(`Error loading summary stats for ${mod}:`, error);
+        return null;
+      })
+  );
+
+  Promise.all(fetchPromises)
+    .then(results => {
+      const summaryData = {};
+      const allWorkers = new Set();
+      const modalityDataMap = {};
+
+      summaryModalities.forEach((mod, index) => {
+        const modData = results[index] || {};
+        modalityDataMap[mod] = modData;
+        Object.keys(modData.Summe || {}).forEach(worker => 
+          allWorkers.add(worker)
+        );
+      });
+
+      allWorkers.forEach(worker => {
+        summaryData[worker] = { total: 0, weighted: 0 };
+        summaryModalities.forEach(mod => {
+          const dataForMod = modalityDataMap[mod] || {};
+          const sumValue = dataForMod.Summe && dataForMod.Summe[worker]
+            ? parseInt(dataForMod.Summe[worker])
+            : 0;
+          summaryData[worker][mod] = sumValue;
+          summaryData[worker].total += sumValue;
+
+          const weightedValue = dataForMod.GlobalWeighted && 
+            dataForMod.GlobalWeighted[worker]
+            ? parseFloat(dataForMod.GlobalWeighted[worker])
+            : 0;
+          if (!isNaN(weightedValue)) {
+            summaryData[worker].weighted = 
+              Math.max(summaryData[worker].weighted, weightedValue);
+          }
+        });
+      });
+
+      let sortedWorkers = Object.keys(summaryData).sort((a, b) =>
+        summaryData[b].weighted - summaryData[a].weighted
+      );
+
+      let summaryRows = "";
+      sortedWorkers.forEach(worker => {
+        summaryRows += `<tr class="stats-row"><td>${worker}</td>`;
+        summaryModalities.forEach(mod => {
+          summaryRows += `<td>${summaryData[worker][mod] || 0}</td>`;
+        });
+        summaryRows += `<td>${summaryData[worker].total}</td>`;
+        summaryRows += `<td>${summaryData[worker].weighted.toFixed(1)}</td></tr>`;
+      });
+
+      document.getElementById("summaryStatsBody").innerHTML = summaryRows;
+    })
+    .catch(error => console.error("Error updating summary stats:", error));
+}
+
+// Auto-refresh every 60 seconds
+document.addEventListener("DOMContentLoaded", function() {
+  updateSummaryTable();
+  setInterval(updateSummaryTable, 60000);
+});
+```
+
+---
+
+## 4. NAVIGATION BETWEEN MODALITIES
+
+### A. Template-Level Navigation
+
+All templates (index.html, upload.html, timetable.html, login.html) include a **Modality Selector** in the header:
+
+```html
+<div class="modality-selector">
+  {% for mod in modality_order %}
+    <a href="{{ url_for('<current_page>', modality=mod) }}" 
+       data-modality="{{ mod }}" 
+       class="{% if modality == mod %}active{% endif %}">
+      {{ modality_labels[mod] }}
+    </a>
+  {% endfor %}
+</div>
+```
+
+**Navigation Flow:**
+- Clicking a modality tab navigates to the same page but with different modality parameter
+- Example: `/index?modality=ct` → `/index?modality=mr`
+- The page re-renders with modality-specific data
+
+### B. URL Routing Pattern
+
+All routes support modality query parameter:
+```
+/?modality=ct
+/?modality=mr
+/?modality=xray
+
+/upload?modality=ct
+/timetable?modality=xray
+/login?modality=mr
+```
+
+### C. Backend Modality Resolution
+
+**Function:** `resolve_modality_from_request()` in app.py (lines 469-470)
+
+```python
+def resolve_modality_from_request() -> str:
+    return normalize_modality(request.values.get('modality'))
+
+def normalize_modality(modality_value: Optional[str]) -> str:
+    if not modality_value:
+        return default_modality
+    modality_value = modality_value.lower()
+    return modality_value if modality_value in allowed_modalities else default_modality
+```
+
+### D. CSS Active State
+
+```css
+.modality-selector a {
+  border: 2px solid;
+  border-color: {{ settings.nav_color }};  /* Modality-specific color */
+  transition: border-width 0.2s;
+}
+
+.modality-selector a.active {
+  border-width: 4px;  /* Thicker border for active modality */
+}
+```
+
+---
+
+## 5. API ENDPOINTS CALLED BY FRONTEND
+
+### A. Worker Assignment Endpoints
+
+**Primary Assignment Request (with fallback):**
+```
+GET /api/{modality}/{role}
+GET /api/ct/Normal
+GET /api/mr/Notfall
+GET /api/xray/Herz
+```
+
+**Strict Assignment Request (no fallback):**
+```
+GET /api/{modality}/{role}/strict
+GET /api/ct/Normal/strict
+```
+
+**Backend Handler:** `assign_worker_api()` (lines 1730-1743)
+```python
+@app.route('/api/<modality>/<role>', methods=['GET'])
+def assign_worker_api(modality, role):
+    modality = modality.lower()
+    if modality not in modality_data:
+        return jsonify({"error": "Invalid modality"}), 400
+    return _assign_worker(modality, role)
+
+@app.route('/api/<modality>/<role>/strict', methods=['GET'])
+def assign_worker_strict_api(modality, role):
+    modality = modality.lower()
+    if modality not in modality_data:
+        return jsonify({"error": "Invalid modality"}), 400
+    return _assign_worker(modality, role, allow_fallback=False)
+```
+
+**Response Structure:**
+```json
+{
+  "Draw Time": "14:30:45",
+  "Assigned Person": "Max Mustermann (MM)",
+  "Summe": {
+    "Max Mustermann": 5,
+    "John Doe": 3,
+    ...
+  },
+  "Global": {
+    "Max Mustermann": {
+      "Normal": 5,
+      "Notfall": 2,
+      "Herz": 1,
+      ...
+      "total": 8
+    },
+    ...
+  },
+  "modality_used": "ct",
+  "skill_used": "Normal",
+  "modality_requested": "ct",
+  "fallback_allowed": true,
+  "strict_request": false,
+  "Normal": { "Max Mustermann": 5, ... },
+  "Notfall": { ... },
+  ...
+}
+```
+
+### B. Quick Reload Endpoint
+
+**Purpose:** Refresh available buttons and worker statistics every 60 seconds
+
+```
+GET /api/quick_reload?modality=ct
+```
+
+**Backend Handler:** `quick_reload()` (lines 2050-2114)
+
+```python
+@app.route('/api/quick_reload', methods=['GET'])
+def quick_reload():
+    modality = resolve_modality_from_request()
+    d = modality_data[modality]
+    now = get_local_berlin_now()
+    checks = run_operational_checks('reload', force=True)
+    
+    # Determine available buttons based on currently active working hours
+    available_buttons = {SKILL_SLUG_MAP[skill]: False for skill in SKILL_COLUMNS}
+    if d['working_hours_df'] is not None:
+        tnow = now.time()
+        active_df = d['working_hours_df'][
+            (d['working_hours_df']['start_time'] <= tnow) &
+            (d['working_hours_df']['end_time'] >= tnow)
+        ]
+        for skill in SKILL_COLUMNS:
+            slug = SKILL_SLUG_MAP[skill]
+            available_buttons[slug] = bool(
+                (skill in active_df.columns) and (active_df[skill].sum() > 0)
+            )
+    
+    # Returns worker statistics and operational checks
+    return jsonify({
+        "Draw Time": now.strftime("%H:%M:%S"),
+        "Assigned Person": None,
+        "Summe": sum_counts,
+        "Global": global_stats,
+        "GlobalWeighted": global_weighted_counts,
+        "available_buttons": available_buttons,
+        "operational_checks": checks,
+    })
+```
+
+**Response Structure:**
+```json
+{
+  "Draw Time": "14:30:45",
+  "Assigned Person": null,
+  "Summe": {
+    "Max Mustermann": 5,
+    ...
+  },
+  "Global": { ... },
+  "GlobalWeighted": {
+    "Max Mustermann": 6.5,
+    ...
+  },
+  "available_buttons": {
+    "normal": true,
+    "notfall": true,
+    "herz": false,
+    ...
+  },
+  "operational_checks": {
+    "results": [...],
+    "timestamp": "2025-11-20 14:30:45",
+    "context": "reload"
+  }
+}
+```
+
+### C. Admin/Upload Endpoints
+
+**Get Entry Data:**
+```
+GET /get_entry?index=0&modality=ct
+```
+
+**Response:**
+```json
+{
+  "person": "Max Mustermann (MM)",
+  "time": "07:00-14:00",
+  "modifier": 1.0,
+  "normal": 1,
+  "notfall": 1,
+  "herz": 0,
+  ...
+}
+```
+
+**Edit/Update Entry:**
+```
+POST /edit
+Content-Type: application/x-www-form-urlencoded
+
+index=0&person=Max%20Mustermann&time=07:00-14:00&modifier=1.0&normal=1&...
+```
+
+**Delete Entry:**
+```
+POST /delete
+Content-Type: application/x-www-form-urlencoded
+
+index=0
+```
+
+**File Upload:**
+```
+POST /upload
+Content-Type: multipart/form-data
+
+file: <xlsx file>
+scheduled_upload: 0|1
+```
+
+**Download File:**
+```
+GET /download              # Last uploaded file
+GET /download_latest       # Live backup
+```
+
+**Edit Info Texts:**
+```
+POST /edit_info
+Content-Type: application/x-www-form-urlencoded
+
+info_text=<text with newlines>
+```
+
+---
+
+## 6. WORK DISTRIBUTION VIEW IMPLEMENTATION
+
+### A. Admin Statistics Panel
+
+**Location:** upload.html (lines 374-424)
+
+**Components:**
+
+1. **Modality-Specific Statistics Table:**
+   - Shows count of assignments per worker per skill
+   - Shows sum total per worker
+   - Shows global weighted count
+
+```html
+<table>
+  <thead>
+    <tr>
+      <th>MA</th>
+      {% for skill in skill_definitions %}
+        <th>{{ skill.label }}</th>
+      {% endfor %}
+      <th>∑</th>
+      <th>W (Global)</th>
+    </tr>
+  </thead>
+  <tbody id="modalityStatsBody">
+    <!-- Populated by updateUploadStats() JavaScript -->
+  </tbody>
+</table>
+```
+
+**Example Output:**
+```
+MA                Normal  Notfall  Privat  Herz  Msk  Chest  ∑   W(Global)
+Max Mustermann      5       2        1      0     0    0    8    6.5
+John Doe            3       1        0      1     0    0    5    4.2
+Maria Schmidt       4       3        2      0     1    0   10    8.1
+```
+
+2. **Global Weighted Calculation Logic** (app.py, lines 1436-1450):
+
+```python
+def update_global_assignment(person: str, role: str, modality: str) -> str:
+    """Update global assignment count with weighted calculation."""
+    canonical_id = get_canonical_worker_id(person)
+    
+    # Get modifier (default 1.0)
+    modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
+    modifier = _coerce_float(modifier, 1.0)
+    
+    # Calculate weighted value
+    weight = skill_weights.get(role, 1.0) * modifier * modality_factors.get(modality, 1.0)
+    
+    # Update global counter
+    global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
+        global_worker_data['weighted_counts_per_mod'][modality].get(canonical_id, 0.0) + weight
+    
+    # Update skill assignment count
+    assignments = _get_or_create_assignments(modality, canonical_id)
+    assignments[role] += 1
+    assignments['total'] += 1
+    
+    return canonical_id
+```
+
+**Weight Formula:**
+```
+Weight = skill_weight × worker_modifier × modality_factor
+
+Example:
+  Notfall assignment for Max in CT modality:
+  1.1 (Notfall) × 1.0 (modifier) × 1.0 (CT factor) = 1.1
+  
+  Herz assignment for Maria in MR modality:
+  1.2 (Herz) × 1.5 (modifier if configured) × 1.2 (MR factor) = 2.16
+```
+
+### B. Cross-Modality Summary Statistics
+
+**Location:** upload.html (lines 571-594)
+
+**Toggle Button:**
+```html
+<button onclick="toggleSummaryStats()" class="modality-button">
+  Full Stats
+</button>
+
+<div id="summaryStatsContainer" class="card" style="display: none;">
+  <h2>Zusammenfassung (Gesamtstatistik)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>MA</th>
+        {% for mod in modality_order %}
+          <th>{{ modality_labels[mod] }}</th>
+        {% endfor %}
+        <th>∑</th>
+        <th>W (Global)</th>
+      </tr>
+    </thead>
+    <tbody id="summaryStatsBody">
+      <!-- Populated by updateSummaryTable() JavaScript -->
+    </tbody>
+  </table>
+</div>
+```
+
+**Example Output:**
+```
+MA                CT    MR    XRAY   ∑   W(Global)
+Max Mustermann    8     2     0     10    8.5
+John Doe          5     3     1      9    7.2
+Maria Schmidt    10     4     2     16    12.3
+```
+
+### C. Timeline Visualization
+
+**Location:** upload.html and timetable.html
+
+**Purpose:** Visual representation of worker schedules with skill indicators
+
+**Key Features:**
+- Time-based horizontal axis (7:00-20:00)
+- Worker/person on vertical axis
+- Color-coded skill bars (striped for multiple skills)
+- Interactive tooltips showing: Worker name, Time range, Skills active
+
+**Visual Representation:**
+```
+Timeline Example:
+Name          7:00  8:00  9:00  10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00
+Max         [====Normal====][====Notfall====]
+John          [====Normal====]
+Maria       [=Normal=][==Herz==][========Notfall========]
+```
+
+**Gradient Color Mapping:**
+- Each skill has its own color from config
+- Multiple skills displayed as striped pattern
+- Repeating pattern: 10px color, 15px white gap
+
+**VIS.js Integration:**
+```javascript
+const timeline = new vis.Timeline(
+  timelineContainer,
+  items,        // Time entries with start/end times
+  groups,       // Worker groups
+  options       // Display options
+);
+```
+
+### D. Active Worker Highlighting
+
+**Location:** upload.html (lines 906-951)
+
+**JavaScript Logic:**
+```javascript
+document.addEventListener("DOMContentLoaded", function() {
+  const now = new Date();
+  let activeWorkers = new Set();
+
+  // Parse timeline data
+  try {
+    const timelineData = JSON.parse('{{ debug_data|safe }}') || [];
+    timelineData.forEach(entry => {
+      if (entry.TIME === '00:00-00:00') return;
+      
+      const start = new Date();
+      const end = new Date();
+      const [startHour, startMin] = entry.start_time.split(':');
+      const [endHour, endMin] = entry.end_time.split(':');
+      
+      start.setHours(parseInt(startHour, 10), parseInt(startMin, 10), 0);
+      end.setHours(parseInt(endHour, 10), parseInt(endMin, 10), 0);
+      
+      if (now >= start && now <= end) {
+        activeWorkers.add(entry.PPL);
+      }
+    });
+  } catch (e) {
+    console.error("Error parsing debug_data:", e);
+  }
+
+  // Highlight active workers in statistics table
+  document.querySelectorAll("#modalityStatsBody tr").forEach(row => {
+    const worker = row.querySelector("td").textContent.trim();
+    if (activeWorkers.has(worker)) {
+      row.classList.add("active-row");
+    }
+  });
+});
+```
+
+**CSS Highlighting:**
+```css
+.active-row {
+  background-color: var(--modality-bg, #fff) !important;
+}
+```
+
+### E. Skill Value System
+
+**Displayed in Edit Form** (upload.html, lines 500-514):
+
+```html
+<select id="{{ skill.form_key }}" name="{{ skill.form_key }}">
+  <option value="-1">-1</option>
+  <option value="0">0</option>
+  <option value="1">1</option>
+</select>
+```
+
+**Skill Value Meanings** (legend in upload.html, line 521):
+```
+-1 = Ausschluss      (Excluded - not available even in fallback)
+ 0 = Passiv          (Passive - only available in fallback, not primary)
+ 1 = Aktiv           (Active - available for primary and fallback requests)
+```
+
+**Backend Implementation** (app.py, lines 830-860):
+
+```python
+def _attempt_column_selection(
+  active_df: pd.DataFrame, column: str, modality: str, is_primary: bool = True
+):
+    """
+    Select workers from a specific skill column.
+
+    Skill values:
+    - 1 = Active (available for primary and fallback)
+    - 0 = Passive (only available in fallback, not for primary requests)
+    - -1 = Excluded (has skill but NOT available in fallback)
+    """
+    if column not in active_df.columns:
+        return None
+
+    # Filter based on primary vs fallback mode
+    if is_primary:
+        # Primary selection: only workers with value >= 1
+        filtered_df = active_df[active_df[column] >= 1]
+    else:
+        # Fallback selection: workers with value >= 0
+        filtered_df = active_df[active_df[column] >= 0]
+
+    if filtered_df.empty:
+        return None
+    
+    balanced_df = _apply_minimum_balancer(filtered_df, column, modality)
+    result_df = balanced_df if not balanced_df.empty else filtered_df
+    result_df = result_df.copy()
+    result_df['__skill_source'] = column
+    return result_df
+```
+
+---
+
+## SUMMARY TABLE
+
+| Aspect | Details |
+|--------|---------|
+| **Frontend Framework** | Jinja2 templates + vanilla JavaScript + CSS3 |
+| **Modality Navigation** | Tab-based selector in header, URL parameter-based routing |
+| **Main Views** | Home (assignment), Admin (stats & upload), Timetable (timeline), Login |
+| **API Pattern** | RESTful GET/POST to Flask routes |
+| **Real-time Updates** | Auto-refresh every 60 seconds via quick_reload endpoint |
+| **Statistics** | Modality-specific + cross-modality tables with weighted counts |
+| **Timeline Library** | VIS.js for time-based worker schedule visualization |
+| **Skill Selection** | 3-value system (-1=excluded, 0=passive, 1=active) |
+| **Work Distribution** | Weighted calculation: skill_weight × modifier × modality_factor |
+| **File Format** | Excel (.xlsx) with Tabelle1 (data) and Tabelle2 (info) sheets |
+| **Automatic Features** | Clipboard copy (abbreviations), Timer display, Active worker highlighting |
+
+---
+
+## OPERATIONAL CHECKS
+
+**Function:** `run_operational_checks(context, force)` is implemented in app.py (lines 1583-1748) and provides system readiness validation.
+
+**Checks performed:**
+1. Config file (config.yaml readable and valid YAML)
+2. Admin password (set and not default value)
+3. Upload folder (exists and writable, counts Excel files)
+4. Modalities (configured count and list)
+5. Skills (configured count and list)
+6. Worker data (total workers loaded across modalities)
+
+**Return format:**
+```python
+{
+  'results': [
+    {'name': 'Check Name', 'status': 'OK|WARNING|ERROR', 'detail': 'Details'},
+    ...
+  ],
+  'context': 'admin_view|reload|cli',
+  'timestamp': '2025-11-20T07:00:00+01:00'
+}
+```
+
+**Used in:**
+- Admin panel (upload.html) - displays system checks section
+- Quick reload API - validates system state
+- ops_check.py CLI tool - pre-deployment verification
+
+
+====== END docs/FRONTEND_ARCHITECTURE.md ======
+
