@@ -1586,15 +1586,19 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     """
     Two-phase balancer to ensure fair initial distribution:
 
-    Phase 1 (No-Overflow Mode): Until ALL primary workers have at least min_required
-    assignments, restrict selection to only workers below the threshold. This ensures
-    round-robin distribution where everyone gets their fair share before anyone gets
-    overloaded.
+    Phase 1 (No-Overflow Mode): Until ALL primary workers FOR THIS SKILL have at least
+    min_required assignments, restrict selection to only workers below the threshold.
 
-    Phase 2 (Normal Mode): Once all primary workers have the minimum, return all
-    workers and allow normal weighted selection with overflow based on hours worked.
+    IMPORTANT: Checks ALL workers who have this skill (not just currently active ones).
+    This prevents the issue where a worker starting at midday would trigger Phase 1
+    even though morning workers already completed their minimum.
 
-    Example: If min_required=3, worker A must get 3 tasks before worker B can get a 4th.
+    Phase 2 (Normal Mode): Once all workers with this skill have the minimum (across
+    the entire day), return all currently active workers and allow normal weighted
+    selection with overflow based on hours worked.
+
+    Example: If min_required=3 and Worker A (8-12) has 3 tasks, Worker B (12-16)
+    starting at noon can immediately use normal mode instead of being stuck in Phase 1.
     """
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
@@ -1606,15 +1610,19 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if not skill_counts:
         return filtered_df
 
-    # Check if all workers have reached the minimum threshold
-    all_workers_count = []
-    for _, row in filtered_df.iterrows():
-        worker = row['PPL']
-        count = _get_effective_assignment_load(worker, column, modality, skill_counts)
-        all_workers_count.append(count)
+    # Check ALL workers who have this skill (globally for the day), not just currently active
+    # This ensures we don't stay in Phase 1 just because a new worker started their shift
+    all_workers_with_skill = skill_counts.keys()
 
-    # Phase 2: If ALL workers have at least min_required, return full pool (normal mode)
-    if all(count >= min_required for count in all_workers_count):
+    any_below_minimum = False
+    for worker in all_workers_with_skill:
+        count = _get_effective_assignment_load(worker, column, modality, skill_counts)
+        if count < min_required:
+            any_below_minimum = True
+            break
+
+    # Phase 2: If ALL workers with this skill have at least min_required, return full pool (normal mode)
+    if not any_below_minimum:
         return filtered_df
 
     # Phase 1: Some workers still below minimum, restrict to only those below threshold
