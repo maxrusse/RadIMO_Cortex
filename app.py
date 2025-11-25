@@ -1586,19 +1586,25 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     """
     Two-phase balancer to ensure fair initial distribution:
 
-    Phase 1 (No-Overflow Mode): Until ALL primary workers FOR THIS SKILL have at least
-    min_required assignments, restrict selection to only workers below the threshold.
+    Phase 1 (No-Overflow Mode): Until ALL ACTIVE workers (skill >= 1) FOR THIS SKILL
+    have at least min_required WEIGHTED assignments, restrict selection to only workers
+    below the threshold.
 
-    IMPORTANT: Checks ALL workers who have this skill (not just currently active ones).
-    This prevents the issue where a worker starting at midday would trigger Phase 1
-    even though morning workers already completed their minimum.
+    IMPORTANT:
+    - Only counts workers with skill value >= 1 (active workers)
+    - Workers with skill value 0 (passive) are NOT counted toward minimums
+    - Uses WEIGHTED assignments (not raw counts) via _get_effective_assignment_load
+    - Only checks workers who have worked today (in skill_counts)
 
-    Phase 2 (Normal Mode): Once all workers with this skill have the minimum (across
-    the entire day), return all currently active workers and allow normal weighted
+    Phase 2 (Normal Mode): Once all ACTIVE workers with this skill have the minimum
+    weighted assignments, return all currently active workers and allow normal weighted
     selection with overflow based on hours worked.
 
-    Example: If min_required=3 and Worker A (8-12) has 3 tasks, Worker B (12-16)
-    starting at noon can immediately use normal mode instead of being stuck in Phase 1.
+    Example: If min_required=3.0 (weighted):
+    - Worker A (skill=1): 2.5 weighted → below minimum
+    - Worker B (skill=1): 3.5 weighted → above minimum
+    - Worker C (skill=0): 0 weighted → NOT counted (passive worker)
+    → Phase 1 active (Worker A still below)
     """
     if filtered_df.empty or not BALANCER_SETTINGS.get('enabled', True):
         return filtered_df
@@ -1610,22 +1616,37 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if not skill_counts:
         return filtered_df
 
-    # Check ALL workers who have this skill (globally for the day), not just currently active
-    # This ensures we don't stay in Phase 1 just because a new worker started their shift
-    all_workers_with_skill = skill_counts.keys()
+    # Get the full working_hours_df to check skill values
+    working_hours_df = modality_data[modality].get('working_hours_df')
+    if working_hours_df is None or column not in working_hours_df.columns:
+        return filtered_df
 
+    # Check only ACTIVE workers (skill >= 1) who have this skill
+    # Passive workers (skill = 0) should NOT be counted toward minimums
     any_below_minimum = False
-    for worker in all_workers_with_skill:
+    for worker in skill_counts.keys():
+        # Check if this worker has skill >= 1 (active) for this column
+        worker_rows = working_hours_df[working_hours_df['PPL'] == worker]
+        if worker_rows.empty:
+            continue
+
+        # Get skill value for this worker (take first row if multiple shifts)
+        skill_value = worker_rows[column].iloc[0]
+        if skill_value < 1:
+            # Passive worker (0) or excluded (-1), skip from minimum checks
+            continue
+
+        # This is an active worker, check their weighted assignment load
         count = _get_effective_assignment_load(worker, column, modality, skill_counts)
         if count < min_required:
             any_below_minimum = True
             break
 
-    # Phase 2: If ALL workers with this skill have at least min_required, return full pool (normal mode)
+    # Phase 2: If ALL ACTIVE workers have at least min_required, return full pool (normal mode)
     if not any_below_minimum:
         return filtered_df
 
-    # Phase 1: Some workers still below minimum, restrict to only those below threshold
+    # Phase 1: Some active workers still below minimum, restrict to only those below threshold
     # This ensures no-overflow behavior until everyone has the minimum
     prioritized = filtered_df[
         filtered_df['PPL'].apply(
