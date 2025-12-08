@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-API Health Check Script for RadIMO SBZ Coordinator
+API Health Check Script for RadIMO Cortex Coordinator
 Tests all three fallback strategies and API endpoints
 """
 
@@ -297,7 +297,7 @@ def print_api_test_guide():
 def main():
     """Run all health checks"""
     print(f"\n{BLUE}{'='*60}")
-    print("RadIMO SBZ Coordinator - API Health Check")
+    print("RadIMO Cortex Coordinator - API Health Check")
     print(f"{'='*60}{RESET}\n")
 
     all_checks = [

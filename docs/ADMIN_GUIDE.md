@@ -12,7 +12,7 @@ RadIMO provides three distinct admin interfaces for different operational needs:
 |------|-----|--------|----------|
 | **Skill Roster** | `/skill_roster` | Staged | Long-term planning, rotations |
 | **Prep Next Day** | `/prep-next-day` | Tomorrow only | Daily schedule preparation |
-| **Live Edit** | `/admin/live-edit` | Immediate | Emergency same-day changes |
+| **Day Control** | `/admin/live-edit` | Immediate | Emergency same-day changes |
 
 All admin pages require login with the admin password from `config.yaml`.
 
@@ -32,7 +32,7 @@ All admin pages require login with the admin password from `config.yaml`.
 │  ├─ Preview and adjust                                      │
 │  └─ No effect on current day                                │
 ├─────────────────────────────────────────────────────────────┤
-│  OPERATIONAL (Now)              Live Edit                   │
+│  OPERATIONAL (Now)              Day Control                   │
 │  ├─ Immediate effect            (DANGER ZONE)               │
 │  ├─ Emergency changes only                                  │
 │  └─ Careful: impacts ongoing assignments                    │
@@ -150,7 +150,7 @@ Changes are applied when:
 
 ---
 
-## 3. Live Edit (`/admin/live-edit`)
+## 3. Day Control (`/admin/live-edit`)
 
 **Purpose:** Make immediate changes to current day's assignments.
 

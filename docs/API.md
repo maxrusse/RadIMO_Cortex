@@ -376,7 +376,7 @@ Copy staged roster to active.
 
 ---
 
-## Live Edit (Admin)
+## Day Control (Admin)
 
 ### Get Workers
 

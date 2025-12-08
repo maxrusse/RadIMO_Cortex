@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Edit - RadIMO</title>
+  <title>RadIMO Cortex | Day Control</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -305,15 +305,76 @@
     .edit-form-add h3 {
       color: #28a745;
     }
+
+    /* Skill Filter Bar */
+    .skill-filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .skill-filter-bar label {
+      font-weight: 600;
+      color: #333;
+      margin-right: 0.5rem;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .filter-btn:hover {
+      border-color: #004892;
+      background: #f0f0f0;
+    }
+
+    .filter-btn.active {
+      background: #004892;
+      color: white;
+      border-color: #004892;
+    }
+
+    .filter-btn.filter-all {
+      background: #28a745;
+      color: white;
+      border-color: #28a745;
+    }
+
+    .filter-btn.filter-all:hover {
+      background: #218838;
+      border-color: #218838;
+    }
+
+    .filter-btn.filter-all.active {
+      background: #155724;
+      border-color: #155724;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>Live Edit <span class="text-danger" style="font-size: 1.2rem;">(IMMEDIATE EFFECT)</span></h1>
+    <div>
+      <h1>RadIMO Cortex | Day Control <span class="text-danger" style="font-size: 1rem;">(IMMEDIATE EFFECT)</span></h1>
+      <p>Emergency same-day edits and overrides</p>
+    </div>
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="window.location.href='/upload'">Admin Panel</button>
-      <button class="btn btn-secondary" onclick="window.location.href='/skill_roster'">Skill Roster</button>
-      <button class="btn btn-secondary" onclick="window.location.href='/prep-next-day'">Prep Next Day</button>
+      <a href="{{ url_for('index') }}">Dashboard</a>
+      <a href="{{ url_for('timetable') }}">Timetable</a>
+      <a href="{{ url_for('skill_roster_page') }}">Skill Matrix</a>
+      <a href="{{ url_for('upload_file') }}">Admin</a>
+      <button class="btn btn-primary" onclick="window.location.href='/prep-next-day'" style="margin-left: 1rem;">📝 Prep Next Day</button>
     </div>
   </div>
 
@@ -516,6 +577,19 @@
         <h2>CT Workers</h2>
         <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
+
+      <!-- Skill Filter Bar -->
+      <div class="skill-filter-bar">
+        <label>Filter by Skill:</label>
+        <button class="filter-btn filter-all active" onclick="filterBySkill('ct', 'all')">All</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Normal')">Normal</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Notfall')">Notfall</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Privat')">Privat</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Herz')">Herz</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Msk')">Msk</button>
+        <button class="filter-btn" onclick="filterBySkill('ct', 'Chest')">Chest</button>
+      </div>
+
       <div id="ct-loading" class="loading">Loading CT workers...</div>
       <div id="ct-table-container" style="display: none;">
         <table class="workers-table">
@@ -542,6 +616,19 @@
         <h2>MR Workers</h2>
         <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
+
+      <!-- Skill Filter Bar -->
+      <div class="skill-filter-bar">
+        <label>Filter by Skill:</label>
+        <button class="filter-btn filter-all active" onclick="filterBySkill('mr', 'all')">All</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Normal')">Normal</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Notfall')">Notfall</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Privat')">Privat</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Herz')">Herz</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Msk')">Msk</button>
+        <button class="filter-btn" onclick="filterBySkill('mr', 'Chest')">Chest</button>
+      </div>
+
       <div id="mr-loading" class="loading">Loading MR workers...</div>
       <div id="mr-table-container" style="display: none;">
         <table class="workers-table">
@@ -568,6 +655,19 @@
         <h2>X-RAY Workers</h2>
         <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
+
+      <!-- Skill Filter Bar -->
+      <div class="skill-filter-bar">
+        <label>Filter by Skill:</label>
+        <button class="filter-btn filter-all active" onclick="filterBySkill('xray', 'all')">All</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Normal')">Normal</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Notfall')">Notfall</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Privat')">Privat</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Herz')">Herz</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Msk')">Msk</button>
+        <button class="filter-btn" onclick="filterBySkill('xray', 'Chest')">Chest</button>
+      </div>
+
       <div id="xray-loading" class="loading">Loading X-RAY workers...</div>
       <div id="xray-table-container" style="display: none;">
         <table class="workers-table">
@@ -661,19 +761,24 @@
       workers.forEach((worker, index) => {
         const row = document.createElement('tr');
 
-        // Skills badges
+        // Skills badges and track active skills for filtering
         const skillBadges = [];
+        const activeSkills = [];
         const skills = ['Normal', 'Notfall', 'Privat', 'Herz', 'Msk', 'Chest'];
         skills.forEach(skill => {
           const value = worker[skill];
           if (value === 1) {
             skillBadges.push(`<span class="skill-badge active">${skill}</span>`);
+            activeSkills.push(skill);
           } else if (value === 0) {
             skillBadges.push(`<span class="skill-badge passive">${skill}</span>`);
           } else if (value === -1) {
             skillBadges.push(`<span class="skill-badge excluded">${skill}</span>`);
           }
         });
+
+        // Add data attributes for filtering
+        row.setAttribute('data-active-skills', activeSkills.join(','));
 
         row.innerHTML = `
           <td><strong>${worker.PPL}</strong></td>
@@ -851,6 +956,47 @@
       setTimeout(() => {
         statusEl.style.display = 'none';
       }, 5000);
+    }
+
+    /**
+     * Filter workers table by skill
+     * @param {string} modality - The modality (ct, mr, xray)
+     * @param {string} skill - The skill to filter by ('all' or skill name)
+     */
+    function filterBySkill(modality, skill) {
+      // Update button states
+      const filterBar = document.querySelector(`#${modality}-content .skill-filter-bar`);
+      const buttons = filterBar.querySelectorAll('.filter-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Get table rows
+      const tbody = document.getElementById(`${modality}-tbody`);
+      const rows = tbody.querySelectorAll('tr');
+
+      // Filter rows
+      rows.forEach(row => {
+        // Skip empty state rows
+        if (row.querySelector('.table-empty-state')) {
+          return;
+        }
+
+        if (skill === 'all') {
+          // Show all rows
+          row.style.display = '';
+        } else {
+          // Get active skills for this worker
+          const activeSkills = row.getAttribute('data-active-skills');
+
+          if (activeSkills && activeSkills.includes(skill)) {
+            // Worker has this skill active (value = 1), show row
+            row.style.display = '';
+          } else {
+            // Worker does not have this skill active, hide row
+            row.style.display = 'none';
+          }
+        }
+      });
     }
   </script>
 </body>

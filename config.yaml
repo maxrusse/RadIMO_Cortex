@@ -159,7 +159,7 @@ medweb_mapping:
       shift: "Fruehdienst"
       base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
 
-    - match: "SBZ: CT Privatpatienten"
+    - match: "Cortex: CT Privatpatienten"
       modality: "ct"
       shift: "Fruehdienst"
       base_skills: {Normal: 0, Notfall: 0, Privat: 1, Herz: 0, Msk: 0, Chest: 0}
@@ -180,7 +180,7 @@ medweb_mapping:
       shift: "Fruehdienst"
       base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
 
-    - match: "SBZ: MRT-OA"
+    - match: "Cortex: MRT-OA"
       modality: "mr"
       shift: "Fruehdienst"
       base_skills: {Normal: 0, Notfall: 0, Privat: 1, Herz: 0, Msk: 0, Chest: 0}
@@ -255,8 +255,8 @@ medweb_mapping:
         Dienstag: "10:00-11:00"
         Donnerstag: "10:00-11:00"
 
-    # SBZ Aufklärung - uses shifts logic
-    - match: "SBZ Aufklärung"
+    # Cortex Aufklärung - uses shifts logic
+    - match: "Cortex Aufklärung"
       modality: "ct"
       shift: "Fruehdienst"
       label: "Aufklärung"

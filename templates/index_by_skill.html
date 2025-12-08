@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RadIMO: {{ skill_labels[skill] }} Koordinator</title>
+  <title>RadIMO Cortex | {{ skill_labels[skill] }} Dashboard</title>
   <style>
     :root {
       --disabled-color:  #888;
@@ -267,15 +267,36 @@
   </style>
 </head>
 <body data-skill="{{ skill }}">
-  <!-- Premium Header with Embedded Skill Selector -->
+  <!-- Premium Header with Navigation -->
   <header class="premium-header">
-    <h1>RadIMO: {{ skill_labels[skill] }} Koordinator</h1>
-    <div class="skill-selector">
-      {% for s in skill_order %}
-        <a href="{{ url_for('index_by_skill', skill=s) }}" data-skill="{{ s }}" class="{% if skill == s %}active{% endif %}">{{ skill_labels[s] }}</a>
-      {% endfor %}
+    <div>
+      <h1>RadIMO Cortex</h1>
+      <p style="margin: 0; opacity: 0.8; font-size: 0.9rem;">Intelligent Radiology Orchestration</p>
     </div>
+    <nav style="display: flex; gap: 1rem; align-items: center;">
+      <a href="{{ url_for('index') }}" style="font-weight: bold; color: #004892; text-decoration: none; border-bottom: 2px solid #004892;">Dashboard</a>
+      <a href="{{ url_for('timetable') }}" style="color: #333; text-decoration: none;">Timetable</a>
+      <a href="{{ url_for('skill_roster_page') }}" style="color: #333; text-decoration: none;">Skill Matrix</a>
+      <a href="{{ url_for('live_edit_page') }}" style="color: #333; text-decoration: none;">Day Control</a>
+      <a href="{{ url_for('upload_file') }}" style="color: #333; text-decoration: none;">Admin</a>
+    </nav>
   </header>
+
+  <!-- Skill Selector -->
+  <div style="background: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="skill-selector" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% for s in skill_order %}
+          <a href="{{ url_for('index_by_skill', skill=s) }}" data-skill="{{ s }}" class="{% if skill == s %}active{% endif %}">{{ skill_labels[s] }}</a>
+        {% endfor %}
+      </div>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <span style="font-size: 0.9rem; color: #666;">View by:</span>
+        <a href="{{ url_for('index') }}" style="padding: 0.4rem 0.8rem; background: #e0e0e0; color: #333; border-radius: 4px; text-decoration: none; font-size: 0.9rem;">Modality</a>
+        <a href="{{ url_for('index_by_skill') }}" style="padding: 0.4rem 0.8rem; background: #004892; color: white; border-radius: 4px; text-decoration: none; font-size: 0.9rem;">Skill</a>
+      </div>
+    </div>
+  </div>
 
   <!-- Main Assignment Panel -->
   <section class="card">
@@ -303,12 +324,8 @@
       {% endfor %}
     </div>
     <div id="result"></div>
-    <div class="clipboard-note" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="clipboard-note">
       <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
-      <div>
-        <a href="{{ url_for('index') }}" class="small-button">Nach Modalität</a>
-        <a href="{{ url_for('upload_file') }}" class="small-button">Admin</a>
-      </div>
     </div>
     <div class="info-box">
       <div class="info-texts">

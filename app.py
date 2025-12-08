@@ -553,9 +553,9 @@ for mod in allowed_modalities:
         'draw_counts': {},
         'skill_counts': {skill: {} for skill in SKILL_COLUMNS},
         'WeightedCounts': {},
-        'last_uploaded_filename': f"SBZ_{mod.upper()}.xlsx",  # e.g. SBZ_CT.xlsx
-        'default_file_path': os.path.join(app.config['UPLOAD_FOLDER'], f"SBZ_{mod.upper()}.xlsx"),
-        'scheduled_file_path': os.path.join(app.config['UPLOAD_FOLDER'], f"SBZ_{mod.upper()}_scheduled.xlsx"),
+        'last_uploaded_filename': f"Cortex_{mod.upper()}.xlsx",  # e.g. Cortex_CT.xlsx
+        'default_file_path': os.path.join(app.config['UPLOAD_FOLDER'], f"Cortex_{mod.upper()}.xlsx"),
+        'scheduled_file_path': os.path.join(app.config['UPLOAD_FOLDER'], f"Cortex_{mod.upper()}_scheduled.xlsx"),
         'last_reset_date': None
     }
 
@@ -630,7 +630,7 @@ def load_state():
                     modality_data[mod]['draw_counts'] = mod_state.get('draw_counts', {})
                     modality_data[mod]['skill_counts'] = mod_state.get('skill_counts', {skill: {} for skill in SKILL_COLUMNS})
                     modality_data[mod]['WeightedCounts'] = mod_state.get('WeightedCounts', {})
-                    modality_data[mod]['last_uploaded_filename'] = mod_state.get('last_uploaded_filename', f"SBZ_{mod.upper()}.xlsx")
+                    modality_data[mod]['last_uploaded_filename'] = mod_state.get('last_uploaded_filename', f"Cortex_{mod.upper()}.xlsx")
 
                     last_reset_str = mod_state.get('last_reset_date')
                     if last_reset_str:
@@ -650,8 +650,8 @@ for mod in allowed_modalities:
         'info_texts': [],
         'total_work_hours': {},
         'worker_modifiers': {},
-        'last_uploaded_filename': f"SBZ_{mod.upper()}_staged.xlsx",
-        'staged_file_path': os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"SBZ_{mod.upper()}_staged.xlsx"),
+        'last_uploaded_filename': f"Cortex_{mod.upper()}_staged.xlsx",
+        'staged_file_path': os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"Cortex_{mod.upper()}_staged.xlsx"),
         'last_modified': None
     }
 
@@ -1114,7 +1114,7 @@ def build_working_hours_from_medweb(
         # Match rule
         rule = match_mapping_rule(activity_desc, mapping_rules)
         if not rule:
-            continue  # Not SBZ-relevant or not mapped
+            continue  # Not Cortex-relevant or not mapped
 
         # Build PPL and get canonical ID (needed for both work and exclusions)
         ppl_str = build_ppl_from_row(row)
@@ -1363,7 +1363,7 @@ def preload_next_workday(csv_path: str, config: dict) -> dict:
             return {
                 'success': False,
                 'target_date': date_str,
-                'message': f'Keine SBZ-Daten für {date_str} gefunden'
+                'message': f'Keine Cortex-Daten für {date_str} gefunden'
             }
 
         # CRITICAL FIX: Do NOT update modality_data directly.
@@ -2449,7 +2449,7 @@ def backup_dataframe(modality: str, use_staged: bool = False):
         backup_dir = os.path.join(app.config['UPLOAD_FOLDER'], "backups")
         os.makedirs(backup_dir, exist_ok=True)
         suffix = "_staged" if use_staged else "_live"
-        backup_file = os.path.join(backup_dir, f"SBZ_{modality.upper()}{suffix}.xlsx")
+        backup_file = os.path.join(backup_dir, f"Cortex_{modality.upper()}{suffix}.xlsx")
         try:
             # Remove unwanted columns from backup
             cols_to_backup = [col for col in d['working_hours_df'].columns
@@ -2535,7 +2535,7 @@ def load_staged_dataframe(modality: str) -> bool:
 # -----------------------------------------------------------
 for mod, d in modality_data.items():
     backup_dir  = os.path.join(app.config['UPLOAD_FOLDER'], "backups")
-    backup_path = os.path.join(backup_dir, f"SBZ_{mod.upper()}_live.xlsx")
+    backup_path = os.path.join(backup_dir, f"Cortex_{mod.upper()}_live.xlsx")
 
     loaded = False
 
@@ -2888,7 +2888,7 @@ def upload_file():
             )
 
             if not modality_dfs:
-                return jsonify({"error": f"Keine SBZ-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
+                return jsonify({"error": f"Keine Cortex-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
 
             # CRITICAL: Acquire lock before modifying global state
             with lock:
@@ -3084,7 +3084,7 @@ def force_refresh_today():
         )
 
         if not modality_dfs:
-            return jsonify({"error": f"Keine SBZ-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
+            return jsonify({"error": f"Keine Cortex-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
 
         # CRITICAL: Reset ALL counters and apply to modality_data
         for modality, df in modality_dfs.items():
@@ -3649,7 +3649,7 @@ def download_file():
 def download_latest():
     modality = resolve_modality_from_request()
     backup_dataframe(modality)  # always ensure the latest backup is current
-    backup_file = os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"SBZ_{modality.upper()}_live.xlsx")
+    backup_file = os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"Cortex_{modality.upper()}_live.xlsx")
     if os.path.exists(backup_file):
         return send_from_directory(
             os.path.join(app.config['UPLOAD_FOLDER'], "backups"),
