@@ -678,7 +678,8 @@
       try {
         const response = await fetch('/edit', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {
@@ -742,7 +743,8 @@
       try {
         const response = await fetch('/edit', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {
@@ -774,7 +776,8 @@
 
         const response = await fetch('/delete', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {

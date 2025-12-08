@@ -3724,7 +3724,13 @@ def edit_entry():
         # Update live backup after editing
         backup_dataframe(modality)
 
+    # Return JSON for AJAX requests, redirect for traditional form submissions
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+       'application/json' in request.headers.get('Accept', ''):
+        return jsonify({'success': True, 'message': 'Entry updated successfully'})
     return redirect(url_for('upload_file', modality=modality))
+
+
 @app.route('/delete', methods=['POST'])
 def delete_entry():
     modality = resolve_modality_from_request()
@@ -3741,7 +3747,13 @@ def delete_entry():
             d['total_work_hours'] = d['working_hours_df'].groupby('PPL')['shift_duration'].sum().to_dict()
             # Update live backup after deletion
             backup_dataframe(modality)
+
+    # Return JSON for AJAX requests, redirect for traditional form submissions
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+       'application/json' in request.headers.get('Accept', ''):
+        return jsonify({'success': True, 'message': 'Entry deleted successfully'})
     return redirect(url_for('upload_file', modality=modality))
+
 
 @app.route('/get_entry', methods=['GET'])
 def get_entry():
