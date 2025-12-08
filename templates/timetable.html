@@ -133,6 +133,63 @@
     .back-button:hover {
       background: var(--modality-hover, #003f73);
     }
+
+    /* Skill Filter Bar */
+    .skill-filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: white;
+      border-radius: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .skill-filter-bar label {
+      font-weight: 600;
+      color: #333;
+      margin-right: 0.5rem;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #ddd;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .filter-btn:hover {
+      border-color: #004892;
+      background: #f0f0f0;
+    }
+
+    .filter-btn.active {
+      background: #004892;
+      color: white;
+      border-color: #004892;
+    }
+
+    .filter-btn.filter-all {
+      background: #28a745;
+      color: white;
+      border-color: #28a745;
+    }
+
+    .filter-btn.filter-all:hover {
+      background: #218838;
+      border-color: #218838;
+    }
+
+    .filter-btn.filter-all.active {
+      background: #155724;
+      border-color: #155724;
+    }
   </style>
 </head>
 <body data-modality="{{ modality }}">
@@ -145,7 +202,7 @@
       <a href="{{ url_for('index', modality=modality) }}" style="color: #333; text-decoration: none;">Dashboard</a>
       <a href="{{ url_for('timetable', modality=modality) }}" style="font-weight: bold; color: #004892; text-decoration: none; border-bottom: 2px solid #004892;">Timetable</a>
       <a href="{{ url_for('skill_roster_page') }}" style="color: #333; text-decoration: none;">Skill Matrix</a>
-      <a href="{{ url_for('live_edit_page') }}" style="color: #333; text-decoration: none;">Live Ops</a>
+      <a href="{{ url_for('live_edit_page') }}" style="color: #333; text-decoration: none;">Day Control</a>
       <a href="{{ url_for('upload_file', modality=modality) }}" style="color: #333; text-decoration: none;">Admin</a>
     </nav>
   </header>
@@ -158,7 +215,19 @@
       {% endfor %}
     </div>
   </div>
-  
+
+  <!-- Skill Filter Bar -->
+  <div class="skill-filter-bar">
+    <label>Filter by Skill:</label>
+    <button class="filter-btn filter-all active" onclick="filterTimeline('all')">All</button>
+    <button class="filter-btn" onclick="filterTimeline('Normal')">Normal</button>
+    <button class="filter-btn" onclick="filterTimeline('Notfall')">Notfall</button>
+    <button class="filter-btn" onclick="filterTimeline('Privat')">Privat</button>
+    <button class="filter-btn" onclick="filterTimeline('Herz')">Herz</button>
+    <button class="filter-btn" onclick="filterTimeline('Msk')">Msk</button>
+    <button class="filter-btn" onclick="filterTimeline('Chest')">Chest</button>
+  </div>
+
   <div class="card timeline-card">
     <div id="timeline-container"></div>
     <div class="legend">
@@ -177,6 +246,11 @@
     const skillColumns = {{ skill_columns|tojson }};
     const skillSlugMap = {{ skill_slug_map|tojson }};
     const skillColorMap = {{ skill_color_map|tojson }};
+
+    // Global variables for filtering
+    let originalData = null;
+    let timelineInstance = null;
+    let currentFilter = 'all';
 
     function buildGradient(skills) {
       const stripeWidth = 10;
@@ -220,6 +294,21 @@
       dfData = dfData.filter(entry => entry.TIME !== '00:00-00:00');
       if (dfData.length === 0) {
         timelineContainer.innerHTML = "<p>No active schedule entries found</p>";
+        return;
+      }
+
+      // Store original data globally for filtering
+      originalData = dfData;
+
+      // Build initial timeline with all data
+      renderTimeline(originalData);
+    }
+
+    function renderTimeline(dfData) {
+      const timelineContainer = document.getElementById('timeline-container');
+
+      if (!dfData || dfData.length === 0) {
+        timelineContainer.innerHTML = "<p>No workers match the selected filter</p>";
         return;
       }
       const items = [];
@@ -291,14 +380,50 @@
         verticalScroll: true,
         //maxHeight: '800px'
       };
+      // Destroy existing timeline if it exists
+      if (timelineInstance) {
+        timelineInstance.destroy();
+      }
+
       const timeline = new vis.Timeline(timelineContainer, items, finalGroups, options);
+      timelineInstance = timeline;
+
       setInterval(() => {
-        timeline.setCurrentTime(new Date());
+        if (timelineInstance) {
+          timelineInstance.setCurrentTime(new Date());
+        }
       }, 60000);
       timeline.setWindow(
         new Date(today.setHours(Math.max(7, new Date().getHours() - 1), 0, 0)),
         new Date(today.setHours(Math.min(20, new Date().getHours() + 2), 0, 0))
       );
+    }
+
+    /**
+     * Filter timeline by skill
+     * @param {string} skill - The skill to filter by ('all' or skill name)
+     */
+    function filterTimeline(skill) {
+      // Update button states
+      const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      currentFilter = skill;
+
+      if (skill === 'all') {
+        // Show all workers
+        renderTimeline(originalData);
+      } else {
+        // Filter data to show only workers with this skill active (value = 1)
+        const filteredData = originalData.filter(entry => {
+          // Check if this entry has the skill active
+          const skillValue = entry[skill];
+          return skillValue && skillValue === 1;
+        });
+
+        renderTimeline(filteredData);
+      }
     }
     
     document.addEventListener('DOMContentLoaded', function() {
