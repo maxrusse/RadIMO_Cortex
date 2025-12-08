@@ -3724,11 +3724,7 @@ def edit_entry():
         # Update live backup after editing
         backup_dataframe(modality)
 
-    # Return JSON for AJAX requests, redirect for traditional form submissions
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
-       'application/json' in request.headers.get('Accept', ''):
-        return jsonify({'success': True, 'message': 'Entry updated successfully'})
-    return redirect(url_for('upload_file', modality=modality))
+    return jsonify({'success': True, 'message': 'Entry updated successfully'})
 
 
 @app.route('/delete', methods=['POST'])
@@ -3748,11 +3744,7 @@ def delete_entry():
             # Update live backup after deletion
             backup_dataframe(modality)
 
-    # Return JSON for AJAX requests, redirect for traditional form submissions
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
-       'application/json' in request.headers.get('Accept', ''):
-        return jsonify({'success': True, 'message': 'Entry deleted successfully'})
-    return redirect(url_for('upload_file', modality=modality))
+    return jsonify({'success': True, 'message': 'Entry deleted successfully'})
 
 
 @app.route('/get_entry', methods=['GET'])
