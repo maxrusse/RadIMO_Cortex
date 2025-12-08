@@ -124,7 +124,7 @@ balancer:
   min_assignments_per_skill: 5
   imbalance_threshold_pct: 30
   allow_fallback_on_imbalance: true
-  fallback_strategy: skill_priority  # Options: skill_priority, modality_priority, pool_priority
+  # Note: System uses pool-based selection (evaluates all skill/modality combinations)
   modifier_applies_to_active_only: true  # If true, Modifier only applies when skill=1 (active), not skill=0 (fallback)
   fallback_chain:
     Normal: []

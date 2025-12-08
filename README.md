@@ -12,10 +12,10 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 
 **Key Capabilities:**
 - Real-time worker assignment with automatic load balancing
-- Smart fallback strategies for overload situations
+- Smart fallback system with availability and fairness triggers
 - Dynamic shift handling with work-hour-adjusted balancing
 - Two UI modes: by modality or by skill
-- Cross-modality workload tracking and overflow management
+- Pool-based selection across skills and modalities
 - Config-driven medweb CSV integration with automated daily preload
 - Three-page admin system: Planning (staged), Prep (tomorrow), Day Control (immediate)
 - Worker skill roster admin portal with JSON-based staged/active workflow
@@ -74,10 +74,25 @@ Real-time assignment with load balancing
 
 ## Key Features
 
-### Load Balancing
-- **Work-hour-adjusted ratios**: Balances based on hours worked, not just count
-- **30% imbalance threshold**: Automatic fallback when workload becomes unfair
-- **Minimum assignments**: Two-phase system ensures all workers get fair share
+### Smart Fallback System
+
+RadIMO uses pool-based selection to ensure fair workload distribution:
+
+**How It Works:**
+1. Build candidate pool from requested skill and modality
+2. Calculate workload ratio for each candidate (weighted assignments / hours worked)
+3. Select worker with lowest ratio
+
+**Pool Expansion Triggers:**
+- **Availability**: No workers with requested skill → expand to fallback skills
+- **Fairness**: Workload imbalance >30% → expand pool to balance load
+
+**Skill Routing:**
+- skill=1 (Active): Primary routing, receives direct requests
+- skill=0 (Passive): Fallback only, used when needed
+- skill=-1 (Excluded): Never assigned this skill
+
+**Example:** Request for "Privat" →  Try Privat=1 → If unavailable/imbalanced, expand to Notfall → Normal → Pick lowest ratio
 
 ### Skill System
 | Value | Name | Behavior |

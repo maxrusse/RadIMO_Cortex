@@ -141,7 +141,7 @@ balancer:
   min_assignments_per_skill: 5    # Minimum weighted assignments
   imbalance_threshold_pct: 30     # Trigger fallback at 30% imbalance
   allow_fallback_on_imbalance: true
-  fallback_strategy: skill_priority  # See strategies below
+  # System uses pool-based selection (evaluates all skill/modality combinations)
   modifier_applies_to_active_only: true  # Modifier only for skill=1
 
   fallback_chain:
@@ -153,13 +153,19 @@ balancer:
     Chest: [[Notfall, Normal]]
 ```
 
-### Fallback Strategies
+### Pool-Based Selection
 
-| Strategy | Behavior |
-|----------|----------|
-| `skill_priority` | Try all skills in current modality before moving to other modalities |
-| `modality_priority` | Try current skill in all modalities before trying fallback skills |
-| `pool_priority` | Evaluate all options globally, pick least loaded |
+The system uses a pool-based approach for worker selection:
+
+1. **Build candidate pool** from requested skill and fallback chain
+2. **Calculate workload ratio** for each candidate (weighted_count / hours_worked)
+3. **Select worker** with lowest ratio
+
+**Pool Expansion Triggers:**
+- **Availability**: No workers with requested skill available
+- **Fairness**: Workload imbalance exceeds `imbalance_threshold_pct` (default 30%)
+
+When triggered, the pool expands using the `fallback_chain` configuration.
 
 ### Two-Phase Minimum Balancer
 
@@ -326,7 +332,6 @@ balancer:
   enabled: true
   min_assignments_per_skill: 5
   imbalance_threshold_pct: 30
-  fallback_strategy: skill_priority
 
 modality_fallbacks:
   xray: [[ct, mr]]

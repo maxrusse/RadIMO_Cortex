@@ -62,21 +62,10 @@ def check_config():
 
         balancer = config['balancer']
 
-        # Check fallback_strategy
-        if 'fallback_strategy' not in balancer:
-            print_check(False, "fallback_strategy not configured")
-            return False
+        # System now uses pool-based selection only (no strategy option)
+        print_check(True, "Using pool-based selection")
 
-        strategy = balancer['fallback_strategy']
-        valid_strategies = ['skill_priority', 'modality_priority', 'pool_priority']
-
-        if strategy in valid_strategies:
-            print_check(True, f"fallback_strategy = '{strategy}'")
-        else:
-            print_check(False, f"Invalid strategy '{strategy}' (valid: {valid_strategies})")
-            return False
-
-        # Check other balancer settings
+        # Check balancer settings
         settings = {
             'enabled': bool,
             'min_assignments_per_skill': int,
@@ -135,11 +124,9 @@ def check_app_structure():
         with open('app.py', 'r') as f:
             content = f.read()
 
-        # Check for strategy functions
+        # Check for worker selection functions
         functions = [
             'get_next_available_worker',
-            '_get_worker_skill_priority',
-            '_get_worker_modality_priority',
             '_get_worker_pool_priority',
         ]
 
@@ -164,23 +151,11 @@ def check_app_structure():
                 print_check(False, f"Endpoint {endpoint.split('[')[0]} NOT FOUND")
                 return False
 
-        # Check strategy dispatcher logic
-        if "strategy = BALANCER_SETTINGS.get('fallback_strategy'" in content:
-            print_check(True, "Strategy dispatcher implemented")
+        # Verify pool-based selection is used
+        if "return _get_worker_pool_priority(" in content:
+            print_check(True, "Pool-based selection implemented")
         else:
-            print_check(False, "Strategy dispatcher NOT FOUND")
-            return False
-
-        if "if strategy == 'modality_priority':" in content:
-            print_check(True, "modality_priority strategy routing")
-        else:
-            print_check(False, "modality_priority routing missing")
-            return False
-
-        if "elif strategy == 'pool_priority':" in content:
-            print_check(True, "pool_priority strategy routing")
-        else:
-            print_check(False, "pool_priority routing missing")
+            print_check(False, "Pool selection NOT FOUND")
             return False
 
         return True
@@ -242,10 +217,8 @@ def check_readme_documentation():
             readme = f.read()
 
         docs_to_check = [
-            ('skill_priority', 'skill_priority strategy documented'),
-            ('modality_priority', 'modality_priority strategy documented'),
-            ('pool_priority', 'pool_priority strategy documented'),
-            ('fallback_strategy', 'fallback_strategy configuration documented'),
+            ('Pool-based selection', 'Pool-based selection documented'),
+            ('Smart Fallback System', 'Smart Fallback System documented'),
             ('Configuration Reference', 'Configuration section exists'),
         ]
 
@@ -282,17 +255,15 @@ def print_api_test_guide():
     print("5. Check logs for strategy execution:")
     print("   $ tail -f logs/selection.log\n")
 
-    print(f"{YELLOW}Strategy Testing:{RESET}\n")
+    print(f"{YELLOW}Pool-Based Selection Testing:{RESET}\n")
 
-    strategies = ['skill_priority', 'modality_priority', 'pool_priority']
-    for strategy in strategies:
-        print(f"To test {strategy}:")
-        print(f"  1. Set in config.yaml: fallback_strategy: {strategy}")
-        print(f"  2. Restart Flask app")
-        print(f"  3. Make API request and check logs/selection.log")
-        print(f"  4. Look for: 'Building candidate pool' (pool_priority)")
-        print(f"     or 'Trying skill X across modalities' (modality_priority)")
-        print(f"     or standard modality-first logging (skill_priority)\n")
+    print(f"System uses pool-based selection (only strategy):")
+    print(f"  1. Make API request (e.g., GET /api/ct/privat)")
+    print(f"  2. Check logs/selection.log for:")
+    print(f"     - 'Building candidate pool for role X'")
+    print(f"     - Lists of skills and modalities considered")
+    print(f"     - Selected worker with lowest ratio")
+    print(f"  3. Verify fair distribution across workers\n")
 
 def main():
     """Run all health checks"""
