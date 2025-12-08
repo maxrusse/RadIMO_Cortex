@@ -244,7 +244,7 @@ Overnight shifts (e.g., `22:00-06:00`) are automatically handled by rolling end 
 
 ---
 
-## Worker Skill Roster
+## Worker Skill Matrix
 
 Per-worker skill overrides. Takes precedence over medweb_mapping base_skills.
 
