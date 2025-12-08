@@ -22,7 +22,7 @@ Beschreibung:
 2. Verzeichnis der IT-Komponenten
 ------------------------------------------------------------
 Projektverzeichnis:
-/nfs/norasys/notebooks/russe/RadIMO_SBZ_DEV
+/nfs/norasys/notebooks/russe/RadIMO_Cortex
 
 Wichtige Dateien und Verzeichnisse:
   - app.py                → Hauptlogik, API und Scheduler
@@ -141,7 +141,7 @@ Ansprechpartner:
 8. Versionshistorie
 ------------------------------------------------------------
 Aktuelle Version:
-  V18 (Produktivstand: RadIMO_SBZ_DEV)
+  V18 (Produktivstand: RadIMO_Cortex)
 
 Wesentliche Änderungen gegenüber V16/V17:
   V18 (2025-01):

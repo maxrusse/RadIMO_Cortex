@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RadIMO Admin - Medweb CSV Upload</title>
+  <title>RadIMO Cortex | Admin</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -237,14 +237,15 @@
 <body>
   <div class="header">
     <div>
-      <h1>🏥 RadIMO Admin Panel</h1>
-      <p>Medweb CSV Upload & System Verwaltung</p>
+      <h1>🏥 RadIMO Cortex | Admin</h1>
+      <p>System Configuration & CSV Management</p>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('skill_roster_page') }}">📋 Skill Roster (Planning)</a>
-      <a href="{{ url_for('prep_next_day') }}">📝 Nächsten Tag Bearbeiten</a>
-      <a href="{{ url_for('live_edit_page') }}">⚠️ Live Edit</a>
-      <a href="{{ url_for('index', modality=modality) }}">← Zurück zur Zuteilung</a>
+      <a href="{{ url_for('index', modality=modality) }}">Dashboard</a>
+      <a href="{{ url_for('timetable', modality=modality) }}">Timetable</a>
+      <a href="{{ url_for('skill_roster_page') }}">Skill Matrix</a>
+      <a href="{{ url_for('live_edit_page') }}">Live Ops</a>
+      <a href="{{ url_for('prep_next_day') }}">Prep Next Day</a>
       <a href="{{ url_for('logout') }}">Logout</a>
     </div>
   </div>

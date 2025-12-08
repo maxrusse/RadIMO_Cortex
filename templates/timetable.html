@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zeitplan - {{ modality_labels[modality] }}</title>
+  <title>RadIMO Cortex | Timetable</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vis.min.css') }}">
   <style>
     :root {
@@ -137,13 +137,27 @@
 </head>
 <body data-modality="{{ modality }}">
   <header class="premium-header">
-    <h1>Zeitplan - {{ modality_labels[modality] }}</h1>
-    <div class="modality-selector">
+    <div>
+      <h1>RadIMO Cortex</h1>
+      <p style="margin: 0; opacity: 0.8; font-size: 0.9rem;">Intelligent Radiology Orchestration</p>
+    </div>
+    <nav style="display: flex; gap: 1rem; align-items: center;">
+      <a href="{{ url_for('index', modality=modality) }}" style="color: #333; text-decoration: none;">Dashboard</a>
+      <a href="{{ url_for('timetable', modality=modality) }}" style="font-weight: bold; color: #004892; text-decoration: none; border-bottom: 2px solid #004892;">Timetable</a>
+      <a href="{{ url_for('skill_roster_page') }}" style="color: #333; text-decoration: none;">Skill Matrix</a>
+      <a href="{{ url_for('live_edit_page') }}" style="color: #333; text-decoration: none;">Live Ops</a>
+      <a href="{{ url_for('upload_file', modality=modality) }}" style="color: #333; text-decoration: none;">Admin</a>
+    </nav>
+  </header>
+
+  <!-- Modality Selector -->
+  <div style="background: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <div class="modality-selector" style="display: flex; gap: 0.5rem;">
       {% for mod in modality_order %}
         <a href="{{ url_for('timetable', modality=mod) }}" data-modality="{{ mod }}" class="{% if modality == mod %}active{% endif %}">{{ modality_labels[mod] }}</a>
       {% endfor %}
     </div>
-  </header>
+  </div>
   
   <div class="card timeline-card">
     <div id="timeline-container"></div>

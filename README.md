@@ -1,14 +1,14 @@
-# RadIMO SBZ - Radiology Workload Coordinator
+# RadIMO Cortex
 
-**Radiology: Innovation, Management & Orchestration**
+**Intelligent Radiology Orchestration**
 
-Smart worker assignment system for radiology teams with automatic load balancing, flexible fallback strategies, and config-driven medweb CSV integration.
+Smart worker assignment platform for radiology teams with automatic load balancing, skill-aware routing, and shift-based fairness.
 
 ---
 
-## What is RadIMO SBZ?
+## What is RadIMO Cortex?
 
-RadIMO orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY) and skills (Normal, Notfall, Privat, Herz, Msk, Chest). It automatically balances assignments to ensure fair distribution while respecting worker availability, shift timing, and skill levels.
+RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY) and skills (Normal, Notfall, Privat, Herz, Msk, Chest). It automatically balances assignments to ensure fair distribution while respecting worker availability, shift timing, and skill levels.
 
 **Key Capabilities:**
 - Real-time worker assignment with automatic load balancing
@@ -102,7 +102,7 @@ Assignments are weighted by:
 ## Project Structure
 
 ```
-RadIMO_SBZ_DEV/
+RadIMO_Cortex/
 ├── app.py                      # Main Flask application
 ├── config.yaml                 # Configuration (mapping, skills, weights)
 ├── worker_skill_overrides.json # Worker skill roster (admin portal)

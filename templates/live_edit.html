@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Edit - RadIMO</title>
+  <title>RadIMO Cortex | Live Ops</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -309,11 +309,16 @@
 </head>
 <body>
   <div class="header">
-    <h1>Live Edit <span class="text-danger" style="font-size: 1.2rem;">(IMMEDIATE EFFECT)</span></h1>
+    <div>
+      <h1>RadIMO Cortex | Live Ops <span class="text-danger" style="font-size: 1rem;">(IMMEDIATE EFFECT)</span></h1>
+      <p>Emergency same-day edits and overrides</p>
+    </div>
     <div class="header-actions">
-      <button class="btn btn-secondary" onclick="window.location.href='/upload'">Admin Panel</button>
-      <button class="btn btn-secondary" onclick="window.location.href='/skill_roster'">Skill Roster</button>
-      <button class="btn btn-secondary" onclick="window.location.href='/prep-next-day'">Prep Next Day</button>
+      <a href="{{ url_for('index') }}">Dashboard</a>
+      <a href="{{ url_for('timetable') }}">Timetable</a>
+      <a href="{{ url_for('skill_roster_page') }}">Skill Matrix</a>
+      <a href="{{ url_for('upload_file') }}">Admin</a>
+      <button class="btn btn-primary" onclick="window.location.href='/prep-next-day'" style="margin-left: 1rem;">📝 Prep Next Day</button>
     </div>
   </div>
 

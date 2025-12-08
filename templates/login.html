@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ modality_labels[modality] }} Admin - Login</title>
+  <title>RadIMO Cortex | Admin Login</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     :root {
@@ -124,7 +124,10 @@
 </head>
 <body data-modality="{{ modality }}">
   <header class="premium-header">
-    <h1>{{ modality_labels[modality] }} Admin - Login</h1>
+    <div>
+      <h1>RadIMO Cortex</h1>
+      <p style="margin: 0; opacity: 0.8; font-size: 0.9rem;">Admin Login</p>
+    </div>
     <div class="modality-selector">
       {% for mod in modality_order %}
         <a href="{{ url_for('login', modality=mod) }}" data-modality="{{ mod }}" class="{% if modality == mod %}active{% endif %}">{{ modality_labels[mod] }}</a>
