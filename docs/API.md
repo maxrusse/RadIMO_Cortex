@@ -300,9 +300,9 @@ Copy staged data to live and reset counters.
 
 ---
 
-## Skill Roster (Admin)
+## Skill Matrix (Admin)
 
-### Get Skill Roster
+### Get Skill Matrix
 
 ```http
 GET /api/admin/skill_roster
@@ -328,7 +328,7 @@ Get staged worker skill roster.
 
 ---
 
-### Save Skill Roster
+### Save Skill Matrix
 
 ```http
 POST /api/admin/skill_roster
@@ -358,7 +358,7 @@ Save roster changes to staging.
 
 ---
 
-### Activate Skill Roster
+### Activate Skill Matrix
 
 ```http
 POST /api/admin/skill_roster/activate

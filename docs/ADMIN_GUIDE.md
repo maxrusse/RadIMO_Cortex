@@ -10,7 +10,7 @@ RadIMO provides three distinct admin interfaces for different operational needs:
 
 | Page | URL | Effect | Use Case |
 |------|-----|--------|----------|
-| **Skill Roster** | `/skill_roster` | Staged | Long-term planning, rotations |
+| **Skill Matrix** | `/skill_roster` | Staged | Long-term planning, rotations |
 | **Prep Next Day** | `/prep-next-day` | Tomorrow only | Daily schedule preparation |
 | **Day Control** | `/admin/live-edit` | Immediate | Emergency same-day changes |
 
@@ -22,7 +22,7 @@ All admin pages require login with the admin password from `config.yaml`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  PLANNING (Future)              Skill Roster                │
+│  PLANNING (Future)              Skill Matrix                │
 │  ├─ Staged changes              (Planning Mode)             │
 │  ├─ Review before apply                                     │
 │  └─ Activate when ready                                     │
@@ -41,7 +41,7 @@ All admin pages require login with the admin password from `config.yaml`.
 
 ---
 
-## 1. Skill Roster (`/skill_roster`)
+## 1. Skill Matrix (`/skill_roster`)
 
 **Purpose:** Plan worker skill changes for rotations and long-term scheduling.
 
