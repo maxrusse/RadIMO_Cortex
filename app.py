@@ -3724,7 +3724,9 @@ def edit_entry():
         # Update live backup after editing
         backup_dataframe(modality)
 
-    return redirect(url_for('upload_file', modality=modality))
+    return jsonify({'success': True, 'message': 'Entry updated successfully'})
+
+
 @app.route('/delete', methods=['POST'])
 def delete_entry():
     modality = resolve_modality_from_request()
@@ -3741,7 +3743,9 @@ def delete_entry():
             d['total_work_hours'] = d['working_hours_df'].groupby('PPL')['shift_duration'].sum().to_dict()
             # Update live backup after deletion
             backup_dataframe(modality)
-    return redirect(url_for('upload_file', modality=modality))
+
+    return jsonify({'success': True, 'message': 'Entry deleted successfully'})
+
 
 @app.route('/get_entry', methods=['GET'])
 def get_entry():

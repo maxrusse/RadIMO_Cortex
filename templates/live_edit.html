@@ -6,6 +6,8 @@
   <title>Live Edit - RadIMO</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: #f0f0f0;
@@ -255,11 +257,59 @@
       padding: 2rem;
       color: #777;
     }
+
+    /* Utility classes to replace inline styles */
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #218838;
+    }
+
+    .btn-sm {
+      padding: 0.3rem 0.6rem;
+      font-size: 0.85rem;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .section-header h2 {
+      margin: 0;
+    }
+
+    .text-muted {
+      color: #666;
+    }
+
+    .text-danger {
+      color: #d32f2f;
+    }
+
+    .table-empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #777;
+    }
+
+    .edit-form-add {
+      border-color: #28a745;
+    }
+
+    .edit-form-add h3 {
+      color: #28a745;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>Live Edit <span style="color: #d32f2f; font-size: 1.2rem;">(IMMEDIATE EFFECT)</span></h1>
+    <h1>Live Edit <span class="text-danger" style="font-size: 1.2rem;">(IMMEDIATE EFFECT)</span></h1>
     <div class="header-actions">
       <button class="btn btn-secondary" onclick="window.location.href='/upload'">Admin Panel</button>
       <button class="btn btn-secondary" onclick="window.location.href='/skill_roster'">Skill Roster</button>
@@ -293,9 +343,9 @@
 
   <div class="content-box">
     <!-- Add New Worker Form -->
-    <form id="addForm" class="edit-form" style="border-color: #28a745;" onsubmit="submitAdd(event)">
-      <h3 style="color: #28a745;">➕ Add New Worker Entry</h3>
-      <p style="margin: 0 0 1rem 0; color: #666;">Add a worker for a specific time slot (e.g., worker available for just 1 hour)</p>
+    <form id="addForm" class="edit-form edit-form-add" onsubmit="submitAdd(event)">
+      <h3>➕ Add New Worker Entry</h3>
+      <p class="text-muted" style="margin: 0 0 1rem 0;">Add a worker for a specific time slot (e.g., worker available for just 1 hour)</p>
       <input type="hidden" id="addModality" name="modality">
 
       <div class="form-grid">
@@ -307,7 +357,7 @@
         <div class="form-group">
           <label for="addTime">Time Range (Start-End) *</label>
           <input type="text" id="addTime" name="time" placeholder="08:00-16:00" required>
-          <small style="color: #666;">Format: HH:MM-HH:MM</small>
+          <small class="text-muted">Format: HH:MM-HH:MM</small>
         </div>
 
         <div class="form-group">
@@ -371,7 +421,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary" style="background: #28a745; border-color: #28a745;">Add Worker</button>
+        <button type="submit" class="btn btn-success">Add Worker</button>
         <button type="button" class="btn btn-secondary" onclick="cancelAdd()">Cancel</button>
       </div>
     </form>
@@ -391,7 +441,7 @@
         <div class="form-group">
           <label for="editTime">Time Range (Start-End)</label>
           <input type="text" id="editTime" name="time" placeholder="08:00-16:00" required>
-          <small style="color: #666;">Format: HH:MM-HH:MM (adjust end time if leaving early)</small>
+          <small class="text-muted">Format: HH:MM-HH:MM (adjust end time if leaving early)</small>
         </div>
 
         <div class="form-group">
@@ -462,9 +512,9 @@
 
     <!-- CT Modality -->
     <div id="ct-content" class="modality-content active">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 style="margin: 0;">CT Workers</h2>
-        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      <div class="section-header">
+        <h2>CT Workers</h2>
+        <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
       <div id="ct-loading" class="loading">Loading CT workers...</div>
       <div id="ct-table-container" style="display: none;">
@@ -488,9 +538,9 @@
 
     <!-- MR Modality -->
     <div id="mr-content" class="modality-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 style="margin: 0;">MR Workers</h2>
-        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      <div class="section-header">
+        <h2>MR Workers</h2>
+        <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
       <div id="mr-loading" class="loading">Loading MR workers...</div>
       <div id="mr-table-container" style="display: none;">
@@ -514,9 +564,9 @@
 
     <!-- XRAY Modality -->
     <div id="xray-content" class="modality-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 style="margin: 0;">X-RAY Workers</h2>
-        <button class="btn btn-primary" style="background: #28a745; border-color: #28a745;" onclick="showAddForm()">➕ Add New Worker</button>
+      <div class="section-header">
+        <h2>X-RAY Workers</h2>
+        <button class="btn btn-success" onclick="showAddForm()">➕ Add New Worker</button>
       </div>
       <div id="xray-loading" class="loading">Loading X-RAY workers...</div>
       <div id="xray-table-container" style="display: none;">
@@ -604,7 +654,7 @@
 
       const workers = workersData[modality];
       if (!workers || workers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #777;">No workers scheduled</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty-state">No workers scheduled</td></tr>';
         return;
       }
 
@@ -633,8 +683,8 @@
           <td>${skillBadges.join(' ')}</td>
           <td>${worker.Modifier || 1.0}</td>
           <td>
-            <button class="btn btn-primary" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="editWorker('${modality}', ${index})">Edit</button>
-            <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="deleteWorker('${modality}', ${index})">Delete</button>
+            <button class="btn btn-primary btn-sm" onclick="editWorker('${modality}', ${index})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteWorker('${modality}', ${index})">Delete</button>
           </td>
         `;
 
@@ -676,7 +726,8 @@
       try {
         const response = await fetch('/edit', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {
@@ -740,7 +791,8 @@
       try {
         const response = await fetch('/edit', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {
@@ -772,7 +824,8 @@
 
         const response = await fetch('/delete', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
 
         if (response.ok) {

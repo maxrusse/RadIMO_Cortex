@@ -26,25 +26,27 @@
       --highlight-bg:    rgba(0, 0, 0, 0.05);
     }
     
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 1rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
     /* Background based on modality */
     body[data-modality] {
       background: var(--modality-bg, var(--body-bg));
     }
 
     {% for key, settings in modalities.items() %}
-      body[data-modality="{{ key }}"] {
-        --modality-bg: {{ settings.background_color }};
-        --modality-nav: {{ settings.nav_color }};
-        --modality-hover: {{ settings.hover_color }};
-      }
-      {% endfor %}
-    
-    body {
-      font-family: system-ui, sans-serif;
-      padding: 1rem;
-      max-width: 1400px;
-      margin: 0 auto;
+    body[data-modality="{{ key }}"] {
+      --modality-bg: {{ settings.background_color }};
+      --modality-nav: {{ settings.nav_color }};
+      --modality-hover: {{ settings.hover_color }};
     }
+    {% endfor %}
     /* Premium header mimicking the admin page */
     .premium-header {
       display: flex;

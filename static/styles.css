@@ -1,0 +1,258 @@
+/**
+ * RadIMO Shared Styles
+ * Common CSS used across multiple templates
+ */
+
+/* ==========================================================================
+   CSS Reset
+   ========================================================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   CSS Variables (defaults, can be overridden per-template)
+   ========================================================================== */
+:root {
+  /* Primary Colors */
+  --primary-color: #004892;
+  --primary-hover: #003670;
+
+  /* Status Colors */
+  --success-color: #28a745;
+  --success-hover: #218838;
+  --danger-color: #dc3545;
+  --danger-hover: #c82333;
+  --warning-color: #ffc107;
+  --warning-hover: #e0a800;
+
+  /* UI Colors */
+  --disabled-color: #888;
+  --body-bg: #f0f0f0;
+  --header-bg: #fff;
+  --card-bg: #fff;
+  --tab-bg: #fff;
+  --tab-color: #000;
+
+  /* Text Colors */
+  --text-muted: #666;
+  --text-dark: #333;
+
+  /* Borders & Shadows */
+  --border-color: #ddd;
+  --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --box-shadow-light: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================================================
+   Base Styles
+   ========================================================================== */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--body-bg);
+  padding: 1rem;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   Typography Utilities
+   ========================================================================== */
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-danger {
+  color: var(--danger-color);
+}
+
+.text-success {
+  color: var(--success-color);
+}
+
+/* ==========================================================================
+   Premium Header Component
+   Used in: index.html, index_by_skill.html, timetable.html, login.html
+   ========================================================================== */
+.premium-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--header-bg);
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  margin-bottom: 1rem;
+}
+
+.premium-header h1 {
+  font-size: 1.75rem;
+  margin: 0;
+}
+
+/* ==========================================================================
+   Card Component
+   Used in: index.html, index_by_skill.html, timetable.html, upload.html, prep_next_day.html
+   ========================================================================== */
+.card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ==========================================================================
+   Button Base Styles
+   ========================================================================== */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s, transform 0.1s;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled,
+.btn.btn-disabled {
+  background-color: var(--disabled-color) !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Button Variants */
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-success {
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-success:hover {
+  background: var(--success-hover);
+}
+
+.btn-danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
+}
+
+.btn-secondary {
+  background: #777;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #555;
+}
+
+/* Button Sizes */
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.btn-lg {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   Section Header Layout
+   Used in: live_edit.html for modality sections
+   ========================================================================== */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+/* ==========================================================================
+   Form Utilities
+   ========================================================================== */
+.form-hint {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--text-dark);
+}
+
+/* ==========================================================================
+   Table Utilities
+   ========================================================================== */
+.table-empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Status Messages
+   ========================================================================== */
+.status-message {
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.status-message.success {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.status-message.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.status-message.warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+}
+
+/* ==========================================================================
+   Loading State
+   ========================================================================== */
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+}
