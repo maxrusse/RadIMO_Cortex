@@ -441,6 +441,11 @@ modality_factors = {
     for mod, settings in MODALITY_SETTINGS.items()
 }
 
+# Load skill×modality weight overrides (optional)
+# Allows specific skill+modality combinations to have custom weights
+# instead of the default skill_weight × modality_factor calculation
+skill_modality_overrides = APP_CONFIG.get('skill_modality_overrides', {})
+
 
 def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[List[str], Dict[str, str], Dict[str, str], List[Dict[str, Any]], Dict[str, float]]:
     ordered_skills = sorted(
@@ -479,6 +484,31 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
 
 
 SKILL_COLUMNS, SKILL_SLUG_MAP, SKILL_FORM_KEYS, SKILL_TEMPLATES, skill_weights = _build_skill_metadata(SKILL_SETTINGS)
+
+
+def get_skill_modality_weight(skill: str, modality: str) -> float:
+    """
+    Get the weight for a skill×modality combination.
+
+    First checks skill_modality_overrides for an explicit value.
+    If not found, falls back to: skill_weight × modality_factor
+
+    Args:
+        skill: The skill name (e.g., 'Notfall', 'Herz')
+        modality: The modality name (e.g., 'ct', 'mr', 'xray')
+
+    Returns:
+        The combined weight for this skill×modality combination
+    """
+    # Check for explicit override first
+    modality_overrides = skill_modality_overrides.get(modality, {})
+    if skill in modality_overrides:
+        return _coerce_float(modality_overrides[skill], 1.0)
+
+    # Fall back to default calculation: skill_weight × modality_factor
+    return skill_weights.get(skill, 1.0) * modality_factors.get(modality, 1.0)
+
+
 BALANCER_SETTINGS = APP_CONFIG.get('balancer', DEFAULT_BALANCER)
 raw_balancer_chain = BALANCER_SETTINGS.get('fallback_chain', DEFAULT_FALLBACK_CHAIN)
 BALANCER_FALLBACK_CHAIN = {}
@@ -2383,7 +2413,8 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     # Get the modifier (default 1.0). Values > 1 mean more work, < 1 mean less work.
     modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
     modifier = _coerce_float(modifier, 1.0)
-    weight = skill_weights.get(role, 1.0) * modifier * modality_factors.get(modality, 1.0)
+    # Use helper that checks for skill×modality overrides first
+    weight = get_skill_modality_weight(role, modality) * modifier
 
     global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
         global_worker_data['weighted_counts_per_mod'][modality].get(canonical_id, 0.0) + weight
@@ -3527,10 +3558,9 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
 
                     if person not in d['WeightedCounts']:
                         d['WeightedCounts'][person] = 0.0
+                    # Use helper that checks for skill×modality overrides first
                     d['WeightedCounts'][person] += (
-                        skill_weights.get(actual_skill, 1.0)
-                        * modifier
-                        * modality_factors.get(actual_modality, 1.0)
+                        get_skill_modality_weight(actual_skill, actual_modality) * modifier
                     )
 
                 canonical_id = update_global_assignment(person, actual_skill, actual_modality)

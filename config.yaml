@@ -108,6 +108,17 @@ skills:
       - Normal
     slug: chest
     form_key: chest
+# Skill×Modality weight overrides (Optional)
+# Use this to override the default skill_weight × modality_factor calculation
+# for specific combinations. If not specified, falls back to: skill.weight × modality.factor
+# Example: MR×Herz override instead of 1.2×1.2=1.44
+skill_modality_overrides:
+  # Example: MR×Herz override (instead of default 1.2×1.2=1.44)
+  mr:
+    Herz: 1.8        # Cardiac work in MR weighted higher
+  # ct:
+  #   Chest: 1.0     # Override CT×Chest
+
 balancer:
   enabled: true
   min_assignments_per_skill: 5
