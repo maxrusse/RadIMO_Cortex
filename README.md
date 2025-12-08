@@ -17,10 +17,11 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 - Two UI modes: by modality or by skill
 - Cross-modality workload tracking and overflow management
 - Config-driven medweb CSV integration with automated daily preload
-- Three-page admin system: Planning (staged), Prep (tomorrow), Live Edit (immediate)
+- Three-page admin system: Planning (staged), Prep (tomorrow), Day Control (immediate)
 - Worker skill roster admin portal with JSON-based staged/active workflow
 - Time exclusion system for boards, meetings, and teaching activities
 - Overnight shift handling across midnight boundaries
+- Smart skill filtering on Day Control and Timeline views
 
 ---
 
@@ -49,7 +50,7 @@ flask --app app run --debug  # Start application
 | Admin Panel | `/upload` | Upload medweb CSV, system management |
 | Skill Roster | `/skill_roster` | Plan skill changes (STAGED mode) |
 | Prep Next Day | `/prep-next-day` | Prepare tomorrow's schedule |
-| Live Edit | `/admin/live-edit` | Emergency same-day edits |
+| Day Control | `/admin/live-edit` | Emergency same-day edits (immediate effect) |
 
 ---
 
@@ -95,7 +96,26 @@ Assignments are weighted by:
 ### Three-Page Admin System
 1. **Skill Roster** (`/skill_roster`) - Plan skill changes, staged before activation
 2. **Prep Next Day** (`/prep-next-day`) - Prepare tomorrow's schedule
-3. **Live Edit** (`/admin/live-edit`) - Emergency same-day changes (immediate effect)
+3. **Day Control** (`/admin/live-edit`) - Emergency same-day changes (immediate effect)
+
+### Navigation & UI Features
+
+**Cortex Layout** - Unified navigation across all pages:
+- **Dashboard** - Main workload view (toggle between Modality/Skill views)
+- **Timetable** - Visual timeline of shifts and schedules
+- **Skill Matrix** - Manage worker skills (staged changes)
+- **Day Control** - Emergency same-day overrides (immediate effect)
+- **Admin** - System configuration and CSV uploads
+
+**Smart Skill Filtering:**
+- **Day Control** (`/admin/live-edit`) - Filter worker tables by active skill
+  - Click "All" to show all workers
+  - Click skill name (Normal, Notfall, Herz, etc.) to show only workers with that skill active (value=1)
+  - Separate filters for CT, MR, and XRAY tables
+- **Timeline** (`/timetable`) - Filter timeline view by active skill
+  - Same filtering logic as Day Control
+  - Timeline dynamically rebuilds with filtered workers
+  - Allows sub-specialty leads to focus on their team
 
 ---
 
