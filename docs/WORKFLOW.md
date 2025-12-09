@@ -91,15 +91,15 @@ Human-readable guide to how medweb CSV files move through RadIMO v19, including 
 
 ---
 
-### 4. Force Refresh (Emergency)
+### 4. Force Refresh (Full Reset)
 
-**Use Case:** Emergency same-day schedule reload when assignments must be discarded.
+**Use Case:** Complete same-day schedule rebuild when assignments must be discarded.
 
-**Warning:** This deletes all assignment history for today.
+**⚠️ WARNING:** This deletes all assignment history and counters for today. Use only when a full rebuild is necessary.
 
 **Steps:**
 1. Open the admin panel at `/upload`.
-2. Use **🔄 Force Refresh (Heute - NOTFALL)**.
+2. Use **🔄 Force Refresh Today**.
 3. Choose the CSV file.
 4. Confirm the warning and reload.
 
@@ -108,7 +108,7 @@ Human-readable guide to how medweb CSV files move through RadIMO v19, including 
 - The new schedule is parsed with the same normalization rules used elsewhere.
 - The day restarts from a clean state; previous assignments are not preserved.
 
-**When to Use:** major mid-day staffing changes or schedule errors that cannot wait for tomorrow.
+**When to Use:** Only for major schedule rebuilds that require resetting all assignment history. For most same-day changes, use Day Control (`/admin/live-edit`) instead.
 
 ---
 
@@ -116,11 +116,13 @@ Human-readable guide to how medweb CSV files move through RadIMO v19, including 
 
 The prep page (`/prep-next-day`) lets admins stage tomorrow's schedule without impacting today's data. It is ideal for correcting mapping edge cases, adjusting times (including overnight spans), or refining skills before the next preload runs.
 
+For same-day schedule adjustments, use Day Control (`/admin/live-edit`) instead.
+
 **Access:** Admin Panel → **📝 Nächsten Tag Bearbeiten**
 
-**Key Difference from Same-Day Editing:**
-- Same-day editing preserves assignment history and is meant for minimal, targeted changes.
-- Next-day prep works on a clean slate so larger edits do not disturb current operations.
+**Key Difference from Day Control:**
+- Day Control (`/admin/live-edit`) edits today's live schedule and preserves assignment history.
+- Next-day prep works on tomorrow's schedule with a clean slate.
 
 ### Two Editing Modes
 
@@ -165,5 +167,5 @@ The prep page (`/prep-next-day`) lets admins stage tomorrow's schedule without i
 
 - Upload or update the master medweb CSV whenever schedule data changes.
 - Confirm mapping rules and shift definitions reflect current medweb activity names and times, including any overnight coverage.
-- Use next-day prep for planned adjustments; reserve same-day force refresh for emergencies.
+- Use Day Control for same-day adjustments; use next-day prep for planned changes; use force refresh only for complete schedule rebuilds.
 - Monitor `selection.log` after preloads to verify the correct date, modality counts, and worker totals.
