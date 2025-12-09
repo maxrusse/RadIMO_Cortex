@@ -71,7 +71,6 @@ def check_config():
             'min_assignments_per_skill': int,
             'imbalance_threshold_pct': (int, float),
             'allow_fallback_on_imbalance': bool,
-            'fallback_chain': dict
         }
 
         for setting, expected_type in settings.items():
@@ -127,7 +126,6 @@ def check_app_structure():
         # Check for worker selection functions
         functions = [
             'get_next_available_worker',
-            '_get_worker_pool_priority',
             '_get_worker_exclusion_based',
         ]
 
@@ -152,17 +150,18 @@ def check_app_structure():
                 print_check(False, f"Endpoint {endpoint.split('[')[0]} NOT FOUND")
                 return False
 
-        # Verify routing logic is implemented
-        if "USE_EXCLUSION_ROUTING" in content:
-            print_check(True, "Routing strategy selection implemented")
-        else:
-            print_check(False, "Routing strategy NOT FOUND")
-            return False
-
+        # Verify exclusion-based routing is implemented
         if "_get_worker_exclusion_based(" in content:
             print_check(True, "Exclusion-based routing implemented")
         else:
             print_check(False, "Exclusion routing NOT FOUND")
+            return False
+
+        # Verify exclusion rules are loaded
+        if "EXCLUSION_RULES" in content:
+            print_check(True, "Exclusion rules configuration loaded")
+        else:
+            print_check(False, "Exclusion rules NOT FOUND")
             return False
 
         return True
@@ -171,9 +170,9 @@ def check_app_structure():
         print_check(False, "app.py not found")
         return False
 
-def check_fallback_chain_logic():
-    """Verify routing configuration structure"""
-    print_section("Checking Routing Configuration")
+def check_exclusion_routing():
+    """Verify exclusion-based routing configuration"""
+    print_section("Checking Exclusion Routing Configuration")
 
     try:
         with open('config.yaml', 'r') as f:
@@ -186,34 +185,19 @@ def check_fallback_chain_logic():
         balancer = config['balancer']
 
         # Check exclusion routing configuration
-        if 'use_exclusion_routing' in balancer:
-            use_exclusion = balancer['use_exclusion_routing']
-            print_check(True, f"use_exclusion_routing: {use_exclusion}")
-
-            if use_exclusion:
-                if 'exclusion_rules' not in balancer:
-                    print_check(False, "exclusion_rules not configured (required when use_exclusion_routing=true)")
-                    return False
-
-                exclusion_rules = balancer['exclusion_rules']
-                skills = config.get('skills', {})
-
-                for skill in skills.keys():
-                    if skill in exclusion_rules:
-                        exclude_skills = exclusion_rules[skill].get('exclude_skills', [])
-                        print_check(True, f"{skill}: exclude {exclude_skills if exclude_skills else 'none'}")
-                    else:
-                        print_check(True, f"{skill}: no exclusion rules")
-        else:
-            print_check(True, "use_exclusion_routing not set (using default)")
-
-        # Check legacy fallback chain
-        if 'fallback_chain' in balancer:
-            fallback_chain = balancer['fallback_chain']
-            print_check(True, f"Legacy fallback_chain configured ({len(fallback_chain)} skills)")
-        else:
-            print_check(False, "fallback_chain not configured")
+        if 'exclusion_rules' not in balancer:
+            print_check(False, "exclusion_rules not configured")
             return False
+
+        exclusion_rules = balancer['exclusion_rules']
+        skills = config.get('skills', {})
+
+        for skill in skills.keys():
+            if skill in exclusion_rules:
+                exclude_skills = exclusion_rules[skill].get('exclude_skills', [])
+                print_check(True, f"{skill}: exclude {exclude_skills if exclude_skills else 'none'}")
+            else:
+                print_check(True, f"{skill}: no exclusion rules (default to empty)")
 
         # Check modality fallbacks if configured
         if 'modality_fallbacks' in config:
@@ -300,7 +284,7 @@ def main():
         ("Python Dependencies", check_imports),
         ("Configuration", check_config),
         ("Application Structure", check_app_structure),
-        ("Fallback Chain Logic", check_fallback_chain_logic),
+        ("Exclusion Routing", check_exclusion_routing),
         ("Documentation", check_readme_documentation),
     ]
 

@@ -110,8 +110,7 @@ balancer:
   allow_fallback_on_imbalance: true
   modifier_applies_to_active_only: true  # If true, Modifier only applies when skill=1 (active), not skill=0 (fallback)
 
-  # Exclusion-based routing: Start with ALL workers, exclude specific skills
-  use_exclusion_routing: true
+  # Exclusion-based routing configuration
   exclusion_rules:
     # Define which workers to EXCLUDE when requesting each skill
     # Workers with excluded_skill=1 won't receive work for this skill
@@ -134,24 +133,6 @@ balancer:
 
     Chest:
       exclude_skills: []  # No exclusions - anyone can get Chest work
-
-  # Legacy fallback_chain (only used when use_exclusion_routing=false)
-  fallback_chain:
-    Normal: []
-    Notfall:
-      - Normal
-    Herz:
-      - - Notfall
-        - Normal
-    Privat:
-      - Notfall
-      - Normal
-    Msk:
-      - Notfall
-      - Normal
-    Chest:
-      - Notfall
-      - Normal
 
 # Medweb CSV Upload Configuration
 medweb_mapping:
