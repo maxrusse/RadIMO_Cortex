@@ -124,8 +124,34 @@ balancer:
   min_assignments_per_skill: 5
   imbalance_threshold_pct: 30
   allow_fallback_on_imbalance: true
-  fallback_strategy: skill_priority  # Options: skill_priority, modality_priority, pool_priority
   modifier_applies_to_active_only: true  # If true, Modifier only applies when skill=1 (active), not skill=0 (fallback)
+
+  # Exclusion-based routing: Start with ALL workers, exclude specific skills
+  use_exclusion_routing: true
+  exclusion_rules:
+    # Define which workers to EXCLUDE when requesting each skill
+    # Workers with excluded_skill=1 won't receive work for this skill
+    # Two-level fallback: (1) All except exclusions → (2) Skill>=0 → (3) None
+
+    Privat:
+      exclude_skills: []  # No exclusions - anyone can get Privat work
+
+    Notfall:
+      exclude_skills: []  # No exclusions - anyone can get Notfall work
+
+    Herz:
+      exclude_skills: []  # No exclusions - anyone can get Herz work
+
+    Normal:
+      exclude_skills: []  # No exclusions - anyone can get Normal work
+
+    Msk:
+      exclude_skills: []  # No exclusions - anyone can get Msk work
+
+    Chest:
+      exclude_skills: []  # No exclusions - anyone can get Chest work
+
+  # Legacy fallback_chain (only used when use_exclusion_routing=false)
   fallback_chain:
     Normal: []
     Notfall:

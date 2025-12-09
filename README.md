@@ -12,10 +12,10 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 
 **Key Capabilities:**
 - Real-time worker assignment with automatic load balancing
-- Smart fallback strategies for overload situations
+- Smart fallback system with availability and fairness triggers
 - Dynamic shift handling with work-hour-adjusted balancing
 - Two UI modes: by modality or by skill
-- Cross-modality workload tracking and overflow management
+- Pool-based selection across skills and modalities
 - Config-driven medweb CSV integration with automated daily preload
 - Three-page admin system: Planning (staged), Prep (tomorrow), Day Control (immediate)
 - Worker skill roster admin portal with JSON-based staged/active workflow
@@ -74,10 +74,38 @@ Real-time assignment with load balancing
 
 ## Key Features
 
-### Load Balancing
-- **Work-hour-adjusted ratios**: Balances based on hours worked, not just count
-- **30% imbalance threshold**: Automatic fallback when workload becomes unfair
-- **Minimum assignments**: Two-phase system ensures all workers get fair share
+### Smart Exclusion-Based Routing
+
+RadIMO uses exclusion-based selection to ensure fair workload distribution across all workers while respecting specialty boundaries:
+
+**How It Works:**
+1. **Filter by Skill**: Start with workers who have requested skill≥0 (excludes -1)
+2. **Apply Exclusions**: Remove workers with excluded skills=1 (e.g., Chest=1 workers don't get Herz work)
+3. **Calculate Ratios**: Weighted assignments / hours worked for each candidate
+4. **Select Best**: Worker with lowest workload ratio
+
+**Two-Level Fallback:**
+1. **Level 1** (Exclusion-based): Workers with requested skill≥0 (not -1) EXCEPT those with excluded skills=1
+2. **Level 2** (Skill-based fallback): Workers with requested skill≥0 (ignores exclusions)
+3. **Level 3**: No assignment possible
+
+**Skill Values:**
+- skill=1 (Active): Actively performs this skill
+- skill=0 (Passive): Can do this skill if needed (training, backup)
+- skill=-1 (Excluded): Cannot do this skill
+
+**Configuration Example:**
+```yaml
+exclusion_rules:
+  Herz:
+    exclude_skills: [Chest, Msk]  # Chest/Msk specialists don't get Herz work
+```
+
+**Example Workflow:**
+- Request: Herz work needed (exclusion rule: exclude Chest=1 and Msk=1 workers)
+- Level 1: Filter Herz≥0, exclude Chest=1 and Msk=1 → Pick lowest ratio
+- Level 2 (if Level 1 empty): Filter Herz≥0 only (ignore exclusions) → Pick lowest ratio
+- Level 3: No assignment (no workers with Herz≥0 available)
 
 ### Skill System
 | Value | Name | Behavior |
