@@ -68,7 +68,6 @@ skills:
     special: false         # Not a specialty skill
     always_visible: true
     display_order: 0       # Button order
-    fallback: []           # No fallback
     slug: normal           # URL-safe name
     form_key: normal       # Form field name
 
@@ -81,8 +80,6 @@ skills:
     special: false
     always_visible: true
     display_order: 1
-    fallback:
-      - Normal             # Falls back to Normal
     slug: notfall
     form_key: notfall
 
@@ -95,15 +92,9 @@ skills:
     special: true          # Specialty skill
     always_visible: false
     display_order: 3
-    fallback:
-      - [Notfall, Normal]  # Parallel fallback
     slug: herz
     form_key: herz
 ```
-
-**Fallback syntax:**
-- `[Normal]` - Sequential: try Normal
-- `[[Notfall, Normal]]` - Parallel: try Notfall AND Normal simultaneously
 
 ---
 
@@ -356,12 +347,10 @@ skills:
     optional: false
   Notfall:
     weight: 1.1
-    fallback: [Normal]
   Herz:
     weight: 1.2
     optional: true
     special: true
-    fallback: [[Notfall, Normal]]
 
 skill_modality_overrides:
   mr:

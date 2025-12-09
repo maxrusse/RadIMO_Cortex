@@ -12,10 +12,10 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 
 **Key Capabilities:**
 - Real-time worker assignment with automatic load balancing
-- Smart fallback system with availability and fairness triggers
+- Skill-based routing with configurable exclusion rules
 - Dynamic shift handling with work-hour-adjusted balancing
 - Two UI modes: by modality or by skill
-- Pool-based selection across skills and modalities
+- Two-level fallback for high availability
 - Config-driven medweb CSV integration with automated daily preload
 - Three-page admin system: Planning (staged), Prep (tomorrow), Day Control (immediate)
 - Worker skill roster admin portal with JSON-based staged/active workflow
