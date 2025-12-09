@@ -50,7 +50,7 @@ flask --app app run --debug  # Start application
 | Admin Panel | `/upload` | Upload medweb CSV, system management |
 | Skill Matrix | `/skill_roster` | Plan skill changes (STAGED mode) |
 | Prep Next Day | `/prep-next-day` | Prepare tomorrow's schedule |
-| Day Control | `/admin/live-edit` | Emergency same-day edits (immediate effect) |
+| Day Control | `/admin/live-edit` | Same-day schedule adjustments (immediate effect) |
 
 ---
 
@@ -97,7 +97,7 @@ Assignments are weighted by:
 ### Three-Page Admin System
 1. **Skill Matrix** (`/skill_roster`) - Plan skill changes, staged before activation
 2. **Prep Next Day** (`/prep-next-day`) - Prepare tomorrow's schedule
-3. **Day Control** (`/admin/live-edit`) - Emergency same-day changes (immediate effect)
+3. **Day Control** (`/admin/live-edit`) - Same-day schedule adjustments (immediate effect)
 
 ### Navigation & UI Features
 
@@ -105,7 +105,7 @@ Assignments are weighted by:
 - **Dashboard** - Main workload view (toggle between Modality/Skill views)
 - **Timetable** - Visual timeline of shifts and schedules
 - **Skill Matrix** - Manage worker skills (staged changes)
-- **Day Control** - Emergency same-day overrides (immediate effect)
+- **Day Control** - Same-day schedule adjustments (immediate effect)
 - **Admin** - System configuration and CSV uploads
 
 **Smart Skill Filtering:**
@@ -116,7 +116,7 @@ Assignments are weighted by:
 - **Timetable** (`/timetable`) - Filter timetable view by active skill
   - Same filtering logic as Day Control
   - Timetable dynamically rebuilds with filtered workers
-  - Allows sub-specialty leads to focus on their team
+  - Allows specialty leads to focus on their team
 
 ---
 

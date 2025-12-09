@@ -366,8 +366,8 @@
 <body>
   <div class="header">
     <div>
-      <h1>RadIMO Cortex | Day Control <span class="text-danger" style="font-size: 1rem;">(IMMEDIATE EFFECT)</span></h1>
-      <p>Emergency same-day edits and overrides</p>
+      <h1>RadIMO Cortex | Day Control</h1>
+      <p>Same-day schedule adjustments</p>
     </div>
     <div class="header-actions">
       <a href="{{ url_for('index') }}">Dashboard</a>
@@ -379,20 +379,20 @@
   </div>
 
   <div class="warning-banner">
-    <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">🔴 LIVE EDIT MODE - SOFORTIGE WIRKUNG!</h2>
+    <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📝 Same-Day Editing</h2>
     <p style="margin-bottom: 1rem; font-size: 1.1rem;">
-      <strong>⚠️ KRITISCH:</strong> Alle Änderungen auf dieser Seite wirken sich <strong>SOFORT</strong> auf laufende Zuteilungen aus!
+      Changes on this page take effect immediately and apply to today's schedule.
     </p>
     <p style="margin-bottom: 1rem; background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 4px;">
-      <strong>Unterschied zu "Prep Next Day":</strong> Diese Seite bearbeitet den <strong>LIVE-Plan</strong>.
-      Für Änderungen am morgigen Plan verwenden Sie <a href="/prep-next-day" style="color: #fff; text-decoration: underline;">Prep Next Day (Staging)</a>.
+      <strong>Note:</strong> This page edits the current live schedule.
+      For tomorrow's schedule, use <a href="/prep-next-day" style="color: #fff; text-decoration: underline;">Prep Next Day</a>.
     </p>
-    <strong>Was Sie hier tun können:</strong>
+    <strong>Available actions:</strong>
     <ul style="margin: 0.5rem 0 0 1.5rem;">
       <li>✏️ <strong>Edit times</strong> - Worker leaving early? Adjust their end time</li>
       <li>➕ <strong>Add new entry</strong> - Worker available for 1 hour? Add them back</li>
       <li>🗑️ <strong>Delete entry</strong> - Take worker out completely (e.g., called in sick)</li>
-      <li>⚙️ <strong>Modify skills</strong> - Emergency skill adjustments</li>
+      <li>⚙️ <strong>Modify skills</strong> - Adjust skill assignments</li>
     </ul>
   </div>
 
@@ -836,7 +836,7 @@
         });
 
         if (response.ok) {
-          showStatus('✅ Worker added successfully (IMMEDIATELY ACTIVE)', 'success');
+          showStatus('✅ Worker added successfully', 'success');
 
           // Reload workers data
           await loadWorkers(modality);
@@ -901,7 +901,7 @@
         });
 
         if (response.ok) {
-          showStatus('✅ Worker updated successfully (IMMEDIATELY ACTIVE)', 'success');
+          showStatus('✅ Worker updated successfully', 'success');
 
           // Reload workers data
           await loadWorkers(modality);
@@ -918,7 +918,7 @@
     }
 
     async function deleteWorker(modality, index) {
-      if (!confirm('⚠️ DELETE this worker entry?\n\nThis will take effect IMMEDIATELY.\n\nContinue?')) {
+      if (!confirm('Delete this worker entry?\n\nThis will update the current schedule.\n\nContinue?')) {
         return;
       }
 
@@ -934,7 +934,7 @@
         });
 
         if (response.ok) {
-          showStatus('✅ Worker deleted successfully (IMMEDIATELY ACTIVE)', 'success');
+          showStatus('✅ Worker deleted successfully', 'success');
 
           // Reload workers data
           await loadWorkers(modality);

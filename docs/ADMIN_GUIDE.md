@@ -32,10 +32,10 @@ All admin pages require login with the admin password from `config.yaml`.
 │  ├─ Preview and adjust                                      │
 │  └─ No effect on current day                                │
 ├─────────────────────────────────────────────────────────────┤
-│  OPERATIONAL (Now)              Day Control                   │
-│  ├─ Immediate effect            (DANGER ZONE)               │
-│  ├─ Emergency changes only                                  │
-│  └─ Careful: impacts ongoing assignments                    │
+│  OPERATIONAL (Now)              Day Control                 │
+│  ├─ Immediate effect                                        │
+│  ├─ Same-day adjustments                                    │
+│  └─ Note: impacts current schedule                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -154,14 +154,14 @@ Changes are applied when:
 
 **Purpose:** Make immediate changes to current day's assignments.
 
-**Key behavior:** Changes take effect IMMEDIATELY.
+**Key behavior:** Changes take effect immediately.
 
 ### When to Use
 
-- Emergency substitutions
-- Last-minute schedule changes
-- Same-day corrections
-- Urgent worker additions/removals
+- Same-day schedule adjustments
+- Worker leaving early or arriving late
+- Schedule corrections
+- Worker additions/removals
 
 ### Features
 
@@ -171,16 +171,14 @@ Changes are applied when:
 - Delete worker entries
 - Add new workers
 
-### Warning
+### Note
 
-Changes are **INSTANT** and affect:
+Changes take effect immediately and affect:
 - Current assignment calculations
 - Workload ratios
 - Availability for new assignments
 
-Use with caution!
-
-### Example: Emergency Sick Call
+### Example: Worker Sick Call
 
 **Scenario:** Worker "AM" calls in sick at 9 AM.
 
@@ -209,7 +207,7 @@ Central hub for system management.
 |--------|-------------|
 | **Medweb CSV Upload** | Upload schedule for specific date |
 | **Preload Next Workday** | Manual trigger of auto-preload |
-| **Force Refresh Today** | Emergency same-day reload (destroys counters) |
+| **Force Refresh Today** | Full same-day rebuild (WARNING: destroys all counters and assignment history) |
 
 ### CSV Upload Flow
 
@@ -241,11 +239,11 @@ Central hub for system management.
 3. Test with `/prep-next-day` preview
 4. Activate on rotation start day
 
-### Emergency Changes
+### Same-Day Changes
 
-1. Prefer `/admin/live-edit` for targeted fixes
-2. Use "Force Refresh Today" only as last resort
-3. Document emergency changes for tracking
+1. Prefer `/admin/live-edit` for targeted adjustments
+2. Use "Force Refresh Today" only for complete schedule rebuilds (WARNING: destroys all assignment history)
+3. Document significant changes for tracking
 
 ### Skill Management
 
@@ -254,7 +252,7 @@ Central hub for system management.
 | Permanent skill change | `config.yaml` → `worker_skill_roster` |
 | Temporary/rotation change | `/skill_roster` staging |
 | One-day override | `/prep-next-day` |
-| Emergency same-day | `/admin/live-edit` |
+| Same-day adjustment | `/admin/live-edit` |
 
 ---
 

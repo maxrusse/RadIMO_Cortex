@@ -416,7 +416,7 @@ POST /edit
 Content-Type: application/x-www-form-urlencoded
 ```
 
-Edit worker entry with immediate effect.
+Edit worker entry (takes effect immediately).
 
 **Parameters:**
 | Name | Type | Description |
@@ -507,7 +507,7 @@ POST /force-refresh-today
 Content-Type: multipart/form-data
 ```
 
-Emergency same-day reload. Destroys all counters.
+Complete same-day rebuild. **WARNING:** Destroys all assignment history and counters.
 
 **Parameters:**
 | Name | Type | Description |
