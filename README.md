@@ -74,45 +74,18 @@ Real-time assignment with load balancing
 
 ## Key Features
 
-### Smart Exclusion-Based Routing
-
-RadIMO uses exclusion-based selection to ensure fair workload distribution across all workers while respecting specialty boundaries:
-
-**How It Works:**
-1. **Filter by Skill**: Start with workers who have requested skill≥0 (excludes -1)
-2. **Apply Exclusions**: Remove workers with excluded skills=1 (e.g., Chest=1 workers don't get Herz work)
-3. **Calculate Ratios**: Weighted assignments / hours worked for each candidate
-4. **Select Best**: Worker with lowest workload ratio
-
-**Two-Level Fallback:**
-1. **Level 1** (Exclusion-based): Workers with requested skill≥0 (not -1) EXCEPT those with excluded skills=1
-2. **Level 2** (Skill-based fallback): Workers with requested skill≥0 (ignores exclusions)
-3. **Level 3**: No assignment possible
-
-**Skill Values:**
-- skill=1 (Active): Actively performs this skill
-- skill=0 (Passive): Can do this skill if needed (training, backup)
-- skill=-1 (Excluded): Cannot do this skill
-
-**Configuration Example:**
-```yaml
-exclusion_rules:
-  Herz:
-    exclude_skills: [Chest, Msk]  # Chest/Msk specialists don't get Herz work
-```
-
-**Example Workflow:**
-- Request: Herz work needed (exclusion rule: exclude Chest=1 and Msk=1 workers)
-- Level 1: Filter Herz≥0, exclude Chest=1 and Msk=1 → Pick lowest ratio
-- Level 2 (if Level 1 empty): Filter Herz≥0 only (ignore exclusions) → Pick lowest ratio
-- Level 3: No assignment (no workers with Herz≥0 available)
+### Smart Load Balancing
+- **Skill-based routing** with configurable exclusion rules
+- **Work-hour adjusted ratios** ensure fair distribution
+- **Two-level fallback** system for high availability
+- See [CONFIGURATION.md](docs/CONFIGURATION.md) for routing details
 
 ### Skill System
 | Value | Name | Behavior |
 |-------|------|----------|
-| **1** | Active | Primary requests + fallback |
-| **0** | Passive | Fallback only (training, backup) |
-| **-1** | Excluded | Not available |
+| **1** | Active | Primary routing - actively performs this skill |
+| **0** | Passive | Fallback only - can help if needed |
+| **-1** | Excluded | Never assigned - cannot do this skill |
 
 ### Weighting System
 Assignments are weighted by:
