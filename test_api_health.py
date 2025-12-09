@@ -128,6 +128,7 @@ def check_app_structure():
         functions = [
             'get_next_available_worker',
             '_get_worker_pool_priority',
+            '_get_worker_exclusion_based',
         ]
 
         for func in functions:
@@ -151,11 +152,17 @@ def check_app_structure():
                 print_check(False, f"Endpoint {endpoint.split('[')[0]} NOT FOUND")
                 return False
 
-        # Verify pool-based selection is used
-        if "return _get_worker_pool_priority(" in content:
-            print_check(True, "Pool-based selection implemented")
+        # Verify routing logic is implemented
+        if "USE_EXCLUSION_ROUTING" in content:
+            print_check(True, "Routing strategy selection implemented")
         else:
-            print_check(False, "Pool selection NOT FOUND")
+            print_check(False, "Routing strategy NOT FOUND")
+            return False
+
+        if "_get_worker_exclusion_based(" in content:
+            print_check(True, "Exclusion-based routing implemented")
+        else:
+            print_check(False, "Exclusion routing NOT FOUND")
             return False
 
         return True
@@ -165,30 +172,48 @@ def check_app_structure():
         return False
 
 def check_fallback_chain_logic():
-    """Verify fallback chain configuration structure"""
-    print_section("Checking Fallback Chain Logic")
+    """Verify routing configuration structure"""
+    print_section("Checking Routing Configuration")
 
     try:
         with open('config.yaml', 'r') as f:
             config = yaml.safe_load(f)
 
-        if 'balancer' not in config or 'fallback_chain' not in config['balancer']:
-            print_check(False, "fallback_chain not configured")
+        if 'balancer' not in config:
+            print_check(False, "balancer not configured")
             return False
 
-        fallback_chain = config['balancer']['fallback_chain']
+        balancer = config['balancer']
 
-        # Check each skill has a fallback configuration
-        skills = config.get('skills', {})
-        for skill in skills.keys():
-            if skill in fallback_chain:
-                chain = fallback_chain[skill]
-                if isinstance(chain, list):
-                    print_check(True, f"{skill}: {chain}")
-                else:
-                    print_check(False, f"{skill}: invalid type (should be list)")
-            else:
-                print_check(True, f"{skill}: not in fallback_chain (will use default)")
+        # Check exclusion routing configuration
+        if 'use_exclusion_routing' in balancer:
+            use_exclusion = balancer['use_exclusion_routing']
+            print_check(True, f"use_exclusion_routing: {use_exclusion}")
+
+            if use_exclusion:
+                if 'exclusion_rules' not in balancer:
+                    print_check(False, "exclusion_rules not configured (required when use_exclusion_routing=true)")
+                    return False
+
+                exclusion_rules = balancer['exclusion_rules']
+                skills = config.get('skills', {})
+
+                for skill in skills.keys():
+                    if skill in exclusion_rules:
+                        exclude_skills = exclusion_rules[skill].get('exclude_skills', [])
+                        print_check(True, f"{skill}: exclude {exclude_skills if exclude_skills else 'none'}")
+                    else:
+                        print_check(True, f"{skill}: no exclusion rules")
+        else:
+            print_check(True, "use_exclusion_routing not set (using default)")
+
+        # Check legacy fallback chain
+        if 'fallback_chain' in balancer:
+            fallback_chain = balancer['fallback_chain']
+            print_check(True, f"Legacy fallback_chain configured ({len(fallback_chain)} skills)")
+        else:
+            print_check(False, "fallback_chain not configured")
+            return False
 
         # Check modality fallbacks if configured
         if 'modality_fallbacks' in config:
@@ -205,7 +230,7 @@ def check_fallback_chain_logic():
         return True
 
     except Exception as e:
-        print_check(False, f"Error checking fallback chains: {e}")
+        print_check(False, f"Error checking routing configuration: {e}")
         return False
 
 def check_readme_documentation():
@@ -217,9 +242,9 @@ def check_readme_documentation():
             readme = f.read()
 
         docs_to_check = [
-            ('Pool-based selection', 'Pool-based selection documented'),
-            ('Smart Fallback System', 'Smart Fallback System documented'),
-            ('Configuration Reference', 'Configuration section exists'),
+            ('Exclusion-Based Routing', 'Exclusion-based routing documented'),
+            ('exclusion_rules', 'Exclusion rules configuration documented'),
+            ('Two-Level Fallback', 'Fallback system documented'),
         ]
 
         for search_term, description in docs_to_check:

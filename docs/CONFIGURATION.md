@@ -141,9 +141,27 @@ balancer:
   min_assignments_per_skill: 5    # Minimum weighted assignments
   imbalance_threshold_pct: 30     # Trigger fallback at 30% imbalance
   allow_fallback_on_imbalance: true
-  # System uses pool-based selection (evaluates all skill/modality combinations)
   modifier_applies_to_active_only: true  # Modifier only for skill=1
 
+  # Exclusion-based routing (NEW)
+  use_exclusion_routing: true
+  exclusion_rules:
+    # Define which workers to EXCLUDE when requesting each skill
+    # Workers with excluded_skill=1 won't receive work for this skill
+    Privat:
+      exclude_skills: []         # No exclusions
+    Notfall:
+      exclude_skills: []
+    Herz:
+      exclude_skills: [Chest, Msk]  # Chest/Msk specialists don't get Herz
+    Normal:
+      exclude_skills: []
+    Msk:
+      exclude_skills: []
+    Chest:
+      exclude_skills: []
+
+  # Legacy fallback_chain (only used when use_exclusion_routing=false)
   fallback_chain:
     Normal: []
     Notfall: [Normal]
@@ -153,19 +171,40 @@ balancer:
     Chest: [[Notfall, Normal]]
 ```
 
-### Pool-Based Selection
+### Exclusion-Based Routing
 
-The system uses a pool-based approach for worker selection:
+The system uses exclusion-based selection to distribute work fairly while respecting specialty boundaries:
 
-1. **Build candidate pool** from requested skill and fallback chain
-2. **Calculate workload ratio** for each candidate (weighted_count / hours_worked)
-3. **Select worker** with lowest ratio
+**Three-Level Fallback:**
 
-**Pool Expansion Triggers:**
-- **Availability**: No workers with requested skill available
-- **Fairness**: Workload imbalance exceeds `imbalance_threshold_pct` (default 30%)
+1. **Level 1 (Exclusion-based):**
+   - Start with ALL available workers across all skills
+   - Remove workers with excluded skills (value=1)
+   - Calculate workload ratio for each candidate (weighted_count / hours_worked)
+   - Select worker with lowest ratio
 
-When triggered, the pool expands using the `fallback_chain` configuration.
+2. **Level 2 (Skill-based fallback):**
+   - If Level 1 produces no candidates, ignore exclusions
+   - Try workers with requested skill≥0 (active or passive)
+   - Select worker with lowest ratio
+
+3. **Level 3:** No assignment possible
+
+**Example:**
+```yaml
+exclusion_rules:
+  Herz:
+    exclude_skills: [Chest, Msk]
+```
+
+- **Request:** Herz work needed
+- **Level 1:** Try ALL workers EXCEPT Chest=1 and Msk=1 workers → Pick lowest ratio
+- **Level 2 (if empty):** Try workers with Herz≥0 → Pick lowest ratio
+- **Level 3:** No assignment
+
+**Toggle Between Strategies:**
+- Set `use_exclusion_routing: true` for exclusion-based routing (NEW)
+- Set `use_exclusion_routing: false` for legacy pool-based routing with fallback chains
 
 ### Two-Phase Minimum Balancer
 

@@ -518,6 +518,11 @@ else:
     BALANCER_FALLBACK_CHAIN = {k: _normalize_skill_fallback_entries(v) for k, v in DEFAULT_FALLBACK_CHAIN.items()}
 
 BALANCER_SETTINGS['fallback_chain'] = BALANCER_FALLBACK_CHAIN
+
+# Load exclusion routing configuration
+USE_EXCLUSION_ROUTING = BALANCER_SETTINGS.get('use_exclusion_routing', False)
+EXCLUSION_RULES = BALANCER_SETTINGS.get('exclusion_rules', {})
+
 RAW_MODALITY_FALLBACKS = APP_CONFIG.get('modality_fallbacks', {})
 MODALITY_FALLBACK_CHAIN = {}
 for mod in allowed_modalities:
@@ -1979,12 +1984,14 @@ def get_next_available_worker(
     allow_fallback: bool = True,
 ):
     """
-    Get next available worker using pool-based selection.
+    Get next available worker using configured routing strategy.
 
-    Builds a pool of candidates across skills and modalities, then selects
-    the worker with the lowest workload ratio.
+    Routes to either exclusion-based or pool-based selection based on config.
     """
-    return _get_worker_pool_priority(current_dt, role, modality, allow_fallback)
+    if USE_EXCLUSION_ROUTING:
+        return _get_worker_exclusion_based(current_dt, role, modality, allow_fallback)
+    else:
+        return _get_worker_pool_priority(current_dt, role, modality, allow_fallback)
 
 
 def _get_worker_pool_priority(
@@ -2130,6 +2137,214 @@ def _get_worker_pool_priority(
         )
 
     return candidate, used_skill, source_modality
+
+
+def _get_worker_exclusion_based(
+    current_dt: datetime,
+    role: str,
+    modality: str,
+    allow_fallback: bool,
+):
+    """
+    Exclusion-based routing: Start with ALL workers, exclude based on rules.
+
+    Two-level fallback:
+    1. Primary: ALL workers EXCEPT those with excluded skills=1
+    2. Fallback: Workers with requested skill>=0 (ignore exclusions)
+    3. None: No workers available
+    """
+    # Build role mapping
+    role_map = {
+        'normal':  'Normal',
+        'notfall': 'Notfall',
+        'herz':    'Herz',
+        'privat':  'Privat',
+        'msk':     'Msk',
+        'chest':   'Chest'
+    }
+    role_lower = role.lower()
+    if role_lower not in role_map:
+        role_lower = 'normal'
+    primary_skill = role_map[role_lower]
+
+    # Get exclusion rules for this skill
+    skill_exclusions = EXCLUSION_RULES.get(primary_skill, {})
+    exclude_skills = skill_exclusions.get('exclude_skills', [])
+
+    # Build modality search order
+    modality_search = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
+
+    # Flatten modality groups
+    flat_modality_search = []
+    for entry in modality_search:
+        if isinstance(entry, list):
+            flat_modality_search.extend(entry)
+        else:
+            flat_modality_search.append(entry)
+
+    # Remove duplicates while preserving order
+    seen_modalities = set()
+    unique_modality_search = []
+    for mod in flat_modality_search:
+        if mod not in seen_modalities and mod in modality_data:
+            seen_modalities.add(mod)
+            unique_modality_search.append(mod)
+
+    selection_logger.info(
+        "Exclusion-based routing for skill %s: excluding workers with %s=1, modalities=%s",
+        primary_skill,
+        exclude_skills,
+        unique_modality_search,
+    )
+
+    # Level 1: Try with exclusions
+    candidate_pool_excluded = []
+
+    for target_modality in unique_modality_search:
+        d = modality_data[target_modality]
+        if d['working_hours_df'] is None:
+            continue
+
+        active_df = _filter_active_rows(d['working_hours_df'], current_dt)
+        if active_df is None or active_df.empty:
+            continue
+
+        # Start with ALL workers
+        all_workers = active_df.copy()
+
+        # Apply exclusion filter: remove workers with excluded skills=1
+        filtered_workers = all_workers
+        for skill_to_exclude in exclude_skills:
+            if skill_to_exclude in filtered_workers.columns:
+                # Exclude workers with this skill active (value >= 1)
+                filtered_workers = filtered_workers[filtered_workers[skill_to_exclude] < 1]
+
+        if filtered_workers.empty:
+            continue
+
+        # Apply minimum balancer
+        balanced_df = _apply_minimum_balancer(filtered_workers, primary_skill, target_modality)
+        result_df = balanced_df if not balanced_df.empty else filtered_workers
+
+        # Calculate ratios
+        hours_map = calculate_work_hours_now(current_dt, target_modality)
+
+        def weighted_ratio(person):
+            canonical_id = get_canonical_worker_id(person)
+            h = hours_map.get(canonical_id, 0)
+            w = get_global_weighted_count(canonical_id)
+            return w / max(h, 0.5) if h > 0 else w
+
+        available_workers = result_df['PPL'].unique()
+        if len(available_workers) == 0:
+            continue
+
+        # Get best worker for this modality
+        best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
+        candidate = result_df[result_df['PPL'] == best_person].iloc[0].copy()
+        candidate['__modality_source'] = target_modality
+        candidate['__selection_ratio'] = weighted_ratio(best_person)
+
+        ratio = candidate.get('__selection_ratio', float('inf'))
+        candidate_pool_excluded.append((ratio, candidate, primary_skill, target_modality))
+
+    # If we found candidates with exclusions, use them
+    if candidate_pool_excluded:
+        ratio, candidate, used_skill, source_modality = min(candidate_pool_excluded, key=lambda item: item[0])
+
+        selection_logger.info(
+            "Exclusion routing: Selected from pool of %d candidates (excluded %s=1): person=%s, modality=%s, ratio=%.4f",
+            len(candidate_pool_excluded),
+            exclude_skills,
+            candidate.get('PPL', 'unknown'),
+            source_modality,
+            ratio,
+        )
+
+        return candidate, used_skill, source_modality
+
+    # Level 2: Fallback to skill-based selection (ignore exclusions)
+    if not allow_fallback:
+        selection_logger.info(
+            "No workers available with exclusions for skill %s, and fallback disabled",
+            primary_skill,
+        )
+        return None
+
+    selection_logger.info(
+        "No workers available with exclusions for skill %s, falling back to skill-based selection",
+        primary_skill,
+    )
+
+    candidate_pool_fallback = []
+
+    for target_modality in unique_modality_search:
+        d = modality_data[target_modality]
+        if d['working_hours_df'] is None:
+            continue
+
+        active_df = _filter_active_rows(d['working_hours_df'], current_dt)
+        if active_df is None or active_df.empty:
+            continue
+
+        # Try workers with requested skill>=0 (no exclusions)
+        if primary_skill not in active_df.columns:
+            continue
+
+        # Filter to workers with skill>=0 (includes active and passive, excludes -1)
+        skill_filtered = active_df[active_df[primary_skill] >= 0]
+
+        if skill_filtered.empty:
+            continue
+
+        # Apply minimum balancer
+        balanced_df = _apply_minimum_balancer(skill_filtered, primary_skill, target_modality)
+        result_df = balanced_df if not balanced_df.empty else skill_filtered
+
+        # Calculate ratios
+        hours_map = calculate_work_hours_now(current_dt, target_modality)
+
+        def weighted_ratio(person):
+            canonical_id = get_canonical_worker_id(person)
+            h = hours_map.get(canonical_id, 0)
+            w = get_global_weighted_count(canonical_id)
+            return w / max(h, 0.5) if h > 0 else w
+
+        available_workers = result_df['PPL'].unique()
+        if len(available_workers) == 0:
+            continue
+
+        # Get best worker for this modality
+        best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
+        candidate = result_df[result_df['PPL'] == best_person].iloc[0].copy()
+        candidate['__modality_source'] = target_modality
+        candidate['__selection_ratio'] = weighted_ratio(best_person)
+
+        ratio = candidate.get('__selection_ratio', float('inf'))
+        candidate_pool_fallback.append((ratio, candidate, primary_skill, target_modality))
+
+    # If we found candidates in fallback, use them
+    if candidate_pool_fallback:
+        ratio, candidate, used_skill, source_modality = min(candidate_pool_fallback, key=lambda item: item[0])
+
+        selection_logger.info(
+            "Fallback routing: Selected from pool of %d candidates (skill %s>=0): person=%s, modality=%s, ratio=%.4f",
+            len(candidate_pool_fallback),
+            primary_skill,
+            candidate.get('PPL', 'unknown'),
+            source_modality,
+            ratio,
+        )
+
+        return candidate, used_skill, source_modality
+
+    # Level 3: No workers available
+    selection_logger.info(
+        "No workers available for skill %s (tried exclusion-based and skill-based fallback)",
+        primary_skill,
+    )
+    return None
+
 
 # -----------------------------------------------------------
 # Daily Reset: check (for every modality) at >= 07:30

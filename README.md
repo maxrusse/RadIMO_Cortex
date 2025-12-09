@@ -74,25 +74,38 @@ Real-time assignment with load balancing
 
 ## Key Features
 
-### Smart Fallback System
+### Smart Exclusion-Based Routing
 
-RadIMO uses pool-based selection to ensure fair workload distribution:
+RadIMO uses exclusion-based selection to ensure fair workload distribution across all workers while respecting specialty boundaries:
 
 **How It Works:**
-1. Build candidate pool from requested skill and modality
-2. Calculate workload ratio for each candidate (weighted assignments / hours worked)
-3. Select worker with lowest ratio
+1. **Primary Pool**: Start with ALL available workers across all skills
+2. **Apply Exclusions**: Remove workers with excluded skills (e.g., Chest specialists don't get Herz work)
+3. **Calculate Ratios**: Weighted assignments / hours worked for each candidate
+4. **Select Best**: Worker with lowest workload ratio
 
-**Pool Expansion Triggers:**
-- **Availability**: No workers with requested skill → expand to fallback skills
-- **Fairness**: Workload imbalance >30% → expand pool to balance load
+**Two-Level Fallback:**
+1. **Level 1** (Exclusion-based): ALL workers EXCEPT those with excluded skills=1
+2. **Level 2** (Skill-based fallback): Workers with requested skill≥0 (ignores exclusions)
+3. **Level 3**: No assignment possible
 
-**Skill Routing:**
-- skill=1 (Active): Primary routing, receives direct requests
-- skill=0 (Passive): Fallback only, used when needed
-- skill=-1 (Excluded): Never assigned this skill
+**Skill Values:**
+- skill=1 (Active): Actively performs this skill
+- skill=0 (Passive): Can do this skill if needed (training, backup)
+- skill=-1 (Excluded): Cannot do this skill
 
-**Example:** Request for "Privat" →  Try Privat=1 → If unavailable/imbalanced, expand to Notfall → Normal → Pick lowest ratio
+**Configuration Example:**
+```yaml
+exclusion_rules:
+  Herz:
+    exclude_skills: [Chest, Msk]  # Chest/Msk specialists don't get Herz work
+```
+
+**Example Workflow:**
+- Request: Herz work needed
+- Level 1: Try ALL workers EXCEPT those with Chest=1 or Msk=1 → Pick lowest ratio
+- Level 2 (if Level 1 empty): Try workers with Herz≥0 → Pick lowest ratio
+- Level 3: No assignment
 
 ### Skill System
 | Value | Name | Behavior |
