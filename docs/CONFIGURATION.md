@@ -178,14 +178,14 @@ The system uses exclusion-based selection to distribute work fairly while respec
 **Three-Level Fallback:**
 
 1. **Level 1 (Exclusion-based):**
-   - Start with ALL available workers across all skills
-   - Remove workers with excluded skills (value=1)
+   - Filter to workers with requested skill≥0 (excludes -1)
+   - Remove workers with excluded skills=1
    - Calculate workload ratio for each candidate (weighted_count / hours_worked)
    - Select worker with lowest ratio
 
 2. **Level 2 (Skill-based fallback):**
    - If Level 1 produces no candidates, ignore exclusions
-   - Try workers with requested skill≥0 (active or passive)
+   - Filter to workers with requested skill≥0 (active or passive)
    - Select worker with lowest ratio
 
 3. **Level 3:** No assignment possible
@@ -198,9 +198,9 @@ exclusion_rules:
 ```
 
 - **Request:** Herz work needed
-- **Level 1:** Try ALL workers EXCEPT Chest=1 and Msk=1 workers → Pick lowest ratio
-- **Level 2 (if empty):** Try workers with Herz≥0 → Pick lowest ratio
-- **Level 3:** No assignment
+- **Level 1:** Filter Herz≥0, exclude Chest=1 and Msk=1 workers → Pick lowest ratio
+- **Level 2 (if empty):** Filter Herz≥0 only (ignore exclusions) → Pick lowest ratio
+- **Level 3:** No assignment (no Herz≥0 workers available)
 
 **Toggle Between Strategies:**
 - Set `use_exclusion_routing: true` for exclusion-based routing (NEW)

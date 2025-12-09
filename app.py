@@ -2146,12 +2146,16 @@ def _get_worker_exclusion_based(
     allow_fallback: bool,
 ):
     """
-    Exclusion-based routing: Start with ALL workers, exclude based on rules.
+    Exclusion-based routing: Filter by requested skill, exclude based on rules.
 
     Two-level fallback:
-    1. Primary: ALL workers EXCEPT those with excluded skills=1
+    1. Primary: Workers with requested skill>=0 (not -1) EXCEPT those with excluded skills=1
     2. Fallback: Workers with requested skill>=0 (ignore exclusions)
     3. None: No workers available
+
+    Example: Request Herz, exclude Chest=1 workers
+      Level 1: Workers with Herz>=0 AND Chest<1 → Pick lowest ratio
+      Level 2: Workers with Herz>=0 (any Chest value) → Pick lowest ratio
     """
     # Build role mapping
     role_map = {
@@ -2191,9 +2195,10 @@ def _get_worker_exclusion_based(
             unique_modality_search.append(mod)
 
     selection_logger.info(
-        "Exclusion-based routing for skill %s: excluding workers with %s=1, modalities=%s",
+        "Exclusion-based routing for skill %s: filter %s>=0, exclude %s=1, modalities=%s",
         primary_skill,
-        exclude_skills,
+        primary_skill,
+        exclude_skills if exclude_skills else 'none',
         unique_modality_search,
     )
 
@@ -2209,11 +2214,16 @@ def _get_worker_exclusion_based(
         if active_df is None or active_df.empty:
             continue
 
-        # Start with ALL workers
-        all_workers = active_df.copy()
+        # FIRST: Filter to workers with requested skill >= 0 (exclude -1)
+        if primary_skill not in active_df.columns:
+            continue
 
-        # Apply exclusion filter: remove workers with excluded skills=1
-        filtered_workers = all_workers
+        skill_filtered = active_df[active_df[primary_skill] >= 0]
+        if skill_filtered.empty:
+            continue
+
+        # SECOND: Apply exclusion filter (remove workers with excluded skills=1)
+        filtered_workers = skill_filtered
         for skill_to_exclude in exclude_skills:
             if skill_to_exclude in filtered_workers.columns:
                 # Exclude workers with this skill active (value >= 1)
@@ -2253,9 +2263,10 @@ def _get_worker_exclusion_based(
         ratio, candidate, used_skill, source_modality = min(candidate_pool_excluded, key=lambda item: item[0])
 
         selection_logger.info(
-            "Exclusion routing: Selected from pool of %d candidates (excluded %s=1): person=%s, modality=%s, ratio=%.4f",
+            "Exclusion routing: Selected from pool of %d candidates (%s>=0, excluded %s=1): person=%s, modality=%s, ratio=%.4f",
             len(candidate_pool_excluded),
-            exclude_skills,
+            primary_skill,
+            exclude_skills if exclude_skills else 'none',
             candidate.get('PPL', 'unknown'),
             source_modality,
             ratio,

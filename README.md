@@ -79,13 +79,13 @@ Real-time assignment with load balancing
 RadIMO uses exclusion-based selection to ensure fair workload distribution across all workers while respecting specialty boundaries:
 
 **How It Works:**
-1. **Primary Pool**: Start with ALL available workers across all skills
-2. **Apply Exclusions**: Remove workers with excluded skills (e.g., Chest specialists don't get Herz work)
+1. **Filter by Skill**: Start with workers who have requested skill≥0 (excludes -1)
+2. **Apply Exclusions**: Remove workers with excluded skills=1 (e.g., Chest=1 workers don't get Herz work)
 3. **Calculate Ratios**: Weighted assignments / hours worked for each candidate
 4. **Select Best**: Worker with lowest workload ratio
 
 **Two-Level Fallback:**
-1. **Level 1** (Exclusion-based): ALL workers EXCEPT those with excluded skills=1
+1. **Level 1** (Exclusion-based): Workers with requested skill≥0 (not -1) EXCEPT those with excluded skills=1
 2. **Level 2** (Skill-based fallback): Workers with requested skill≥0 (ignores exclusions)
 3. **Level 3**: No assignment possible
 
@@ -102,10 +102,10 @@ exclusion_rules:
 ```
 
 **Example Workflow:**
-- Request: Herz work needed
-- Level 1: Try ALL workers EXCEPT those with Chest=1 or Msk=1 → Pick lowest ratio
-- Level 2 (if Level 1 empty): Try workers with Herz≥0 → Pick lowest ratio
-- Level 3: No assignment
+- Request: Herz work needed (exclusion rule: exclude Chest=1 and Msk=1 workers)
+- Level 1: Filter Herz≥0, exclude Chest=1 and Msk=1 → Pick lowest ratio
+- Level 2 (if Level 1 empty): Filter Herz≥0 only (ignore exclusions) → Pick lowest ratio
+- Level 3: No assignment (no workers with Herz≥0 available)
 
 ### Skill System
 | Value | Name | Behavior |
