@@ -134,8 +134,7 @@ balancer:
   allow_fallback_on_imbalance: true
   modifier_applies_to_active_only: true  # Modifier only for skill=1
 
-  # Exclusion-based routing (NEW)
-  use_exclusion_routing: true
+  # Exclusion-based routing configuration
   exclusion_rules:
     # Define which workers to EXCLUDE when requesting each skill
     # Workers with excluded_skill=1 won't receive work for this skill
@@ -151,22 +150,13 @@ balancer:
       exclude_skills: []
     Chest:
       exclude_skills: []
-
-  # Legacy fallback_chain (only used when use_exclusion_routing=false)
-  fallback_chain:
-    Normal: []
-    Notfall: [Normal]
-    Privat: [Notfall, Normal]
-    Herz: [[Notfall, Normal]]     # Parallel fallback
-    Msk: [[Notfall, Normal]]
-    Chest: [[Notfall, Normal]]
 ```
 
 ### Exclusion-Based Routing
 
 The system uses exclusion-based selection to distribute work fairly while respecting specialty boundaries:
 
-**Three-Level Fallback:**
+**Two-Level Fallback:**
 
 1. **Level 1 (Exclusion-based):**
    - Filter to workers with requested skill≥0 (excludes -1)
@@ -179,8 +169,6 @@ The system uses exclusion-based selection to distribute work fairly while respec
    - Filter to workers with requested skill≥0 (active or passive)
    - Select worker with lowest ratio
 
-3. **Level 3:** No assignment possible
-
 **Example:**
 ```yaml
 exclusion_rules:
@@ -191,11 +179,6 @@ exclusion_rules:
 - **Request:** Herz work needed
 - **Level 1:** Filter Herz≥0, exclude Chest=1 and Msk=1 workers → Pick lowest ratio
 - **Level 2 (if empty):** Filter Herz≥0 only (ignore exclusions) → Pick lowest ratio
-- **Level 3:** No assignment (no Herz≥0 workers available)
-
-**Toggle Between Strategies:**
-- Set `use_exclusion_routing: true` for exclusion-based routing (NEW)
-- Set `use_exclusion_routing: false` for legacy pool-based routing with fallback chains
 
 ### Two-Phase Minimum Balancer
 

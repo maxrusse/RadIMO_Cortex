@@ -67,15 +67,6 @@ worker_skill_json_roster = {}
 # Global constants & modality-/skill-specific factors
 # -----------------------------------------------------------
 
-DEFAULT_FALLBACK_CHAIN = {
-    'Normal': [],
-    'Notfall': ['Normal'],
-    'Herz': ['Notfall', 'Normal'],
-    'Privat': ['Notfall', 'Normal'],
-    'Msk': ['Notfall', 'Normal'],
-    'Chest': ['Notfall', 'Normal']
-}
-
 DEFAULT_SKILLS = {
     "Normal": {
         "label": "Normal",
@@ -85,7 +76,6 @@ DEFAULT_SKILLS = {
         "optional": False,
         "special": False,
         "always_visible": True,
-        "fallback": [],
     },
     "Notfall": {
         "label": "Notfall",
@@ -95,7 +85,6 @@ DEFAULT_SKILLS = {
         "optional": False,
         "special": False,
         "always_visible": True,
-        "fallback": ["Normal"],
     },
     "Privat": {
         "label": "Privat",
@@ -105,7 +94,6 @@ DEFAULT_SKILLS = {
         "optional": True,
         "special": False,
         "always_visible": True,
-        "fallback": ["Notfall", "Normal"],
     },
     "Herz": {
         "label": "Herz",
@@ -115,7 +103,6 @@ DEFAULT_SKILLS = {
         "optional": True,
         "special": True,
         "always_visible": False,
-        "fallback": ["Notfall", "Normal"],
     },
     "Msk": {
         "label": "Msk",
@@ -125,7 +112,6 @@ DEFAULT_SKILLS = {
         "optional": True,
         "special": True,
         "always_visible": False,
-        "fallback": ["Notfall", "Normal"],
     },
     "Chest": {
         "label": "Chest",
@@ -135,7 +121,6 @@ DEFAULT_SKILLS = {
         "optional": True,
         "special": True,
         "always_visible": False,
-        "fallback": ["Notfall", "Normal"],
     },
 }
 
@@ -176,31 +161,7 @@ DEFAULT_BALANCER = {
     'min_assignments_per_skill': 5,
     'imbalance_threshold_pct': 30,
     'allow_fallback_on_imbalance': True,
-    'fallback_chain': DEFAULT_FALLBACK_CHAIN
 }
-
-
-def _normalize_skill_fallback_entries(entries: Any) -> List[Any]:
-    """Normalize fallback tiers to support strings or nested groups."""
-
-    normalized: List[Any] = []
-    if not isinstance(entries, list):
-        return normalized
-
-    for entry in entries:
-        if isinstance(entry, list):
-            group: List[str] = []
-            seen: set = set()
-            for candidate in entry:
-                if isinstance(candidate, str) and candidate not in seen:
-                    group.append(candidate)
-                    seen.add(candidate)
-            if group:
-                normalized.append(group)
-        elif isinstance(entry, str):
-            normalized.append(entry)
-
-    return normalized
 
 
 def _normalize_modality_fallback_entries(
@@ -394,23 +355,7 @@ def _build_app_config() -> Dict[str, Any]:
     user_balancer = raw_config.get('balancer')
     if isinstance(user_balancer, dict):
         for key, value in user_balancer.items():
-            if key == 'fallback_chain' and isinstance(value, dict):
-                merged_fallback = {}
-                all_skills = set(DEFAULT_FALLBACK_CHAIN) | set(value)
-                for skill in all_skills:
-                    merged_fallback[skill] = _normalize_skill_fallback_entries(
-                        list(DEFAULT_FALLBACK_CHAIN.get(skill, []))
-                    )
-
-                for skill, overrides in value.items():
-                    if isinstance(overrides, list):
-                        merged_fallback[skill] = _normalize_skill_fallback_entries(overrides)
-                    else:
-                        merged_fallback[skill] = merged_fallback.get(skill, [])
-
-                balancer_settings['fallback_chain'] = merged_fallback
-            else:
-                balancer_settings[key] = value
+            balancer_settings[key] = value
     config['balancer'] = balancer_settings
 
     modality_fallbacks = raw_config.get('modality_fallbacks')
@@ -484,6 +429,10 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
 
 SKILL_COLUMNS, SKILL_SLUG_MAP, SKILL_FORM_KEYS, SKILL_TEMPLATES, skill_weights = _build_skill_metadata(SKILL_SETTINGS)
 
+# Build dynamic role map from config (slug -> canonical name)
+# This allows URL-friendly lowercase names like 'herz' to map to 'Herz'
+ROLE_MAP = {slug.lower(): name for name, slug in SKILL_SLUG_MAP.items()}
+
 
 def get_skill_modality_weight(skill: str, modality: str) -> float:
     """
@@ -509,18 +458,8 @@ def get_skill_modality_weight(skill: str, modality: str) -> float:
 
 
 BALANCER_SETTINGS = APP_CONFIG.get('balancer', DEFAULT_BALANCER)
-raw_balancer_chain = BALANCER_SETTINGS.get('fallback_chain', DEFAULT_FALLBACK_CHAIN)
-BALANCER_FALLBACK_CHAIN = {}
-if isinstance(raw_balancer_chain, dict):
-    for skill, entries in raw_balancer_chain.items():
-        BALANCER_FALLBACK_CHAIN[skill] = _normalize_skill_fallback_entries(entries)
-else:
-    BALANCER_FALLBACK_CHAIN = {k: _normalize_skill_fallback_entries(v) for k, v in DEFAULT_FALLBACK_CHAIN.items()}
-
-BALANCER_SETTINGS['fallback_chain'] = BALANCER_FALLBACK_CHAIN
 
 # Load exclusion routing configuration
-USE_EXCLUSION_ROUTING = BALANCER_SETTINGS.get('use_exclusion_routing', False)
 EXCLUSION_RULES = BALANCER_SETTINGS.get('exclusion_rules', {})
 
 RAW_MODALITY_FALLBACKS = APP_CONFIG.get('modality_fallbacks', {})
@@ -1841,142 +1780,6 @@ def _attempt_column_selection(active_df: pd.DataFrame, column: str, modality: st
     return result_df
 
 
-def _try_configured_fallback(active_df: pd.DataFrame, current_column: str, modality: str):
-    fallback_chain = BALANCER_FALLBACK_CHAIN.get(current_column, [])
-    for fallback in fallback_chain:
-        if isinstance(fallback, list):
-            combined_frames = []
-            for fallback_column in fallback:
-                # is_primary=False: fallback mode allows skill value 0
-                result = _attempt_column_selection(active_df, fallback_column, modality, is_primary=False)
-                if result is not None:
-                    combined_frames.append(result)
-            if combined_frames:
-                merged = pd.concat(combined_frames, ignore_index=True)
-                if 'PPL' in merged.columns:
-                    merged = merged.drop_duplicates(subset=['PPL'])
-                return merged, fallback
-        else:
-            # is_primary=False: fallback mode allows skill value 0
-            result = _attempt_column_selection(active_df, fallback, modality, is_primary=False)
-            if result is not None:
-                return result, fallback
-    return None, current_column
-
-
-def get_active_df_for_role(
-    active_df: pd.DataFrame,
-    role: str,
-    modality: str,
-    allow_fallback: bool = True,
-):
-    role_map = {
-        'normal':  'Normal',
-        'notfall': 'Notfall',
-        'herz':    'Herz',
-        'privat':  'Privat',
-        'msk':     'Msk',
-        'chest':   'Chest'
-    }
-    role_lower = role.lower()
-    if role_lower not in role_map:
-        role_lower = 'normal'
-    primary_column = role_map[role_lower]
-
-    # Primary selection: is_primary=True (requires skill value >= 1)
-    selection = _attempt_column_selection(active_df, primary_column, modality, is_primary=True)
-    if selection is not None:
-        filtered_df = selection
-        used_column = primary_column
-    else:
-        filtered_df = None
-        used_column = primary_column
-
-    if filtered_df is None and allow_fallback:
-        filtered_df, used_column = _try_configured_fallback(active_df, primary_column, modality)
-
-    if filtered_df is None and allow_fallback:
-        # Ultimate fallback to Normal: is_primary=False (allows skill value 0)
-        normal_df = _attempt_column_selection(active_df, 'Normal', modality, is_primary=False)
-        if normal_df is not None:
-            filtered_df = normal_df
-            used_column = 'Normal'
-
-    if filtered_df is None:
-        return active_df.iloc[0:0], primary_column
-
-    # CRITICAL FIX: Only trigger fallback on imbalance if allow_fallback is True
-    # If strict mode (allow_fallback=False), skip the imbalance check entirely
-    if allow_fallback and isinstance(used_column, str) and _should_balance_via_fallback(filtered_df, used_column, modality):
-        fallback_df, fallback_column = _try_configured_fallback(active_df, used_column, modality)
-        if fallback_df is not None:
-            filtered_df = fallback_df
-            used_column = fallback_column
-
-    return filtered_df, used_column
-
-def _select_worker_for_modality(
-    current_dt: datetime,
-    role='normal',
-    modality=default_modality,
-    allow_fallback: bool = True,
-):
-    d = modality_data[modality]
-    if d['working_hours_df'] is None:
-        selection_logger.info(f"No working hours data for modality {modality}")
-        return None
-
-    tnow = current_dt.time()
-    active_df = _filter_active_rows(d['working_hours_df'], current_dt)
-
-    if active_df is None or active_df.empty:
-        selection_logger.info(f"No active workers at time {tnow} for modality {modality}")
-        return None
-
-    filtered_df, used_column = get_active_df_for_role(
-        active_df,
-        role,
-        modality,
-        allow_fallback=allow_fallback,
-    )
-    
-    if filtered_df.empty:
-        selection_logger.info(f"No workers found for role {role} (using column {used_column}) at time {tnow}")
-        return None
-
-    worker_count = len(filtered_df['PPL'].unique())
-    selection_logger.info(
-        "Found %s workers for role %s (column %s) in modality %s",
-        worker_count,
-        role,
-        used_column,
-        modality,
-    )
-
-    hours_map = calculate_work_hours_now(current_dt, modality)
-
-    def weighted_ratio(person):
-        canonical_id = get_canonical_worker_id(person)
-        h = hours_map.get(canonical_id, 0)
-        w = get_global_weighted_count(canonical_id)
-        # Smoothing: use max(h, 0.5) to prevent extreme volatility in first hour
-        # This prevents one worker from being hammered just because they started 1 minute ago
-        return w / max(h, 0.5) if h > 0 else w
-
-    available_workers = filtered_df['PPL'].unique()
-
-    if len(available_workers) == 0:
-        selection_logger.info(f"No workers available after filtering for {used_column}")
-        return None
-
-    best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
-    candidate = filtered_df[filtered_df['PPL'] == best_person].iloc[0].copy()
-    candidate['__modality_source'] = modality
-    candidate['__selection_ratio'] = weighted_ratio(best_person)
-    selection_logger.info(f"Selected candidate: {best_person}")
-    return candidate, used_column
-
-
 def get_next_available_worker(
     current_dt: datetime,
     role='normal',
@@ -1984,159 +1787,14 @@ def get_next_available_worker(
     allow_fallback: bool = True,
 ):
     """
-    Get next available worker using configured routing strategy.
+    Get next available worker using exclusion-based routing.
 
-    Routes to either exclusion-based or pool-based selection based on config.
+    Two-level fallback:
+    1. Primary: Workers with requested skill>=0 (not -1) EXCEPT those with excluded skills=1
+    2. Fallback: Workers with requested skill>=0 (ignore exclusions)
+    3. None: No workers available
     """
-    if USE_EXCLUSION_ROUTING:
-        return _get_worker_exclusion_based(current_dt, role, modality, allow_fallback)
-    else:
-        return _get_worker_pool_priority(current_dt, role, modality, allow_fallback)
-
-
-def _get_worker_pool_priority(
-    current_dt: datetime,
-    role: str,
-    modality: str,
-    allow_fallback: bool,
-):
-    """Pool-based approach: Collect ALL possible (skill, modality) combinations and pick the globally best one."""
-
-    # Build the skill fallback sequence
-    role_map = {
-        'normal':  'Normal',
-        'notfall': 'Notfall',
-        'herz':    'Herz',
-        'privat':  'Privat',
-        'msk':     'Msk',
-        'chest':   'Chest'
-    }
-    role_lower = role.lower()
-    if role_lower not in role_map:
-        role_lower = 'normal'
-    primary_skill = role_map[role_lower]
-
-    # Get skill fallback chain
-    skill_chain = [primary_skill]
-    if allow_fallback:
-        configured_fallbacks = BALANCER_FALLBACK_CHAIN.get(primary_skill, [])
-        for fallback_entry in configured_fallbacks:
-            if isinstance(fallback_entry, list):
-                skill_chain.extend(fallback_entry)
-            else:
-                skill_chain.append(fallback_entry)
-        # Add ultimate fallback to Normal if not already there
-        if 'Normal' not in skill_chain:
-            skill_chain.append('Normal')
-
-    # Build modality search order
-    modality_search = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
-
-    # Flatten modality groups
-    flat_modality_search = []
-    for entry in modality_search:
-        if isinstance(entry, list):
-            flat_modality_search.extend(entry)
-        else:
-            flat_modality_search.append(entry)
-
-    # Remove duplicates while preserving order
-    seen_modalities = set()
-    unique_modality_search = []
-    for mod in flat_modality_search:
-        if mod not in seen_modalities and mod in modality_data:
-            seen_modalities.add(mod)
-            unique_modality_search.append(mod)
-
-    # Build the complete pool: all (skill, modality) combinations
-    selection_logger.info(
-        "Building candidate pool for role %s: skills=%s, modalities=%s (pool_priority mode)",
-        role,
-        skill_chain,
-        unique_modality_search,
-    )
-
-    candidate_pool = []
-
-    for skill_to_try in skill_chain:
-        # Determine if this is primary or fallback mode
-        is_primary_skill = (skill_to_try == primary_skill)
-
-        for target_modality in unique_modality_search:
-            d = modality_data[target_modality]
-            if d['working_hours_df'] is None:
-                continue
-
-            active_df = _filter_active_rows(d['working_hours_df'], current_dt)
-
-            if active_df is None or active_df.empty:
-                continue
-
-            # Try this specific skill in this specific modality
-            # is_primary=True for requested skill, False for fallbacks
-            selection = _attempt_column_selection(active_df, skill_to_try, target_modality, is_primary=is_primary_skill)
-            if selection is None or selection.empty:
-                continue
-
-            # Apply minimum balancer
-            balanced_df = _apply_minimum_balancer(selection, skill_to_try, target_modality)
-            result_df = balanced_df if not balanced_df.empty else selection
-
-            # Select best worker from this (skill, modality) combination
-            hours_map = calculate_work_hours_now(current_dt, target_modality)
-
-            def weighted_ratio(person):
-                canonical_id = get_canonical_worker_id(person)
-                h = hours_map.get(canonical_id, 0)
-                w = get_global_weighted_count(canonical_id)
-                # Smoothing: use max(h, 0.5) to prevent extreme volatility in first hour
-                return w / max(h, 0.5) if h > 0 else w
-
-            available_workers = result_df['PPL'].unique()
-            if len(available_workers) == 0:
-                continue
-
-            # Get the best worker for this specific (skill, modality) combination
-            best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
-            candidate = result_df[result_df['PPL'] == best_person].iloc[0].copy()
-            candidate['__modality_source'] = target_modality
-            candidate['__selection_ratio'] = weighted_ratio(best_person)
-
-            ratio = candidate.get('__selection_ratio', float('inf'))
-            candidate_pool.append((ratio, candidate, skill_to_try, target_modality))
-
-    # Now select the globally best candidate from the entire pool
-    if not candidate_pool:
-        selection_logger.info(
-            "No workers available for role %s across all skill and modality combinations (pool_priority mode)",
-            role,
-        )
-        return None
-
-    # Sort by ratio and pick the best
-    ratio, candidate, used_skill, source_modality = min(candidate_pool, key=lambda item: item[0])
-
-    selection_logger.info(
-        "Selected from pool of %d candidates: skill=%s, modality=%s, person=%s, ratio=%.4f (requested: skill=%s, modality=%s)",
-        len(candidate_pool),
-        used_skill,
-        source_modality,
-        candidate.get('PPL', 'unknown'),
-        ratio,
-        primary_skill,
-        modality,
-    )
-
-    if source_modality != modality or used_skill != primary_skill:
-        selection_logger.info(
-            "Fallback used: skill=%s, modality=%s (requested: skill=%s, modality=%s)",
-            used_skill,
-            source_modality,
-            primary_skill,
-            modality,
-        )
-
-    return candidate, used_skill, source_modality
+    return _get_worker_exclusion_based(current_dt, role, modality, allow_fallback)
 
 
 def _get_worker_exclusion_based(
@@ -2157,19 +1815,11 @@ def _get_worker_exclusion_based(
       Level 1: Workers with Herz>=0 AND Chest<1 → Pick lowest ratio
       Level 2: Workers with Herz>=0 (any Chest value) → Pick lowest ratio
     """
-    # Build role mapping
-    role_map = {
-        'normal':  'Normal',
-        'notfall': 'Notfall',
-        'herz':    'Herz',
-        'privat':  'Privat',
-        'msk':     'Msk',
-        'chest':   'Chest'
-    }
+    # Map role slug to canonical skill name (e.g., 'herz' -> 'Herz')
     role_lower = role.lower()
-    if role_lower not in role_map:
+    if role_lower not in ROLE_MAP:
         role_lower = 'normal'
-    primary_skill = role_map[role_lower]
+    primary_skill = ROLE_MAP[role_lower]
 
     # Get exclusion rules for this skill
     skill_exclusions = EXCLUSION_RULES.get(primary_skill, {})
