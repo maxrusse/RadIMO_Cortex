@@ -35,7 +35,6 @@ skills:
     special: false
     always_visible: true
     display_order: 0
-    fallback: []
     slug: normal
     form_key: normal
   Notfall:
@@ -47,8 +46,6 @@ skills:
     special: false
     always_visible: true
     display_order: 1
-    fallback:
-      - Normal
     slug: notfall
     form_key: notfall
   Privat:
@@ -60,10 +57,6 @@ skills:
     special: false
     always_visible: true
     display_order: 2
-    fallback:
-      - Notfall
-      - - Normal
-        - Herz
     slug: privat
     form_key: privat
   Herz:
@@ -75,9 +68,6 @@ skills:
     special: true
     always_visible: false
     display_order: 3
-    fallback:
-      - - Notfall
-        - Normal
     slug: herz
     form_key: herz
   Msk:
@@ -89,9 +79,6 @@ skills:
     special: true
     always_visible: false
     display_order: 4
-    fallback:
-      - Notfall
-      - Normal
     slug: msk
     form_key: msk
   Chest:
@@ -103,9 +90,6 @@ skills:
     special: true
     always_visible: false
     display_order: 5
-    fallback:
-      - Notfall
-      - Normal
     slug: chest
     form_key: chest
 # Skill×Modality weight overrides (Optional)
