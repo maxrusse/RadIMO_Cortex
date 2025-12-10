@@ -410,6 +410,19 @@ def _build_app_config() -> Dict[str, Any]:
                 list(merged_modalities.keys()),
             )
     config['modality_fallbacks'] = normalized_fallbacks
+
+    # Include medweb_mapping (activity -> modality/skill mapping rules)
+    medweb_mapping = raw_config.get('medweb_mapping', {})
+    config['medweb_mapping'] = medweb_mapping
+
+    # Include worker_roster
+    worker_roster = raw_config.get('worker_roster', {})
+    config['worker_roster'] = worker_roster
+
+    # Include skill_modality_overrides
+    skill_modality_overrides = raw_config.get('skill_modality_overrides', {})
+    config['skill_modality_overrides'] = skill_modality_overrides
+
     return config
 
 
