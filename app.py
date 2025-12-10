@@ -1183,6 +1183,7 @@ def build_working_hours_from_medweb(
                     'end_time': end_time,
                     'shift_duration': duration_hours,
                     'Modifier': 1.0,  # Can be extended with modifier_overrides
+                    'tasks': '',  # Initialize empty tasks column
                     **final_skills
                 })
 
@@ -1512,10 +1513,13 @@ def initialize_data(file_path: str, modality: str):
             # Compute canonical ID for each worker
             df['canonical_id'] = df['PPL'].apply(get_canonical_worker_id)
 
-            # Set column order as desired
-            col_order = ['PPL', 'canonical_id', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration']
+            # Set column order as desired (include tasks column)
+            col_order = ['PPL', 'canonical_id', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks']
             skill_cols = [skill for skill in SKILL_COLUMNS if skill in df.columns]
             col_order = col_order[:4] + skill_cols + col_order[4:]
+            # Ensure tasks column exists
+            if 'tasks' not in df.columns:
+                df['tasks'] = ''
             df = df[[col for col in col_order if col in df.columns]]
 
             # Save the DataFrame and compute auxiliary data
@@ -3024,6 +3028,10 @@ def prep_next_day():
     """
     next_day = get_next_workday()
 
+    # Get worker list from skill roster for autocomplete
+    roster = load_worker_skill_json()
+    worker_list = list(roster.keys()) if roster else []
+
     return render_template(
         'prep_next_day.html',
         target_date=next_day.strftime('%Y-%m-%d'),
@@ -3033,7 +3041,8 @@ def prep_next_day():
         modalities=list(MODALITY_SETTINGS.keys()),
         modality_settings=MODALITY_SETTINGS,
         shift_times=APP_CONFIG.get('shift_times', {}),
-        medweb_mapping=APP_CONFIG.get('medweb_mapping', {})
+        medweb_mapping=APP_CONFIG.get('medweb_mapping', {}),
+        worker_list=worker_list
     )
 
 
