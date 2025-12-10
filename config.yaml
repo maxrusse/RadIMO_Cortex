@@ -13,11 +13,17 @@ modalities:
     background_color: '#f9f9f9'
     factor: 1.2
   xray:
-    label: XRAY
+    label: X-ray
     nav_color: '#239b56'
     hover_color: '#1d7a48'
     background_color: '#e0f2e9'
     factor: 0.33
+  mammo:
+    label: Mammo
+    nav_color: '#e91e63'
+    hover_color: '#c2185b'
+    background_color: '#fce4ec'
+    factor: 0.5
 modality_fallbacks:
   xray:
     - - ct
@@ -25,9 +31,10 @@ modality_fallbacks:
   ct:
     - mr
   mr: []
+  mammo: []
 skills:
-  Normal:
-    label: Normal
+  Allgemein:
+    label: Allgemein
     button_color: '#004892'
     text_color: '#ffffff'
     weight: 1.0
@@ -35,8 +42,8 @@ skills:
     special: false
     always_visible: true
     display_order: 0
-    slug: normal
-    form_key: normal
+    slug: allgemein
+    form_key: allgemein
   Notfall:
     label: Notfall
     button_color: '#dc3545'
@@ -59,19 +66,19 @@ skills:
     display_order: 2
     slug: privat
     form_key: privat
-  Herz:
-    label: Herz
-    button_color: '#28a745'
+  Gyn:
+    label: Gyn
+    button_color: '#e91e63'
     text_color: '#ffffff'
-    weight: 1.2
+    weight: 1.0
     optional: true
     special: true
     always_visible: false
     display_order: 3
-    slug: herz
-    form_key: herz
-  Msk:
-    label: Msk
+    slug: gyn
+    form_key: gyn
+  MSK:
+    label: MSK
     button_color: '#9c27b0'
     text_color: '#ffffff'
     weight: 0.8
@@ -81,6 +88,17 @@ skills:
     display_order: 4
     slug: msk
     form_key: msk
+  Abdomen:
+    label: Abdomen
+    button_color: '#00bcd4'
+    text_color: '#ffffff'
+    weight: 1.0
+    optional: true
+    special: true
+    always_visible: false
+    display_order: 5
+    slug: abdomen
+    form_key: abdomen
   Chest:
     label: Chest
     button_color: '#ff9800'
@@ -89,17 +107,39 @@ skills:
     optional: true
     special: true
     always_visible: false
-    display_order: 5
+    display_order: 6
     slug: chest
     form_key: chest
+  Cardvask:
+    label: Cardvask
+    button_color: '#28a745'
+    text_color: '#ffffff'
+    weight: 1.2
+    optional: true
+    special: true
+    always_visible: false
+    display_order: 7
+    slug: cardvask
+    form_key: cardvask
+  Uro:
+    label: Uro
+    button_color: '#795548'
+    text_color: '#ffffff'
+    weight: 1.0
+    optional: true
+    special: true
+    always_visible: false
+    display_order: 8
+    slug: uro
+    form_key: uro
 # Skill×Modality weight overrides (Optional)
 # Use this to override the default skill_weight × modality_factor calculation
 # for specific combinations. If not specified, falls back to: skill.weight × modality.factor
 # Example: MR×Herz override instead of 1.2×1.2=1.44
 skill_modality_overrides:
-  # Example: MR×Herz override (instead of default 1.2×1.2=1.44)
+  # Example: MR×Cardvask override (instead of default 1.2×1.2=1.44)
   mr:
-    Herz: 1.8        # Cardiac work in MR weighted higher
+    Cardvask: 1.8    # Cardiac work in MR weighted higher
   # ct:
   #   Chest: 1.0     # Override CT×Chest
 
@@ -116,23 +156,32 @@ balancer:
     # Workers with excluded_skill=1 won't receive work for this skill
     # Two-level fallback: (1) All except exclusions → (2) Skill>=0 → (3) None
 
-    Privat:
-      exclude_skills: []  # No exclusions - anyone can get Privat work
+    Allgemein:
+      exclude_skills: []  # No exclusions - anyone can get Allgemein work
 
     Notfall:
       exclude_skills: []  # No exclusions - anyone can get Notfall work
 
-    Herz:
-      exclude_skills: []  # No exclusions - anyone can get Herz work
+    Privat:
+      exclude_skills: []  # No exclusions - anyone can get Privat work
 
-    Normal:
-      exclude_skills: []  # No exclusions - anyone can get Normal work
+    Gyn:
+      exclude_skills: []
 
-    Msk:
-      exclude_skills: []  # No exclusions - anyone can get Msk work
+    MSK:
+      exclude_skills: []
+
+    Abdomen:
+      exclude_skills: []
 
     Chest:
-      exclude_skills: []  # No exclusions - anyone can get Chest work
+      exclude_skills: []
+
+    Cardvask:
+      exclude_skills: []
+
+    Uro:
+      exclude_skills: []
 
 # Medweb CSV Upload Configuration
 medweb_mapping:
@@ -143,72 +192,91 @@ medweb_mapping:
     - match: "CT Spätdienst"
       modality: "ct"
       shift: "Spaetdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "CT Assistent"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Cortex: CT Privatpatienten"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 0, Privat: 1, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 1, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # MR activities
     - match: "MRT Spätdienst"
       modality: "mr"
       shift: "Spaetdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MR Assistent 1. Monat"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Normal: 1, Notfall: 0, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 0, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MR Assistent"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Cortex: MRT-OA"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 0, Privat: 1, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 1, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # Chir activities → xray modality (per user clarification: chir=xray)
+    # X-ray activities (Chir = conventional X-ray)
     - match: "Chir Assistent"
       modality: "xray"
       shift: "Fruehdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "OA / FA Chir"
       modality: "xray"
       shift: "Fruehdienst"
-      base_skills: {Normal: 1, Notfall: 1, Privat: 1, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 1, Privat: 1, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+
+    # Mammo activities
+    - match: "Mammo Assistent"
+      modality: "mammo"
+      shift: "Fruehdienst"
+      base_skills: {Allgemein: 1, Notfall: 0, Privat: 0, Gyn: 1, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+
+    - match: "Mammo OA"
+      modality: "mammo"
+      shift: "Fruehdienst"
+      base_skills: {Allgemein: 1, Notfall: 0, Privat: 1, Gyn: 1, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # Sub-specialty teams (multi-modality support)
-    # These workers cover multiple modalities for their specialty
-    # Use 'modalities' (list) instead of 'modality' (string)
     - match: "MSK Assistent"
-      modalities: ["xray", "ct", "mr"]  # Available in all three modalities
+      modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 0, Privat: 0, Herz: 0, Msk: 1, Chest: 0}
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 0, Gyn: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MSK Team"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 0, Privat: 0, Herz: 0, Msk: 1, Chest: 0}
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 0, Gyn: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    - match: "Herz Team"
-      modalities: ["ct", "mr"]  # Cardiac specialists in CT and MR
+    - match: "Cardvask Team"
+      modalities: ["ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 1, Privat: 0, Herz: 1, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 0, Notfall: 1, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 1, Uro: 0}
 
     - match: "Chest Team"
-      modalities: ["xray", "ct"]  # Chest specialists in X-ray and CT
+      modalities: ["xray", "ct"]
       shift: "Fruehdienst"
-      base_skills: {Normal: 0, Notfall: 0, Privat: 0, Herz: 0, Msk: 0, Chest: 1}
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 1, Cardvask: 0, Uro: 0}
+
+    - match: "Abdomen Team"
+      modalities: ["ct", "mr"]
+      shift: "Fruehdienst"
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 1, Chest: 0, Cardvask: 0, Uro: 0}
+
+    - match: "Uro Team"
+      modalities: ["ct", "mr"]
+      shift: "Fruehdienst"
+      base_skills: {Allgemein: 0, Notfall: 0, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 1}
 
     # Time exclusions (boards, meetings, teaching) - NEW
     # These punch out time from work shifts (worker completely unavailable)
@@ -251,7 +319,7 @@ medweb_mapping:
       modality: "ct"
       shift: "Fruehdienst"
       label: "Aufklärung"
-      base_skills: {Normal: 1, Notfall: 0, Privat: 0, Herz: 0, Msk: 0, Chest: 0}
+      base_skills: {Allgemein: 1, Notfall: 0, Privat: 0, Gyn: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
 # Shift time definitions
 shift_times:
@@ -267,53 +335,68 @@ shift_times:
 # -1 = excluded (never use), 0 = passive (fallback only), 1 = active (primary + fallback)
 worker_skill_roster:
   # Example: MSK specialist
-  AA:  #  Any Arzt
+  AA:  # Any Arzt
     default:
-      Normal: 1
+      Allgemein: 1
       Notfall: 1
       Privat: 0
-      Herz: 0
-      Msk: 1      # MSK specialist
+      Gyn: 0
+      MSK: 1      # MSK specialist
+      Abdomen: 0
       Chest: 0
+      Cardvask: 0
+      Uro: 0
 
   # Example: Chest specialist with CT Notfall only as fallback
   AN:  # Any Newarzt
     default:
-      Normal: 1
+      Allgemein: 1
       Notfall: 1
       Privat: 0
-      Herz: 0
-      Msk: 0
+      Gyn: 0
+      MSK: 0
+      Abdomen: 0
       Chest: 1    # Chest specialist
+      Cardvask: 0
+      Uro: 0
     ct:
       Notfall: 0  # Only fallback for CT Notfall
 
   # Example: Cardiac specialist
   DEMO1:
     default:
-      Normal: 1
+      Allgemein: 1
       Notfall: 1
       Privat: 0
-      Herz: 1     # Cardiac specialist
-      Msk: 0
+      Gyn: 0
+      MSK: 0
+      Abdomen: 0
       Chest: 0
+      Cardvask: 1   # Cardiac specialist
+      Uro: 0
 
   # Example: Private patients only (PP role)
   DEMO2:
     default:
-      Normal: 0   # Only fallback
-      Notfall: 0  # Only fallback
-      Privat: 1   # Primary for private patients
-      Herz: 0
-      Msk: -1     # Never for MSK
-      Chest: -1   # Never for Chest
+      Allgemein: 0   # Only fallback
+      Notfall: 0     # Only fallback
+      Privat: 1      # Primary for private patients
+      Gyn: 0
+      MSK: -1        # Never for MSK
+      Abdomen: 0
+      Chest: -1      # Never for Chest
+      Cardvask: 0
+      Uro: 0
 
   # Example: First month assistant (no Notfall)
   DEMO3:
     default:
-      Normal: 1
-      Notfall: 0  # Not allowed for emergencies yet
+      Allgemein: 1
+      Notfall: 0     # Not allowed for emergencies yet
       Privat: 0
-      Herz: 0
-      Msk: 0
+      Gyn: 0
+      MSK: 0
+      Abdomen: 0
       Chest: 0
+      Cardvask: 0
+      Uro: 0

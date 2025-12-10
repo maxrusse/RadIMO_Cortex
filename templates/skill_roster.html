@@ -12,7 +12,7 @@
       font-family: system-ui, -apple-system, sans-serif;
       background: #f0f0f0;
       padding: 1rem;
-      max-width: 1400px;
+      max-width: 1600px;
       margin: 0 auto;
     }
 
@@ -25,16 +25,19 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
     .header h1 {
       margin: 0;
-      font-size: 1.75rem;
+      font-size: 1.5rem;
     }
 
     .header-actions {
       display: flex;
       gap: 0.5rem;
+      flex-wrap: wrap;
     }
 
     .btn {
@@ -42,35 +45,24 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       transition: background 0.2s;
+      text-decoration: none;
     }
 
-    .btn-primary {
-      background: #004892;
-      color: white;
-    }
+    .btn-primary { background: #004892; color: white; }
+    .btn-primary:hover { background: #003670; }
+    .btn-secondary { background: #777; color: white; }
+    .btn-secondary:hover { background: #555; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
 
-    .btn-primary:hover {
-      background: #003670;
-    }
-
-    .btn-secondary {
-      background: #777;
-      color: white;
-    }
-
-    .btn-secondary:hover {
-      background: #555;
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #218838;
+    .main-layout {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      gap: 1rem;
     }
 
     .content-box {
@@ -80,12 +72,84 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
+    /* Worker List */
+    .worker-list {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+    }
+
+    .worker-list h3 {
+      margin-bottom: 1rem;
+      color: #004892;
+    }
+
+    .worker-item {
+      padding: 0.75rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .worker-item:hover {
+      background: #e7f3ff;
+      border-color: #004892;
+    }
+
+    .worker-item.active {
+      background: #004892;
+      color: white;
+      border-color: #004892;
+    }
+
+    .worker-item .worker-name {
+      font-weight: 600;
+    }
+
+    .worker-item .has-overrides {
+      font-size: 0.75rem;
+      background: #ff9800;
+      color: white;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+    }
+
+    .add-worker-form {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .add-worker-form input {
+      flex: 1;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    /* Worker Detail */
+    .worker-detail h3 {
+      margin-bottom: 0.5rem;
+      color: #004892;
+    }
+
+    .worker-detail .subtitle {
+      color: #666;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+
     .legend {
       margin-bottom: 1rem;
-      padding: 1rem;
+      padding: 0.75rem;
       background: #e7f3ff;
       border-left: 4px solid #004892;
       border-radius: 4px;
+      font-size: 0.85rem;
     }
 
     .legend-item {
@@ -95,56 +159,59 @@
 
     .legend-item code {
       background: #fff;
-      padding: 0.2rem 0.5rem;
+      padding: 0.1rem 0.4rem;
       border-radius: 3px;
       font-weight: bold;
     }
 
-    .roster-table-container {
-      overflow-x: auto;
-      margin-top: 1rem;
-    }
-
-    .roster-table {
+    /* Skill × Modality Matrix */
+    .matrix-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.9rem;
     }
 
-    .roster-table th,
-    .roster-table td {
+    .matrix-table th,
+    .matrix-table td {
       padding: 0.5rem;
       text-align: center;
       border: 1px solid #ddd;
     }
 
-    .roster-table th {
+    .matrix-table th {
       background: #f8f9fa;
       font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 10;
     }
 
-    .roster-table th.worker-col {
+    .matrix-table th.skill-col {
       text-align: left;
+      background: #004892;
+      color: white;
+      width: 120px;
+    }
+
+    .matrix-table th.default-col {
       background: #004892;
       color: white;
     }
 
-    .roster-table td.worker-id {
+    .matrix-table th.modality-col {
+      background: #f0f0f0;
+    }
+
+    .matrix-table td.skill-name {
       text-align: left;
       font-weight: 600;
       background: #f8f9fa;
     }
 
     .skill-input {
-      width: 50px;
-      padding: 0.3rem;
+      width: 45px;
+      padding: 0.25rem;
       text-align: center;
       border: 1px solid #ccc;
       border-radius: 3px;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
 
     .skill-input:focus {
@@ -153,36 +220,35 @@
       box-shadow: 0 0 3px rgba(0, 72, 146, 0.3);
     }
 
-    .skill-input.value--1 {
-      background: #ffe6e6;
+    .skill-input.has-override {
+      border: 2px solid #ff9800;
+      font-weight: bold;
     }
 
-    .skill-input.value-0 {
-      background: #fff8e6;
+    .skill-input.value--1 { background: #ffe6e6; }
+    .skill-input.value-0 { background: #fff8e6; }
+    .skill-input.value-1 { background: #e6ffe6; }
+
+    .override-cell {
+      position: relative;
     }
 
-    .skill-input.value-1 {
-      background: #e6ffe6;
+    .clear-btn {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: #6c757d;
+      color: white;
+      border: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      font-size: 10px;
+      cursor: pointer;
+      line-height: 1;
     }
 
-    .add-worker-section {
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
-      border-top: 2px solid #e0e0e0;
-    }
-
-    .add-worker-form {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .add-worker-form input {
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 0.95rem;
-    }
+    .clear-btn:hover { background: #5a6268; }
 
     .status-message {
       margin-top: 1rem;
@@ -209,162 +275,106 @@
       color: #777;
     }
 
-    .modality-section {
-      margin-top: 2rem;
-      padding: 1.5rem;
-      background: #f8f9fa;
-      border-radius: 8px;
-      border-left: 4px solid #004892;
-    }
-
-    .modality-section h3 {
-      margin-top: 0;
-      margin-bottom: 1rem;
-      color: #004892;
-      font-size: 1.2rem;
-    }
-
-    .modality-section .hint {
-      font-size: 0.85rem;
-      color: #666;
-      margin-bottom: 1rem;
-    }
-
-    .override-input {
-      width: 50px;
-      padding: 0.3rem;
+    .no-worker-selected {
       text-align: center;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      font-size: 0.9rem;
-      background: #fff;
+      padding: 3rem;
+      color: #777;
     }
 
-    .override-input:focus {
-      outline: none;
-      border-color: #004892;
-      box-shadow: 0 0 3px rgba(0, 72, 146, 0.3);
+    .no-worker-selected h3 {
+      color: #777;
+      margin-bottom: 1rem;
     }
 
-    .override-input.has-override {
-      border: 2px solid #ff9800;
-      font-weight: bold;
-    }
-
-    .override-input.value--1 {
-      background: #ffe6e6;
-    }
-
-    .override-input.value-0 {
-      background: #fff8e6;
-    }
-
-    .override-input.value-1 {
-      background: #e6ffe6;
-    }
-
-    .clear-override-btn {
-      background: #6c757d;
-      color: white;
-      border: none;
-      padding: 0.2rem 0.4rem;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 0.75rem;
-      margin-left: 0.25rem;
-    }
-
-    .clear-override-btn:hover {
-      background: #5a6268;
-    }
-
-    .remove-worker-btn {
-      background: #dc3545;
-      color: white;
-      border: none;
-      padding: 0.3rem 0.6rem;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-
-    .remove-worker-btn:hover {
-      background: #c82333;
+    /* Responsive */
+    @media (max-width: 900px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+      .worker-list {
+        max-height: 200px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <h1>RadIMO Cortex | Skill Matrix <span style="color: #ff9800; font-size: 1rem;">(Planning Mode)</span></h1>
-      <p>Worker skill configuration and management</p>
+      <h1>RadIMO Cortex | Skill Matrix <span style="color: #ff9800; font-size: 0.9rem;">(Planning Mode)</span></h1>
+      <p style="font-size: 0.85rem; color: #666;">Worker skill × modality configuration</p>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('index') }}">Dashboard</a>
-      <a href="{{ url_for('timetable') }}">Timetable</a>
-      <a href="{{ url_for('live_edit_page') }}">Day Control</a>
-      <a href="{{ url_for('upload_file') }}">Admin</a>
-      <a href="{{ url_for('prep_next_day') }}">Prep Next Day</a>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">Dashboard</a>
+      <a href="{{ url_for('timetable') }}" class="btn btn-secondary">Timetable</a>
+      <a href="{{ url_for('live_edit_page') }}" class="btn btn-secondary">Day Control</a>
       <button class="btn btn-secondary" onclick="reloadRoster()">Reload Staged</button>
       <button class="btn btn-primary" onclick="saveRoster()">Save to Staging</button>
       <button class="btn btn-success" onclick="activateRoster()">Activate Changes</button>
     </div>
   </div>
 
-  <div class="content-box">
-    <div class="legend">
-      <strong>⚠️ Planning Mode:</strong> Changes here are STAGED only and do NOT affect current assignments until you click "Activate Changes".
-      <br><br>
-      <strong>Legend:</strong>
-      <div class="legend-item"><code>-1</code> = Excluded (never use)</div>
-      <div class="legend-item"><code>0</code> = Passive (fallback only)</div>
-      <div class="legend-item"><code>1</code> = Active (primary + fallback)</div>
+  <div id="loading" class="loading content-box">Loading roster...</div>
+
+  <div id="mainContent" class="main-layout" style="display: none;">
+    <!-- Worker List -->
+    <div class="content-box worker-list">
+      <h3>Workers</h3>
+      <div id="workerListContainer"></div>
+      <div class="add-worker-form">
+        <input type="text" id="newWorkerId" placeholder="Worker ID" />
+        <button class="btn btn-primary" onclick="addWorker()">+</button>
+      </div>
     </div>
 
-    <div id="loading" class="loading">Loading roster...</div>
+    <!-- Worker Detail -->
+    <div class="content-box worker-detail">
+      <div id="noWorkerSelected" class="no-worker-selected">
+        <h3>Select a worker</h3>
+        <p>Click on a worker from the list to view and edit their skill × modality matrix.</p>
+      </div>
 
-    <div id="rosterContainer" style="display: none;">
-      <h3>Default Skills (applies to all modalities unless overridden below)</h3>
-      <div class="roster-table-container">
-        <table class="roster-table" id="defaultTable">
+      <div id="workerDetailContent" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div>
+            <h3 id="selectedWorkerTitle">Worker: ---</h3>
+            <p class="subtitle">Edit default skills and per-modality overrides</p>
+          </div>
+          <button class="btn btn-danger" onclick="removeSelectedWorker()">Remove Worker</button>
+        </div>
+
+        <div class="legend">
+          <strong>Legend:</strong>
+          <span class="legend-item"><code style="background:#e6ffe6">1</code> Active (primary)</span>
+          <span class="legend-item"><code style="background:#fff8e6">0</code> Fallback only</span>
+          <span class="legend-item"><code style="background:#ffe6e6">-1</code> Excluded</span>
+          <span class="legend-item" style="margin-left: 1rem;"><code style="border:2px solid #ff9800">—</code> Override (orange border)</span>
+        </div>
+
+        <table class="matrix-table" id="matrixTable">
           <thead>
-            <tr>
-              <th class="worker-col">Worker ID</th>
-              <!-- Skills will be added dynamically -->
-              <th>Actions</th>
+            <tr id="matrixHeader">
+              <th class="skill-col">Skill</th>
+              <th class="default-col">default</th>
+              <!-- Modality columns added dynamically -->
             </tr>
           </thead>
-          <tbody id="defaultTableBody">
-            <!-- Rows will be added dynamically -->
+          <tbody id="matrixBody">
+            <!-- Rows added dynamically -->
           </tbody>
         </table>
       </div>
-
-      <div id="modalityTablesContainer">
-        <!-- Per-modality override tables will be added dynamically -->
-      </div>
-
-      <div class="add-worker-section">
-        <h4>Add New Worker</h4>
-        <div class="add-worker-form">
-          <input type="text" id="newWorkerId" placeholder="Worker ID (e.g., AAn, AN)" />
-          <button class="btn btn-primary" onclick="addWorker()">Add Worker</button>
-        </div>
-      </div>
     </div>
-
-    <div id="statusMessage" class="status-message"></div>
   </div>
+
+  <div id="statusMessage" class="status-message"></div>
 
   <script>
     let rosterData = {};
     let skills = [];
     let modalities = [];
+    let selectedWorker = null;
 
-    // Load roster on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      loadRoster();
-    });
+    document.addEventListener('DOMContentLoaded', loadRoster);
 
     async function loadRoster() {
       try {
@@ -376,10 +386,10 @@
           skills = data.skills;
           modalities = data.modalities;
 
-          renderRosterTable();
+          renderWorkerList();
 
           document.getElementById('loading').style.display = 'none';
-          document.getElementById('rosterContainer').style.display = 'block';
+          document.getElementById('mainContent').style.display = 'grid';
         } else {
           showStatus('Failed to load roster: ' + data.error, 'error');
         }
@@ -388,267 +398,214 @@
       }
     }
 
-    function renderRosterTable() {
-      const table = document.getElementById('defaultTable');
-      const thead = table.querySelector('thead tr');
-      const tbody = document.getElementById('defaultTableBody');
-
-      // Clear existing content
-      thead.innerHTML = '<th class="worker-col">Worker ID</th>';
-      tbody.innerHTML = '';
-
-      // Add skill column headers
-      skills.forEach(skill => {
-        const th = document.createElement('th');
-        th.textContent = skill;
-        thead.appendChild(th);
-      });
-
-      // Add actions column
-      const thActions = document.createElement('th');
-      thActions.textContent = 'Actions';
-      thead.appendChild(thActions);
-
-      // Add worker rows
-      const workerIds = Object.keys(rosterData).sort();
-
-      workerIds.forEach(workerId => {
-        const row = document.createElement('tr');
-
-        // Worker ID cell
-        const cellId = document.createElement('td');
-        cellId.className = 'worker-id';
-        cellId.textContent = workerId;
-        row.appendChild(cellId);
-
-        // Skill cells
-        const defaultSkills = rosterData[workerId].default || {};
-
-        skills.forEach(skill => {
-          const cell = document.createElement('td');
-          const input = document.createElement('input');
-          input.type = 'number';
-          input.className = 'skill-input';
-          input.min = '-1';
-          input.max = '1';
-          input.step = '1';
-          input.value = defaultSkills[skill] !== undefined ? defaultSkills[skill] : 0;
-          input.dataset.workerId = workerId;
-          input.dataset.skill = skill;
-
-          // Add color class based on value
-          updateInputColor(input);
-
-          input.addEventListener('change', function() {
-            updateSkillValue(workerId, skill, parseInt(this.value));
-            updateInputColor(this);
-          });
-
-          cell.appendChild(input);
-          row.appendChild(cell);
-        });
-
-        // Actions cell
-        const cellActions = document.createElement('td');
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-worker-btn';
-        removeBtn.textContent = 'Remove';
-        removeBtn.onclick = () => removeWorker(workerId);
-        cellActions.appendChild(removeBtn);
-        row.appendChild(cellActions);
-
-        tbody.appendChild(row);
-      });
-
-      // Render per-modality override tables
-      renderModalityTables();
-    }
-
-    function renderModalityTables() {
-      const container = document.getElementById('modalityTablesContainer');
+    function renderWorkerList() {
+      const container = document.getElementById('workerListContainer');
       container.innerHTML = '';
 
       const workerIds = Object.keys(rosterData).sort();
 
-      modalities.forEach(modality => {
-        const section = document.createElement('div');
-        section.className = 'modality-section';
+      workerIds.forEach(workerId => {
+        const div = document.createElement('div');
+        div.className = 'worker-item' + (selectedWorker === workerId ? ' active' : '');
+        div.onclick = () => selectWorker(workerId);
 
-        const title = document.createElement('h3');
-        title.textContent = `${modality.toUpperCase()} Overrides`;
-        section.appendChild(title);
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'worker-name';
+        nameSpan.textContent = workerId;
+        div.appendChild(nameSpan);
 
-        const hint = document.createElement('p');
-        hint.className = 'hint';
-        hint.textContent = 'Leave empty to use default. Set value to override for this modality only. Orange border = override active.';
-        section.appendChild(hint);
+        // Check if worker has any modality overrides
+        const hasOverrides = modalities.some(mod =>
+          rosterData[workerId][mod] && Object.keys(rosterData[workerId][mod]).length > 0
+        );
 
-        const tableContainer = document.createElement('div');
-        tableContainer.className = 'roster-table-container';
+        if (hasOverrides) {
+          const badge = document.createElement('span');
+          badge.className = 'has-overrides';
+          badge.textContent = 'overrides';
+          div.appendChild(badge);
+        }
 
-        const table = document.createElement('table');
-        table.className = 'roster-table';
-
-        // Header
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-
-        const thWorker = document.createElement('th');
-        thWorker.className = 'worker-col';
-        thWorker.textContent = 'Worker ID';
-        headerRow.appendChild(thWorker);
-
-        skills.forEach(skill => {
-          const th = document.createElement('th');
-          th.textContent = skill;
-          headerRow.appendChild(th);
-        });
-
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        // Body
-        const tbody = document.createElement('tbody');
-
-        workerIds.forEach(workerId => {
-          const row = document.createElement('tr');
-
-          // Worker ID cell
-          const cellId = document.createElement('td');
-          cellId.className = 'worker-id';
-          cellId.textContent = workerId;
-          row.appendChild(cellId);
-
-          // Skill cells - show override or empty
-          const modalityOverrides = rosterData[workerId][modality] || {};
-
-          skills.forEach(skill => {
-            const cell = document.createElement('td');
-
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.className = 'override-input';
-            input.min = '-1';
-            input.max = '1';
-            input.step = '1';
-            input.placeholder = '—';
-            input.dataset.workerId = workerId;
-            input.dataset.modality = modality;
-            input.dataset.skill = skill;
-
-            // Set value if override exists
-            if (modalityOverrides[skill] !== undefined) {
-              input.value = modalityOverrides[skill];
-              input.classList.add('has-override');
-              updateOverrideInputColor(input);
-            }
-
-            input.addEventListener('change', function() {
-              updateModalitySkillValue(workerId, modality, skill, this.value);
-              if (this.value !== '') {
-                this.classList.add('has-override');
-                updateOverrideInputColor(this);
-              } else {
-                this.classList.remove('has-override', 'value--1', 'value-0', 'value-1');
-              }
-            });
-
-            cell.appendChild(input);
-
-            // Add clear button if has override
-            if (modalityOverrides[skill] !== undefined) {
-              const clearBtn = document.createElement('button');
-              clearBtn.className = 'clear-override-btn';
-              clearBtn.textContent = '×';
-              clearBtn.title = 'Clear override';
-              clearBtn.onclick = () => {
-                clearModalityOverride(workerId, modality, skill);
-                renderModalityTables();
-              };
-              cell.appendChild(clearBtn);
-            }
-
-            row.appendChild(cell);
-          });
-
-          tbody.appendChild(row);
-        });
-
-        table.appendChild(tbody);
-        tableContainer.appendChild(table);
-        section.appendChild(tableContainer);
-        container.appendChild(section);
+        container.appendChild(div);
       });
     }
 
-    function updateOverrideInputColor(input) {
+    function selectWorker(workerId) {
+      selectedWorker = workerId;
+      renderWorkerList();
+      renderWorkerMatrix();
+
+      document.getElementById('noWorkerSelected').style.display = 'none';
+      document.getElementById('workerDetailContent').style.display = 'block';
+      document.getElementById('selectedWorkerTitle').textContent = 'Worker: ' + workerId;
+    }
+
+    function renderWorkerMatrix() {
+      if (!selectedWorker || !rosterData[selectedWorker]) return;
+
+      const workerData = rosterData[selectedWorker];
+      const defaultSkills = workerData.default || {};
+
+      // Build header
+      const header = document.getElementById('matrixHeader');
+      header.innerHTML = '<th class="skill-col">Skill</th><th class="default-col">default</th>';
+
+      modalities.forEach(mod => {
+        const th = document.createElement('th');
+        th.className = 'modality-col';
+        th.textContent = mod.toUpperCase();
+        header.appendChild(th);
+      });
+
+      // Build body
+      const tbody = document.getElementById('matrixBody');
+      tbody.innerHTML = '';
+
+      skills.forEach(skill => {
+        const row = document.createElement('tr');
+
+        // Skill name
+        const skillCell = document.createElement('td');
+        skillCell.className = 'skill-name';
+        skillCell.textContent = skill;
+        row.appendChild(skillCell);
+
+        // Default value
+        const defaultCell = document.createElement('td');
+        const defaultInput = createSkillInput(
+          defaultSkills[skill] !== undefined ? defaultSkills[skill] : 0,
+          false,
+          (val) => updateDefaultSkill(skill, val)
+        );
+        defaultCell.appendChild(defaultInput);
+        row.appendChild(defaultCell);
+
+        // Modality overrides
+        modalities.forEach(mod => {
+          const modOverrides = workerData[mod] || {};
+          const hasOverride = modOverrides[skill] !== undefined;
+
+          const cell = document.createElement('td');
+          cell.className = 'override-cell';
+
+          const input = createSkillInput(
+            hasOverride ? modOverrides[skill] : '',
+            hasOverride,
+            (val) => updateModalitySkill(mod, skill, val),
+            true // is override input
+          );
+          cell.appendChild(input);
+
+          if (hasOverride) {
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'clear-btn';
+            clearBtn.textContent = '×';
+            clearBtn.title = 'Clear override';
+            clearBtn.onclick = (e) => {
+              e.stopPropagation();
+              clearOverride(mod, skill);
+            };
+            cell.appendChild(clearBtn);
+          }
+
+          row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+      });
+    }
+
+    function createSkillInput(value, hasOverride, onChange, isOverrideInput = false) {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'skill-input';
+      input.min = '-1';
+      input.max = '1';
+      input.step = '1';
+
+      if (isOverrideInput) {
+        input.placeholder = '—';
+        if (value !== '') {
+          input.value = value;
+          input.classList.add('has-override');
+          applyValueColor(input, value);
+        }
+      } else {
+        input.value = value;
+        applyValueColor(input, value);
+      }
+
+      input.addEventListener('change', function() {
+        const val = this.value === '' ? null : parseInt(this.value);
+        onChange(val);
+
+        if (isOverrideInput) {
+          if (val !== null) {
+            this.classList.add('has-override');
+            applyValueColor(this, val);
+          } else {
+            this.classList.remove('has-override', 'value--1', 'value-0', 'value-1');
+          }
+        } else {
+          applyValueColor(this, val);
+        }
+
+        // Re-render to update clear buttons
+        renderWorkerMatrix();
+        renderWorkerList();
+      });
+
+      return input;
+    }
+
+    function applyValueColor(input, val) {
       input.classList.remove('value--1', 'value-0', 'value-1');
-      const val = parseInt(input.value);
       if (val === -1) input.classList.add('value--1');
       else if (val === 0) input.classList.add('value-0');
       else if (val === 1) input.classList.add('value-1');
     }
 
-    function updateModalitySkillValue(workerId, modality, skill, value) {
-      // Ensure worker exists
-      if (!rosterData[workerId]) {
-        rosterData[workerId] = { default: {} };
+    function updateDefaultSkill(skill, value) {
+      if (!rosterData[selectedWorker]) {
+        rosterData[selectedWorker] = { default: {} };
+      }
+      if (!rosterData[selectedWorker].default) {
+        rosterData[selectedWorker].default = {};
+      }
+      rosterData[selectedWorker].default[skill] = value !== null ? value : 0;
+    }
+
+    function updateModalitySkill(modality, skill, value) {
+      if (!rosterData[selectedWorker]) {
+        rosterData[selectedWorker] = { default: {} };
       }
 
-      // If value is empty, remove the override
-      if (value === '' || value === null) {
-        if (rosterData[workerId][modality]) {
-          delete rosterData[workerId][modality][skill];
-          // Clean up empty modality object
-          if (Object.keys(rosterData[workerId][modality]).length === 0) {
-            delete rosterData[workerId][modality];
+      if (value === null) {
+        // Clear the override
+        if (rosterData[selectedWorker][modality]) {
+          delete rosterData[selectedWorker][modality][skill];
+          if (Object.keys(rosterData[selectedWorker][modality]).length === 0) {
+            delete rosterData[selectedWorker][modality];
           }
         }
-        return;
-      }
-
-      // Ensure modality object exists
-      if (!rosterData[workerId][modality]) {
-        rosterData[workerId][modality] = {};
-      }
-
-      // Set the override value
-      rosterData[workerId][modality][skill] = parseInt(value);
-    }
-
-    function clearModalityOverride(workerId, modality, skill) {
-      if (rosterData[workerId] && rosterData[workerId][modality]) {
-        delete rosterData[workerId][modality][skill];
-        // Clean up empty modality object
-        if (Object.keys(rosterData[workerId][modality]).length === 0) {
-          delete rosterData[workerId][modality];
+      } else {
+        // Set the override
+        if (!rosterData[selectedWorker][modality]) {
+          rosterData[selectedWorker][modality] = {};
         }
+        rosterData[selectedWorker][modality][skill] = value;
       }
     }
 
-    function updateInputColor(input) {
-      input.classList.remove('value--1', 'value-0', 'value-1');
-      const val = parseInt(input.value);
-      if (val === -1) input.classList.add('value--1');
-      else if (val === 0) input.classList.add('value-0');
-      else if (val === 1) input.classList.add('value-1');
-    }
-
-    function updateSkillValue(workerId, skill, value) {
-      // Ensure worker exists in roster
-      if (!rosterData[workerId]) {
-        rosterData[workerId] = { default: {} };
-      }
-      if (!rosterData[workerId].default) {
-        rosterData[workerId].default = {};
-      }
-
-      // Update value
-      rosterData[workerId].default[skill] = value;
+    function clearOverride(modality, skill) {
+      updateModalitySkill(modality, skill, null);
+      renderWorkerMatrix();
+      renderWorkerList();
     }
 
     function addWorker() {
-      const workerId = document.getElementById('newWorkerId').value.trim();
+      const input = document.getElementById('newWorkerId');
+      const workerId = input.value.trim().toUpperCase();
 
       if (!workerId) {
         showStatus('Please enter a worker ID', 'error');
@@ -660,113 +617,82 @@
         return;
       }
 
-      // Add worker with default skills
-      rosterData[workerId] = {
-        default: {}
-      };
-
-      // Initialize all skills to 0
+      // Initialize with default skills all at 0
+      rosterData[workerId] = { default: {} };
       skills.forEach(skill => {
         rosterData[workerId].default[skill] = 0;
       });
 
-      // Re-render table
-      renderRosterTable();
-
-      // Clear input
-      document.getElementById('newWorkerId').value = '';
-
-      showStatus('Worker added successfully. Remember to save to staging and activate!', 'success');
+      input.value = '';
+      renderWorkerList();
+      selectWorker(workerId);
+      showStatus('Worker added. Remember to save!', 'success');
     }
 
-    function removeWorker(workerId) {
-      if (!confirm(`Remove worker "${workerId}"?`)) {
-        return;
-      }
+    function removeSelectedWorker() {
+      if (!selectedWorker) return;
+      if (!confirm(`Remove worker "${selectedWorker}"?`)) return;
 
-      delete rosterData[workerId];
-      renderRosterTable();
+      delete rosterData[selectedWorker];
+      selectedWorker = null;
 
-      showStatus('Worker removed from staging. Remember to save and activate!', 'success');
+      renderWorkerList();
+      document.getElementById('noWorkerSelected').style.display = 'block';
+      document.getElementById('workerDetailContent').style.display = 'none';
+      showStatus('Worker removed. Remember to save!', 'success');
     }
 
     async function saveRoster() {
       try {
         const response = await fetch('/api/admin/skill_roster', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roster: rosterData })
         });
 
         const data = await response.json();
-
-        if (data.success) {
-          showStatus(data.message, 'success');
-        } else {
-          showStatus('Failed to save: ' + data.error, 'error');
-        }
+        showStatus(data.success ? data.message : 'Failed: ' + data.error, data.success ? 'success' : 'error');
       } catch (error) {
-        showStatus('Error saving roster: ' + error.message, 'error');
+        showStatus('Error: ' + error.message, 'error');
       }
     }
 
     async function reloadRoster() {
-      if (!confirm('Reload staged roster from JSON file? Unsaved changes will be lost.')) {
-        return;
-      }
+      if (!confirm('Reload from staged file? Unsaved changes will be lost.')) return;
 
       try {
-        const response = await fetch('/api/admin/skill_roster/reload', {
-          method: 'POST'
-        });
-
+        const response = await fetch('/api/admin/skill_roster/reload', { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
           showStatus(data.message, 'success');
-          // Reload the page to show updated data
           setTimeout(() => location.reload(), 1000);
         } else {
-          showStatus('Failed to reload: ' + data.error, 'error');
+          showStatus('Failed: ' + data.error, 'error');
         }
       } catch (error) {
-        showStatus('Error reloading roster: ' + error.message, 'error');
+        showStatus('Error: ' + error.message, 'error');
       }
     }
 
     async function activateRoster() {
-      if (!confirm('⚠️ ACTIVATE staged changes?\n\nThis will make your staged roster changes IMMEDIATELY ACTIVE for all assignments.\n\nContinue?')) {
-        return;
-      }
+      if (!confirm('ACTIVATE staged changes? This will immediately affect assignments.')) return;
 
       try {
-        const response = await fetch('/api/admin/skill_roster/activate', {
-          method: 'POST'
-        });
-
+        const response = await fetch('/api/admin/skill_roster/activate', { method: 'POST' });
         const data = await response.json();
-
-        if (data.success) {
-          showStatus(data.message + ' - Changes are NOW ACTIVE!', 'success');
-        } else {
-          showStatus('Failed to activate: ' + data.error, 'error');
-        }
+        showStatus(data.success ? data.message + ' - NOW ACTIVE!' : 'Failed: ' + data.error, data.success ? 'success' : 'error');
       } catch (error) {
-        showStatus('Error activating roster: ' + error.message, 'error');
+        showStatus('Error: ' + error.message, 'error');
       }
     }
 
     function showStatus(message, type) {
-      const statusEl = document.getElementById('statusMessage');
-      statusEl.textContent = message;
-      statusEl.className = 'status-message ' + type;
-      statusEl.style.display = 'block';
-
-      setTimeout(() => {
-        statusEl.style.display = 'none';
-      }, 5000);
+      const el = document.getElementById('statusMessage');
+      el.textContent = message;
+      el.className = 'status-message ' + type;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
     }
   </script>
 </body>
