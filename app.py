@@ -228,40 +228,35 @@ def _load_raw_config() -> Dict[str, Any]:
         return {}
 
 
-def load_worker_skill_json(use_staged: bool = False) -> Dict[str, Any]:
+def load_worker_skill_json() -> Dict[str, Any]:
     """
     Load worker skill overrides from JSON file.
-
-    Args:
-        use_staged: If True, load from staged file. If False, load from active file.
+    Single file - no staged/live separation for skill roster.
     """
-    filename = 'worker_skill_overrides_staged.json' if use_staged else 'worker_skill_overrides.json'
+    filename = 'worker_skill_roster.json'
     try:
         with open(filename, 'r', encoding='utf-8') as json_file:
             data = json.load(json_file)
-            selection_logger.info(f"Loaded worker skill overrides from {filename}: {len(data)} workers")
+            selection_logger.info(f"Loaded worker skill roster: {len(data)} workers")
             return data
     except FileNotFoundError:
-        selection_logger.info(f"No {filename} found, using YAML config only")
+        selection_logger.info(f"No {filename} found, using empty roster")
         return {}
     except Exception as exc:
         selection_logger.warning(f"Failed to load {filename}: {exc}")
         return {}
 
 
-def save_worker_skill_json(roster_data: Dict[str, Any], use_staged: bool = False) -> bool:
+def save_worker_skill_json(roster_data: Dict[str, Any]) -> bool:
     """
     Save worker skill overrides to JSON file.
-
-    Args:
-        roster_data: Roster data to save
-        use_staged: If True, save to staged file. If False, save to active file.
+    Single file - no staged/live separation for skill roster.
     """
-    filename = 'worker_skill_overrides_staged.json' if use_staged else 'worker_skill_overrides.json'
+    filename = 'worker_skill_roster.json'
     try:
         with open(filename, 'w', encoding='utf-8') as json_file:
             json.dump(roster_data, json_file, indent=2, ensure_ascii=False)
-        selection_logger.info(f"Saved worker skill overrides to {filename}: {len(roster_data)} workers")
+        selection_logger.info(f"Saved worker skill roster: {len(roster_data)} workers")
         return True
     except Exception as exc:
         selection_logger.error(f"Failed to save {filename}: {exc}")
@@ -279,8 +274,8 @@ def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> int:
     Returns:
         Number of new workers added
     """
-    # Load current staged roster
-    roster = load_worker_skill_json(use_staged=True)
+    # Load current roster
+    roster = load_worker_skill_json()
     added_count = 0
 
     for modality, df in modality_dfs.items():
@@ -307,7 +302,7 @@ def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> int:
 
     # Save updated roster
     if added_count > 0:
-        save_worker_skill_json(roster, use_staged=True)
+        save_worker_skill_json(roster)
 
     return added_count
 
@@ -3889,10 +3884,12 @@ def quick_reload():
 @app.route('/api/admin/skill_roster', methods=['GET'])
 @admin_required
 def get_skill_roster():
-    """Get STAGED worker skill roster (for planning purposes)."""
+    """Get worker skill roster (single file, no staging)."""
+    global worker_skill_json_roster
     try:
-        # Load staged roster (not active)
-        staged_roster = load_worker_skill_json(use_staged=True)
+        # Load roster
+        roster = load_worker_skill_json()
+        worker_skill_json_roster = roster  # Update in-memory copy
 
         # Get available skills and modalities from config
         config = _build_app_config()
@@ -3901,10 +3898,9 @@ def get_skill_roster():
 
         return jsonify({
             'success': True,
-            'roster': staged_roster,
+            'roster': roster,
             'skills': skills,
-            'modalities': modalities,
-            'is_staged': True  # Flag to indicate this is staged data
+            'modalities': modalities
         })
     except Exception as exc:
         selection_logger.error(f"Error getting skill roster: {exc}")
@@ -3914,7 +3910,8 @@ def get_skill_roster():
 @app.route('/api/admin/skill_roster', methods=['POST'])
 @admin_required
 def save_skill_roster():
-    """Save worker skill roster to STAGED JSON (planning only, not immediately active)."""
+    """Save worker skill roster (single file, immediate effect)."""
+    global worker_skill_json_roster
     try:
         data = request.get_json()
         if not data or 'roster' not in data:
@@ -3926,16 +3923,17 @@ def save_skill_roster():
         if not isinstance(roster_data, dict):
             return jsonify({'success': False, 'error': 'Roster must be a dictionary'}), 400
 
-        # Save to STAGED JSON file (not active)
-        if save_worker_skill_json(roster_data, use_staged=True):
-            selection_logger.info(f"Worker skill roster STAGED: {len(roster_data)} workers (not yet active)")
+        # Save to JSON file
+        if save_worker_skill_json(roster_data):
+            worker_skill_json_roster = roster_data  # Update in-memory copy
+            selection_logger.info(f"Worker skill roster saved: {len(roster_data)} workers")
 
             return jsonify({
                 'success': True,
-                'message': f'Roster changes staged ({len(roster_data)} workers) - Use "Activate" to apply'
+                'message': f'Roster saved ({len(roster_data)} workers)'
             })
         else:
-            return jsonify({'success': False, 'error': 'Failed to save staged roster'}), 500
+            return jsonify({'success': False, 'error': 'Failed to save roster'}), 500
 
     except Exception as exc:
         selection_logger.error(f"Error saving skill roster: {exc}")
@@ -3945,43 +3943,17 @@ def save_skill_roster():
 @app.route('/api/admin/skill_roster/reload', methods=['POST'])
 @admin_required
 def reload_skill_roster():
-    """Reload STAGED worker skill roster from JSON file."""
-    try:
-        staged_roster = load_worker_skill_json(use_staged=True)
-        return jsonify({
-            'success': True,
-            'message': f'Staged roster reloaded ({len(staged_roster)} workers)'
-        })
-    except Exception as exc:
-        selection_logger.error(f"Error reloading staged roster: {exc}")
-        return jsonify({'success': False, 'error': str(exc)}), 500
-
-
-@app.route('/api/admin/skill_roster/activate', methods=['POST'])
-@admin_required
-def activate_skill_roster():
-    """Activate staged roster - copy staged → active and reload into memory."""
+    """Reload worker skill roster from JSON file."""
     global worker_skill_json_roster
-
     try:
-        # Load staged roster
-        staged_roster = load_worker_skill_json(use_staged=True)
-
-        # Save to active file
-        if not save_worker_skill_json(staged_roster, use_staged=False):
-            return jsonify({'success': False, 'error': 'Failed to save to active roster'}), 500
-
-        # Reload active roster into memory
-        worker_skill_json_roster = load_worker_skill_json(use_staged=False)
-
-        selection_logger.info(f"Skill roster activated: {len(worker_skill_json_roster)} workers now active")
-
+        roster = load_worker_skill_json()
+        worker_skill_json_roster = roster
         return jsonify({
             'success': True,
-            'message': f'Roster activated successfully ({len(worker_skill_json_roster)} workers)'
+            'message': f'Roster reloaded ({len(roster)} workers)'
         })
     except Exception as exc:
-        selection_logger.error(f"Error activating skill roster: {exc}")
+        selection_logger.error(f"Error reloading roster: {exc}")
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
