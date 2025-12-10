@@ -342,8 +342,6 @@ def _build_app_config() -> Dict[str, Any]:
         values.setdefault('optional', False)
         values.setdefault('special', False)
         values.setdefault('always_visible', False)
-        fallback_value = values.get('fallback', [])
-        values['fallback'] = _normalize_skill_fallback_entries(fallback_value)
         values['display_order'] = _coerce_int(values.get('display_order', 0))
         slug = values.get('slug') or key.lower().replace(' ', '_')
         values['slug'] = slug
