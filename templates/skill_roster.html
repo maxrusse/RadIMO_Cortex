@@ -7,321 +7,67 @@
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f0f0f0; padding: 1rem; max-width: 1400px; margin: 0 auto; }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1600px;
-      margin: 0 auto;
-    }
+    .header { background: #004892; color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .header h1 { margin: 0; font-size: 1.4rem; }
+    .header-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .header-nav a { color: white; text-decoration: none; padding: 0.5rem 1rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.85rem; }
+    .header-nav a:hover { background: rgba(255,255,255,0.3); }
 
-    .header {
-      background: #004892;
-      color: white;
-      padding: 1rem 2rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
-
-    .header-nav {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .header-nav a {
-      color: white;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      background: rgba(255,255,255,0.2);
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
-
-    .header-nav a:hover {
-      background: rgba(255,255,255,0.3);
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: background 0.2s;
-      text-decoration: none;
-    }
-
+    .toolbar { background: #fff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+    .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
     .btn-primary { background: #004892; color: white; }
     .btn-primary:hover { background: #003670; }
-    .btn-secondary { background: #777; color: white; }
-    .btn-secondary:hover { background: #555; }
     .btn-success { background: #28a745; color: white; }
     .btn-success:hover { background: #218838; }
-    .btn-danger { background: #dc3545; color: white; }
-    .btn-danger:hover { background: #c82333; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
 
-    .main-layout {
-      display: grid;
-      grid-template-columns: 250px 1fr;
-      gap: 1rem;
-    }
+    .main-layout { display: grid; grid-template-columns: 220px 1fr; gap: 1rem; }
+    .card { background: white; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-    .content-box {
-      background: #fff;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
+    .worker-list { max-height: 70vh; overflow-y: auto; }
+    .worker-list h3 { margin-bottom: 0.75rem; font-size: 1rem; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem; }
+    .worker-item { padding: 0.6rem 0.75rem; cursor: pointer; border-radius: 4px; margin-bottom: 0.25rem; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+    .worker-item:hover { background: #f0f0f0; }
+    .worker-item.active { background: #004892; color: white; }
 
-    /* Worker List */
-    .worker-list {
-      max-height: calc(100vh - 200px);
-      overflow-y: auto;
-    }
+    .worker-detail h3 { margin-bottom: 1rem; font-size: 1rem; }
+    .matrix-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .matrix-table th, .matrix-table td { padding: 0.5rem; text-align: center; border: 1px solid #e0e0e0; }
+    .matrix-table th { background: #f8f9fa; font-weight: 600; font-size: 0.8rem; }
+    .matrix-table th.skill-col { text-align: left; min-width: 100px; }
+    .matrix-table td.skill-name { text-align: left; font-weight: 500; background: #fafafa; }
+    .matrix-table td.invalid { background: #f5f5f5; color: #bbb; }
 
-    .worker-list h3 {
-      margin-bottom: 1rem;
-      color: #004892;
-    }
+    .skill-input { width: 50px; padding: 0.3rem; text-align: center; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85rem; }
+    .skill-input:focus { outline: 2px solid #004892; border-color: transparent; }
+    .skill-input.value-1 { background: #d4edda; border-color: #28a745; }
+    .skill-input.value-0 { background: #fff3cd; border-color: #ffc107; }
+    .skill-input.value--1 { background: #f8d7da; border-color: #dc3545; }
 
-    .worker-item {
-      padding: 0.75rem 1rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-bottom: 0.5rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+    .add-worker { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #ddd; }
+    .add-worker input { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem; }
+    .add-worker button { width: 100%; }
 
-    .worker-item:hover {
-      background: #e7f3ff;
-      border-color: #004892;
-    }
+    .status-message { position: fixed; bottom: 1rem; right: 1rem; padding: 1rem 1.5rem; border-radius: 8px; font-size: 0.9rem; display: none; z-index: 1000; }
+    .status-message.success { background: #d4edda; color: #155724; display: block; }
+    .status-message.error { background: #f8d7da; color: #721c24; display: block; }
 
-    .worker-item.active {
-      background: #004892;
-      color: white;
-      border-color: #004892;
-    }
+    .empty-state { text-align: center; padding: 3rem; color: #666; }
 
-    .worker-item .worker-name {
-      font-weight: 600;
-    }
-
-    .worker-item .has-overrides {
-      font-size: 0.75rem;
-      background: #ff9800;
-      color: white;
-      padding: 0.1rem 0.4rem;
-      border-radius: 3px;
-    }
-
-    .add-worker-form {
-      margin-top: 1rem;
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .add-worker-form input {
-      flex: 1;
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-
-    /* Worker Detail */
-    .worker-detail h3 {
-      margin-bottom: 0.5rem;
-      color: #004892;
-    }
-
-    .worker-detail .subtitle {
-      color: #666;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-    }
-
-    .legend {
-      margin-bottom: 1rem;
-      padding: 0.75rem;
-      background: #e7f3ff;
-      border-left: 4px solid #004892;
-      border-radius: 4px;
-      font-size: 0.85rem;
-    }
-
-    .legend-item {
-      display: inline-block;
-      margin-right: 1.5rem;
-    }
-
-    .legend-item code {
-      background: #fff;
-      padding: 0.1rem 0.4rem;
-      border-radius: 3px;
-      font-weight: bold;
-    }
-
-    /* Skill × Modality Matrix */
-    .matrix-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-
-    .matrix-table th,
-    .matrix-table td {
-      padding: 0.5rem;
-      text-align: center;
-      border: 1px solid #ddd;
-    }
-
-    .matrix-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-    }
-
-    .matrix-table th.skill-col {
-      text-align: left;
-      background: #004892;
-      color: white;
-      width: 120px;
-    }
-
-    .matrix-table th.default-col {
-      background: #004892;
-      color: white;
-    }
-
-    .matrix-table th.modality-col {
-      background: #f0f0f0;
-    }
-
-    .matrix-table td.skill-name {
-      text-align: left;
-      font-weight: 600;
-      background: #f8f9fa;
-    }
-
-    .skill-input {
-      width: 45px;
-      padding: 0.25rem;
-      text-align: center;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      font-size: 0.85rem;
-    }
-
-    .skill-input:focus {
-      outline: none;
-      border-color: #004892;
-      box-shadow: 0 0 3px rgba(0, 72, 146, 0.3);
-    }
-
-    .skill-input.has-override {
-      border: 2px solid #ff9800;
-      font-weight: bold;
-    }
-
-    .skill-input.value--1 { background: #ffe6e6; }
-    .skill-input.value-0 { background: #fff8e6; }
-    .skill-input.value-1 { background: #e6ffe6; }
-
-    .override-cell {
-      position: relative;
-    }
-
-    .clear-btn {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: #6c757d;
-      color: white;
-      border: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      font-size: 10px;
-      cursor: pointer;
-      line-height: 1;
-    }
-
-    .clear-btn:hover { background: #5a6268; }
-
-    .status-message {
-      margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 4px;
-      display: none;
-    }
-
-    .status-message.success {
-      background: #d4edda;
-      border: 1px solid #c3e6cb;
-      color: #155724;
-    }
-
-    .status-message.error {
-      background: #f8d7da;
-      border: 1px solid #f5c6cb;
-      color: #721c24;
-    }
-
-    .loading {
-      text-align: center;
-      padding: 2rem;
-      color: #777;
-    }
-
-    .no-worker-selected {
-      text-align: center;
-      padding: 3rem;
-      color: #777;
-    }
-
-    .no-worker-selected h3 {
-      color: #777;
-      margin-bottom: 1rem;
-    }
-
-    /* Responsive */
-    @media (max-width: 900px) {
-      .main-layout {
-        grid-template-columns: 1fr;
-      }
-      .worker-list {
-        max-height: 200px;
-      }
+    @media (max-width: 768px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .worker-list { max-height: 200px; }
     }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <h1>RadIMO Cortex | Skill Matrix <span style="color: #ff9800; font-size: 0.9rem;">(Planning Mode)</span></h1>
-      <p style="font-size: 0.85rem; opacity: 0.9;">Worker skill × modality configuration</p>
+      <h1>RadIMO Cortex | Skill Matrix</h1>
+      <p style="font-size: 0.8rem; opacity: 0.9;">Worker skill × modality configuration</p>
     </div>
     <div class="header-nav">
       <a href="{{ url_for('index') }}">Dashboard</a>
@@ -333,61 +79,49 @@
     </div>
   </div>
 
-  <div style="background: #fff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
-    <button class="btn btn-secondary" onclick="reloadRoster()">Reload Staged</button>
-    <button class="btn btn-primary" onclick="saveRoster()">Save to Staging</button>
-    <button class="btn btn-success" onclick="activateRoster()">Activate Changes</button>
+  <div class="toolbar">
+    <div>
+      <strong>Values:</strong>
+      <span style="color: #28a745;">1 = assigned</span> ·
+      <span style="color: #856404;">0 = helper</span> ·
+      <span style="color: #dc3545;">-1 = excluded</span>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <button class="btn btn-secondary" onclick="loadRoster()">Reload</button>
+      <button class="btn btn-primary" onclick="saveRoster()">Save (Staging)</button>
+      <button class="btn btn-success" onclick="activateRoster()">Activate</button>
+    </div>
   </div>
 
-  <div id="loading" class="loading content-box">Loading roster...</div>
-
-  <div id="mainContent" class="main-layout" style="display: none;">
+  <div class="main-layout">
     <!-- Worker List -->
-    <div class="content-box worker-list">
+    <div class="card worker-list">
       <h3>Workers</h3>
       <div id="workerListContainer"></div>
-      <div class="add-worker-form">
-        <input type="text" id="newWorkerId" placeholder="Worker ID" />
-        <button class="btn btn-primary" onclick="addWorker()">+</button>
+      <div class="add-worker">
+        <input type="text" id="newWorkerId" placeholder="New Worker ID">
+        <button class="btn btn-primary" onclick="addWorker()">Add Worker</button>
       </div>
     </div>
 
     <!-- Worker Detail -->
-    <div class="content-box worker-detail">
-      <div id="noWorkerSelected" class="no-worker-selected">
-        <h3>Select a worker</h3>
-        <p>Click on a worker from the list to view and edit their skill × modality matrix.</p>
+    <div class="card worker-detail">
+      <div id="noWorkerSelected" class="empty-state">
+        <p>Select a worker to edit skills</p>
       </div>
-
       <div id="workerDetailContent" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <div>
-            <h3 id="selectedWorkerTitle">Worker: ---</h3>
-            <p class="subtitle">Edit default skills and per-modality overrides</p>
-          </div>
-          <button class="btn btn-danger" onclick="removeSelectedWorker()">Remove Worker</button>
+          <h3 id="selectedWorkerTitle">Worker: -</h3>
+          <button class="btn btn-secondary" style="background: #dc3545;" onclick="deleteWorker()">Delete</button>
         </div>
-
-        <div class="legend">
-          <strong>Legend:</strong>
-          <span class="legend-item"><code style="background:#e6ffe6">1</code> Active (primary)</span>
-          <span class="legend-item"><code style="background:#fff8e6">0</code> Fallback only</span>
-          <span class="legend-item"><code style="background:#ffe6e6">-1</code> Excluded</span>
-          <span class="legend-item" style="margin-left: 1rem;"><code style="border:2px solid #ff9800">—</code> Override (orange border)</span>
+        <div style="overflow-x: auto;">
+          <table class="matrix-table">
+            <thead>
+              <tr id="matrixHeader"></tr>
+            </thead>
+            <tbody id="matrixBody"></tbody>
+          </table>
         </div>
-
-        <table class="matrix-table" id="matrixTable">
-          <thead>
-            <tr id="matrixHeader">
-              <th class="skill-col">Skill</th>
-              <th class="default-col">default</th>
-              <!-- Modality columns added dynamically -->
-            </tr>
-          </thead>
-          <tbody id="matrixBody">
-            <!-- Rows added dynamically -->
-          </tbody>
-        </table>
       </div>
     </div>
   </div>
@@ -399,12 +133,10 @@
     let skills = [];
     let modalities = [];
     let selectedWorker = null;
-    // Valid skill combinations per modality (from config.yaml)
     const validSkillsMap = {{ valid_skills_map|tojson }};
 
-    // Helper to check if skill is valid for a modality
     function isValidCombination(modality, skill) {
-      if (!validSkillsMap[modality]) return true;  // No restriction = all valid
+      if (!validSkillsMap[modality]) return true;
       return validSkillsMap[modality].includes(skill);
     }
 
@@ -414,52 +146,30 @@
       try {
         const response = await fetch('/api/admin/skill_roster');
         const data = await response.json();
-
         if (data.success) {
           rosterData = data.roster;
           skills = data.skills;
           modalities = data.modalities;
-
           renderWorkerList();
-
-          document.getElementById('loading').style.display = 'none';
-          document.getElementById('mainContent').style.display = 'grid';
+          if (selectedWorker && rosterData[selectedWorker]) {
+            renderWorkerMatrix();
+          }
         } else {
-          showStatus('Failed to load roster: ' + data.error, 'error');
+          showStatus('Load failed: ' + data.error, 'error');
         }
       } catch (error) {
-        showStatus('Error loading roster: ' + error.message, 'error');
+        showStatus('Error: ' + error.message, 'error');
       }
     }
 
     function renderWorkerList() {
       const container = document.getElementById('workerListContainer');
       container.innerHTML = '';
-
-      const workerIds = Object.keys(rosterData).sort();
-
-      workerIds.forEach(workerId => {
+      Object.keys(rosterData).sort().forEach(workerId => {
         const div = document.createElement('div');
         div.className = 'worker-item' + (selectedWorker === workerId ? ' active' : '');
+        div.textContent = workerId;
         div.onclick = () => selectWorker(workerId);
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'worker-name';
-        nameSpan.textContent = workerId;
-        div.appendChild(nameSpan);
-
-        // Check if worker has any modality overrides
-        const hasOverrides = modalities.some(mod =>
-          rosterData[workerId][mod] && Object.keys(rosterData[workerId][mod]).length > 0
-        );
-
-        if (hasOverrides) {
-          const badge = document.createElement('span');
-          badge.className = 'has-overrides';
-          badge.textContent = 'overrides';
-          div.appendChild(badge);
-        }
-
         container.appendChild(div);
       });
     }
@@ -468,7 +178,6 @@
       selectedWorker = workerId;
       renderWorkerList();
       renderWorkerMatrix();
-
       document.getElementById('noWorkerSelected').style.display = 'none';
       document.getElementById('workerDetailContent').style.display = 'block';
       document.getElementById('selectedWorkerTitle').textContent = 'Worker: ' + workerId;
@@ -476,22 +185,18 @@
 
     function renderWorkerMatrix() {
       if (!selectedWorker || !rosterData[selectedWorker]) return;
-
       const workerData = rosterData[selectedWorker];
-      const defaultSkills = workerData.default || {};
 
-      // Build header
+      // Header: Skill | CT | MR | X-ray | Mammo
       const header = document.getElementById('matrixHeader');
-      header.innerHTML = '<th class="skill-col">Skill</th><th class="default-col">default</th>';
-
+      header.innerHTML = '<th class="skill-col">Skill</th>';
       modalities.forEach(mod => {
         const th = document.createElement('th');
-        th.className = 'modality-col';
         th.textContent = mod.toUpperCase();
         header.appendChild(th);
       });
 
-      // Build body
+      // Body: each skill row
       const tbody = document.getElementById('matrixBody');
       tbody.innerHTML = '';
 
@@ -504,53 +209,39 @@
         skillCell.textContent = skill;
         row.appendChild(skillCell);
 
-        // Default value
-        const defaultCell = document.createElement('td');
-        const defaultInput = createSkillInput(
-          defaultSkills[skill] !== undefined ? defaultSkills[skill] : 0,
-          false,
-          (val) => updateDefaultSkill(skill, val)
-        );
-        defaultCell.appendChild(defaultInput);
-        row.appendChild(defaultCell);
-
-        // Modality overrides
+        // Value for each modality
         modalities.forEach(mod => {
           const cell = document.createElement('td');
 
-          // Skip invalid combinations (show empty/grayed cell)
           if (!isValidCombination(mod, skill)) {
-            cell.style.background = '#f0f0f0';
-            cell.innerHTML = '<span style="color:#999">—</span>';
+            cell.className = 'invalid';
+            cell.textContent = '—';
             row.appendChild(cell);
             return;
           }
 
-          const modOverrides = workerData[mod] || {};
-          const hasOverride = modOverrides[skill] !== undefined;
+          // Get value: check modality-specific first, then default
+          const modData = workerData[mod] || {};
+          const defaultData = workerData.default || {};
+          let value = modData[skill];
+          if (value === undefined) value = defaultData[skill];
+          if (value === undefined) value = 0;
 
-          cell.className = 'override-cell';
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.className = 'skill-input';
+          input.min = '-1';
+          input.max = '1';
+          input.value = value;
+          applyValueColor(input, value);
 
-          const input = createSkillInput(
-            hasOverride ? modOverrides[skill] : '',
-            hasOverride,
-            (val) => updateModalitySkill(mod, skill, val),
-            true // is override input
-          );
+          input.addEventListener('change', function() {
+            const val = parseInt(this.value) || 0;
+            updateSkill(mod, skill, val);
+            applyValueColor(this, val);
+          });
+
           cell.appendChild(input);
-
-          if (hasOverride) {
-            const clearBtn = document.createElement('button');
-            clearBtn.className = 'clear-btn';
-            clearBtn.textContent = '×';
-            clearBtn.title = 'Clear override';
-            clearBtn.onclick = (e) => {
-              e.stopPropagation();
-              clearOverride(mod, skill);
-            };
-            cell.appendChild(clearBtn);
-          }
-
           row.appendChild(cell);
         });
 
@@ -558,131 +249,60 @@
       });
     }
 
-    function createSkillInput(value, hasOverride, onChange, isOverrideInput = false) {
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.className = 'skill-input';
-      input.min = '-1';
-      input.max = '1';
-      input.step = '1';
-
-      if (isOverrideInput) {
-        input.placeholder = '—';
-        if (value !== '') {
-          input.value = value;
-          input.classList.add('has-override');
-          applyValueColor(input, value);
-        }
-      } else {
-        input.value = value;
-        applyValueColor(input, value);
-      }
-
-      input.addEventListener('change', function() {
-        const val = this.value === '' ? null : parseInt(this.value);
-        onChange(val);
-
-        if (isOverrideInput) {
-          if (val !== null) {
-            this.classList.add('has-override');
-            applyValueColor(this, val);
-          } else {
-            this.classList.remove('has-override', 'value--1', 'value-0', 'value-1');
-          }
-        } else {
-          applyValueColor(this, val);
-        }
-
-        // Re-render to update clear buttons
-        renderWorkerMatrix();
-        renderWorkerList();
-      });
-
-      return input;
-    }
-
     function applyValueColor(input, val) {
       input.classList.remove('value--1', 'value-0', 'value-1');
-      if (val === -1) input.classList.add('value--1');
+      if (val === 1) input.classList.add('value-1');
       else if (val === 0) input.classList.add('value-0');
-      else if (val === 1) input.classList.add('value-1');
+      else if (val === -1) input.classList.add('value--1');
     }
 
-    function updateDefaultSkill(skill, value) {
-      if (!rosterData[selectedWorker]) {
-        rosterData[selectedWorker] = { default: {} };
+    function updateSkill(modality, skill, value) {
+      if (!rosterData[selectedWorker]) return;
+      if (!rosterData[selectedWorker][modality]) {
+        rosterData[selectedWorker][modality] = {};
       }
-      if (!rosterData[selectedWorker].default) {
-        rosterData[selectedWorker].default = {};
-      }
-      rosterData[selectedWorker].default[skill] = value !== null ? value : 0;
-    }
-
-    function updateModalitySkill(modality, skill, value) {
-      if (!rosterData[selectedWorker]) {
-        rosterData[selectedWorker] = { default: {} };
-      }
-
-      if (value === null) {
-        // Clear the override
-        if (rosterData[selectedWorker][modality]) {
-          delete rosterData[selectedWorker][modality][skill];
-          if (Object.keys(rosterData[selectedWorker][modality]).length === 0) {
-            delete rosterData[selectedWorker][modality];
-          }
-        }
-      } else {
-        // Set the override
-        if (!rosterData[selectedWorker][modality]) {
-          rosterData[selectedWorker][modality] = {};
-        }
-        rosterData[selectedWorker][modality][skill] = value;
-      }
-    }
-
-    function clearOverride(modality, skill) {
-      updateModalitySkill(modality, skill, null);
-      renderWorkerMatrix();
-      renderWorkerList();
+      rosterData[selectedWorker][modality][skill] = value;
     }
 
     function addWorker() {
       const input = document.getElementById('newWorkerId');
-      const workerId = input.value.trim().toUpperCase();
-
+      const workerId = input.value.trim();
       if (!workerId) {
         showStatus('Please enter a worker ID', 'error');
         return;
       }
-
       if (rosterData[workerId]) {
         showStatus('Worker already exists', 'error');
         return;
       }
 
-      // Initialize with default skills all at 0
-      rosterData[workerId] = { default: {} };
-      skills.forEach(skill => {
-        rosterData[workerId].default[skill] = 0;
+      // Create new worker with skills = 0 for all valid modality×skill combos
+      rosterData[workerId] = {};
+      modalities.forEach(mod => {
+        rosterData[workerId][mod] = {};
+        skills.forEach(skill => {
+          if (isValidCombination(mod, skill)) {
+            rosterData[workerId][mod][skill] = 0;
+          }
+        });
       });
 
       input.value = '';
       renderWorkerList();
       selectWorker(workerId);
-      showStatus('Worker added. Remember to save!', 'success');
+      showStatus('Worker added (save to keep)', 'success');
     }
 
-    function removeSelectedWorker() {
+    function deleteWorker() {
       if (!selectedWorker) return;
-      if (!confirm(`Remove worker "${selectedWorker}"?`)) return;
+      if (!confirm('Delete worker ' + selectedWorker + '?')) return;
 
       delete rosterData[selectedWorker];
       selectedWorker = null;
-
       renderWorkerList();
       document.getElementById('noWorkerSelected').style.display = 'block';
       document.getElementById('workerDetailContent').style.display = 'none';
-      showStatus('Worker removed. Remember to save!', 'success');
+      showStatus('Worker deleted (save to keep)', 'success');
     }
 
     async function saveRoster() {
@@ -692,26 +312,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roster: rosterData })
         });
-
-        const data = await response.json();
-        showStatus(data.success ? data.message : 'Failed: ' + data.error, data.success ? 'success' : 'error');
-      } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
-      }
-    }
-
-    async function reloadRoster() {
-      if (!confirm('Reload from staged file? Unsaved changes will be lost.')) return;
-
-      try {
-        const response = await fetch('/api/admin/skill_roster/reload', { method: 'POST' });
-        const data = await response.json();
-
-        if (data.success) {
-          showStatus(data.message, 'success');
-          setTimeout(() => location.reload(), 1000);
+        const result = await response.json();
+        if (result.success) {
+          showStatus('Saved to staging', 'success');
         } else {
-          showStatus('Failed: ' + data.error, 'error');
+          showStatus('Save failed: ' + result.error, 'error');
         }
       } catch (error) {
         showStatus('Error: ' + error.message, 'error');
@@ -719,12 +324,15 @@
     }
 
     async function activateRoster() {
-      if (!confirm('ACTIVATE staged changes? This will immediately affect assignments.')) return;
-
+      if (!confirm('Activate roster? This will apply to live system.')) return;
       try {
         const response = await fetch('/api/admin/skill_roster/activate', { method: 'POST' });
-        const data = await response.json();
-        showStatus(data.success ? data.message + ' - NOW ACTIVE!' : 'Failed: ' + data.error, data.success ? 'success' : 'error');
+        const result = await response.json();
+        if (result.success) {
+          showStatus('Roster activated!', 'success');
+        } else {
+          showStatus('Activation failed: ' + result.error, 'error');
+        }
       } catch (error) {
         showStatus('Error: ' + error.message, 'error');
       }
@@ -734,8 +342,7 @@
       const el = document.getElementById('statusMessage');
       el.textContent = message;
       el.className = 'status-message ' + type;
-      el.style.display = 'block';
-      setTimeout(() => { el.style.display = 'none'; }, 5000);
+      setTimeout(() => { el.className = 'status-message'; }, 4000);
     }
   </script>
 </body>

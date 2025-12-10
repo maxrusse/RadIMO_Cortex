@@ -2362,11 +2362,16 @@ def index():
         if entry['always_visible']:
             available_specialties[entry['slug']] = True
 
+    # Get valid skills for this modality (for hiding irrelevant buttons)
+    modality_config = MODALITY_SETTINGS.get(modality, {})
+    valid_skills = modality_config.get('valid_skills', SKILL_COLUMNS)  # All skills if not specified
+
     return render_template(
         'index.html',
         available_specialties=available_specialties,
         info_texts=d.get('info_texts', []),
-        modality=modality
+        modality=modality,
+        valid_skills=valid_skills
     )
 
 
