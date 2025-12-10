@@ -37,9 +37,9 @@
     .edit-table td[contenteditable="true"]:focus { outline: 2px solid #004892; background: white; }
     .edit-table tr:hover { background: #f8f9fa; }
     .skill-cell { text-align: center; font-weight: 600; }
-    .skill-1 { color: #28a745; background: #e6ffe6; }
-    .skill-0 { color: #856404; background: #fff8e6; }
-    .skill--1 { color: #dc3545; background: #ffe6e6; }
+    .skill-1 { background: #d4edda; color: #155724; }
+    .skill-0 { background: #fff3cd; color: #856404; }
+    .skill--1 { background: #f8d7da; color: #721c24; }
     .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
     .btn-primary { background: #004892; color: white; }
     .btn-primary:hover { background: #003670; }
@@ -56,6 +56,23 @@
     .advanced-tools { display: none; margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; }
     .advanced-tools.visible { display: block; }
     .bulk-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .filter-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-group { display: flex; gap: 0.25rem; align-items: center; }
+    .filter-group label { font-weight: 600; color: #666; font-size: 0.85rem; margin-right: 0.5rem; }
+    .filter-btn { padding: 0.3rem 0.6rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .filter-btn:hover { border-color: #004892; }
+    .filter-btn.active { background: #004892; color: white; border-color: #004892; }
+    .add-worker-panel { background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid #28a745; }
+    .add-worker-panel h4 { margin: 0 0 1rem 0; color: #28a745; }
+    .add-worker-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; }
+    .add-worker-row .form-group { display: flex; flex-direction: column; }
+    .add-worker-row .form-group label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .add-worker-row select, .add-worker-row input { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .task-dropdown { position: relative; display: inline-block; }
+    .task-dropdown-content { display: none; position: absolute; background: white; min-width: 200px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 100; border-radius: 4px; padding: 0.5rem; max-height: 200px; overflow-y: auto; }
+    .task-dropdown-content.show { display: block; }
+    .task-dropdown-content label { display: block; padding: 0.3rem 0.5rem; cursor: pointer; font-size: 0.85rem; }
+    .task-dropdown-content label:hover { background: #f0f0f0; }
   </style>
 </head>
 <body>
@@ -105,12 +122,21 @@
       <button id="mode-advanced" onclick="setMode('advanced')">Advanced (Add/Delete)</button>
     </div>
 
-    <div class="modality-tabs">
-      <span style="margin-right: 0.5rem; font-weight: 600; color: #666;">Filter:</span>
-      <button class="active" onclick="setFilter('all')">ALL</button>
-      {% for mod in modalities %}
-      <button onclick="setFilter('{{ mod }}')">{{ mod|upper }}</button>
-      {% endfor %}
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>Modality:</label>
+        <button class="filter-btn active" onclick="setModalityFilter('all')">ALL</button>
+        {% for mod in modalities %}
+        <button class="filter-btn" onclick="setModalityFilter('{{ mod }}')">{{ mod|upper }}</button>
+        {% endfor %}
+      </div>
+      <div class="filter-group">
+        <label>Skill:</label>
+        <button class="filter-btn active" onclick="setSkillFilter('all')">ALL</button>
+        {% for skill in skills %}
+        <button class="filter-btn" onclick="setSkillFilter('{{ skill }}')">{{ skill }}</button>
+        {% endfor %}
+      </div>
     </div>
 
     <div class="table-container">
@@ -134,9 +160,58 @@
     </div>
 
     <div id="advanced-tools" class="advanced-tools">
-      <h4 style="margin-bottom: 0.5rem;">Advanced Tools</h4>
+      <!-- Add Worker Panel -->
+      <div class="add-worker-panel">
+        <h4>+ Add Worker</h4>
+        <div class="add-worker-row">
+          <div class="form-group">
+            <label>Worker (from Skill Matrix)</label>
+            <select id="add-worker-select">
+              <option value="">-- Select Worker --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modality</label>
+            <select id="add-modality-select">
+              {% for mod in modalities %}
+              <option value="{{ mod }}">{{ mod|upper }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Shift</label>
+            <select id="add-shift-select">
+              <option value="Fruehdienst">Frühdienst (07:00-15:00)</option>
+              <option value="Spaetdienst">Spätdienst (13:00-21:00)</option>
+              <option value="custom">Custom...</option>
+            </select>
+          </div>
+          <div class="form-group" id="custom-time-group" style="display: none;">
+            <label>Von - Bis</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <input type="time" id="add-start-time" value="07:00" style="width: 100px;">
+              <input type="time" id="add-end-time" value="15:00" style="width: 100px;">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tasks</label>
+            <div class="task-dropdown">
+              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown()">Select Tasks ▼</button>
+              <div id="task-dropdown-content" class="task-dropdown-content">
+                <label><input type="checkbox" value="Board"> Board</label>
+                <label><input type="checkbox" value="Besprechung"> Besprechung</label>
+                <label><input type="checkbox" value="Aufklaerung"> Aufklärung</label>
+                <label><input type="checkbox" value="Sono"> Sono</label>
+                <label><input type="checkbox" value="Lehre"> Lehre</label>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-success" onclick="addWorkerFromPanel()">Add</button>
+        </div>
+      </div>
+
+      <h4 style="margin-bottom: 0.5rem;">Bulk Actions</h4>
       <div class="bulk-actions">
-        <button class="btn btn-success" onclick="addWorkerRow()">+ Add Worker</button>
         <button class="btn btn-primary" onclick="bulkSetSkill()">Bulk Set Skill</button>
       </div>
     </div>
@@ -154,11 +229,13 @@
     const SKILLS = {{ skills|tojson }};
     const MODALITIES = {{ modalities|tojson }};
 
-    let currentFilter = 'all';  // Filter: 'all' or specific modality
+    let currentModalityFilter = 'all';  // Filter: 'all' or specific modality
+    let currentSkillFilter = 'all';     // Filter: 'all' or specific skill (shows where skill=1)
     let currentMode = 'simple';
     let tableData = {};  // {modality: [rows]}
     let allData = [];    // Combined data from all modalities
     let pendingChanges = {};
+    let skillRosterWorkers = [];  // Workers from skill roster for dropdown
 
     async function loadData() {
       try {
@@ -181,6 +258,28 @@
       }
     }
 
+    async function loadSkillRosterWorkers() {
+      try {
+        const response = await fetch('/api/admin/skill_roster');
+        const data = await response.json();
+        skillRosterWorkers = Object.keys(data);
+        populateWorkerDropdown();
+      } catch (error) {
+        console.log('Could not load skill roster:', error.message);
+      }
+    }
+
+    function populateWorkerDropdown() {
+      const select = document.getElementById('add-worker-select');
+      select.innerHTML = '<option value="">-- Select Worker --</option>';
+      skillRosterWorkers.forEach(worker => {
+        const opt = document.createElement('option');
+        opt.value = worker;
+        opt.textContent = worker;
+        select.appendChild(opt);
+      });
+    }
+
     function setMode(mode) {
       currentMode = mode;
       document.getElementById('mode-simple').classList.toggle('active', mode === 'simple');
@@ -190,11 +289,22 @@
       renderTable();
     }
 
-    function setFilter(filter) {
-      currentFilter = filter;
-      document.querySelectorAll('.modality-tabs button').forEach(btn => {
-        const btnText = btn.textContent.toLowerCase();
-        btn.classList.toggle('active', btnText === filter);
+    function setModalityFilter(filter) {
+      currentModalityFilter = filter;
+      // Update button states in modality filter group
+      document.querySelectorAll('.filter-row .filter-group:first-child .filter-btn').forEach(btn => {
+        const btnFilter = btn.textContent.toLowerCase() === 'all' ? 'all' : btn.textContent.toLowerCase();
+        btn.classList.toggle('active', btnFilter === filter);
+      });
+      renderTable();
+    }
+
+    function setSkillFilter(skill) {
+      currentSkillFilter = skill;
+      // Update button states in skill filter group
+      document.querySelectorAll('.filter-row .filter-group:last-child .filter-btn').forEach(btn => {
+        const btnSkill = btn.textContent === 'ALL' ? 'all' : btn.textContent;
+        btn.classList.toggle('active', btnSkill === skill);
       });
       renderTable();
     }
@@ -203,15 +313,24 @@
       const tbody = document.getElementById('table-body');
       tbody.innerHTML = '';
 
-      // Filter data based on current filter
+      // Filter data based on modality filter
       let data = allData;
-      if (currentFilter !== 'all') {
-        data = allData.filter(row => row._modality === currentFilter);
+      if (currentModalityFilter !== 'all') {
+        data = data.filter(row => row._modality === currentModalityFilter);
+      }
+
+      // Filter by skill (show workers where skill=1)
+      if (currentSkillFilter !== 'all') {
+        data = data.filter(row => row[currentSkillFilter] === 1 || row[currentSkillFilter] === '1');
       }
 
       if (data.length === 0) {
         const colSpan = 5 + SKILLS.length + (currentMode === 'advanced' ? 1 : 0);
-        tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 2rem; color: #666;">No data. Upload CSV first.</td></tr>`;
+        let emptyMsg = 'No data. Upload CSV first.';
+        if (allData.length > 0) {
+          emptyMsg = `No workers match current filters (Modality: ${currentModalityFilter}, Skill: ${currentSkillFilter})`;
+        }
+        tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 2rem; color: #666;">${emptyMsg}</td></tr>`;
         return;
       }
 
@@ -298,7 +417,7 @@
 
     async function addWorkerRow() {
       // Always ask which modality (use current filter as default if it's a specific modality)
-      const defaultMod = currentFilter !== 'all' ? currentFilter : MODALITIES[0];
+      const defaultMod = currentModalityFilter !== 'all' ? currentModalityFilter : MODALITIES[0];
       let targetModality = prompt(`Which modality? (${MODALITIES.join(', ')}):`, defaultMod);
       if (!targetModality || !MODALITIES.includes(targetModality.toLowerCase())) {
         showMessage('error', 'Invalid modality');
@@ -350,7 +469,13 @@
       if (![-1, 0, 1].includes(parsedValue)) { alert('Invalid value! Use -1, 0, or 1'); return; }
 
       // Apply to all visible (filtered) workers
-      const targetData = currentFilter === 'all' ? allData : allData.filter(r => r._modality === currentFilter);
+      let targetData = allData;
+      if (currentModalityFilter !== 'all') {
+        targetData = targetData.filter(r => r._modality === currentModalityFilter);
+      }
+      if (currentSkillFilter !== 'all') {
+        targetData = targetData.filter(r => r[currentSkillFilter] === 1 || r[currentSkillFilter] === '1');
+      }
       targetData.forEach(row => {
         row[skill] = parsedValue;
         if (!pendingChanges[row._modality]) pendingChanges[row._modality] = {};
@@ -415,7 +540,127 @@
       } catch (error) { showMessage('error', error.message); }
     }
 
+    // Toggle task dropdown visibility
+    function toggleTaskDropdown() {
+      const dropdown = document.getElementById('task-dropdown-content');
+      dropdown.classList.toggle('show');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.task-dropdown')) {
+        document.getElementById('task-dropdown-content')?.classList.remove('show');
+      }
+    });
+
+    // Handle shift dropdown change for custom time
+    document.getElementById('add-shift-select')?.addEventListener('change', function() {
+      const customGroup = document.getElementById('custom-time-group');
+      if (this.value === 'custom') {
+        customGroup.style.display = 'block';
+      } else {
+        customGroup.style.display = 'none';
+        // Set default times based on shift
+        const startInput = document.getElementById('add-start-time');
+        const endInput = document.getElementById('add-end-time');
+        if (this.value === 'Fruehdienst') {
+          startInput.value = '07:00';
+          endInput.value = '15:00';
+        } else if (this.value === 'Spaetdienst') {
+          startInput.value = '13:00';
+          endInput.value = '21:00';
+        }
+      }
+    });
+
+    // Add worker from panel (not prompt)
+    async function addWorkerFromPanel() {
+      const workerSelect = document.getElementById('add-worker-select');
+      const modalitySelect = document.getElementById('add-modality-select');
+      const shiftSelect = document.getElementById('add-shift-select');
+      const startInput = document.getElementById('add-start-time');
+      const endInput = document.getElementById('add-end-time');
+
+      const workerName = workerSelect.value;
+      const modality = modalitySelect.value;
+
+      if (!workerName) {
+        showMessage('error', 'Please select a worker');
+        return;
+      }
+
+      // Get times based on shift or custom
+      let startTime = startInput.value || '07:00';
+      let endTime = endInput.value || '15:00';
+
+      if (shiftSelect.value === 'Fruehdienst') {
+        startTime = '07:00';
+        endTime = '15:00';
+      } else if (shiftSelect.value === 'Spaetdienst') {
+        startTime = '13:00';
+        endTime = '21:00';
+      }
+
+      // Get selected tasks
+      const taskCheckboxes = document.querySelectorAll('#task-dropdown-content input[type="checkbox"]:checked');
+      const selectedTasks = Array.from(taskCheckboxes).map(cb => cb.value);
+
+      // Get worker's default skills from skill roster
+      let workerSkills = {};
+      SKILLS.forEach(skill => { workerSkills[skill] = 0; });  // Default all to 0
+
+      // Fetch worker's skills from skill roster
+      try {
+        const rosterResponse = await fetch('/api/admin/skill_roster');
+        const rosterData = await rosterResponse.json();
+        if (rosterData[workerName] && rosterData[workerName].default) {
+          SKILLS.forEach(skill => {
+            if (rosterData[workerName].default[skill] !== undefined) {
+              workerSkills[skill] = rosterData[workerName].default[skill];
+            }
+          });
+        }
+      } catch (e) {
+        console.log('Could not fetch skill roster defaults');
+      }
+
+      try {
+        const response = await fetch('/api/prep-next-day/add-worker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modality: modality,
+            worker_data: {
+              PPL: workerName,
+              start_time: startTime,
+              end_time: endTime,
+              Modifier: 1.0,
+              tasks: selectedTasks,
+              ...workerSkills
+            }
+          })
+        });
+
+        if (response.ok) {
+          showMessage('success', `Worker "${workerName}" added to ${modality.toUpperCase()}`);
+          // Reset form
+          workerSelect.value = '';
+          shiftSelect.value = 'Fruehdienst';
+          document.getElementById('custom-time-group').style.display = 'none';
+          taskCheckboxes.forEach(cb => cb.checked = false);
+          await loadData();  // Refresh table
+        } else {
+          const err = await response.json();
+          showMessage('error', err.error || 'Failed to add worker');
+        }
+      } catch (error) {
+        showMessage('error', error.message);
+      }
+    }
+
+    // Initialize
     loadData();
+    loadSkillRosterWorkers();
   </script>
 </body>
 </html>
