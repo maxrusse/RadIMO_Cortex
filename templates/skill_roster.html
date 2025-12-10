@@ -17,7 +17,8 @@
     }
 
     .header {
-      background: #fff;
+      background: #004892;
+      color: white;
       padding: 1rem 2rem;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -32,6 +33,25 @@
     .header h1 {
       margin: 0;
       font-size: 1.5rem;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .header-nav a:hover {
+      background: rgba(255,255,255,0.3);
     }
 
     .header-actions {
@@ -301,16 +321,22 @@
   <div class="header">
     <div>
       <h1>RadIMO Cortex | Skill Matrix <span style="color: #ff9800; font-size: 0.9rem;">(Planning Mode)</span></h1>
-      <p style="font-size: 0.85rem; color: #666;">Worker skill × modality configuration</p>
+      <p style="font-size: 0.85rem; opacity: 0.9;">Worker skill × modality configuration</p>
     </div>
-    <div class="header-actions">
-      <a href="{{ url_for('index') }}" class="btn btn-secondary">Dashboard</a>
-      <a href="{{ url_for('timetable') }}" class="btn btn-secondary">Timetable</a>
-      <a href="{{ url_for('live_edit_page') }}" class="btn btn-secondary">Day Control</a>
-      <button class="btn btn-secondary" onclick="reloadRoster()">Reload Staged</button>
-      <button class="btn btn-primary" onclick="saveRoster()">Save to Staging</button>
-      <button class="btn btn-success" onclick="activateRoster()">Activate Changes</button>
+    <div class="header-nav">
+      <a href="{{ url_for('index') }}">Dashboard</a>
+      <a href="{{ url_for('timetable') }}">Timetable</a>
+      <a href="{{ url_for('live_edit_page') }}">Day Control</a>
+      <a href="{{ url_for('prep_next_day') }}">Prep Next Day</a>
+      <a href="{{ url_for('upload_file') }}">Upload</a>
+      <a href="{{ url_for('logout') }}">Logout</a>
     </div>
+  </div>
+
+  <div style="background: #fff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
+    <button class="btn btn-secondary" onclick="reloadRoster()">Reload Staged</button>
+    <button class="btn btn-primary" onclick="saveRoster()">Save to Staging</button>
+    <button class="btn btn-success" onclick="activateRoster()">Activate Changes</button>
   </div>
 
   <div id="loading" class="loading content-box">Loading roster...</div>

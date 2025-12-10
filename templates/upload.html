@@ -237,12 +237,12 @@
 <body>
   <div class="header">
     <div>
-      <h1>🏥 RadIMO Cortex | Admin</h1>
-      <p>System Configuration & CSV Management</p>
+      <h1>RadIMO Cortex | Admin</h1>
+      <p style="opacity: 0.9;">System Configuration & CSV Management</p>
     </div>
     <div class="header-actions">
-      <a href="{{ url_for('index', modality=modality) }}">Dashboard</a>
-      <a href="{{ url_for('timetable', modality=modality) }}">Timetable</a>
+      <a href="{{ url_for('index') }}">Dashboard</a>
+      <a href="{{ url_for('timetable') }}">Timetable</a>
       <a href="{{ url_for('skill_roster_page') }}">Skill Matrix</a>
       <a href="{{ url_for('live_edit_page') }}">Day Control</a>
       <a href="{{ url_for('prep_next_day') }}">Prep Next Day</a>
