@@ -818,20 +818,24 @@ def apply_roster_overrides(
     """
     Apply per-worker skill overrides from worker_skill_roster.
 
-    Priority rules:
-    - medweb (base_skills) defines skill=1 (assignment requirement)
-    - roster defines worker capabilities:
-      -1 = NOT able (ALWAYS overrides, even base=1)
-       0 = helper/fallback (does NOT override base=1, but adds if base=0)
-       1 = active capability (adds if base=0)
+    Priority (highest to lowest):
+    1. Day Edit (same day / prep next day) - handled separately, always wins
+    2. medweb + roster merge (this function)
+
+    Roster rules:
+    - roster -1 = ALWAYS wins (worker excluded from this skill)
+    - roster 0/1 = NO effect (roster cannot upgrade, only restrict)
+    - medweb defines the assignment, roster can only exclude with -1
 
     Examples:
-    - base=1, roster=-1 → -1 (roster -1 always wins)
-    - base=1, roster=0  → 1  (roster 0 doesn't downgrade assignment)
-    - base=1, roster=1  → 1
-    - base=0, roster=-1 → -1
-    - base=0, roster=0  → 0
-    - base=0, roster=1  → 1  (roster can upgrade)
+    | medweb | roster | result | reason                              |
+    |--------|--------|--------|-------------------------------------|
+    |   1    |   1    |   1    | assigned                            |
+    |   1    |   0    |   1    | assigned (roster can't downgrade)   |
+    |   1    |  -1    |  -1    | roster -1 ALWAYS wins (excluded)    |
+    |   0    |   1    |   0    | not assigned (roster can't upgrade) |
+    |   0    |   0    |   0    | not assigned                        |
+    |   0    |  -1    |  -1    | roster -1 ALWAYS wins (excluded)    |
     """
     if canonical_id not in worker_roster:
         return base_skills.copy()
@@ -839,32 +843,25 @@ def apply_roster_overrides(
     final_skills = base_skills.copy()
 
     def merge_skill(base_val: int, roster_val: int) -> int:
-        # -1 from roster ALWAYS wins (worker cannot do this)
+        # -1 from roster ALWAYS wins (worker cannot do this skill)
         if roster_val == -1:
             return -1
-        # If base is 1 (assigned), roster 0 does NOT downgrade
-        if base_val == 1 and roster_val == 0:
-            return 1
-        # Otherwise roster value applies (can upgrade 0→1)
-        return roster_val
+        # Roster 0 or 1 cannot change medweb assignment
+        # Only -1 can override, everything else keeps medweb value
+        return base_val
 
-    # Apply default overrides
+    # Apply default overrides (only -1 matters)
     if 'default' in worker_roster[canonical_id]:
         for skill, roster_val in worker_roster[canonical_id]['default'].items():
             if skill in final_skills:
                 final_skills[skill] = merge_skill(final_skills[skill], roster_val)
 
-    # Apply modality-specific overrides (takes precedence over default)
+    # Apply modality-specific overrides (only -1 matters, takes precedence)
     if modality in worker_roster[canonical_id]:
         for skill, roster_val in worker_roster[canonical_id][modality].items():
             if skill in final_skills:
-                # For modality-specific, we need to recalculate from base
-                base_val = base_skills.get(skill, 0)
-                # First apply default if exists
-                if 'default' in worker_roster[canonical_id] and skill in worker_roster[canonical_id]['default']:
-                    base_val = merge_skill(base_val, worker_roster[canonical_id]['default'][skill])
-                # Then apply modality-specific
-                final_skills[skill] = merge_skill(base_val, roster_val)
+                # Modality-specific -1 can override even if default was different
+                final_skills[skill] = merge_skill(final_skills[skill], roster_val)
 
     return final_skills
 
