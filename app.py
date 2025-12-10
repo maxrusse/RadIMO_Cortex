@@ -1107,26 +1107,50 @@ def build_working_hours_from_medweb(
         except Exception as e:
             raise ValueError(f"Fehler beim Laden der CSV: {e}")
 
-    # Parse date column
-    medweb_df['Datum_parsed'] = pd.to_datetime(
-        medweb_df['Datum'], dayfirst=True, errors='coerce'
-    ).dt.date
+    # Parse date column - handle both string and datetime formats robustly
+    def parse_german_date(date_val):
+        """Parse German date format DD.MM.YYYY robustly."""
+        if pd.isna(date_val):
+            return None
+        date_str = str(date_val).strip()
+        # Try German format first
+        for fmt in ['%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y']:
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+        # Fallback to pandas
+        try:
+            return pd.to_datetime(date_str, dayfirst=True).date()
+        except Exception:
+            return None
 
-    day_df = medweb_df[medweb_df['Datum_parsed'] == target_date.date()]
+    medweb_df['Datum_parsed'] = medweb_df['Datum'].apply(parse_german_date)
+    target_date_obj = target_date.date() if hasattr(target_date, 'date') else target_date
+
+    # Debug: log date parsing results
+    parsed_dates = medweb_df['Datum_parsed'].dropna().unique().tolist()
+    selection_logger.debug(f"CSV dates parsed: {parsed_dates}, target: {target_date_obj}, type: {type(target_date_obj)}")
+
+    day_df = medweb_df[medweb_df['Datum_parsed'] == target_date_obj]
 
     if day_df.empty:
+        selection_logger.warning(f"No rows found for date {target_date_obj}. Available: {parsed_dates}")
         return {}
 
     # Get mapping config
     mapping_rules = config.get('medweb_mapping', {}).get('rules', [])
     worker_roster = get_merged_worker_roster(config)
 
+    selection_logger.debug(f"Found {len(day_df)} rows for target date, {len(mapping_rules)} mapping rules")
+
     # Get weekday name for exclusion schedule lookup
-    weekday_name = get_weekday_name_german(target_date.date())
+    weekday_name = get_weekday_name_german(target_date_obj)
 
     # Prepare data structures
     rows_per_modality = {mod: [] for mod in allowed_modalities}
     exclusions_per_worker = {}  # {canonical_id: [{start_time, end_time, activity}, ...]}
+    unmatched_activities = []
 
     # FIRST PASS: Process each activity (collect work shifts AND exclusions)
     for _, row in day_df.iterrows():
@@ -1135,6 +1159,7 @@ def build_working_hours_from_medweb(
         # Match rule
         rule = match_mapping_rule(activity_desc, mapping_rules)
         if not rule:
+            unmatched_activities.append(activity_desc)
             continue  # Not Cortex-relevant or not mapped
 
         # Build PPL and get canonical ID (needed for both work and exclusions)
@@ -1281,11 +1306,15 @@ def build_working_hours_from_medweb(
                     worker_shifts = apply_exclusions_to_shifts(
                         worker_shifts,
                         exclusions_per_worker[worker_id],
-                        target_date.date()
+                        target_date_obj
                     )
                 new_shifts.extend(worker_shifts)
 
             rows_per_modality[modality] = new_shifts
+
+    # Log unmatched activities for debugging
+    if unmatched_activities:
+        selection_logger.debug(f"Unmatched activities (not in mapping rules): {set(unmatched_activities)}")
 
     # Convert to DataFrames
     result = {}
@@ -1298,6 +1327,7 @@ def build_working_hours_from_medweb(
             df = df.drop(columns=['canonical_id'])
         result[modality] = df
 
+    selection_logger.info(f"Loaded {sum(len(df) for df in result.values())} workers across {list(result.keys())}")
     return result
 
 def get_next_workday(from_date: Optional[datetime] = None) -> datetime:
@@ -2918,13 +2948,27 @@ def load_today_from_master():
 
         if not modality_dfs:
             # Better error message with debug info
+            # Check what mapping rules exist
+            mapping_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
+            rule_matches = [r.get('match', '') for r in mapping_rules[:10]]
+
+            # Check which activities would match rules
+            matched_activities = []
+            for activity in available_activities:
+                for rule in mapping_rules:
+                    if rule.get('match', '').lower() in str(activity).lower():
+                        matched_activities.append(activity)
+                        break
+
             return jsonify({
                 "error": f"Keine Cortex-Daten für {target_date.strftime('%d.%m.%Y')} gefunden",
                 "debug": {
                     "target_date": target_date.strftime('%d.%m.%Y'),
-                    "dates_in_csv": available_dates[:10],  # First 10 dates
-                    "activities_in_csv": available_activities[:10],  # First 10 activities
-                    "hint": "Prüfen Sie ob Datum im Format DD.MM.YYYY und Aktivitäten wie 'CT Assistent', 'MR Assistent' vorhanden sind"
+                    "dates_in_csv": available_dates[:10],
+                    "activities_in_csv": available_activities[:10],
+                    "mapping_rules": rule_matches,
+                    "matched_activities": matched_activities[:10],
+                    "hint": "Prüfen Sie ob Datum und Aktivitäten mit Mapping-Regeln übereinstimmen"
                 }
             }), 400
 

@@ -253,6 +253,12 @@
             errorHtml += `Target: ${result.debug.target_date}<br>`;
             errorHtml += `Dates in CSV: ${result.debug.dates_in_csv?.join(', ') || 'none'}<br>`;
             errorHtml += `Activities: ${result.debug.activities_in_csv?.join(', ') || 'none'}<br>`;
+            if (result.debug.mapping_rules) {
+              errorHtml += `Mapping rules: ${result.debug.mapping_rules?.join(', ') || 'none'}<br>`;
+            }
+            if (result.debug.matched_activities) {
+              errorHtml += `Matched: ${result.debug.matched_activities?.join(', ') || 'none'}<br>`;
+            }
             errorHtml += `<em>${result.debug.hint || ''}</em>`;
           }
           errorHtml += `</div>`;
