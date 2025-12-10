@@ -72,8 +72,7 @@
     <div class="header-nav">
       <a href="{{ url_for('index') }}">Dashboard</a>
       <a href="{{ url_for('timetable') }}">Timetable</a>
-      <a href="{{ url_for('live_edit_page') }}">Day Control</a>
-      <a href="{{ url_for('prep_next_day') }}">Prep Next Day</a>
+      <a href="{{ url_for('prep_next_day') }}">Schedule Edit</a>
       <a href="{{ url_for('upload_file') }}">Upload</a>
       <a href="{{ url_for('logout') }}">Logout</a>
     </div>
@@ -88,8 +87,7 @@
     </div>
     <div style="display: flex; gap: 0.5rem;">
       <button class="btn btn-secondary" onclick="loadRoster()">Reload</button>
-      <button class="btn btn-primary" onclick="saveRoster()">Save (Staging)</button>
-      <button class="btn btn-success" onclick="activateRoster()">Activate</button>
+      <button class="btn btn-success" onclick="saveRoster()">Save</button>
     </div>
   </div>
 
@@ -314,24 +312,9 @@
         });
         const result = await response.json();
         if (result.success) {
-          showStatus('Saved to staging', 'success');
+          showStatus('Saved!', 'success');
         } else {
           showStatus('Save failed: ' + result.error, 'error');
-        }
-      } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
-      }
-    }
-
-    async function activateRoster() {
-      if (!confirm('Activate roster? This will apply to live system.')) return;
-      try {
-        const response = await fetch('/api/admin/skill_roster/activate', { method: 'POST' });
-        const result = await response.json();
-        if (result.success) {
-          showStatus('Roster activated!', 'success');
-        } else {
-          showStatus('Activation failed: ' + result.error, 'error');
         }
       } catch (error) {
         showStatus('Error: ' + error.message, 'error');

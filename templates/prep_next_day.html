@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RadIMO Cortex | Prep Next Day</title>
+  <title>RadIMO Cortex | Schedule Edit</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,9 +40,11 @@
     .skill-1 { color: #28a745; background: #e6ffe6; }
     .skill-0 { color: #856404; background: #fff8e6; }
     .skill--1 { color: #dc3545; background: #ffe6e6; }
-    .btn { padding: 0.4rem 0.8rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+    .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
     .btn-primary { background: #004892; color: white; }
     .btn-primary:hover { background: #003670; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
     .btn-success { background: #28a745; color: white; }
     .btn-success:hover { background: #218838; }
     .btn-danger { background: #dc3545; color: white; }
@@ -59,20 +61,26 @@
 <body>
   <div class="header">
     <div>
-      <h1>RadIMO Cortex | Prep Next Day</h1>
-      <p style="font-size: 0.85rem; opacity: 0.9;">Schedule for: <strong>{{ target_date_german }}</strong></p>
+      <h1>RadIMO Cortex | Schedule Edit</h1>
+      <p style="font-size: 0.85rem; opacity: 0.9;">Edit schedule, then Activate to go live</p>
     </div>
     <div class="header-actions">
       <a href="{{ url_for('index') }}">Dashboard</a>
       <a href="{{ url_for('timetable') }}">Timetable</a>
       <a href="{{ url_for('skill_roster_page') }}">Skill Matrix</a>
-      <a href="{{ url_for('live_edit_page') }}">Day Control</a>
       <a href="{{ url_for('upload_file') }}">Upload</a>
       <a href="{{ url_for('logout') }}">Logout</a>
     </div>
   </div>
 
   <div id="message-container"></div>
+
+  <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+    <strong>Load from CSV:</strong>
+    <button class="btn btn-primary" onclick="loadFromCSV('today')">Load Today</button>
+    <button class="btn btn-primary" onclick="loadFromCSV('next')">Load Next Day</button>
+    <span id="load-status" style="color: #666;"></span>
+  </div>
 
   <div class="staging-banner">
     <h2>STAGING MODE - No Live Effect</h2>
@@ -98,8 +106,10 @@
     </div>
 
     <div class="modality-tabs">
+      <span style="margin-right: 0.5rem; font-weight: 600; color: #666;">Filter:</span>
+      <button class="active" onclick="setFilter('all')">ALL</button>
       {% for mod in modalities %}
-      <button{% if loop.first %} class="active"{% endif %} onclick="switchModality('{{ mod }}')">{{ mod|upper }}</button>
+      <button onclick="setFilter('{{ mod }}')">{{ mod|upper }}</button>
       {% endfor %}
     </div>
 
@@ -108,6 +118,7 @@
         <thead>
           <tr>
             <th>Worker</th>
+            <th>Modality</th>
             <th>Von</th>
             <th>Bis</th>
             {% for skill in skills %}
@@ -143,9 +154,10 @@
     const SKILLS = {{ skills|tojson }};
     const MODALITIES = {{ modalities|tojson }};
 
-    let currentModality = MODALITIES[0] || 'ct';
+    let currentFilter = 'all';  // Filter: 'all' or specific modality
     let currentMode = 'simple';
-    let tableData = {};
+    let tableData = {};  // {modality: [rows]}
+    let allData = [];    // Combined data from all modalities
     let pendingChanges = {};
 
     async function loadData() {
@@ -153,6 +165,16 @@
         const response = await fetch('/api/prep-next-day/data');
         const data = await response.json();
         tableData = data;
+
+        // Combine all modalities into unified list
+        allData = [];
+        MODALITIES.forEach(mod => {
+          const modData = tableData[mod] || [];
+          modData.forEach(row => {
+            allData.push({ ...row, _modality: mod });
+          });
+        });
+
         renderTable();
       } catch (error) {
         showMessage('error', `Error loading: ${error.message}`);
@@ -168,10 +190,11 @@
       renderTable();
     }
 
-    function switchModality(modality) {
-      currentModality = modality;
+    function setFilter(filter) {
+      currentFilter = filter;
       document.querySelectorAll('.modality-tabs button').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent.toLowerCase() === modality);
+        const btnText = btn.textContent.toLowerCase();
+        btn.classList.toggle('active', btnText === filter);
       });
       renderTable();
     }
@@ -179,10 +202,15 @@
     function renderTable() {
       const tbody = document.getElementById('table-body');
       tbody.innerHTML = '';
-      const data = tableData[currentModality] || [];
+
+      // Filter data based on current filter
+      let data = allData;
+      if (currentFilter !== 'all') {
+        data = allData.filter(row => row._modality === currentFilter);
+      }
 
       if (data.length === 0) {
-        const colSpan = 4 + SKILLS.length + (currentMode === 'advanced' ? 1 : 0);
+        const colSpan = 5 + SKILLS.length + (currentMode === 'advanced' ? 1 : 0);
         tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 2rem; color: #666;">No data. Upload CSV first.</td></tr>`;
         return;
       }
@@ -190,9 +218,12 @@
       data.forEach((row) => {
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = row.row_index;
+        tr.dataset.modality = row._modality;
 
         // Worker name
         tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="PPL">${row.PPL}</td>`;
+        // Modality (always visible, editable via dropdown in advanced mode later)
+        tr.innerHTML += `<td style="font-weight: bold; text-transform: uppercase;">${row._modality}</td>`;
         // Times
         tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="start_time">${row.start_time}</td>`;
         tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="end_time">${row.end_time}</td>`;
@@ -209,7 +240,7 @@
 
         // Actions (advanced mode)
         if (currentMode === 'advanced') {
-          tr.innerHTML += `<td><button class="btn btn-danger btn-small" onclick="deleteWorkerRow(${row.row_index})">Del</button></td>`;
+          tr.innerHTML += `<td><button class="btn btn-danger btn-small" onclick="deleteWorkerRow('${row._modality}', ${row.row_index})">Del</button></td>`;
         }
 
         tbody.appendChild(tr);
@@ -225,14 +256,15 @@
       const cell = event.target;
       const row = cell.parentElement;
       const rowIndex = parseInt(row.dataset.rowIndex);
+      const rowModality = row.dataset.modality;  // Always use row's modality
       const col = cell.dataset.col;
       const newValue = cell.textContent.trim();
 
-      if (!pendingChanges[currentModality]) pendingChanges[currentModality] = {};
-      if (!pendingChanges[currentModality][rowIndex]) pendingChanges[currentModality][rowIndex] = {};
-      pendingChanges[currentModality][rowIndex][col] = newValue;
+      if (!pendingChanges[rowModality]) pendingChanges[rowModality] = {};
+      if (!pendingChanges[rowModality][rowIndex]) pendingChanges[rowModality][rowIndex] = {};
+      pendingChanges[rowModality][rowIndex][col] = newValue;
 
-      const dataRow = tableData[currentModality].find(r => r.row_index === rowIndex);
+      const dataRow = tableData[rowModality]?.find(r => r.row_index === rowIndex);
       if (dataRow) dataRow[col] = newValue;
 
       cell.style.background = '#d4edda';
@@ -265,6 +297,15 @@
     }
 
     async function addWorkerRow() {
+      // Always ask which modality (use current filter as default if it's a specific modality)
+      const defaultMod = currentFilter !== 'all' ? currentFilter : MODALITIES[0];
+      let targetModality = prompt(`Which modality? (${MODALITIES.join(', ')}):`, defaultMod);
+      if (!targetModality || !MODALITIES.includes(targetModality.toLowerCase())) {
+        showMessage('error', 'Invalid modality');
+        return;
+      }
+      targetModality = targetModality.toLowerCase();
+
       const workerName = prompt('Worker Name:', 'New Worker');
       if (!workerName) return;
 
@@ -276,22 +317,22 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            modality: currentModality,
+            modality: targetModality,
             worker_data: { PPL: workerName, start_time: '07:00', end_time: '15:00', Modifier: 1.0, ...defaultSkills }
           })
         });
-        if (response.ok) { showMessage('success', `Worker "${workerName}" added`); await loadData(); }
+        if (response.ok) { showMessage('success', `Worker "${workerName}" added to ${targetModality.toUpperCase()}`); await loadData(); }
         else showMessage('error', 'Failed to add');
       } catch (error) { showMessage('error', error.message); }
     }
 
-    async function deleteWorkerRow(rowIndex) {
+    async function deleteWorkerRow(modality, rowIndex) {
       if (!confirm('Delete this worker?')) return;
       try {
         const response = await fetch('/api/prep-next-day/delete-worker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modality: currentModality, row_index: rowIndex })
+          body: JSON.stringify({ modality: modality, row_index: rowIndex })
         });
         if (response.ok) { showMessage('success', 'Deleted'); await loadData(); }
         else showMessage('error', 'Failed');
@@ -308,15 +349,45 @@
       const parsedValue = parseInt(value);
       if (![-1, 0, 1].includes(parsedValue)) { alert('Invalid value! Use -1, 0, or 1'); return; }
 
-      tableData[currentModality].forEach(row => {
+      // Apply to all visible (filtered) workers
+      const targetData = currentFilter === 'all' ? allData : allData.filter(r => r._modality === currentFilter);
+      targetData.forEach(row => {
         row[skill] = parsedValue;
-        if (!pendingChanges[currentModality]) pendingChanges[currentModality] = {};
-        if (!pendingChanges[currentModality][row.row_index]) pendingChanges[currentModality][row.row_index] = {};
-        pendingChanges[currentModality][row.row_index][skill] = parsedValue;
+        if (!pendingChanges[row._modality]) pendingChanges[row._modality] = {};
+        if (!pendingChanges[row._modality][row.row_index]) pendingChanges[row._modality][row.row_index] = {};
+        pendingChanges[row._modality][row.row_index][skill] = parsedValue;
       });
 
       renderTable();
-      showMessage('success', `Set ${skill}=${parsedValue} for all workers in ${currentModality.toUpperCase()}`);
+      showMessage('success', `Set ${skill}=${parsedValue} for ${targetData.length} workers`);
+    }
+
+    async function loadFromCSV(mode) {
+      const loadStatus = document.getElementById('load-status');
+      loadStatus.textContent = 'Loading...';
+
+      const endpoint = mode === 'today' ? '/load-today-from-master' : '/preload-from-master';
+      try {
+        const response = await fetch(endpoint, { method: 'POST' });
+        const result = await response.json();
+
+        if (response.ok) {
+          loadStatus.textContent = result.message || 'Loaded!';
+          loadStatus.style.color = '#28a745';
+          await loadData();  // Refresh table
+        } else {
+          loadStatus.textContent = result.error || 'Error';
+          loadStatus.style.color = '#dc3545';
+          if (result.debug) {
+            console.log('Debug:', result.debug);
+          }
+        }
+      } catch (error) {
+        loadStatus.textContent = 'Error: ' + error.message;
+        loadStatus.style.color = '#dc3545';
+      }
+
+      setTimeout(() => { loadStatus.textContent = ''; }, 5000);
     }
 
     function showMessage(type, message) {

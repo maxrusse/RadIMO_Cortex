@@ -1,0 +1,104 @@
+{
+  "CT1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "CT2": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "CT3": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MR1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MR2": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MR3": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MR4": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "XR1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "XR2": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MA1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MA2": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "MSK1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "ABD1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "CHE1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "CAR1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "URO1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  },
+  "GYN1": {
+    "ct": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mr": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "xray": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0},
+    "mammo": {"Allgemein": 0, "Notfall": 0, "Privat": 0, "Gyn": 0, "MSK": 0, "Abdomen": 0, "Chest": 0, "Cardvask": 0, "Uro": 0}
+  }
+}
