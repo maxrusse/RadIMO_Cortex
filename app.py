@@ -2560,6 +2560,66 @@ def logout():
     return redirect(url_for('index', modality=modality))
 
 
+@app.route('/api/master-csv-status')
+def master_csv_status():
+    """Check if master CSV exists and return info."""
+    if os.path.exists(MASTER_CSV_PATH):
+        stat = os.stat(MASTER_CSV_PATH)
+        modified = datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M')
+        return jsonify({
+            'exists': True,
+            'filename': 'master_medweb.csv',
+            'modified': modified,
+            'size': stat.st_size
+        })
+    return jsonify({'exists': False})
+
+
+@app.route('/upload-master-csv', methods=['POST'])
+@admin_required
+def upload_master_csv():
+    """
+    Upload master CSV (saves without processing).
+    The CSV contains data for a whole month.
+    """
+    if 'file' not in request.files:
+        return jsonify({"error": "Keine Datei ausgewählt"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Keine Datei ausgewählt"}), 400
+
+    if not file.filename.lower().endswith('.csv'):
+        return jsonify({"error": "Bitte CSV-Datei hochladen"}), 400
+
+    try:
+        file.save(MASTER_CSV_PATH)
+        selection_logger.info(f"Master CSV uploaded: {MASTER_CSV_PATH}")
+        return jsonify({
+            "success": True,
+            "message": "Master-CSV erfolgreich hochgeladen"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Upload fehlgeschlagen: {str(e)}"}), 500
+
+
+@app.route('/preload-from-master', methods=['POST'])
+@admin_required
+def preload_from_master():
+    """
+    Preload next workday from the already-uploaded master CSV.
+    No file upload needed.
+    """
+    if not os.path.exists(MASTER_CSV_PATH):
+        return jsonify({"error": "Keine Master-CSV vorhanden. Bitte zuerst hochladen."}), 400
+
+    result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG)
+
+    if result['success']:
+        return jsonify(result)
+    return jsonify(result), 400
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @admin_required
 def upload_file():
@@ -2758,6 +2818,78 @@ def preload_next_day():
         if os.path.exists(csv_path):
             os.remove(csv_path)
         return jsonify({"error": f"Fehler beim Preload: {str(e)}"}), 500
+
+
+@app.route('/load-today-from-master', methods=['POST'])
+@admin_required
+def load_today_from_master():
+    """
+    Load today's schedule from the already-uploaded master CSV.
+    No file upload needed - uses stored master_medweb.csv.
+    Resets counters for today.
+    """
+    if not os.path.exists(MASTER_CSV_PATH):
+        return jsonify({"error": "Keine Master-CSV vorhanden. Bitte zuerst CSV hochladen."}), 400
+
+    try:
+        # Use TODAY's date
+        target_date = get_local_berlin_now()
+
+        # Parse medweb CSV
+        modality_dfs = build_working_hours_from_medweb(
+            MASTER_CSV_PATH,
+            target_date,
+            APP_CONFIG
+        )
+
+        if not modality_dfs:
+            return jsonify({
+                "error": f"Keine Cortex-Daten für {target_date.strftime('%d.%m.%Y')} in Master-CSV gefunden"
+            }), 400
+
+        # Reset counters and apply to modality_data
+        with lock:
+            for modality, df in modality_dfs.items():
+                d = modality_data[modality]
+
+                # Reset counters
+                d['draw_counts'] = {}
+                d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
+                d['WeightedCounts'] = {}
+                global_worker_data['weighted_counts_per_mod'][modality] = {}
+                global_worker_data['assignments_per_mod'][modality] = {}
+
+                # Load DataFrame
+                d['working_hours_df'] = df
+
+                # Initialize counters
+                for worker in df['PPL'].unique():
+                    d['draw_counts'][worker] = 0
+                    d['WeightedCounts'][worker] = 0.0
+                    for skill in SKILL_COLUMNS:
+                        if skill not in d['skill_counts']:
+                            d['skill_counts'][skill] = {}
+                        d['skill_counts'][skill][worker] = 0
+
+                d['info_texts'] = []
+                d['last_uploaded_filename'] = f"master_{target_date.strftime('%Y%m%d')}.csv"
+
+            save_state()
+
+        selection_logger.info(
+            f"Loaded today ({target_date.strftime('%d.%m.%Y')}) from master CSV. "
+            f"Modalities: {list(modality_dfs.keys())}"
+        )
+
+        return jsonify({
+            "success": True,
+            "message": f"Heute ({target_date.strftime('%d.%m.%Y')}) aus Master-CSV geladen",
+            "modalities_loaded": list(modality_dfs.keys()),
+            "total_workers": sum(len(df) for df in modality_dfs.values())
+        })
+
+    except Exception as e:
+        return jsonify({"error": f"Fehler: {str(e)}"}), 500
 
 
 @app.route('/force-refresh-today', methods=['POST'])

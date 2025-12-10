@@ -7,238 +7,54 @@
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 2rem;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .header {
-      background: #004892;
-      color: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      margin-bottom: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .header h1 {
-      font-size: 1.8rem;
-    }
-
-    .header-actions a {
-      color: white;
-      text-decoration: none;
-      margin-left: 1rem;
-      padding: 0.5rem 1rem;
-      background: rgba(255,255,255,0.2);
-      border-radius: 4px;
-      transition: background 0.2s;
-    }
-
-    .header-actions a:hover {
-      background: rgba(255,255,255,0.3);
-    }
-
-    .card {
-      background: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 2rem;
-    }
-
-    .card h2 {
-      margin-bottom: 1rem;
-      color: #333;
-      border-bottom: 2px solid #004892;
-      padding-bottom: 0.5rem;
-    }
-
-    .upload-section {
-      background: #f8f9fa;
-      padding: 2rem;
-      border-radius: 8px;
-      border: 2px dashed #004892;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.5rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .form-group input[type="file"],
-    .form-group input[type="date"] {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 1rem;
-    }
-
-    .btn-primary {
-      background: #004892;
-      color: white;
-      padding: 1rem 2rem;
-      border: none;
-      border-radius: 4px;
-      font-size: 1.1rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-primary:hover {
-      background: #003670;
-    }
-
-    .btn-primary:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    .message {
-      padding: 1rem;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      display: none;
-    }
-
-    .message.success {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-      display: block;
-    }
-
-    .message.error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-      display: block;
-    }
-
-    .stats-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-
-    .stats-table th,
-    .stats-table td {
-      padding: 0.75rem;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-    }
-
-    .stats-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .stats-table tr:hover {
-      background: #f8f9fa;
-    }
-
-    .skill-column {
-      text-align: center;
-    }
-
-    .info-box {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      border-radius: 4px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .info-box h3 {
-      margin-bottom: 0.5rem;
-      color: #856404;
-    }
-
-    .operational-checks {
-      list-style: none;
-    }
-
-    .operational-checks li {
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
-      border-radius: 4px;
-    }
-
-    .check-ok {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .check-warning {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .check-error {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
-    .debug-section {
-      margin-top: 2rem;
-    }
-
-    .debug-section summary {
-      cursor: pointer;
-      padding: 1rem;
-      background: #f8f9fa;
-      border-radius: 4px;
-      font-weight: 600;
-      user-select: none;
-    }
-
-    .debug-section summary:hover {
-      background: #e9ecef;
-    }
-
-    .debug-content {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: #f8f9fa;
-      border-radius: 4px;
-      overflow-x: auto;
-    }
-
-    .config-info {
-      background: #e7f3ff;
-      border-left: 4px solid #004892;
-      padding: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .config-info code {
-      background: #fff;
-      padding: 0.2rem 0.4rem;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f0f0f0; padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .header { background: #004892; color: white; padding: 1rem 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .header h1 { font-size: 1.5rem; margin: 0; }
+    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .header-actions a { color: white; text-decoration: none; padding: 0.5rem 1rem; background: rgba(255,255,255,0.2); border-radius: 4px; font-size: 0.9rem; }
+    .header-actions a:hover { background: rgba(255,255,255,0.3); }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+    .card h2 { margin-bottom: 1rem; color: #333; font-size: 1.2rem; border-bottom: 2px solid #004892; padding-bottom: 0.5rem; }
+    .workflow-box { background: #e7f3ff; border-left: 4px solid #004892; padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px; }
+    .workflow-box h3 { margin-bottom: 0.5rem; color: #004892; font-size: 1rem; }
+    .workflow-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .step { background: #f8f9fa; padding: 1rem; border-radius: 4px; text-align: center; }
+    .step-num { background: #004892; color: white; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-bottom: 0.5rem; }
+    .step-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .step-desc { font-size: 0.85rem; color: #666; }
+    .upload-area { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px dashed #004892; margin-bottom: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333; }
+    .form-group input[type="file"] { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }
+    .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .btn-primary { background: #004892; color: white; }
+    .btn-primary:hover { background: #003670; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-warning:hover { background: #e0a800; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .action-card { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 1px solid #ddd; }
+    .action-card h3 { margin-bottom: 0.5rem; font-size: 1rem; }
+    .action-card p { font-size: 0.85rem; color: #666; margin-bottom: 1rem; }
+    .message { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+    .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .master-status { padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .master-status.loaded { background: #d4edda; color: #155724; }
+    .master-status.empty { background: #fff3cd; color: #856404; }
+    .stats-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.85rem; }
+    .stats-table th, .stats-table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #ddd; }
+    .stats-table th { background: #f8f9fa; font-weight: 600; }
+    .skill-column { text-align: center; }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
       <h1>RadIMO Cortex | Admin</h1>
-      <p style="opacity: 0.9;">System Configuration & CSV Management</p>
+      <p style="font-size: 0.85rem; opacity: 0.9;">CSV Management & System</p>
     </div>
     <div class="header-actions">
       <a href="{{ url_for('index') }}">Dashboard</a>
@@ -252,129 +68,82 @@
 
   <div id="message-container"></div>
 
-  <!-- Upload Section -->
-  <div class="card">
-    <h2>📤 Medweb CSV Upload</h2>
+  <!-- Workflow Overview -->
+  <div class="workflow-box">
+    <h3>Workflow</h3>
+    <div class="workflow-steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Upload Master CSV</div>
+        <div class="step-desc">Einmalig pro Monat (enthält alle Tage)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Load Today</div>
+        <div class="step-desc">Lädt heutiges Datum aus Master</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">Auto 7:30</div>
+        <div class="step-desc">Staged → Live automatisch</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">Edit</div>
+        <div class="step-desc">Day Control / Prep Next Day</div>
+      </div>
+    </div>
+  </div>
 
-    <div class="config-info">
-      <strong>ℹ️ Config-gesteuerte Medweb-Anbindung</strong>
-      <p>Diese Seite verwendet die <code>medweb_mapping</code> Regeln aus <code>config.yaml</code> um CSV-Aktivitäten automatisch auf Modalitäten und Skills zu mappen.</p>
-      <p><strong>Unterstützte Aktivitäten:</strong> CT Assistent, CT Spätdienst, MR Assistent, MR Assistent 1. Monat, MRT Spätdienst, Chir Assistent, OA/FA Chir, Cortex: MRT-OA, Cortex: CT Privatpatienten, Cortex Aufklärung, etc.</p>
+  <!-- Master CSV Upload -->
+  <div class="card">
+    <h2>Master CSV Upload</h2>
+
+    <div id="master-status" class="master-status empty">
+      Keine Master-CSV geladen
     </div>
 
-    <div class="upload-section">
-      <form id="upload-form" enctype="multipart/form-data">
+    <div class="upload-area">
+      <form id="master-upload-form" enctype="multipart/form-data">
         <div class="form-group">
-          <label for="csv-file">📁 Medweb CSV Datei:</label>
-          <input type="file" id="csv-file" name="file" accept=".csv" required>
+          <label>Medweb CSV (enthält ganzen Monat):</label>
+          <input type="file" id="master-csv-file" name="file" accept=".csv" required>
           <small style="color: #666; display: block; margin-top: 0.5rem;">
-            Erwartet: medweb CSV mit Spalten wie "Datum", "Beschreibung der Aktivität", "Name des Mitarbeiters", "Code des Mitarbeiters"
+            CSV mit Spalten: Datum (DD.MM.YYYY), Beschreibung der Aktivität, Name des Mitarbeiters, Code des Mitarbeiters
           </small>
         </div>
-
-        <div class="form-group">
-          <label for="target-date">📅 Zieldatum:</label>
-          <input type="date" id="target-date" name="target_date" required>
-          <small style="color: #666; display: block; margin-top: 0.5rem;">
-            Das Datum für welches die Dienstpläne aus der CSV extrahiert werden sollen
-          </small>
-        </div>
-
-        <button type="submit" class="btn-primary" id="upload-btn">
-          ⬆️ CSV Hochladen & Verarbeiten
+        <button type="submit" class="btn btn-primary" id="master-upload-btn">
+          Upload Master CSV
         </button>
       </form>
     </div>
   </div>
 
-  <!-- Preload Next Workday Section -->
+  <!-- Quick Actions -->
   <div class="card">
-    <h2>🔮 Preload Nächster Arbeitstag</h2>
-
-    <div class="info-box">
-      <h3>ℹ️ Automatisches Preload</h3>
-      <p>Lädt automatisch den <strong>nächsten Arbeitstag</strong> aus der medweb CSV:</p>
-      <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
-        <li>Freitag → lädt <strong>Montag</strong></li>
-        <li>Andere Tage → lädt <strong>Morgen</strong></li>
-        <li>Überspringt Wochenenden automatisch</li>
-      </ul>
-    </div>
-
-    <div class="upload-section">
-      <form id="preload-form" enctype="multipart/form-data">
-        <div class="form-group">
-          <label for="preload-csv-file">📁 Medweb CSV Datei (mit ~1 Monat Einträgen):</label>
-          <input type="file" id="preload-csv-file" name="file" accept=".csv" required>
-          <small style="color: #666; display: block; margin-top: 0.5rem;">
-            Die CSV sollte Einträge für mehrere Tage enthalten. Das System wählt automatisch den nächsten Arbeitstag.
-          </small>
-        </div>
-
-        <button type="submit" class="btn-primary" id="preload-btn" style="background: #28a745;">
-          🔮 Nächsten Arbeitstag Preloaden
+    <h2>Quick Actions</h2>
+    <div class="action-grid">
+      <div class="action-card">
+        <h3>Load Today</h3>
+        <p>Lädt heutiges Datum aus Master-CSV (setzt Zähler zurück)</p>
+        <button class="btn btn-success" id="load-today-btn" onclick="loadTodayFromMaster()">
+          Load Today
         </button>
-        <div id="preload-info" style="margin-top: 1rem; padding: 0.75rem; background: #e7f3ff; border-radius: 4px; display: none;">
-          <strong>Nächster Arbeitstag:</strong> <span id="next-workday"></span>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Force Refresh Today Section -->
-  <div class="card">
-    <h2>🔄 Force Refresh (Heute - NOTFALL)</h2>
-
-    <div class="info-box" style="background: #fff3cd; border-color: #f39c12;">
-      <h3>⚠️ Warnung: Alle Zuteilungen werden gelöscht!</h3>
-      <p>Diese Funktion überschreibt den <strong>heutigen</strong> Dienstplan komplett:</p>
-      <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
-        <li style="color: #856404;"><strong>Alle bisherigen Zuteilungen werden gelöscht</strong></li>
-        <li style="color: #856404;"><strong>Alle Zählerstände werden zurückgesetzt</strong></li>
-        <li>Nur für Notfall-Änderungen verwenden!</li>
-        <li>Besser: Nächsten Tag mit Preload vorbereiten</li>
-      </ul>
-    </div>
-
-    <div class="upload-section" style="border-color: #f39c12;">
-      <form id="force-refresh-form" enctype="multipart/form-data">
-        <div class="form-group">
-          <label for="force-refresh-csv-file">📁 Neue Medweb CSV Datei:</label>
-          <input type="file" id="force-refresh-csv-file" name="file" accept=".csv" required>
-          <small style="color: #666; display: block; margin-top: 0.5rem;">
-            Lädt Daten für <strong>HEUTE</strong> und löscht alle bisherigen Zuteilungen!
-          </small>
-        </div>
-
-        <button type="submit" class="btn-primary" id="force-refresh-btn" style="background: #f39c12;" onclick="return confirm('WARNUNG: Alle heutigen Zuteilungen werden gelöscht! Fortfahren?');">
-          🔄 HEUTE Neu Laden (Notfall)
+      </div>
+      <div class="action-card">
+        <h3>Preload Next Workday</h3>
+        <p>Lädt nächsten Arbeitstag aus Master-CSV in Staging</p>
+        <button class="btn btn-primary" id="preload-btn" onclick="preloadNextDay()">
+          Preload Tomorrow
         </button>
-      </form>
+      </div>
     </div>
   </div>
-
-  <!-- Operational Checks -->
-  {% if operational_checks %}
-  <div class="card">
-    <h2>✅ System-Checks</h2>
-    <ul class="operational-checks">
-      {% for check in operational_checks.results %}
-        <li class="{% if check.status == 'OK' %}check-ok{% elif check.status == 'WARNING' %}check-warning{% else %}check-error{% endif %}">
-          <strong>{{ check.name }}:</strong> {{ check.status }}
-          {% if check.detail %}
-            <br><small>{{ check.detail }}</small>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-    <p style="margin-top: 1rem; color: #666;"><small>Letzte Prüfung: {{ operational_checks.timestamp }}</small></p>
-  </div>
-  {% endif %}
 
   <!-- Worker Statistics -->
   {% if combined_workers %}
   <div class="card">
-    <h2>📊 Worker Statistiken (Alle Modalitäten)</h2>
+    <h2>Worker Statistiken</h2>
     <div style="overflow-x: auto;">
       <table class="stats-table">
         <thead>
@@ -384,8 +153,6 @@
               <th class="skill-column">{{ skill }}</th>
             {% endfor %}
             <th class="skill-column"><strong>Total</strong></th>
-            <th class="skill-column">Global</th>
-            <th class="skill-column">Weighted</th>
           </tr>
         </thead>
         <tbody>
@@ -396,251 +163,130 @@
                 <td class="skill-column">{{ modality_stats[worker][skill] }}</td>
               {% endfor %}
               <td class="skill-column"><strong>{{ modality_stats[worker].total }}</strong></td>
-              <td class="skill-column">{{ global_counts.get(worker, 0) }}</td>
-              <td class="skill-column">{{ "%.2f"|format(global_weighted_counts.get(worker, 0)) }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    <p style="margin-top: 1rem; color: #666;">
-      <small>
-        <strong>Total:</strong> Zuteilungen in dieser Modalität |
-        <strong>Global:</strong> Zuteilungen über alle Modalitäten |
-        <strong>Weighted:</strong> Gewichtete Zuteilungen (berücksichtigt Skill-Faktoren)
-      </small>
-    </p>
   </div>
   {% endif %}
 
-  <!-- Debug Info -->
-  <details class="card debug-section">
-    <summary>🔍 Debug-Informationen (working_hours_df)</summary>
-    <div class="debug-content">
-      {{ debug_info|safe }}
-    </div>
-  </details>
-
   <script>
-    // Helper: Calculate next workday
-    function getNextWorkday() {
-      const today = new Date();
-      let nextDay = new Date(today);
-      nextDay.setDate(nextDay.getDate() + 1);
+    // Check master CSV status on load
+    checkMasterStatus();
 
-      // Skip weekends
-      while (nextDay.getDay() === 0 || nextDay.getDay() === 6) {
-        nextDay.setDate(nextDay.getDate() + 1);
+    async function checkMasterStatus() {
+      try {
+        const response = await fetch('/api/master-csv-status');
+        const data = await response.json();
+        const statusEl = document.getElementById('master-status');
+        if (data.exists) {
+          statusEl.className = 'master-status loaded';
+          statusEl.innerHTML = `Master-CSV geladen: <strong>${data.filename}</strong> (${data.modified})`;
+        } else {
+          statusEl.className = 'master-status empty';
+          statusEl.textContent = 'Keine Master-CSV geladen';
+        }
+      } catch (e) {
+        console.error('Error checking master status:', e);
       }
-
-      return nextDay;
     }
 
-    // Helper: Format date as YYYY-MM-DD
-    function formatDate(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    // Helper: Format date for display (German format)
-    function formatDateGerman(date) {
-      const weekdays = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      const weekday = weekdays[date.getDay()];
-      return `${weekday}, ${day}.${month}.${year}`;
-    }
-
-    // Set today as default date
-    document.getElementById('target-date').valueAsDate = new Date();
-
-    // Show next workday info
-    const nextWorkday = getNextWorkday();
-    document.getElementById('next-workday').textContent = formatDateGerman(nextWorkday);
-    document.getElementById('preload-info').style.display = 'block';
-
-    // Handle upload form submission
-    document.getElementById('upload-form').addEventListener('submit', async function(e) {
+    // Master CSV upload
+    document.getElementById('master-upload-form').addEventListener('submit', async function(e) {
       e.preventDefault();
+      const formData = new FormData(this);
+      const btn = document.getElementById('master-upload-btn');
+      const msgContainer = document.getElementById('message-container');
 
-      const form = e.target;
-      const formData = new FormData(form);
-      const uploadBtn = document.getElementById('upload-btn');
-      const messageContainer = document.getElementById('message-container');
-
-      // Disable button
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = '⏳ Verarbeite...';
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
 
       try {
-        const response = await fetch('/upload', {
+        const response = await fetch('/upload-master-csv', {
           method: 'POST',
           body: formData
         });
-
         const result = await response.json();
 
         if (response.ok && result.success) {
-          // Success
-          messageContainer.innerHTML = `
-            <div class="message success">
-              ✅ ${result.message}<br>
-              <strong>Modalitäten geladen:</strong> ${result.modalities_loaded.join(', ')}<br>
-              <strong>Workers gefunden:</strong> ${result.total_workers}
-            </div>
-          `;
-
-          // Reload page after 2 seconds to show updated stats
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+          msgContainer.innerHTML = `<div class="message success">${result.message}</div>`;
+          checkMasterStatus();
         } else {
-          // Error
-          messageContainer.innerHTML = `
-            <div class="message error">
-              ❌ Fehler: ${result.error || 'Unbekannter Fehler'}
-            </div>
-          `;
-          uploadBtn.disabled = false;
-          uploadBtn.textContent = '⬆️ CSV Hochladen & Verarbeiten';
+          msgContainer.innerHTML = `<div class="message error">${result.error || 'Upload failed'}</div>`;
         }
       } catch (error) {
-        messageContainer.innerHTML = `
-          <div class="message error">
-            ❌ Netzwerkfehler: ${error.message}
-          </div>
-        `;
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = '⬆️ CSV Hochladen & Verarbeiten';
+        msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;
       }
+
+      btn.disabled = false;
+      btn.textContent = 'Upload Master CSV';
     });
 
-    // Handle preload form submission
-    document.getElementById('preload-form').addEventListener('submit', async function(e) {
-      e.preventDefault();
+    // Load Today from Master
+    async function loadTodayFromMaster() {
+      const btn = document.getElementById('load-today-btn');
+      const msgContainer = document.getElementById('message-container');
 
-      const form = e.target;
-      const formData = new FormData(form);
-      const preloadBtn = document.getElementById('preload-btn');
-      const messageContainer = document.getElementById('message-container');
+      if (!confirm('Load today from Master CSV? (Resets counters)')) return;
 
-      // Disable button
-      preloadBtn.disabled = true;
-      preloadBtn.textContent = '⏳ Preloade...';
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
 
       try {
-        const response = await fetch('/preload-next-day', {
-          method: 'POST',
-          body: formData
-        });
-
+        const response = await fetch('/load-today-from-master', { method: 'POST' });
         const result = await response.json();
 
         if (response.ok && result.success) {
-          // Success
-          messageContainer.innerHTML = `
+          msgContainer.innerHTML = `
             <div class="message success">
-              ✅ ${result.message}<br>
-              <strong>Datum:</strong> ${result.target_date}<br>
-              <strong>Modalitäten geladen:</strong> ${result.modalities_loaded.join(', ')}<br>
-              <strong>Workers gefunden:</strong> ${result.total_workers}
+              ${result.message}<br>
+              <strong>Modalities:</strong> ${result.modalities_loaded.join(', ')}<br>
+              <strong>Workers:</strong> ${result.total_workers}
             </div>
           `;
-
-          // Scroll to message
-          messageContainer.scrollIntoView({ behavior: 'smooth' });
-
-          // Reload page after 2 seconds to show updated stats
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+          setTimeout(() => location.reload(), 2000);
         } else {
-          // Error
-          messageContainer.innerHTML = `
-            <div class="message error">
-              ❌ Fehler: ${result.error || result.message || 'Unbekannter Fehler'}
-            </div>
-          `;
-          messageContainer.scrollIntoView({ behavior: 'smooth' });
-          preloadBtn.disabled = false;
-          preloadBtn.textContent = '🔮 Nächsten Arbeitstag Preloaden';
+          msgContainer.innerHTML = `<div class="message error">${result.error}</div>`;
         }
       } catch (error) {
-        messageContainer.innerHTML = `
-          <div class="message error">
-            ❌ Netzwerkfehler: ${error.message}
-          </div>
-        `;
-        messageContainer.scrollIntoView({ behavior: 'smooth' });
-        preloadBtn.disabled = false;
-        preloadBtn.textContent = '🔮 Nächsten Arbeitstag Preloaden';
+        msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;
       }
-    });
 
-    // Handle force refresh form submission
-    document.getElementById('force-refresh-form').addEventListener('submit', async function(e) {
-      e.preventDefault();
+      btn.disabled = false;
+      btn.textContent = 'Load Today';
+    }
 
-      const form = e.target;
-      const formData = new FormData(form);
-      const forceBtn = document.getElementById('force-refresh-btn');
-      const messageContainer = document.getElementById('message-container');
+    // Preload Next Day
+    async function preloadNextDay() {
+      const btn = document.getElementById('preload-btn');
+      const msgContainer = document.getElementById('message-container');
 
-      // Disable button
-      forceBtn.disabled = true;
-      forceBtn.textContent = '⏳ Force Refresh läuft...';
+      btn.disabled = true;
+      btn.textContent = 'Preloading...';
 
       try {
-        const response = await fetch('/force-refresh-today', {
-          method: 'POST',
-          body: formData
-        });
-
+        const response = await fetch('/preload-from-master', { method: 'POST' });
         const result = await response.json();
 
         if (response.ok && result.success) {
-          // Success
-          messageContainer.innerHTML = `
+          msgContainer.innerHTML = `
             <div class="message success">
-              ✅ ${result.message}<br>
-              <strong>Modalitäten geladen:</strong> ${result.modalities_loaded.join(', ')}<br>
-              <strong>Workers gefunden:</strong> ${result.total_workers}<br>
-              <strong style="color: #f39c12;">⚠️ ${result.warning}</strong>
+              ${result.message}<br>
+              <strong>Date:</strong> ${result.target_date}<br>
+              <strong>Workers:</strong> ${result.total_workers}
             </div>
           `;
-
-          // Scroll to message
-          messageContainer.scrollIntoView({ behavior: 'smooth' });
-
-          // Reload page after 2 seconds to show updated stats
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
         } else {
-          // Error
-          messageContainer.innerHTML = `
-            <div class="message error">
-              ❌ Fehler: ${result.error || result.message || 'Unbekannter Fehler'}
-            </div>
-          `;
-          messageContainer.scrollIntoView({ behavior: 'smooth' });
-          forceBtn.disabled = false;
-          forceBtn.textContent = '🔄 HEUTE Neu Laden (Notfall)';
+          msgContainer.innerHTML = `<div class="message error">${result.error || result.message}</div>`;
         }
       } catch (error) {
-        messageContainer.innerHTML = `
-          <div class="message error">
-            ❌ Netzwerkfehler: ${error.message}
-          </div>
-        `;
-        messageContainer.scrollIntoView({ behavior: 'smooth' });
-        forceBtn.disabled = false;
-        forceBtn.textContent = '🔄 HEUTE Neu Laden (Notfall)';
+        msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;
       }
-    });
+
+      btn.disabled = false;
+      btn.textContent = 'Preload Tomorrow';
+    }
   </script>
 </body>
 </html>
