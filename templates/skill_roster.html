@@ -210,15 +210,72 @@
     }
 
     .modality-section {
-      margin-top: 1.5rem;
-      padding: 1rem;
+      margin-top: 2rem;
+      padding: 1.5rem;
       background: #f8f9fa;
-      border-radius: 4px;
+      border-radius: 8px;
+      border-left: 4px solid #004892;
     }
 
-    .modality-section h4 {
+    .modality-section h3 {
       margin-top: 0;
+      margin-bottom: 1rem;
       color: #004892;
+      font-size: 1.2rem;
+    }
+
+    .modality-section .hint {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 1rem;
+    }
+
+    .override-input {
+      width: 50px;
+      padding: 0.3rem;
+      text-align: center;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+
+    .override-input:focus {
+      outline: none;
+      border-color: #004892;
+      box-shadow: 0 0 3px rgba(0, 72, 146, 0.3);
+    }
+
+    .override-input.has-override {
+      border: 2px solid #ff9800;
+      font-weight: bold;
+    }
+
+    .override-input.value--1 {
+      background: #ffe6e6;
+    }
+
+    .override-input.value-0 {
+      background: #fff8e6;
+    }
+
+    .override-input.value-1 {
+      background: #e6ffe6;
+    }
+
+    .clear-override-btn {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      margin-left: 0.25rem;
+    }
+
+    .clear-override-btn:hover {
+      background: #5a6268;
     }
 
     .remove-worker-btn {
@@ -267,7 +324,7 @@
     <div id="loading" class="loading">Loading roster...</div>
 
     <div id="rosterContainer" style="display: none;">
-      <h3>Default Skills (applies to all modalities)</h3>
+      <h3>Default Skills (applies to all modalities unless overridden below)</h3>
       <div class="roster-table-container">
         <table class="roster-table" id="defaultTable">
           <thead>
@@ -281,6 +338,10 @@
             <!-- Rows will be added dynamically -->
           </tbody>
         </table>
+      </div>
+
+      <div id="modalityTablesContainer">
+        <!-- Per-modality override tables will be added dynamically -->
       </div>
 
       <div class="add-worker-section">
@@ -398,6 +459,171 @@
 
         tbody.appendChild(row);
       });
+
+      // Render per-modality override tables
+      renderModalityTables();
+    }
+
+    function renderModalityTables() {
+      const container = document.getElementById('modalityTablesContainer');
+      container.innerHTML = '';
+
+      const workerIds = Object.keys(rosterData).sort();
+
+      modalities.forEach(modality => {
+        const section = document.createElement('div');
+        section.className = 'modality-section';
+
+        const title = document.createElement('h3');
+        title.textContent = `${modality.toUpperCase()} Overrides`;
+        section.appendChild(title);
+
+        const hint = document.createElement('p');
+        hint.className = 'hint';
+        hint.textContent = 'Leave empty to use default. Set value to override for this modality only. Orange border = override active.';
+        section.appendChild(hint);
+
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'roster-table-container';
+
+        const table = document.createElement('table');
+        table.className = 'roster-table';
+
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+
+        const thWorker = document.createElement('th');
+        thWorker.className = 'worker-col';
+        thWorker.textContent = 'Worker ID';
+        headerRow.appendChild(thWorker);
+
+        skills.forEach(skill => {
+          const th = document.createElement('th');
+          th.textContent = skill;
+          headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+
+        workerIds.forEach(workerId => {
+          const row = document.createElement('tr');
+
+          // Worker ID cell
+          const cellId = document.createElement('td');
+          cellId.className = 'worker-id';
+          cellId.textContent = workerId;
+          row.appendChild(cellId);
+
+          // Skill cells - show override or empty
+          const modalityOverrides = rosterData[workerId][modality] || {};
+
+          skills.forEach(skill => {
+            const cell = document.createElement('td');
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'override-input';
+            input.min = '-1';
+            input.max = '1';
+            input.step = '1';
+            input.placeholder = '—';
+            input.dataset.workerId = workerId;
+            input.dataset.modality = modality;
+            input.dataset.skill = skill;
+
+            // Set value if override exists
+            if (modalityOverrides[skill] !== undefined) {
+              input.value = modalityOverrides[skill];
+              input.classList.add('has-override');
+              updateOverrideInputColor(input);
+            }
+
+            input.addEventListener('change', function() {
+              updateModalitySkillValue(workerId, modality, skill, this.value);
+              if (this.value !== '') {
+                this.classList.add('has-override');
+                updateOverrideInputColor(this);
+              } else {
+                this.classList.remove('has-override', 'value--1', 'value-0', 'value-1');
+              }
+            });
+
+            cell.appendChild(input);
+
+            // Add clear button if has override
+            if (modalityOverrides[skill] !== undefined) {
+              const clearBtn = document.createElement('button');
+              clearBtn.className = 'clear-override-btn';
+              clearBtn.textContent = '×';
+              clearBtn.title = 'Clear override';
+              clearBtn.onclick = () => {
+                clearModalityOverride(workerId, modality, skill);
+                renderModalityTables();
+              };
+              cell.appendChild(clearBtn);
+            }
+
+            row.appendChild(cell);
+          });
+
+          tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        section.appendChild(tableContainer);
+        container.appendChild(section);
+      });
+    }
+
+    function updateOverrideInputColor(input) {
+      input.classList.remove('value--1', 'value-0', 'value-1');
+      const val = parseInt(input.value);
+      if (val === -1) input.classList.add('value--1');
+      else if (val === 0) input.classList.add('value-0');
+      else if (val === 1) input.classList.add('value-1');
+    }
+
+    function updateModalitySkillValue(workerId, modality, skill, value) {
+      // Ensure worker exists
+      if (!rosterData[workerId]) {
+        rosterData[workerId] = { default: {} };
+      }
+
+      // If value is empty, remove the override
+      if (value === '' || value === null) {
+        if (rosterData[workerId][modality]) {
+          delete rosterData[workerId][modality][skill];
+          // Clean up empty modality object
+          if (Object.keys(rosterData[workerId][modality]).length === 0) {
+            delete rosterData[workerId][modality];
+          }
+        }
+        return;
+      }
+
+      // Ensure modality object exists
+      if (!rosterData[workerId][modality]) {
+        rosterData[workerId][modality] = {};
+      }
+
+      // Set the override value
+      rosterData[workerId][modality][skill] = parseInt(value);
+    }
+
+    function clearModalityOverride(workerId, modality, skill) {
+      if (rosterData[workerId] && rosterData[workerId][modality]) {
+        delete rosterData[workerId][modality][skill];
+        // Clean up empty modality object
+        if (Object.keys(rosterData[workerId][modality]).length === 0) {
+          delete rosterData[workerId][modality];
+        }
+      }
     }
 
     function updateInputColor(input) {
