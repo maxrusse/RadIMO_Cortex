@@ -67,39 +67,9 @@ worker_skill_json_roster = {}
 # Global constants & modality-/skill-specific factors
 # -----------------------------------------------------------
 
-# Skills are loaded entirely from config.yaml - no hardcoded defaults
+# Modalities and skills are loaded entirely from config.yaml - no hardcoded defaults
 
-DEFAULT_MODALITIES = {
-    'ct': {
-        'label': 'CT',
-        'nav_color': '#1a5276',
-        'hover_color': '#153f5b',
-        'background_color': '#e6f2fa',
-        'factor': 1.0,
-    },
-    'mr': {
-        'label': 'MR',
-        'nav_color': '#777777',
-        'hover_color': '#555555',
-        'background_color': '#f9f9f9',
-        'factor': 1.2,
-    },
-    'xray': {
-        'label': 'XRAY',
-        'nav_color': '#239b56',
-        'hover_color': '#1d7a48',
-        'background_color': '#e0f2e9',
-        'factor': 0.33,
-    },
-}
-
-DEFAULT_CONFIG = {
-    'admin_password': 'change_pw_for_live',
-    'modalities': DEFAULT_MODALITIES,
-    'skills': {},  # Skills loaded from config.yaml
-    'modality_fallbacks': {},
-    'balancer': {}
-}
+DEFAULT_ADMIN_PASSWORD = 'change_pw_for_live'
 
 DEFAULT_BALANCER = {
     'enabled': True,
@@ -282,21 +252,18 @@ def get_merged_worker_roster(config: Dict[str, Any]) -> Dict[str, Any]:
 def _build_app_config() -> Dict[str, Any]:
     raw_config = _load_raw_config()
     config: Dict[str, Any] = {
-        'admin_password': raw_config.get('admin_password', DEFAULT_CONFIG['admin_password'])
+        'admin_password': raw_config.get('admin_password', DEFAULT_ADMIN_PASSWORD)
     }
 
-    merged_modalities: Dict[str, Dict[str, Any]] = {
-        key: dict(values)
-        for key, values in DEFAULT_MODALITIES.items()
-    }
+    # Load modalities directly from config.yaml (no hardcoded defaults)
+    merged_modalities: Dict[str, Dict[str, Any]] = {}
     user_modalities = raw_config.get('modalities') or {}
     if isinstance(user_modalities, dict):
-        for key, override in user_modalities.items():
-            base = merged_modalities.get(key, {}).copy()
-            if isinstance(override, dict):
-                base.update(override)
-            merged_modalities[key] = base
+        for key, mod_data in user_modalities.items():
+            if isinstance(mod_data, dict):
+                merged_modalities[key] = dict(mod_data)
 
+    # Set sensible defaults for any missing modality properties
     for key, values in merged_modalities.items():
         values.setdefault('label', key.upper())
         values.setdefault('nav_color', '#004892')
@@ -369,7 +336,7 @@ def _build_app_config() -> Dict[str, Any]:
 APP_CONFIG = _build_app_config()
 MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
-allowed_modalities = list(MODALITY_SETTINGS.keys()) or list(DEFAULT_MODALITIES.keys())
+allowed_modalities = list(MODALITY_SETTINGS.keys())
 default_modality = allowed_modalities[0] if allowed_modalities else 'ct'
 modality_labels = {
     mod: settings.get('label', mod.upper())
@@ -3944,55 +3911,6 @@ def skill_roster_page():
         modality_labels={k: v.get('label', k.upper()) for k, v in MODALITY_SETTINGS.items()},
         valid_skills_map=valid_skills_map
     )
-
-
-@app.route('/admin/live-edit')
-@admin_required
-def live_edit_page():
-    """Admin page for live editing of current workers (IMMEDIATE EFFECT)."""
-    return render_template(
-        'live_edit.html',
-        skills=SKILL_COLUMNS,
-        modalities=list(MODALITY_SETTINGS.keys())
-    )
-
-
-@app.route('/api/live_edit/workers', methods=['GET'])
-@admin_required
-def get_live_edit_workers():
-    """Get current workers for a modality (for live editing)."""
-    modality = request.args.get('modality', 'ct')
-    modality = normalize_modality(modality)
-
-    d = modality_data[modality]
-
-    if d['working_hours_df'] is None or d['working_hours_df'].empty:
-        return jsonify({
-            'success': True,
-            'workers': [],
-            'modality': modality
-        })
-
-    # Convert DataFrame to list of dicts
-    workers_list = []
-    for idx, row in d['working_hours_df'].iterrows():
-        worker_dict = {
-            'index': idx,
-            'PPL': row.get('PPL', ''),
-            'start_time': row['start_time'].strftime('%H:%M:%S') if pd.notnull(row.get('start_time')) else '',
-            'end_time': row['end_time'].strftime('%H:%M:%S') if pd.notnull(row.get('end_time')) else '',
-            'shift_duration': row.get('shift_duration', 0),
-        }
-        # Add all skill columns dynamically
-        for skill in SKILL_COLUMNS:
-            worker_dict[skill] = int(row.get(skill, 0))
-        workers_list.append(worker_dict)
-
-    return jsonify({
-        'success': True,
-        'workers': workers_list,
-        'modality': modality
-    })
 
 
 @app.route('/timetable')

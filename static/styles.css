@@ -179,7 +179,6 @@ body {
 
 /* ==========================================================================
    Section Header Layout
-   Used in: live_edit.html for modality sections
    ========================================================================== */
 .section-header {
   display: flex;

@@ -108,21 +108,15 @@ Human-readable guide to how medweb CSV files move through RadIMO v19, including 
 - The new schedule is parsed with the same normalization rules used elsewhere.
 - The day restarts from a clean state; previous assignments are not preserved.
 
-**When to Use:** Only for major schedule rebuilds that require resetting all assignment history. For most same-day changes, use Day Control (`/admin/live-edit`) instead.
+**When to Use:** Only for major schedule rebuilds that require resetting all assignment history.
 
 ---
 
-## 📝 Next-Day Schedule Preparation
+## 📝 Schedule Editing
 
-The prep page (`/prep-next-day`) lets admins stage tomorrow's schedule without impacting today's data. It is ideal for correcting mapping edge cases, adjusting times (including overnight spans), or refining skills before the next preload runs.
-
-For same-day schedule adjustments, use Day Control (`/admin/live-edit`) instead.
+The Schedule Edit page (`/prep-next-day`) lets admins prepare schedules and make adjustments. It is ideal for correcting mapping edge cases, adjusting times (including overnight spans), or refining skills.
 
 **Access:** Admin Panel → **📝 Nächsten Tag Bearbeiten**
-
-**Key Difference from Day Control:**
-- Day Control (`/admin/live-edit`) edits today's live schedule and preserves assignment history.
-- Next-day prep works on tomorrow's schedule with a clean slate.
 
 ### Two Editing Modes
 

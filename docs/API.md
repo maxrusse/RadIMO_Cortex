@@ -376,40 +376,7 @@ Copy staged roster to active.
 
 ---
 
-## Day Control (Admin)
-
-### Get Workers
-
-```http
-GET /api/live_edit/workers?modality={modality}
-```
-
-Get current workers for live editing.
-
-**Response:**
-```json
-{
-  "success": true,
-  "workers": [
-    {
-      "index": 0,
-      "PPL": "Dr. Müller (AM)",
-      "start_time": "07:00:00",
-      "end_time": "15:00:00",
-      "shift_duration": 8.0,
-      "Modifier": 1.0,
-      "Normal": 1,
-      "Notfall": 1,
-      ...
-    }
-  ],
-  "modality": "ct"
-}
-```
-
----
-
-### Edit Entry (Live)
+### Edit Entry
 
 ```http
 POST /edit

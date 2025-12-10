@@ -1,18 +1,17 @@
 # RadIMO Admin Guide
 
-Guide to the three-page admin system for managing workers and schedules.
+Guide to the admin system for managing workers and schedules.
 
 ---
 
 ## Overview
 
-RadIMO provides three distinct admin interfaces for different operational needs:
+RadIMO provides two admin interfaces for different operational needs:
 
 | Page | URL | Effect | Use Case |
 |------|-----|--------|----------|
 | **Skill Matrix** | `/skill_roster` | Staged | Long-term planning, rotations |
-| **Prep Next Day** | `/prep-next-day` | Tomorrow only | Daily schedule preparation |
-| **Day Control** | `/admin/live-edit` | Immediate | Emergency same-day changes |
+| **Schedule Edit** | `/prep-next-day` | Schedule editing | Daily schedule preparation |
 
 All admin pages require login with the admin password from `config.yaml`.
 
@@ -27,15 +26,10 @@ All admin pages require login with the admin password from `config.yaml`.
 │  ├─ Review before apply                                     │
 │  └─ Activate when ready                                     │
 ├─────────────────────────────────────────────────────────────┤
-│  PREP (Tomorrow)                Prep Next Day               │
-│  ├─ Upload CSV for next day                                 │
+│  SCHEDULE EDIT                  Schedule Edit               │
+│  ├─ Prepare and edit schedules                              │
 │  ├─ Preview and adjust                                      │
-│  └─ No effect on current day                                │
-├─────────────────────────────────────────────────────────────┤
-│  OPERATIONAL (Now)              Day Control                 │
-│  ├─ Immediate effect                                        │
-│  ├─ Same-day adjustments                                    │
-│  └─ Note: impacts current schedule                          │
+│  └─ Add/remove workers, edit times and skills               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -150,53 +144,6 @@ Changes are applied when:
 
 ---
 
-## 3. Day Control (`/admin/live-edit`)
-
-**Purpose:** Make immediate changes to current day's assignments.
-
-**Key behavior:** Changes take effect immediately.
-
-### When to Use
-
-- Same-day schedule adjustments
-- Worker leaving early or arriving late
-- Schedule corrections
-- Worker additions/removals
-
-### Features
-
-- Modality tabs (CT/MR/XRAY)
-- Real-time worker list with current assignments
-- Edit worker hours, names, skills, modifiers
-- Delete worker entries
-- Add new workers
-
-### Note
-
-Changes take effect immediately and affect:
-- Current assignment calculations
-- Workload ratios
-- Availability for new assignments
-
-### Example: Worker Sick Call
-
-**Scenario:** Worker "AM" calls in sick at 9 AM.
-
-1. Go to `/admin/live-edit`
-2. Select modality tab where "AM" is assigned
-3. Find "AM" in table
-4. Click Delete or set time to "00:00-00:00"
-5. Confirm → Worker immediately removed from pool
-
-### Example: Add Replacement Worker
-
-1. Go to `/admin/live-edit`
-2. Click "Add New Worker" button
-3. Fill in details: name, time, skills
-4. Submit → Worker immediately available for assignment
-
----
-
 ## Admin Panel (`/upload`)
 
 Central hub for system management.
@@ -241,9 +188,8 @@ Central hub for system management.
 
 ### Same-Day Changes
 
-1. Prefer `/admin/live-edit` for targeted adjustments
-2. Use "Force Refresh Today" only for complete schedule rebuilds (WARNING: destroys all assignment history)
-3. Document significant changes for tracking
+1. Use "Force Refresh Today" only for complete schedule rebuilds (WARNING: destroys all assignment history)
+2. Document significant changes for tracking
 
 ### Skill Management
 
@@ -251,8 +197,7 @@ Central hub for system management.
 |-------------|----------|
 | Permanent skill change | `config.yaml` → `worker_skill_roster` |
 | Temporary/rotation change | `/skill_roster` staging |
-| One-day override | `/prep-next-day` |
-| Same-day adjustment | `/admin/live-edit` |
+| Schedule editing | `/prep-next-day` |
 
 ---
 

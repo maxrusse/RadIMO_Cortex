@@ -49,8 +49,7 @@ flask --app app run --debug  # Start application
 |------|-----|-------------|
 | Admin Panel | `/upload` | Upload medweb CSV, system management |
 | Skill Matrix | `/skill_roster` | Plan skill changes (STAGED mode) |
-| Prep Next Day | `/prep-next-day` | Prepare tomorrow's schedule |
-| Day Control | `/admin/live-edit` | Same-day schedule adjustments (immediate effect) |
+| Schedule Edit | `/prep-next-day` | Prepare and edit schedules |
 
 ---
 
@@ -94,10 +93,9 @@ Assignments are weighted by:
 - **Worker modifier**: Individual multiplier
 - **Skill×Modality overrides**: Custom weights for specific combinations
 
-### Three-Page Admin System
+### Two-Page Admin System
 1. **Skill Matrix** (`/skill_roster`) - Plan skill changes, staged before activation
-2. **Prep Next Day** (`/prep-next-day`) - Prepare tomorrow's schedule
-3. **Day Control** (`/admin/live-edit`) - Same-day schedule adjustments (immediate effect)
+2. **Schedule Edit** (`/prep-next-day`) - Prepare and edit schedules
 
 ### Navigation & UI Features
 
@@ -105,18 +103,8 @@ Assignments are weighted by:
 - **Dashboard** - Main workload view (toggle between Modality/Skill views)
 - **Timetable** - Visual timeline of shifts and schedules
 - **Skill Matrix** - Manage worker skills (staged changes)
-- **Day Control** - Same-day schedule adjustments (immediate effect)
+- **Schedule Edit** - Prepare and edit schedules
 - **Admin** - System configuration and CSV uploads
-
-**Smart Skill Filtering:**
-- **Day Control** (`/admin/live-edit`) - Filter worker tables by active skill
-  - Click "All" to show all workers
-  - Click skill name (Normal, Notfall, Herz, etc.) to show only workers with that skill active (value=1)
-  - Separate filters for CT, MR, and XRAY tables
-- **Timetable** (`/timetable`) - Filter timetable view by active skill
-  - Same filtering logic as Day Control
-  - Timetable dynamically rebuilds with filtered workers
-  - Allows specialty leads to focus on their team
 
 ---
 
