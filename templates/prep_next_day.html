@@ -25,9 +25,6 @@
     .mode-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
     .mode-toggle button { padding: 0.5rem 1rem; border: 2px solid #004892; background: white; color: #004892; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
     .mode-toggle button.active { background: #004892; color: white; }
-    .modality-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #ddd; flex-wrap: wrap; }
-    .modality-tabs button { padding: 0.5rem 1rem; border: none; background: transparent; cursor: pointer; font-size: 0.9rem; font-weight: 600; border-bottom: 3px solid transparent; }
-    .modality-tabs button.active { border-bottom-color: #004892; color: #004892; }
     .table-container { max-height: 500px; overflow: auto; }
     .edit-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     .edit-table th, .edit-table td { padding: 0.4rem; text-align: left; border: 1px solid #ddd; }
@@ -114,7 +111,7 @@
 
   <div class="card">
     <div class="info-box">
-      <strong>Next Day Editing (Staging)</strong> - Adjust tomorrow's schedule here. Changes saved to STAGED area.
+      <strong>Master Schedule</strong> - Edit workers, times, and skills. Changes saved to STAGED area until Activated.
     </div>
 
     <div class="mode-toggle">
@@ -430,36 +427,6 @@
       setTimeout(() => { saveStatus.textContent = ''; }, 3000);
     }
 
-    async function addWorkerRow() {
-      // Always ask which modality (use current filter as default if it's a specific modality)
-      const defaultMod = currentModalityFilter !== 'all' ? currentModalityFilter : MODALITIES[0];
-      let targetModality = prompt(`Which modality? (${MODALITIES.join(', ')}):`, defaultMod);
-      if (!targetModality || !MODALITIES.includes(targetModality.toLowerCase())) {
-        showMessage('error', 'Invalid modality');
-        return;
-      }
-      targetModality = targetModality.toLowerCase();
-
-      const workerName = prompt('Worker Name:', 'New Worker');
-      if (!workerName) return;
-
-      const defaultSkills = {};
-      SKILLS.forEach((skill, i) => { defaultSkills[skill] = i < 2 ? 1 : 0; });
-
-      try {
-        const response = await fetch('/api/prep-next-day/add-worker', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality: targetModality,
-            worker_data: { PPL: workerName, start_time: '07:00', end_time: '15:00', Modifier: 1.0, ...defaultSkills }
-          })
-        });
-        if (response.ok) { showMessage('success', `Worker "${workerName}" added to ${targetModality.toUpperCase()}`); await loadData(); }
-        else showMessage('error', 'Failed to add');
-      } catch (error) { showMessage('error', error.message); }
-    }
-
     async function deleteWorkerRow(modality, rowIndex) {
       if (!confirm('Delete this worker?')) return;
       try {
@@ -688,7 +655,7 @@
       }
 
       // Determine modality (single or first of multi)
-      let modality = 'ct';  // default
+      let modality = MODALITIES[0];  // default to first configured modality
       if (selectedActivityData) {
         if (selectedActivityData.modality) {
           modality = selectedActivityData.modality;
