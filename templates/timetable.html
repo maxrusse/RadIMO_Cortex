@@ -205,13 +205,13 @@
     </nav>
   </header>
 
-  <!-- Modality Selector -->
-  <div style="background: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <div class="modality-selector" style="display: flex; gap: 0.5rem;">
-      {% for mod in modality_order %}
-        <a href="{{ url_for('timetable', modality=mod) }}" data-modality="{{ mod }}" class="{% if modality == mod %}active{% endif %}">{{ modality_labels[mod] }}</a>
-      {% endfor %}
-    </div>
+  <!-- Modality Filter Bar -->
+  <div class="skill-filter-bar">
+    <label>Modality:</label>
+    <a href="{{ url_for('timetable', modality='all') }}" class="filter-btn filter-all {% if modality == 'all' %}active{% endif %}">ALL</a>
+    {% for mod in modality_order %}
+    <a href="{{ url_for('timetable', modality=mod) }}" class="filter-btn {% if modality == mod %}active{% endif %}" style="{% if modality == mod %}background: {{ modalities[mod].nav_color }}; border-color: {{ modalities[mod].nav_color }};{% endif %}">{{ modality_labels[mod] }}</a>
+    {% endfor %}
   </div>
 
   <!-- Skill Filter Bar -->
@@ -343,13 +343,15 @@
         const customStyle = document.createElement('style');
         customStyle.textContent = `.${customClass} { ${buildGradient(activeSkills)} }`;
         document.head.appendChild(customStyle);
+        // Build tooltip with modality info if available
+        const modalityInfo = entry._modality ? `<br>Modality: ${entry._modality.toUpperCase()}` : '';
         items.push({
           id: index,
           group: entry.PPL,
           start: startDateTime,
           end: endDateTime,
           content: '',
-          title: `${entry.PPL}<br>Zeit: ${entry.TIME}<br>Skills: ${activeSkills.join(', ')}`,
+          title: `${entry.PPL}${modalityInfo}<br>Zeit: ${entry.TIME}<br>Skills: ${activeSkills.join(', ')}`,
           className: customClass
         });
       });
