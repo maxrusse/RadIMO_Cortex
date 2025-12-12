@@ -4141,12 +4141,30 @@ def timetable():
         debug_data = df_for_json.to_json(orient='records')
     else:
         debug_data = "[]"
+
+    # Build skill definitions for legend (list of {label, button_color})
+    skill_definitions = [
+        {'label': SKILL_SETTINGS[skill].get('label', skill), 'button_color': SKILL_SETTINGS[skill].get('button_color', '#cccccc')}
+        for skill in SKILL_COLUMNS
+    ]
+
+    # Build skill color map (slug -> color)
+    skill_color_map = {
+        SKILL_SLUG_MAP[skill]: SKILL_SETTINGS[skill].get('button_color', '#cccccc')
+        for skill in SKILL_COLUMNS
+    }
+
     return render_template(
         'timetable.html',
         debug_data=debug_data,
         modality=modality,
         skills=SKILL_COLUMNS,
+        skill_columns=SKILL_COLUMNS,
+        skill_slug_map=SKILL_SLUG_MAP,
+        skill_color_map=skill_color_map,
+        skill_definitions=skill_definitions,
         modalities=MODALITY_SETTINGS,
+        modality_order=list(MODALITY_SETTINGS.keys()),
         modality_labels={k: v.get('label', k.upper()) for k, v in MODALITY_SETTINGS.items()}
     )
 
