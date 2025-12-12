@@ -163,7 +163,12 @@
         <div class="add-worker-row">
           <div class="form-group">
             <label>Worker Name</label>
-            <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 150px;">
+            <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 200px;" list="worker-list-datalist" autocomplete="off">
+            <datalist id="worker-list-datalist">
+              {% for worker in worker_list %}
+              <option value="{{ worker }}">
+              {% endfor %}
+            </datalist>
           </div>
           <div class="form-group">
             <label>Activity/Role</label>
