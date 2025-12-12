@@ -351,10 +351,10 @@
 
   <script>
     // Configuration from backend
-    const SKILLS = {{ skills|tojson }};
-    const MODALITIES = {{ modalities|tojson }};
-    const SHIFT_TIMES = {{ shift_times|tojson }};
-    const WORKER_SKILLS = {{ worker_skills|tojson }};  // Full skill matrix from roster
+    const SKILLS = {{ skills|default([])|tojson }};
+    const MODALITIES = {{ modalities|default([])|tojson }};
+    const SHIFT_TIMES = {{ shift_times|default({})|tojson }};
+    const WORKER_SKILLS = {{ worker_skills|default({})|tojson }};  // Full skill matrix from roster
 
     // State management
     let currentTab = 'today';
