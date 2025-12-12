@@ -3030,7 +3030,9 @@ def prep_next_day():
 
     # Get worker list from skill roster for autocomplete
     roster = load_worker_skill_json()
-    worker_list = list(roster.keys()) if roster else []
+    if roster is None:
+        roster = {}
+    worker_list = list(roster.keys())
 
     return render_template(
         'prep_next_day.html',
