@@ -404,9 +404,13 @@
 
           workers[workerName].modalities.add(mod);
 
-          // Parse tasks
-          const taskStr = row.tasks || '';
-          if (taskStr) {
+          // Parse tasks - handle both string and array formats
+          let taskStr = row.tasks || '';
+          if (Array.isArray(taskStr)) {
+            taskStr.forEach(t => {
+              if (t && t.trim()) workers[workerName].tasks.add(t.trim());
+            });
+          } else if (typeof taskStr === 'string' && taskStr) {
             taskStr.split(',').map(t => t.trim()).filter(t => t).forEach(t => {
               workers[workerName].tasks.add(t);
             });
