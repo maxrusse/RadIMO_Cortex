@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RadIMO Cortex | Master Schedule</title>
+  <title>RadIMO Cortex | Change Today / Prep Tomorrow</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,16 +15,26 @@
     .header-actions a:hover, .header-actions button:hover { background: rgba(255,255,255,0.3); }
     .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
     .info-box { background: #e7f3ff; border-left: 4px solid #004892; padding: 1rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.9rem; }
-    .staging-banner { background: #fff3cd; border: 2px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center; }
-    .staging-banner h2 { color: #856404; margin-bottom: 0.5rem; font-size: 1.2rem; }
-    .staging-banner p { color: #856404; margin: 0.25rem 0; font-size: 0.9rem; }
-    .activate-section { background: #d1ecf1; border: 2px solid #0c5460; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center; }
-    .activate-section h3 { color: #0c5460; margin-bottom: 0.5rem; font-size: 1.1rem; }
-    .btn-activate { background: #28a745; color: white; border: none; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; }
-    .btn-activate:hover { background: #218838; }
-    .mode-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    .mode-toggle button { padding: 0.5rem 1rem; border: 2px solid #004892; background: white; color: #004892; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
-    .mode-toggle button.active { background: #004892; color: white; }
+
+    /* Tab Styles */
+    .tab-container { display: flex; gap: 0; margin-bottom: 0; }
+    .tab-btn { padding: 1rem 2rem; border: none; background: #e0e0e0; color: #666; font-size: 1rem; font-weight: 600; cursor: pointer; border-radius: 8px 8px 0 0; transition: all 0.2s; }
+    .tab-btn:hover { background: #d0d0d0; }
+    .tab-btn.active-today { background: #28a745; color: white; }
+    .tab-btn.active-tomorrow { background: #ffc107; color: #333; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Today Banner - Green */
+    .today-banner { background: #d4edda; border: 2px solid #28a745; padding: 1rem; border-radius: 0 8px 8px 8px; margin-bottom: 1rem; }
+    .today-banner h2 { color: #155724; margin-bottom: 0.5rem; font-size: 1.2rem; }
+    .today-banner p { color: #155724; margin: 0.25rem 0; font-size: 0.9rem; }
+
+    /* Tomorrow Banner - Yellow */
+    .tomorrow-banner { background: #fff3cd; border: 2px solid #ffc107; padding: 1rem; border-radius: 0 8px 8px 8px; margin-bottom: 1rem; }
+    .tomorrow-banner h2 { color: #856404; margin-bottom: 0.5rem; font-size: 1.2rem; }
+    .tomorrow-banner p { color: #856404; margin: 0.25rem 0; font-size: 0.9rem; }
+
     .table-container { max-height: 500px; overflow: auto; }
     .edit-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     .edit-table th, .edit-table td { padding: 0.4rem; text-align: left; border: 1px solid #ddd; }
@@ -44,23 +54,26 @@
     .btn-secondary:hover { background: #5a6268; }
     .btn-success { background: #28a745; color: white; }
     .btn-success:hover { background: #218838; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-warning:hover { background: #e0a800; }
     .btn-danger { background: #dc3545; color: white; }
     .btn-danger:hover { background: #c82333; }
     .btn-small { padding: 0.2rem 0.4rem; font-size: 0.75rem; }
     .message { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; display: none; }
     .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
     .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
-    .advanced-tools { display: none; margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; }
-    .advanced-tools.visible { display: block; }
-    .bulk-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .filter-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
     .filter-group { display: flex; gap: 0.25rem; align-items: center; }
     .filter-group label { font-weight: 600; color: #666; font-size: 0.85rem; margin-right: 0.5rem; }
     .filter-btn { padding: 0.3rem 0.6rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
     .filter-btn:hover { border-color: #004892; }
     .filter-btn.active { background: #004892; color: white; border-color: #004892; }
+
+    /* Add Worker Panel */
     .add-worker-panel { background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 2px solid #28a745; }
+    .add-worker-panel.tomorrow { border-color: #ffc107; }
     .add-worker-panel h4 { margin: 0 0 1rem 0; color: #28a745; }
+    .add-worker-panel.tomorrow h4 { color: #856404; }
     .add-worker-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; }
     .add-worker-row .form-group { display: flex; flex-direction: column; }
     .add-worker-row .form-group label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem; }
@@ -70,13 +83,20 @@
     .task-dropdown-content.show { display: block; }
     .task-dropdown-content label { display: block; padding: 0.3rem 0.5rem; cursor: pointer; font-size: 0.85rem; }
     .task-dropdown-content label:hover { background: #f0f0f0; }
+
+    /* Skill display in add panel */
+    .worker-skills-preview { margin-top: 0.5rem; font-size: 0.8rem; color: #666; }
+    .worker-skills-preview .skill-badge { display: inline-block; padding: 0.15rem 0.4rem; margin: 0.1rem; border-radius: 3px; font-size: 0.75rem; }
+    .worker-skills-preview .skill-badge.active { background: #d4edda; color: #155724; }
+    .worker-skills-preview .skill-badge.passive { background: #fff3cd; color: #856404; }
+    .worker-skills-preview .skill-badge.excluded { background: #f8d7da; color: #721c24; }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <h1>RadIMO Cortex | Master Schedule</h1>
-      <p style="font-size: 0.85rem; opacity: 0.9;">Unified schedule view - Load from CSV, edit, then Activate</p>
+      <h1>RadIMO Cortex | Change Today / Prep Tomorrow</h1>
+      <p style="font-size: 0.85rem; opacity: 0.9;">Manage current schedule or prepare tomorrow's schedule</p>
     </div>
     <div class="header-actions">
       <a href="{{ url_for('index') }}">Dashboard</a>
@@ -89,102 +109,51 @@
 
   <div id="message-container"></div>
 
-  <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-    <strong>Load from CSV:</strong>
-    <button class="btn btn-primary" onclick="loadFromCSV('today')">Load Today</button>
-    <button class="btn btn-primary" onclick="loadFromCSV('next')">Load Next Day</button>
-    <span id="load-status" style="color: #666;"></span>
+  <!-- Tab Navigation -->
+  <div class="tab-container">
+    <button class="tab-btn active-today" onclick="switchTab('today')" id="tab-today">Change Today</button>
+    <button class="tab-btn" onclick="switchTab('tomorrow')" id="tab-tomorrow">Prep Tomorrow</button>
   </div>
 
-  <div class="staging-banner">
-    <h2>STAGING MODE - No Live Effect</h2>
-    <p>Changes are saved to STAGED area. Use "Activate" to apply to live schedule.</p>
-  </div>
-
-  <div class="activate-section">
-    <h3>Activate Staged Schedule</h3>
-    <p style="font-size: 0.85rem; margin-bottom: 0.5rem;">This copies Staged → Live and resets all counters!</p>
-    <button class="btn-activate" onclick="activateStagedSchedule()">
-      ACTIVATE (Staged → Live)
-    </button>
-  </div>
-
-  <div class="card">
-    <div class="info-box">
-      <strong>Master Schedule</strong> - Edit workers, times, and skills. Changes saved to STAGED area until Activated.
+  <!-- TODAY TAB -->
+  <div id="content-today" class="tab-content active">
+    <div class="today-banner">
+      <h2>LIVE CHANGES - Immediate Effect</h2>
+      <p>Changes here apply IMMEDIATELY to today's schedule.</p>
+      <p><strong>Counters are NOT reset</strong> - existing assignment counts preserved.</p>
     </div>
 
-    <div class="mode-toggle">
-      <button id="mode-simple" class="active" onclick="setMode('simple')">Simple (Edit Cells)</button>
-      <button id="mode-advanced" onclick="setMode('advanced')">Advanced (Add/Delete)</button>
+    <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+      <strong>Load Today from CSV:</strong>
+      <button class="btn btn-success" onclick="loadFromCSV('today')">Load Today</button>
+      <span id="load-status-today" style="color: #666;"></span>
     </div>
 
-    <div class="filter-row">
-      <div class="filter-group">
-        <label>Modality:</label>
-        <button class="filter-btn active" onclick="setModalityFilter('all')">ALL</button>
-        {% for mod in modalities %}
-        <button class="filter-btn" onclick="setModalityFilter('{{ mod }}')">{{ mod|upper }}</button>
-        {% endfor %}
-      </div>
-      <div class="filter-group">
-        <label>Skill:</label>
-        <button class="filter-btn active" onclick="setSkillFilter('all')">ALL</button>
-        {% for skill in skills %}
-        <button class="filter-btn" onclick="setSkillFilter('{{ skill }}')">{{ skill }}</button>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="table-container">
-      <table class="edit-table" id="edit-table">
-        <thead>
-          <tr>
-            <th>Worker</th>
-            <th>Modality</th>
-            <th>Von</th>
-            <th>Bis</th>
-            {% for skill in skills %}
-            <th>{{ skill }}</th>
-            {% endfor %}
-            <th>Tasks</th>
-            <th id="actions-header" style="display:none;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="table-body">
-        </tbody>
-      </table>
-    </div>
-
-    <div id="advanced-tools" class="advanced-tools">
-      <!-- Add Worker Panel -->
+    <div class="card">
+      <!-- Add Worker Panel for Today -->
       <div class="add-worker-panel">
-        <h4>+ Add Worker</h4>
+        <h4>+ Add Worker to Today</h4>
         <div class="add-worker-row">
           <div class="form-group">
             <label>Worker Name</label>
-            <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 150px;">
+            <select id="add-worker-today" onchange="onWorkerSelectChange('today')">
+              <option value="">-- Select Worker --</option>
+              {% for worker in worker_list %}
+              <option value="{{ worker }}">{{ worker }}</option>
+              {% endfor %}
+            </select>
           </div>
           <div class="form-group">
-            <label>Activity/Role</label>
-            <select id="add-activity-select" onchange="onActivityChange()">
-              <option value="">-- Select Activity --</option>
-              {% for rule in medweb_mapping.get('rules', []) %}
-              {% if not rule.get('exclusion') %}
-              <option value="{{ rule.match }}"
-                      data-modality="{{ rule.get('modality', '') }}"
-                      data-modalities="{{ rule.get('modalities', [])|tojson }}"
-                      data-shift="{{ rule.get('shift', 'Fruehdienst') }}"
-                      data-skills="{{ rule.get('base_skills', {})|tojson }}">
-                {{ rule.match }}
-              </option>
-              {% endif %}
+            <label>Modality</label>
+            <select id="add-modality-today">
+              {% for mod in modalities %}
+              <option value="{{ mod }}">{{ mod|upper }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="form-group">
             <label>Shift</label>
-            <select id="add-shift-select" onchange="onShiftChange()">
+            <select id="add-shift-today" onchange="onShiftChange('today')">
               {% for shift_name, shift_data in shift_times.items() %}
               <option value="{{ shift_name }}" data-times="{{ shift_data|tojson }}">
                 {{ shift_name }} ({{ shift_data.get('default', '') }})
@@ -193,18 +162,18 @@
               <option value="custom">Custom...</option>
             </select>
           </div>
-          <div class="form-group" id="custom-time-group" style="display: none;">
+          <div class="form-group" id="custom-time-group-today" style="display: none;">
             <label>Von - Bis</label>
             <div style="display: flex; gap: 0.25rem;">
-              <input type="time" id="add-start-time" value="07:00" style="width: 100px;">
-              <input type="time" id="add-end-time" value="15:00" style="width: 100px;">
+              <input type="time" id="add-start-today" value="07:00" style="width: 100px;">
+              <input type="time" id="add-end-today" value="15:00" style="width: 100px;">
             </div>
           </div>
           <div class="form-group">
             <label>Tasks</label>
             <div class="task-dropdown">
-              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown()">Select Tasks ▼</button>
-              <div id="task-dropdown-content" class="task-dropdown-content">
+              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown('today')">Select Tasks ▼</button>
+              <div id="task-dropdown-today" class="task-dropdown-content">
                 {% for rule in medweb_mapping.get('rules', []) %}
                 {% if rule.get('exclusion') %}
                 <label><input type="checkbox" value="{{ rule.match }}"> {{ rule.match }}</label>
@@ -213,244 +182,586 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-success" onclick="addWorkerFromPanel()">Add</button>
+          <button class="btn btn-success" onclick="addWorker('today')">Add to Today</button>
         </div>
-        <div id="activity-info" style="margin-top: 0.5rem; font-size: 0.85rem; color: #666;"></div>
+        <div id="worker-skills-today" class="worker-skills-preview"></div>
       </div>
 
-      <h4 style="margin-bottom: 0.5rem;">Bulk Actions</h4>
-      <div class="bulk-actions">
-        <button class="btn btn-primary" onclick="bulkSetSkill()">Bulk Set Skill</button>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Modality:</label>
+          <button class="filter-btn active" onclick="setFilter('today', 'modality', 'all')">ALL</button>
+          {% for mod in modalities %}
+          <button class="filter-btn" onclick="setFilter('today', 'modality', '{{ mod }}')">{{ mod|upper }}</button>
+          {% endfor %}
+        </div>
+        <div class="filter-group">
+          <label>Skill:</label>
+          <button class="filter-btn active" onclick="setFilter('today', 'skill', 'all')">ALL</button>
+          {% for skill in skills %}
+          <button class="filter-btn" onclick="setFilter('today', 'skill', '{{ skill }}')">{{ skill }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="edit-table">
+          <thead>
+            <tr>
+              <th>Worker</th>
+              <th>Modality</th>
+              <th>Von</th>
+              <th>Bis</th>
+              {% for skill in skills %}
+              <th>{{ skill }}</th>
+              {% endfor %}
+              <th>Tasks</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body-today"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <button class="btn btn-success" onclick="saveAllChanges('today')" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
+          Apply Changes (No Counter Reset)
+        </button>
+        <span id="save-status-today" style="margin-left: 1rem; color: #666;"></span>
       </div>
     </div>
+  </div>
 
-    <div style="margin-top: 1rem;">
-      <button class="btn btn-success" onclick="saveAllChanges()" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
-        Save All Changes
-      </button>
-      <span id="save-status" style="margin-left: 1rem; color: #666;"></span>
+  <!-- TOMORROW TAB -->
+  <div id="content-tomorrow" class="tab-content">
+    <div class="tomorrow-banner">
+      <h2>STAGING MODE - Prep for Tomorrow</h2>
+      <p>Changes are saved to STAGED area for tomorrow.</p>
+      <p><strong>Counter reset happens on CSV import</strong> - when you load a new day's schedule.</p>
+    </div>
+
+    <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+      <strong>Load Next Day from CSV:</strong>
+      <button class="btn btn-warning" onclick="loadFromCSV('next')">Load Next Day</button>
+      <span id="load-status-tomorrow" style="color: #666;"></span>
+    </div>
+
+    <div class="card">
+      <!-- Add Worker Panel for Tomorrow -->
+      <div class="add-worker-panel tomorrow">
+        <h4>+ Add Worker to Tomorrow</h4>
+        <div class="add-worker-row">
+          <div class="form-group">
+            <label>Worker Name</label>
+            <select id="add-worker-tomorrow" onchange="onWorkerSelectChange('tomorrow')">
+              <option value="">-- Select Worker --</option>
+              {% for worker in worker_list %}
+              <option value="{{ worker }}">{{ worker }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Modality</label>
+            <select id="add-modality-tomorrow">
+              {% for mod in modalities %}
+              <option value="{{ mod }}">{{ mod|upper }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Shift</label>
+            <select id="add-shift-tomorrow" onchange="onShiftChange('tomorrow')">
+              {% for shift_name, shift_data in shift_times.items() %}
+              <option value="{{ shift_name }}" data-times="{{ shift_data|tojson }}">
+                {{ shift_name }} ({{ shift_data.get('default', '') }})
+              </option>
+              {% endfor %}
+              <option value="custom">Custom...</option>
+            </select>
+          </div>
+          <div class="form-group" id="custom-time-group-tomorrow" style="display: none;">
+            <label>Von - Bis</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <input type="time" id="add-start-tomorrow" value="07:00" style="width: 100px;">
+              <input type="time" id="add-end-tomorrow" value="15:00" style="width: 100px;">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tasks</label>
+            <div class="task-dropdown">
+              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown('tomorrow')">Select Tasks ▼</button>
+              <div id="task-dropdown-tomorrow" class="task-dropdown-content">
+                {% for rule in medweb_mapping.get('rules', []) %}
+                {% if rule.get('exclusion') %}
+                <label><input type="checkbox" value="{{ rule.match }}"> {{ rule.match }}</label>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-warning" onclick="addWorker('tomorrow')">Add to Tomorrow</button>
+        </div>
+        <div id="worker-skills-tomorrow" class="worker-skills-preview"></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>Modality:</label>
+          <button class="filter-btn active" onclick="setFilter('tomorrow', 'modality', 'all')">ALL</button>
+          {% for mod in modalities %}
+          <button class="filter-btn" onclick="setFilter('tomorrow', 'modality', '{{ mod }}')">{{ mod|upper }}</button>
+          {% endfor %}
+        </div>
+        <div class="filter-group">
+          <label>Skill:</label>
+          <button class="filter-btn active" onclick="setFilter('tomorrow', 'skill', 'all')">ALL</button>
+          {% for skill in skills %}
+          <button class="filter-btn" onclick="setFilter('tomorrow', 'skill', '{{ skill }}')">{{ skill }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="edit-table">
+          <thead>
+            <tr>
+              <th>Worker</th>
+              <th>Modality</th>
+              <th>Von</th>
+              <th>Bis</th>
+              {% for skill in skills %}
+              <th>{{ skill }}</th>
+              {% endfor %}
+              <th>Tasks</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body-tomorrow"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <button class="btn btn-warning" onclick="saveAllChanges('tomorrow')" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
+          Save Tomorrow's Schedule
+        </button>
+        <span id="save-status-tomorrow" style="margin-left: 1rem; color: #666;"></span>
+      </div>
     </div>
   </div>
 
   <script>
-    // Dynamic configuration from backend
+    // Configuration from backend
     const SKILLS = {{ skills|tojson }};
     const MODALITIES = {{ modalities|tojson }};
     const SHIFT_TIMES = {{ shift_times|tojson }};
+    const WORKER_SKILLS = {{ worker_skills|tojson }};  // Full skill matrix from roster
 
-    let currentModalityFilter = 'all';  // Filter: 'all' or specific modality
-    let currentSkillFilter = 'all';     // Filter: 'all' or specific skill (shows where skill=1)
-    let currentMode = 'simple';
-    let tableData = {};  // {modality: [rows]}
-    let allData = [];    // Combined data from all modalities
-    let pendingChanges = {};
-    let selectedActivityData = null;  // Current selected activity's data
+    // State management
+    let currentTab = 'today';
+    let filters = {
+      today: { modality: 'all', skill: 'all' },
+      tomorrow: { modality: 'all', skill: 'all' }
+    };
+    let tableData = {
+      today: {},   // {modality: [rows]}
+      tomorrow: {}
+    };
+    let allData = {
+      today: [],
+      tomorrow: []
+    };
+    let pendingChanges = {
+      today: {},
+      tomorrow: {}
+    };
 
+    // Tab switching
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tab-today').className = tab === 'today' ? 'tab-btn active-today' : 'tab-btn';
+      document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab-btn active-tomorrow' : 'tab-btn';
+      document.getElementById('content-today').className = tab === 'today' ? 'tab-content active' : 'tab-content';
+      document.getElementById('content-tomorrow').className = tab === 'tomorrow' ? 'tab-content active' : 'tab-content';
+    }
+
+    // Load data for both tabs
     async function loadData() {
       try {
-        const response = await fetch('/api/prep-next-day/data');
-        const data = await response.json();
-        tableData = data;
+        // Load today's LIVE data
+        const todayResponse = await fetch('/api/live-schedule/data');
+        const todayData = await todayResponse.json();
+        tableData.today = todayData;
+        allData.today = combineModalityData(todayData);
 
-        // Combine all modalities into unified list
-        allData = [];
-        MODALITIES.forEach(mod => {
-          const modData = tableData[mod] || [];
-          modData.forEach(row => {
-            allData.push({ ...row, _modality: mod });
-          });
-        });
+        // Load tomorrow's STAGED data
+        const tomorrowResponse = await fetch('/api/prep-next-day/data');
+        const tomorrowData = await tomorrowResponse.json();
+        tableData.tomorrow = tomorrowData;
+        allData.tomorrow = combineModalityData(tomorrowData);
 
-        renderTable();
+        renderTable('today');
+        renderTable('tomorrow');
       } catch (error) {
-        showMessage('error', `Error loading: ${error.message}`);
+        showMessage('error', `Error loading data: ${error.message}`);
       }
     }
 
-    function setMode(mode) {
-      currentMode = mode;
-      document.getElementById('mode-simple').classList.toggle('active', mode === 'simple');
-      document.getElementById('mode-advanced').classList.toggle('active', mode === 'advanced');
-      document.getElementById('advanced-tools').classList.toggle('visible', mode === 'advanced');
-      document.getElementById('actions-header').style.display = mode === 'advanced' ? '' : 'none';
-      renderTable();
-    }
-
-    function setModalityFilter(filter) {
-      currentModalityFilter = filter;
-      // Update button states in modality filter group
-      document.querySelectorAll('.filter-row .filter-group:first-child .filter-btn').forEach(btn => {
-        const btnFilter = btn.textContent.toLowerCase() === 'all' ? 'all' : btn.textContent.toLowerCase();
-        btn.classList.toggle('active', btnFilter === filter);
+    function combineModalityData(data) {
+      const combined = [];
+      MODALITIES.forEach(mod => {
+        const modData = data[mod] || [];
+        modData.forEach(row => {
+          combined.push({ ...row, _modality: mod });
+        });
       });
-      renderTable();
+      return combined;
     }
 
-    function setSkillFilter(skill) {
-      currentSkillFilter = skill;
-      // Update button states in skill filter group
-      document.querySelectorAll('.filter-row .filter-group:last-child .filter-btn').forEach(btn => {
-        const btnSkill = btn.textContent === 'ALL' ? 'all' : btn.textContent;
-        btn.classList.toggle('active', btnSkill === skill);
+    // Set filter and update UI
+    function setFilter(tab, filterType, value) {
+      filters[tab][filterType] = value;
+
+      // Update button states
+      const container = document.getElementById(`content-${tab}`);
+      const groupIndex = filterType === 'modality' ? 0 : 1;
+      const buttons = container.querySelectorAll(`.filter-row .filter-group:nth-child(${groupIndex + 1}) .filter-btn`);
+      buttons.forEach(btn => {
+        const btnValue = btn.textContent.trim().toLowerCase() === 'all' ? 'all' :
+                        (filterType === 'modality' ? btn.textContent.trim().toLowerCase() : btn.textContent.trim());
+        btn.classList.toggle('active', btnValue === value);
       });
-      renderTable();
+
+      renderTable(tab);
     }
 
-    function renderTable() {
-      const tbody = document.getElementById('table-body');
+    // Render table for specified tab
+    function renderTable(tab) {
+      const tbody = document.getElementById(`table-body-${tab}`);
       tbody.innerHTML = '';
 
-      // Filter data based on modality filter
-      let data = allData;
-      if (currentModalityFilter !== 'all') {
-        data = data.filter(row => row._modality === currentModalityFilter);
-      }
+      let data = allData[tab];
 
-      // Filter by skill (show workers where skill=1)
-      if (currentSkillFilter !== 'all') {
-        data = data.filter(row => row[currentSkillFilter] === 1 || row[currentSkillFilter] === '1');
+      // Apply filters
+      if (filters[tab].modality !== 'all') {
+        data = data.filter(row => row._modality === filters[tab].modality);
+      }
+      if (filters[tab].skill !== 'all') {
+        data = data.filter(row => row[filters[tab].skill] === 1 || row[filters[tab].skill] === '1');
       }
 
       if (data.length === 0) {
-        const colSpan = 5 + SKILLS.length + (currentMode === 'advanced' ? 1 : 0);
-        let emptyMsg = 'No data. Upload CSV first.';
-        if (allData.length > 0) {
-          emptyMsg = `No workers match current filters (Modality: ${currentModalityFilter}, Skill: ${currentSkillFilter})`;
-        }
+        const colSpan = 5 + SKILLS.length + 1;
+        let emptyMsg = allData[tab].length > 0
+          ? `No workers match current filters`
+          : `No data. Load from CSV first.`;
         tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align: center; padding: 2rem; color: #666;">${emptyMsg}</td></tr>`;
         return;
       }
 
-      data.forEach((row) => {
+      data.forEach(row => {
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = row.row_index;
         tr.dataset.modality = row._modality;
+        tr.dataset.tab = tab;
 
-        // Worker name
-        tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="PPL">${row.PPL}</td>`;
-        // Modality (always visible, editable via dropdown in advanced mode later)
+        // Worker name - dropdown from skill matrix
+        tr.innerHTML += `
+          <td>
+            <select class="worker-select" data-col="PPL" onchange="handleSelectChange(this, '${tab}')">
+              <option value="${row.PPL}">${row.PPL}</option>
+              ${Object.keys(WORKER_SKILLS).filter(w => w !== row.PPL).map(w =>
+                `<option value="${w}">${w}</option>`
+              ).join('')}
+            </select>
+          </td>`;
+
+        // Modality (readonly display)
         tr.innerHTML += `<td style="font-weight: bold; text-transform: uppercase;">${row._modality}</td>`;
-        // Times
-        tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="start_time">${row.start_time}</td>`;
-        tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="end_time">${row.end_time}</td>`;
 
-        // Skills
+        // Times
+        tr.innerHTML += `<td contenteditable="true" data-col="start_time">${row.start_time}</td>`;
+        tr.innerHTML += `<td contenteditable="true" data-col="end_time">${row.end_time}</td>`;
+
+        // Skills from roster (based on worker + modality)
         SKILLS.forEach(skill => {
           const value = row[skill] !== undefined ? row[skill] : 0;
           const className = `skill-cell skill-${value}`;
-          tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="${skill}" class="${className}">${value}</td>`;
+          tr.innerHTML += `<td contenteditable="true" data-col="${skill}" class="${className}">${value}</td>`;
         });
 
-        // Tasks (array displayed as comma-separated, editable)
+        // Tasks
         const tasks = row.tasks || [];
         const tasksStr = Array.isArray(tasks) ? tasks.join(', ') : (tasks || '');
-        tr.innerHTML += `<td contenteditable="${currentMode === 'simple'}" data-col="tasks" style="font-size: 0.75rem; max-width: 150px;">${tasksStr}</td>`;
+        tr.innerHTML += `<td contenteditable="true" data-col="tasks" style="font-size: 0.75rem; max-width: 150px;">${tasksStr}</td>`;
 
-        // Actions (advanced mode)
-        if (currentMode === 'advanced') {
-          tr.innerHTML += `<td><button class="btn btn-danger btn-small" onclick="deleteWorkerRow('${row._modality}', ${row.row_index})">Del</button></td>`;
-        }
+        // Actions
+        tr.innerHTML += `<td><button class="btn btn-danger btn-small" onclick="deleteWorker('${tab}', '${row._modality}', ${row.row_index})">Del</button></td>`;
 
         tbody.appendChild(tr);
       });
 
-      // Add event listeners
-      document.querySelectorAll('td[contenteditable="true"]').forEach(cell => {
-        cell.addEventListener('blur', handleCellEdit);
+      // Add blur event listeners for contenteditable cells
+      tbody.querySelectorAll('td[contenteditable="true"]').forEach(cell => {
+        cell.addEventListener('blur', (e) => handleCellEdit(e, tab));
       });
     }
 
-    function handleCellEdit(event) {
+    // Handle worker dropdown change - update skills preview
+    function onWorkerSelectChange(tab) {
+      const workerSelect = document.getElementById(`add-worker-${tab}`);
+      const modalitySelect = document.getElementById(`add-modality-${tab}`);
+      const previewDiv = document.getElementById(`worker-skills-${tab}`);
+
+      const worker = workerSelect.value;
+      const modality = modalitySelect.value;
+
+      if (!worker || !WORKER_SKILLS[worker]) {
+        previewDiv.innerHTML = '';
+        return;
+      }
+
+      // Get skills for this worker and modality
+      const workerData = WORKER_SKILLS[worker];
+      const modalitySkills = workerData[modality] || workerData['default'] || {};
+
+      let html = '<strong>Skills for ' + worker + ' (' + modality.toUpperCase() + '):</strong> ';
+      SKILLS.forEach(skill => {
+        const value = modalitySkills[skill] !== undefined ? modalitySkills[skill] : 0;
+        let badgeClass = 'passive';
+        if (value === 1) badgeClass = 'active';
+        else if (value === -1) badgeClass = 'excluded';
+        html += `<span class="skill-badge ${badgeClass}">${skill}: ${value}</span>`;
+      });
+
+      previewDiv.innerHTML = html;
+    }
+
+    // Handle select change in table row
+    function handleSelectChange(selectEl, tab) {
+      const row = selectEl.closest('tr');
+      const rowIndex = parseInt(row.dataset.rowIndex);
+      const modality = row.dataset.modality;
+      const col = selectEl.dataset.col;
+      const newValue = selectEl.value;
+
+      if (!pendingChanges[tab][modality]) pendingChanges[tab][modality] = {};
+      if (!pendingChanges[tab][modality][rowIndex]) pendingChanges[tab][modality][rowIndex] = {};
+      pendingChanges[tab][modality][rowIndex][col] = newValue;
+
+      // If worker changed, update skills from roster
+      if (col === 'PPL' && WORKER_SKILLS[newValue]) {
+        const workerData = WORKER_SKILLS[newValue];
+        const modalitySkills = workerData[modality] || workerData['default'] || {};
+
+        SKILLS.forEach(skill => {
+          const value = modalitySkills[skill] !== undefined ? modalitySkills[skill] : 0;
+          pendingChanges[tab][modality][rowIndex][skill] = value;
+        });
+      }
+
+      selectEl.style.background = '#d4edda';
+      setTimeout(() => { selectEl.style.background = ''; }, 500);
+    }
+
+    // Handle cell edit
+    function handleCellEdit(event, tab) {
       const cell = event.target;
       const row = cell.parentElement;
       const rowIndex = parseInt(row.dataset.rowIndex);
-      const rowModality = row.dataset.modality;  // Always use row's modality
+      const modality = row.dataset.modality;
       const col = cell.dataset.col;
       const newValue = cell.textContent.trim();
 
-      if (!pendingChanges[rowModality]) pendingChanges[rowModality] = {};
-      if (!pendingChanges[rowModality][rowIndex]) pendingChanges[rowModality][rowIndex] = {};
-      pendingChanges[rowModality][rowIndex][col] = newValue;
+      if (!pendingChanges[tab][modality]) pendingChanges[tab][modality] = {};
+      if (!pendingChanges[tab][modality][rowIndex]) pendingChanges[tab][modality][rowIndex] = {};
+      pendingChanges[tab][modality][rowIndex][col] = newValue;
 
-      const dataRow = tableData[rowModality]?.find(r => r.row_index === rowIndex);
+      // Update local data
+      const dataRow = tableData[tab][modality]?.find(r => r.row_index === rowIndex);
       if (dataRow) dataRow[col] = newValue;
 
       cell.style.background = '#d4edda';
       setTimeout(() => { cell.style.background = ''; }, 500);
     }
 
-    async function saveAllChanges() {
-      const saveStatus = document.getElementById('save-status');
+    // Save all changes
+    async function saveAllChanges(tab) {
+      const saveStatus = document.getElementById(`save-status-${tab}`);
       saveStatus.textContent = 'Saving...';
       let successCount = 0, errorCount = 0;
 
-      for (const modality in pendingChanges) {
-        for (const rowIndex in pendingChanges[modality]) {
+      const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
+
+      for (const modality in pendingChanges[tab]) {
+        for (const rowIndex in pendingChanges[tab][modality]) {
           try {
-            const response = await fetch('/api/prep-next-day/update-row', {
+            const response = await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ modality, row_index: parseInt(rowIndex), updates: pendingChanges[modality][rowIndex] })
+              body: JSON.stringify({
+                modality,
+                row_index: parseInt(rowIndex),
+                updates: pendingChanges[tab][modality][rowIndex]
+              })
             });
             response.ok ? successCount++ : errorCount++;
           } catch { errorCount++; }
         }
       }
 
-      pendingChanges = {};
-      saveStatus.textContent = errorCount === 0 ? `${successCount} saved` : `${successCount} saved, ${errorCount} errors`;
+      pendingChanges[tab] = {};
+      const msgType = errorCount === 0 ? 'success' : 'error';
+      const msg = errorCount === 0 ? `${successCount} changes saved` : `${successCount} saved, ${errorCount} errors`;
+      saveStatus.textContent = msg;
       saveStatus.style.color = errorCount === 0 ? '#28a745' : '#dc3545';
-      showMessage(errorCount === 0 ? 'success' : 'error', saveStatus.textContent);
+      showMessage(msgType, msg + (tab === 'today' ? ' - Applied immediately!' : ' - Saved for tomorrow'));
+
+      await loadData();
       setTimeout(() => { saveStatus.textContent = ''; }, 3000);
     }
 
-    async function deleteWorkerRow(modality, rowIndex) {
+    // Delete worker
+    async function deleteWorker(tab, modality, rowIndex) {
       if (!confirm('Delete this worker?')) return;
+
+      const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
+
       try {
-        const response = await fetch('/api/prep-next-day/delete-worker', {
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modality: modality, row_index: rowIndex })
+          body: JSON.stringify({ modality, row_index: rowIndex })
         });
-        if (response.ok) { showMessage('success', 'Deleted'); await loadData(); }
-        else showMessage('error', 'Failed');
-      } catch (error) { showMessage('error', error.message); }
+        if (response.ok) {
+          showMessage('success', 'Worker deleted');
+          await loadData();
+        } else {
+          showMessage('error', 'Failed to delete');
+        }
+      } catch (error) {
+        showMessage('error', error.message);
+      }
     }
 
-    function bulkSetSkill() {
-      const skillList = SKILLS.join(', ');
-      const skill = prompt(`Skill Name (${skillList}):`, SKILLS[0]);
-      if (!skill || !SKILLS.includes(skill)) { alert('Invalid skill'); return; }
+    // Add worker
+    async function addWorker(tab) {
+      const workerSelect = document.getElementById(`add-worker-${tab}`);
+      const modalitySelect = document.getElementById(`add-modality-${tab}`);
+      const shiftSelect = document.getElementById(`add-shift-${tab}`);
+      const startInput = document.getElementById(`add-start-${tab}`);
+      const endInput = document.getElementById(`add-end-${tab}`);
 
-      const value = prompt(`Value for ${skill} (-1=excluded, 0=passive, 1=active):`, '1');
-      if (value === null) return;
-      const parsedValue = parseInt(value);
-      if (![-1, 0, 1].includes(parsedValue)) { alert('Invalid value! Use -1, 0, or 1'); return; }
+      const workerName = workerSelect.value;
+      const modality = modalitySelect.value;
 
-      // Apply to all visible (filtered) workers
-      let targetData = allData;
-      if (currentModalityFilter !== 'all') {
-        targetData = targetData.filter(r => r._modality === currentModalityFilter);
+      if (!workerName) {
+        showMessage('error', 'Please select a worker');
+        return;
       }
-      if (currentSkillFilter !== 'all') {
-        targetData = targetData.filter(r => r[currentSkillFilter] === 1 || r[currentSkillFilter] === '1');
+
+      // Get times
+      let startTime, endTime;
+      if (shiftSelect.value === 'custom') {
+        startTime = startInput.value || '07:00';
+        endTime = endInput.value || '15:00';
+      } else {
+        const shiftConfig = SHIFT_TIMES[shiftSelect.value];
+        if (shiftConfig) {
+          const [start, end] = (shiftConfig.default || '07:00-15:00').split('-');
+          startTime = start;
+          endTime = end;
+        }
       }
-      targetData.forEach(row => {
-        row[skill] = parsedValue;
-        if (!pendingChanges[row._modality]) pendingChanges[row._modality] = {};
-        if (!pendingChanges[row._modality][row.row_index]) pendingChanges[row._modality][row.row_index] = {};
-        pendingChanges[row._modality][row.row_index][skill] = parsedValue;
+
+      // Get tasks
+      const taskCheckboxes = document.querySelectorAll(`#task-dropdown-${tab} input[type="checkbox"]:checked`);
+      const selectedTasks = Array.from(taskCheckboxes).map(cb => cb.value);
+
+      // Get skills from roster for this worker + modality
+      const workerData = WORKER_SKILLS[workerName] || {};
+      const modalitySkills = workerData[modality] || workerData['default'] || {};
+
+      let workerSkills = {};
+      SKILLS.forEach(skill => {
+        workerSkills[skill] = modalitySkills[skill] !== undefined ? modalitySkills[skill] : 0;
       });
 
-      renderTable();
-      showMessage('success', `Set ${skill}=${parsedValue} for ${targetData.length} workers`);
+      const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modality,
+            worker_data: {
+              PPL: workerName,
+              start_time: startTime,
+              end_time: endTime,
+              Modifier: 1.0,
+              tasks: selectedTasks,
+              ...workerSkills
+            }
+          })
+        });
+
+        if (response.ok) {
+          showMessage('success', `Worker "${workerName}" added to ${modality.toUpperCase()}`);
+          // Reset form
+          workerSelect.value = '';
+          document.getElementById(`worker-skills-${tab}`).innerHTML = '';
+          document.getElementById(`custom-time-group-${tab}`).style.display = 'none';
+          taskCheckboxes.forEach(cb => cb.checked = false);
+          await loadData();
+        } else {
+          showMessage('error', 'Failed to add worker');
+        }
+      } catch (error) {
+        showMessage('error', error.message);
+      }
     }
 
+    // Shift change handler
+    function onShiftChange(tab) {
+      const shiftSelect = document.getElementById(`add-shift-${tab}`);
+      const customGroup = document.getElementById(`custom-time-group-${tab}`);
+      const startInput = document.getElementById(`add-start-${tab}`);
+      const endInput = document.getElementById(`add-end-${tab}`);
+
+      if (shiftSelect.value === 'custom') {
+        customGroup.style.display = 'block';
+      } else {
+        customGroup.style.display = 'none';
+        const shiftConfig = SHIFT_TIMES[shiftSelect.value];
+        if (shiftConfig) {
+          const [start, end] = (shiftConfig.default || '').split('-');
+          if (start) startInput.value = start;
+          if (end) endInput.value = end;
+        }
+      }
+    }
+
+    // Toggle task dropdown
+    function toggleTaskDropdown(tab) {
+      const dropdown = document.getElementById(`task-dropdown-${tab}`);
+      dropdown.classList.toggle('show');
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.task-dropdown')) {
+        document.querySelectorAll('.task-dropdown-content').forEach(d => d.classList.remove('show'));
+      }
+    });
+
+    // Load from CSV
     async function loadFromCSV(mode) {
-      const loadStatus = document.getElementById('load-status');
+      const statusId = mode === 'today' ? 'load-status-today' : 'load-status-tomorrow';
+      const loadStatus = document.getElementById(statusId);
       loadStatus.textContent = 'Loading...';
 
       const endpoint = mode === 'today' ? '/load-today-from-master' : '/preload-from-master';
+
       try {
         const response = await fetch(endpoint, { method: 'POST' });
         const result = await response.json();
@@ -458,13 +769,10 @@
         if (response.ok) {
           loadStatus.textContent = result.message || 'Loaded!';
           loadStatus.style.color = '#28a745';
-          await loadData();  // Refresh table
+          await loadData();
         } else {
           loadStatus.textContent = result.error || 'Error';
           loadStatus.style.color = '#dc3545';
-          if (result.debug) {
-            console.log('Debug:', result.debug);
-          }
         }
       } catch (error) {
         loadStatus.textContent = 'Error: ' + error.message;
@@ -474,217 +782,11 @@
       setTimeout(() => { loadStatus.textContent = ''; }, 5000);
     }
 
+    // Show message
     function showMessage(type, message) {
       const container = document.getElementById('message-container');
       container.innerHTML = `<div class="message ${type}">${message}</div>`;
       setTimeout(() => { container.innerHTML = ''; }, 5000);
-    }
-
-    async function activateStagedSchedule() {
-      if (!confirm('WARNING!\n\nThis copies STAGED → LIVE and resets all counters!\n\nContinue?')) return;
-      if (!confirm('Final confirmation: All assignment counters will be reset. Activate?')) return;
-
-      try {
-        const response = await fetch('/api/prep-next-day/activate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modalities: MODALITIES })
-        });
-        const result = await response.json();
-        if (result.success) {
-          showMessage('success', `Activated! Modalities: ${result.activated_modalities.join(', ')}, Workers: ${result.total_workers}`);
-        } else {
-          showMessage('error', result.error || 'Unknown error');
-        }
-      } catch (error) { showMessage('error', error.message); }
-    }
-
-    // Toggle task dropdown visibility
-    function toggleTaskDropdown() {
-      const dropdown = document.getElementById('task-dropdown-content');
-      dropdown.classList.toggle('show');
-    }
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.task-dropdown')) {
-        document.getElementById('task-dropdown-content')?.classList.remove('show');
-      }
-    });
-
-    // Handle activity selection - auto-set shift and show info
-    function onActivityChange() {
-      const activitySelect = document.getElementById('add-activity-select');
-      const shiftSelect = document.getElementById('add-shift-select');
-      const infoDiv = document.getElementById('activity-info');
-      const selectedOption = activitySelect.options[activitySelect.selectedIndex];
-
-      if (!selectedOption || !selectedOption.value) {
-        selectedActivityData = null;
-        infoDiv.textContent = '';
-        return;
-      }
-
-      // Parse data attributes
-      const modality = selectedOption.dataset.modality;
-      let modalities = [];
-      try {
-        modalities = JSON.parse(selectedOption.dataset.modalities || '[]');
-      } catch (e) {}
-      const shift = selectedOption.dataset.shift || 'Fruehdienst';
-      let skills = {};
-      try {
-        skills = JSON.parse(selectedOption.dataset.skills || '{}');
-      } catch (e) {}
-
-      // Store for use in addWorkerFromPanel
-      selectedActivityData = {
-        modality: modality,
-        modalities: modalities,
-        shift: shift,
-        skills: skills
-      };
-
-      // Auto-select the shift
-      if (shift && shiftSelect) {
-        for (let i = 0; i < shiftSelect.options.length; i++) {
-          if (shiftSelect.options[i].value === shift) {
-            shiftSelect.selectedIndex = i;
-            onShiftChange();  // Update times
-            break;
-          }
-        }
-      }
-
-      // Show info about selected activity
-      const modalityInfo = modality ? modality.toUpperCase() : (modalities.length ? modalities.map(m => m.toUpperCase()).join(', ') : '');
-      const skillInfo = Object.entries(skills).filter(([k, v]) => v === 1).map(([k]) => k).join(', ');
-      infoDiv.innerHTML = `<strong>Modality:</strong> ${modalityInfo || 'Multi'} | <strong>Skills:</strong> ${skillInfo || 'None'}`;
-    }
-
-    // Handle shift dropdown change for custom time
-    function onShiftChange() {
-      const shiftSelect = document.getElementById('add-shift-select');
-      const customGroup = document.getElementById('custom-time-group');
-      const startInput = document.getElementById('add-start-time');
-      const endInput = document.getElementById('add-end-time');
-
-      if (shiftSelect.value === 'custom') {
-        customGroup.style.display = 'block';
-      } else {
-        customGroup.style.display = 'none';
-        // Get times from shift config
-        const shiftConfig = SHIFT_TIMES[shiftSelect.value];
-        if (shiftConfig) {
-          const defaultTime = shiftConfig.default || '';
-          const [start, end] = defaultTime.split('-');
-          if (start) startInput.value = start;
-          if (end) endInput.value = end;
-        }
-      }
-    }
-
-    // Add worker from panel (activity-based)
-    async function addWorkerFromPanel() {
-      const workerInput = document.getElementById('add-worker-input');
-      const activitySelect = document.getElementById('add-activity-select');
-      const shiftSelect = document.getElementById('add-shift-select');
-      const startInput = document.getElementById('add-start-time');
-      const endInput = document.getElementById('add-end-time');
-
-      const workerName = workerInput.value.trim();
-
-      if (!workerName) {
-        showMessage('error', 'Please enter a worker name');
-        return;
-      }
-
-      if (!selectedActivityData && !activitySelect.value) {
-        showMessage('error', 'Please select an activity/role');
-        return;
-      }
-
-      // Get times based on shift or custom
-      let startTime = startInput.value || '07:00';
-      let endTime = endInput.value || '15:00';
-
-      if (shiftSelect.value !== 'custom') {
-        const shiftConfig = SHIFT_TIMES[shiftSelect.value];
-        if (shiftConfig) {
-          const defaultTime = shiftConfig.default || '';
-          const [start, end] = defaultTime.split('-');
-          if (start) startTime = start;
-          if (end) endTime = end;
-        }
-      }
-
-      // Get selected tasks
-      const taskCheckboxes = document.querySelectorAll('#task-dropdown-content input[type="checkbox"]:checked');
-      const selectedTasks = Array.from(taskCheckboxes).map(cb => cb.value);
-
-      // Use activity skills as base, or default all to 0
-      let workerSkills = {};
-      SKILLS.forEach(skill => { workerSkills[skill] = 0; });
-
-      // Apply activity's base_skills if available
-      if (selectedActivityData && selectedActivityData.skills) {
-        Object.assign(workerSkills, selectedActivityData.skills);
-      }
-
-      // Determine modality (single or first of multi)
-      let modality = MODALITIES[0];  // default to first configured modality
-      if (selectedActivityData) {
-        if (selectedActivityData.modality) {
-          modality = selectedActivityData.modality;
-        } else if (selectedActivityData.modalities && selectedActivityData.modalities.length > 0) {
-          modality = selectedActivityData.modalities[0];
-        }
-      }
-
-      // Add worker for each modality if multi-modality activity
-      const modalitiesToAdd = selectedActivityData?.modalities?.length > 0
-        ? selectedActivityData.modalities
-        : [modality];
-
-      let successCount = 0;
-      for (const mod of modalitiesToAdd) {
-        try {
-          const response = await fetch('/api/prep-next-day/add-worker', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              modality: mod,
-              worker_data: {
-                PPL: workerName,
-                start_time: startTime,
-                end_time: endTime,
-                Modifier: 1.0,
-                tasks: selectedTasks,
-                activity: activitySelect.value,
-                ...workerSkills
-              }
-            })
-          });
-          if (response.ok) successCount++;
-        } catch (error) {
-          console.log(`Error adding to ${mod}:`, error);
-        }
-      }
-
-      if (successCount > 0) {
-        const modStr = modalitiesToAdd.map(m => m.toUpperCase()).join(', ');
-        showMessage('success', `Worker "${workerName}" added to ${modStr}`);
-        // Reset form
-        workerInput.value = '';
-        activitySelect.value = '';
-        selectedActivityData = null;
-        document.getElementById('activity-info').textContent = '';
-        document.getElementById('custom-time-group').style.display = 'none';
-        taskCheckboxes.forEach(cb => cb.checked = false);
-        await loadData();  // Refresh table
-      } else {
-        showMessage('error', 'Failed to add worker');
-      }
     }
 
     // Initialize

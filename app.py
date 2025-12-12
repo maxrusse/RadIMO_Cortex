@@ -600,23 +600,9 @@ def normalize_skill(skill_value: Optional[str]) -> str:
 
 
 def get_available_modalities_for_skill(skill: str) -> dict:
-    """Check which modalities have active workers for this skill"""
-    available = {}
-    now = get_local_berlin_now()
-
-    for modality in allowed_modalities:
-        d = modality_data[modality]
-        if d['working_hours_df'] is not None:
-            active_df = _filter_active_rows(d['working_hours_df'], now)
-            available[modality] = bool(
-                active_df is not None
-                and (skill in active_df.columns)
-                and (active_df[skill].sum() > 0)
-            )
-        else:
-            available[modality] = False
-
-    return available
+    """Return all modalities as available (always show all modality buttons)"""
+    # Always show all modalities - user can click and get "no one available" if needed
+    return {modality: True for modality in allowed_modalities}
 
 # -----------------------------------------------------------
 # TIME / DATE HELPERS (unchanged)
@@ -1197,6 +1183,7 @@ def build_working_hours_from_medweb(
                     'end_time': end_time,
                     'shift_duration': duration_hours,
                     'Modifier': 1.0,  # Can be extended with modifier_overrides
+                    'tasks': '',  # Initialize empty tasks column
                     **final_skills
                 })
 
@@ -1526,10 +1513,13 @@ def initialize_data(file_path: str, modality: str):
             # Compute canonical ID for each worker
             df['canonical_id'] = df['PPL'].apply(get_canonical_worker_id)
 
-            # Set column order as desired
-            col_order = ['PPL', 'canonical_id', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration']
+            # Set column order as desired (include tasks column)
+            col_order = ['PPL', 'canonical_id', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks']
             skill_cols = [skill for skill in SKILL_COLUMNS if skill in df.columns]
             col_order = col_order[:4] + skill_cols + col_order[4:]
+            # Ensure tasks column exists
+            if 'tasks' not in df.columns:
+                df['tasks'] = ''
             df = df[[col for col in col_order if col in df.columns]]
 
             # Save the DataFrame and compute auxiliary data
@@ -3038,6 +3028,10 @@ def prep_next_day():
     """
     next_day = get_next_workday()
 
+    # Get worker list from skill roster for autocomplete
+    roster = load_worker_skill_json()
+    worker_list = list(roster.keys()) if roster else []
+
     return render_template(
         'prep_next_day.html',
         target_date=next_day.strftime('%Y-%m-%d'),
@@ -3047,7 +3041,9 @@ def prep_next_day():
         modalities=list(MODALITY_SETTINGS.keys()),
         modality_settings=MODALITY_SETTINGS,
         shift_times=APP_CONFIG.get('shift_times', {}),
-        medweb_mapping=APP_CONFIG.get('medweb_mapping', {})
+        medweb_mapping=APP_CONFIG.get('medweb_mapping', {}),
+        worker_list=worker_list,
+        worker_skills=roster  # Full skill matrix for worker dropdowns
     )
 
 
@@ -3393,6 +3389,227 @@ def activate_staged_schedule():
     except Exception as e:
         selection_logger.error(f"Error in activate_staged_schedule: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# LIVE SCHEDULE APIs (Change Today - immediate effect, NO counter reset)
+# =============================================================================
+
+@app.route('/api/live-schedule/data', methods=['GET'])
+@admin_required
+def get_live_data():
+    """
+    Get LIVE working_hours_df data for all modalities.
+    Unlike prep-next-day, this returns currently active schedule data.
+    """
+    result = {}
+
+    for modality in allowed_modalities:
+        d = modality_data[modality]
+        df = d.get('working_hours_df')
+
+        if df is not None and not df.empty:
+            data = []
+            for idx, row in df.iterrows():
+                worker_data = {
+                    'row_index': int(idx),
+                    'PPL': row['PPL'],
+                    'start_time': row['start_time'].strftime('%H:%M') if pd.notnull(row.get('start_time')) else '',
+                    'end_time': row['end_time'].strftime('%H:%M') if pd.notnull(row.get('end_time')) else '',
+                    'tasks': row.get('tasks', ''),
+                }
+                # Add all skill columns
+                for skill in SKILL_COLUMNS:
+                    worker_data[skill] = int(row.get(skill, 0)) if pd.notnull(row.get(skill)) else 0
+                data.append(worker_data)
+            result[modality] = data
+        else:
+            result[modality] = []
+
+    return jsonify(result)
+
+
+@app.route('/api/live-schedule/update-row', methods=['POST'])
+@admin_required
+def update_live_row():
+    """
+    Update a single worker row in LIVE working_hours_df.
+    IMPORTANT: Does NOT reset counters - changes apply immediately.
+    """
+    try:
+        data = request.json
+        modality = data.get('modality')
+        row_index = data.get('row_index')
+        updates = data.get('updates', {})
+
+        if modality not in modality_data:
+            return jsonify({'error': 'Invalid modality'}), 400
+
+        df = modality_data[modality]['working_hours_df']
+
+        if df is None or row_index >= len(df):
+            return jsonify({'error': 'Invalid row index'}), 400
+
+        # Apply updates
+        for col, value in updates.items():
+            if col in ['start_time', 'end_time']:
+                try:
+                    df.at[row_index, col] = datetime.strptime(value, '%H:%M').time()
+                except:
+                    return jsonify({'error': f'Invalid time format for {col}'}), 400
+            elif col in SKILL_COLUMNS or col == 'Modifier':
+                df.at[row_index, col] = value
+            elif col == 'PPL':
+                df.at[row_index, col] = value
+                df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
+            elif col == 'tasks':
+                if isinstance(value, list):
+                    df.at[row_index, 'tasks'] = ', '.join(value)
+                else:
+                    df.at[row_index, 'tasks'] = value
+
+        # Recalculate shift_duration if times changed
+        if 'start_time' in updates or 'end_time' in updates:
+            start = df.at[row_index, 'start_time']
+            end = df.at[row_index, 'end_time']
+            if pd.notnull(start) and pd.notnull(end):
+                start_dt = datetime.combine(datetime.today(), start)
+                end_dt = datetime.combine(datetime.today(), end)
+                if end_dt < start_dt:
+                    end_dt += timedelta(days=1)
+                df.at[row_index, 'shift_duration'] = (end_dt - start_dt).seconds / 3600
+
+        # Update TIME column
+        if 'start_time' in updates or 'end_time' in updates:
+            start = df.at[row_index, 'start_time']
+            end = df.at[row_index, 'end_time']
+            if 'TIME' in df.columns:
+                df.at[row_index, 'TIME'] = f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
+
+        # Save live data after update (NO counter reset)
+        backup_dataframe(modality, use_staged=False)
+
+        selection_logger.info(f"Live schedule updated for {modality}, row {row_index} (no counter reset)")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/live-schedule/add-worker', methods=['POST'])
+@admin_required
+def add_live_worker():
+    """
+    Add a new worker row to LIVE working_hours_df.
+    IMPORTANT: Does NOT reset counters - worker is added immediately.
+    Initializes counter for new worker at 0.
+    """
+    try:
+        data = request.json
+        modality = data.get('modality')
+        worker_data = data.get('worker_data', {})
+
+        if modality not in modality_data:
+            return jsonify({'error': 'Invalid modality'}), 400
+
+        df = modality_data[modality]['working_hours_df']
+
+        # Build new row
+        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
+        new_row = {
+            'PPL': ppl_name,
+            'canonical_id': get_canonical_worker_id(ppl_name),
+            'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), '%H:%M').time(),
+            'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), '%H:%M').time(),
+            'Modifier': float(worker_data.get('Modifier', 1.0)),
+        }
+
+        # Add TIME column
+        new_row['TIME'] = f"{new_row['start_time'].strftime('%H:%M')}-{new_row['end_time'].strftime('%H:%M')}"
+
+        # Add skill columns
+        for skill in SKILL_COLUMNS:
+            new_row[skill] = int(worker_data.get(skill, 0))
+
+        # Add tasks
+        tasks = worker_data.get('tasks', [])
+        if isinstance(tasks, list):
+            new_row['tasks'] = ', '.join(tasks)
+        else:
+            new_row['tasks'] = tasks or ''
+
+        # Calculate shift_duration
+        start_dt = datetime.combine(datetime.today(), new_row['start_time'])
+        end_dt = datetime.combine(datetime.today(), new_row['end_time'])
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)
+        new_row['shift_duration'] = (end_dt - start_dt).seconds / 3600
+
+        # Append to DataFrame
+        if df is None or df.empty:
+            modality_data[modality]['working_hours_df'] = pd.DataFrame([new_row])
+        else:
+            modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+        # Initialize counter for new worker at 0 (don't reset existing counters)
+        d = modality_data[modality]
+        if ppl_name not in d['draw_counts']:
+            d['draw_counts'][ppl_name] = 0
+        if ppl_name not in d['WeightedCounts']:
+            d['WeightedCounts'][ppl_name] = 0.0
+        for skill in SKILL_COLUMNS:
+            if skill not in d['skill_counts']:
+                d['skill_counts'][skill] = {}
+            if ppl_name not in d['skill_counts'][skill]:
+                d['skill_counts'][skill][ppl_name] = 0
+
+        # Save live data after adding (NO counter reset for existing workers)
+        backup_dataframe(modality, use_staged=False)
+
+        selection_logger.info(f"Worker {ppl_name} added to LIVE {modality} schedule (no counter reset)")
+
+        return jsonify({'success': True, 'row_index': len(modality_data[modality]['working_hours_df']) - 1})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/live-schedule/delete-worker', methods=['POST'])
+@admin_required
+def delete_live_worker():
+    """
+    Delete a worker row from LIVE working_hours_df.
+    IMPORTANT: Does NOT reset counters for remaining workers.
+    """
+    try:
+        data = request.json
+        modality = data.get('modality')
+        row_index = data.get('row_index')
+
+        if modality not in modality_data:
+            return jsonify({'error': 'Invalid modality'}), 400
+
+        df = modality_data[modality]['working_hours_df']
+
+        if df is None or row_index >= len(df):
+            return jsonify({'error': 'Invalid row index'}), 400
+
+        # Get worker name before deletion for logging
+        worker_name = df.iloc[row_index]['PPL']
+
+        # Delete row
+        modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
+
+        # Save live data after deletion (NO counter reset)
+        backup_dataframe(modality, use_staged=False)
+
+        selection_logger.info(f"Worker {worker_name} deleted from LIVE {modality} schedule (no counter reset)")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/<modality>/<role>', methods=['GET'])
