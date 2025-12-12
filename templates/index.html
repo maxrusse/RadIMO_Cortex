@@ -329,7 +329,15 @@
     let timerInterval, lastClickTime, disableTimeout;
     let currentModality = "{{ modality }}";
     let lastSkillUsed = "";
-    
+
+    // Utility: Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      if (text === null || text === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+
     const skillButtonMap = {};
     document.querySelectorAll('.skill-button-wrapper').forEach(wrapper => {
       const slug = wrapper.dataset.skillSlug;
@@ -363,48 +371,57 @@
         ? `/api/${currentModality}/${skill}/strict`
         : `/api/${currentModality}/${skill}`;
       fetch(endpoint)
-        .then(response => response.json())
-        .then(data => {
-          if (data['Assigned Person']) {
-            showResult(data['Assigned Person'], skill);
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
           }
+          return response.json();
+        })
+        .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          showResult(data['Assigned Person'] || '', skill);
         })
         .catch(e => {
           console.error("API error:", e);
-          alert('Fehler beim Abrufen.');
+          showResult('', skill);
+          updateButtonsState(false);
         });
     }
 
     function showResult(person, skill) {
       const resultDiv = document.getElementById('result');
-      if (!person || person === "") {
-        person = "Niemand verfügbar";
-      }
+      const displayPerson = person || "Niemand verfügbar";
+      const escapedPerson = escapeHtml(displayPerson);
+
       resultDiv.innerHTML = `
         <div class="result-panel">
-          <div class="assigned-person">${person}</div>
+          <div class="assigned-person">${escapedPerson}</div>
           <div class="timer" id="timer"></div>
         </div>
       `;
       startTimer();
+
+      // Extract abbreviation from parentheses and copy to clipboard
       const match = person.match(/\(([^)]+)\)/);
       if (match && match[1]) copyTextToClipboard(match[1]);
 
-      // Update last assignment footer
+      // Update last assignment footer (textContent is XSS-safe)
       const now = new Date();
       const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'});
       const lastEl = document.getElementById('lastAssignment');
-      lastEl.textContent = `Letzte Zuweisung: ${timeStr} · ${person} · ${skill || lastSkillUsed}`;
+      lastEl.textContent = `Letzte Zuweisung: ${timeStr} · ${displayPerson} · ${skill || lastSkillUsed}`;
       lastEl.classList.add('visible');
     }
-    
+
     function startTimer() {
       lastClickTime = new Date();
       updateTimer();
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(updateTimer, 1000);
     }
-    
+
     function updateTimer() {
       const now = new Date();
       const secondsElapsed = Math.floor((now - lastClickTime) / 1000);
@@ -417,8 +434,18 @@
         minutes.toString().padStart(2, '0') + ":" +
         seconds.toString().padStart(2, '0');
     }
-    
-    function copyTextToClipboard(text) {
+
+    async function copyTextToClipboard(text) {
+      // Use modern Clipboard API with fallback
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (e) {
+          console.warn('Clipboard API failed, using fallback:', e);
+        }
+      }
+      // Fallback for older browsers
       const textarea = document.createElement("textarea");
       textarea.value = text;
       textarea.style.position = "fixed";
@@ -428,11 +455,11 @@
       try {
         document.execCommand('copy');
       } catch (e) {
-        console.error(e);
+        console.error('Fallback clipboard copy failed:', e);
       }
       document.body.removeChild(textarea);
     }
-    
+
     function updateButtonsState(disabled) {
       if (!disabled && requestInProgress) return;
       requestInProgress = disabled;

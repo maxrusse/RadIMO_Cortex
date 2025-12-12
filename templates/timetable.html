@@ -239,6 +239,29 @@
     let originalData = null;
     let timelineInstance = null;
     let currentFilter = 'all';
+    let dynamicStyleSheet = null;  // Single stylesheet for all timeline items
+
+    // Utility: Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      if (text === null || text === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+
+    // Initialize dynamic stylesheet (created once, reused)
+    function initDynamicStyleSheet() {
+      if (!dynamicStyleSheet) {
+        const style = document.createElement('style');
+        style.id = 'timeline-dynamic-styles';
+        document.head.appendChild(style);
+        dynamicStyleSheet = style.sheet;
+      }
+      // Clear existing rules
+      while (dynamicStyleSheet.cssRules.length > 0) {
+        dynamicStyleSheet.deleteRule(0);
+      }
+    }
 
     function buildGradient(skills) {
       const stripeWidth = 10;
@@ -267,7 +290,7 @@
       const period = blockWidth + gapWidth;
       return `background: repeating-linear-gradient(90deg, ${stops.join(', ')}, #ffffff ${period}px);`;
     }
-    
+
     function buildTimeline() {
       const timelineContainer = document.getElementById('timeline-container');
       let dfData;
@@ -299,6 +322,10 @@
         timelineContainer.innerHTML = "<p>No workers match the selected filter</p>";
         return;
       }
+
+      // Initialize/reset dynamic stylesheet for batched styles
+      initDynamicStyleSheet();
+
       const items = [];
       const groups = [];
       const groupMap = {};
@@ -317,7 +344,9 @@
         }
       });
       groups.sort((a, b) => a.order - b.order);
-      const finalGroups = groups.map(group => ({ id: group.id, content: group.id }));
+      // Escape group content for XSS safety
+      const finalGroups = groups.map(group => ({ id: group.id, content: escapeHtml(group.id) }));
+
       dfData.forEach((entry, index) => {
         const startTimeParts = entry.start_time.split(':');
         const endTimeParts = entry.end_time.split(':');
@@ -332,22 +361,33 @@
             activeSkills.push(slug);
           }
         });
+
         const customClass = `timeline-item-${index}`;
-        const customStyle = document.createElement('style');
-        customStyle.textContent = `.${customClass} { ${buildGradient(activeSkills)} }`;
-        document.head.appendChild(customStyle);
-        // Build tooltip with modality info if available
-        const modalityInfo = entry._modality ? `<br>Modality: ${entry._modality.toUpperCase()}` : '';
+        // Add rule to shared stylesheet instead of creating new <style> element
+        try {
+          dynamicStyleSheet.insertRule(`.${customClass} { ${buildGradient(activeSkills)} }`, dynamicStyleSheet.cssRules.length);
+        } catch (e) {
+          console.warn('Failed to insert CSS rule:', e);
+        }
+
+        // Build tooltip with XSS-safe escaping
+        const escapedPPL = escapeHtml(entry.PPL);
+        const escapedTime = escapeHtml(entry.TIME);
+        const escapedModality = entry._modality ? escapeHtml(entry._modality.toUpperCase()) : '';
+        const escapedSkills = activeSkills.map(s => escapeHtml(s)).join(', ');
+        const modalityInfo = escapedModality ? `<br>Modality: ${escapedModality}` : '';
+
         items.push({
           id: index,
           group: entry.PPL,
           start: startDateTime,
           end: endDateTime,
           content: '',
-          title: `${entry.PPL}${modalityInfo}<br>Zeit: ${entry.TIME}<br>Skills: ${activeSkills.join(', ')}`,
+          title: `${escapedPPL}${modalityInfo}<br>Zeit: ${escapedTime}<br>Skills: ${escapedSkills}`,
           className: customClass
         });
       });
+
       // Create date objects for timeline bounds (don't mutate same object)
       const now = new Date();
       const minTime = new Date();
@@ -426,7 +466,7 @@
         renderTimeline(filteredData);
       }
     }
-    
+
     document.addEventListener('DOMContentLoaded', function() {
       buildTimeline();
     });
