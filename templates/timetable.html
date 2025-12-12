@@ -175,21 +175,14 @@
       border-color: #004892;
     }
 
-    .filter-btn.filter-all {
-      background: #28a745;
+    /* Skill-specific colors when active */
+    {% for skill in skill_definitions %}
+    .filter-btn[data-skill="{{ skill.label }}"].active {
+      background: {{ skill.button_color }};
+      border-color: {{ skill.button_color }};
       color: white;
-      border-color: #28a745;
     }
-
-    .filter-btn.filter-all:hover {
-      background: #218838;
-      border-color: #218838;
-    }
-
-    .filter-btn.filter-all.active {
-      background: #155724;
-      border-color: #155724;
-    }
+    {% endfor %}
   </style>
 </head>
 <body data-modality="{{ modality }}">
@@ -208,18 +201,18 @@
   <!-- Modality Filter Bar -->
   <div class="skill-filter-bar">
     <label>Modality:</label>
-    <a href="{{ url_for('timetable', modality='all') }}" class="filter-btn filter-all {% if modality == 'all' %}active{% endif %}">ALL</a>
+    <a href="{{ url_for('timetable', modality='all') }}" class="filter-btn {% if modality == 'all' %}active{% endif %}">ALL</a>
     {% for mod in modality_order %}
-    <a href="{{ url_for('timetable', modality=mod) }}" class="filter-btn {% if modality == mod %}active{% endif %}" style="{% if modality == mod %}background: {{ modalities[mod].nav_color }}; border-color: {{ modalities[mod].nav_color }};{% endif %}">{{ modality_labels[mod] }}</a>
+    <a href="{{ url_for('timetable', modality=mod) }}" class="filter-btn {% if modality == mod %}active{% endif %}" style="{% if modality == mod %}background: {{ modalities[mod].nav_color }}; border-color: {{ modalities[mod].nav_color }}; color: white;{% endif %}">{{ modality_labels[mod] }}</a>
     {% endfor %}
   </div>
 
   <!-- Skill Filter Bar -->
   <div class="skill-filter-bar">
     <label>Filter by Skill:</label>
-    <button class="filter-btn filter-all active" onclick="filterTimeline('all')">All</button>
-    {% for skill in skills %}
-    <button class="filter-btn" onclick="filterTimeline('{{ skill }}')">{{ skill }}</button>
+    <button class="filter-btn active" data-skill="all" onclick="filterTimeline('all')">All</button>
+    {% for skill in skill_definitions %}
+    <button class="filter-btn" data-skill="{{ skill.label }}" onclick="filterTimeline('{{ skill.label }}')" style="border-left: 4px solid {{ skill.button_color }};">{{ skill.label }}</button>
     {% endfor %}
   </div>
 
@@ -355,13 +348,19 @@
           className: customClass
         });
       });
-      const today = new Date();
+      // Create date objects for timeline bounds (don't mutate same object)
+      const now = new Date();
+      const minTime = new Date();
+      minTime.setHours(6, 0, 0, 0);
+      const maxTime = new Date();
+      maxTime.setHours(20, 0, 0, 0);
+
       const options = {
-        zoomable: false,
+        zoomable: true,
         moveable: true,
         stack: false,
-        min: new Date(today.setHours(7, 0, 0)),
-        max: new Date(today.setHours(20, 0, 0)),
+        min: minTime,
+        max: maxTime,
         showCurrentTime: true,
         format: {
           minorLabels: {
@@ -375,7 +374,6 @@
         },
         margin: { item: { vertical: 10 } },
         verticalScroll: true,
-        //maxHeight: '800px'
       };
       // Destroy existing timeline if it exists
       if (timelineInstance) {
@@ -390,10 +388,13 @@
           timelineInstance.setCurrentTime(new Date());
         }
       }, 60000);
-      timeline.setWindow(
-        new Date(today.setHours(Math.max(7, new Date().getHours() - 1), 0, 0)),
-        new Date(today.setHours(Math.min(20, new Date().getHours() + 2), 0, 0))
-      );
+
+      // Set initial window around current time
+      const windowStart = new Date();
+      windowStart.setHours(Math.max(6, now.getHours() - 1), 0, 0, 0);
+      const windowEnd = new Date();
+      windowEnd.setHours(Math.min(20, now.getHours() + 3), 0, 0, 0);
+      timeline.setWindow(windowStart, windowEnd);
     }
 
     /**
@@ -401,10 +402,13 @@
      * @param {string} skill - The skill to filter by ('all' or skill name)
      */
     function filterTimeline(skill) {
-      // Update button states
-      const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn');
-      buttons.forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
+      // Update button states - only for skill filter bar (second one)
+      const skillFilterBars = document.querySelectorAll('.skill-filter-bar');
+      if (skillFilterBars.length > 1) {
+        const buttons = skillFilterBars[1].querySelectorAll('.filter-btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+      }
 
       currentFilter = skill;
 
