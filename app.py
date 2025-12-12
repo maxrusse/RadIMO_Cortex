@@ -421,6 +421,9 @@ def get_skill_modality_weight(skill: str, modality: str) -> float:
 
 BALANCER_SETTINGS = APP_CONFIG.get('balancer', DEFAULT_BALANCER)
 
+# Time format constant for consistent time string parsing
+TIME_FORMAT = '%H:%M'
+
 # Load exclusion routing configuration
 EXCLUSION_RULES = BALANCER_SETTINGS.get('exclusion_rules', {})
 
@@ -2230,6 +2233,325 @@ def load_staged_dataframe(modality: str) -> bool:
 
 
 # -----------------------------------------------------------
+# Shared helpers for schedule CRUD operations (used by both live and staged APIs)
+# -----------------------------------------------------------
+
+def _get_schedule_data_dict(modality: str, use_staged: bool) -> dict:
+    """
+    Get the appropriate data dictionary for a modality (live or staged).
+    """
+    if use_staged:
+        return staged_modality_data[modality]
+    return modality_data[modality]
+
+
+def _validate_row_index(df: pd.DataFrame, row_index: int) -> bool:
+    """
+    Validate that row_index exists in the DataFrame.
+    Uses DataFrame index instead of position for safety.
+    """
+    if df is None:
+        return False
+    return row_index in df.index
+
+
+def _df_to_api_response(df: pd.DataFrame) -> list:
+    """
+    Convert a working_hours DataFrame to API response format.
+    Uses to_dict('records') for better performance than iterrows.
+    """
+    if df is None or df.empty:
+        return []
+
+    data = []
+    for idx in df.index:
+        row = df.loc[idx]
+        worker_data = {
+            'row_index': int(idx),
+            'PPL': row['PPL'],
+            'start_time': row['start_time'].strftime(TIME_FORMAT) if pd.notnull(row.get('start_time')) else '',
+            'end_time': row['end_time'].strftime(TIME_FORMAT) if pd.notnull(row.get('end_time')) else '',
+        }
+
+        # Add all skill columns
+        for skill in SKILL_COLUMNS:
+            worker_data[skill] = int(row.get(skill, 0)) if pd.notnull(row.get(skill)) else 0
+
+        # Add tasks (stored as comma-separated string or list)
+        tasks_val = row.get('tasks', '')
+        if isinstance(tasks_val, list):
+            worker_data['tasks'] = tasks_val
+        elif isinstance(tasks_val, str) and tasks_val:
+            worker_data['tasks'] = [t.strip() for t in tasks_val.split(',') if t.strip()]
+        else:
+            worker_data['tasks'] = []
+
+        data.append(worker_data)
+
+    return data
+
+
+def _update_schedule_row(modality: str, row_index: int, updates: dict, use_staged: bool) -> tuple:
+    """
+    Update a single worker row in working_hours_df.
+
+    Args:
+        modality: The modality to update
+        row_index: The DataFrame index of the row to update
+        updates: Dictionary of column -> value updates
+        use_staged: If True, update staged data. If False, update live data.
+
+    Returns:
+        (success: bool, error_message: str or None)
+    """
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+    df = data_dict['working_hours_df']
+
+    if not _validate_row_index(df, row_index):
+        return False, 'Invalid row index'
+
+    try:
+        for col, value in updates.items():
+            if col in ['start_time', 'end_time']:
+                # Parse time string
+                df.at[row_index, col] = datetime.strptime(value, TIME_FORMAT).time()
+            elif col in SKILL_COLUMNS or col == 'Modifier':
+                df.at[row_index, col] = value
+            elif col == 'PPL':
+                df.at[row_index, col] = value
+                df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
+            elif col == 'tasks':
+                if isinstance(value, list):
+                    df.at[row_index, 'tasks'] = ', '.join(value)
+                else:
+                    df.at[row_index, 'tasks'] = value
+
+        # Recalculate shift_duration if times changed
+        if 'start_time' in updates or 'end_time' in updates:
+            start = df.at[row_index, 'start_time']
+            end = df.at[row_index, 'end_time']
+            if pd.notnull(start) and pd.notnull(end):
+                start_dt = datetime.combine(datetime.today(), start)
+                end_dt = datetime.combine(datetime.today(), end)
+                if end_dt < start_dt:
+                    end_dt += timedelta(days=1)
+                df.at[row_index, 'shift_duration'] = (end_dt - start_dt).seconds / 3600
+
+                # Update TIME column
+                if 'TIME' in df.columns:
+                    df.at[row_index, 'TIME'] = f"{start.strftime(TIME_FORMAT)}-{end.strftime(TIME_FORMAT)}"
+
+        backup_dataframe(modality, use_staged=use_staged)
+        return True, None
+
+    except ValueError as e:
+        return False, f'Invalid time format: {e}'
+    except Exception as e:
+        return False, str(e)
+
+
+def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) -> tuple:
+    """
+    Add a new worker row to working_hours_df.
+
+    Args:
+        modality: The modality to add worker to
+        worker_data: Dictionary with worker data (PPL, start_time, end_time, skills, etc.)
+        use_staged: If True, add to staged data. If False, add to live data.
+
+    Returns:
+        (success: bool, row_index: int or None, error_message: str or None)
+    """
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+    df = data_dict['working_hours_df']
+
+    try:
+        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
+        new_row = {
+            'PPL': ppl_name,
+            'canonical_id': get_canonical_worker_id(ppl_name),
+            'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), TIME_FORMAT).time(),
+            'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), TIME_FORMAT).time(),
+            'Modifier': float(worker_data.get('Modifier', 1.0)),
+        }
+
+        # Add TIME column
+        new_row['TIME'] = f"{new_row['start_time'].strftime(TIME_FORMAT)}-{new_row['end_time'].strftime(TIME_FORMAT)}"
+
+        # Add skill columns
+        for skill in SKILL_COLUMNS:
+            new_row[skill] = int(worker_data.get(skill, 0))
+
+        # Add tasks
+        tasks = worker_data.get('tasks', [])
+        if isinstance(tasks, list):
+            new_row['tasks'] = ', '.join(tasks)
+        else:
+            new_row['tasks'] = tasks or ''
+
+        # Calculate shift_duration
+        start_dt = datetime.combine(datetime.today(), new_row['start_time'])
+        end_dt = datetime.combine(datetime.today(), new_row['end_time'])
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)
+        new_row['shift_duration'] = (end_dt - start_dt).seconds / 3600
+
+        # Append to DataFrame
+        if df is None or df.empty:
+            data_dict['working_hours_df'] = pd.DataFrame([new_row])
+        else:
+            data_dict['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+        backup_dataframe(modality, use_staged=use_staged)
+
+        new_idx = len(data_dict['working_hours_df']) - 1
+        return True, new_idx, None
+
+    except ValueError as e:
+        return False, None, f'Invalid time format: {e}'
+    except Exception as e:
+        return False, None, str(e)
+
+
+def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool) -> tuple:
+    """
+    Delete a worker row from working_hours_df.
+
+    Args:
+        modality: The modality to delete from
+        row_index: The DataFrame index of the row to delete
+        use_staged: If True, delete from staged data. If False, delete from live data.
+
+    Returns:
+        (success: bool, worker_name: str or None, error_message: str or None)
+    """
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+    df = data_dict['working_hours_df']
+
+    if not _validate_row_index(df, row_index):
+        return False, None, 'Invalid row index'
+
+    try:
+        worker_name = df.loc[row_index, 'PPL']
+        data_dict['working_hours_df'] = df.drop(index=row_index).reset_index(drop=True)
+        backup_dataframe(modality, use_staged=use_staged)
+        return True, worker_name, None
+
+    except Exception as e:
+        return False, None, str(e)
+
+
+def _add_gap_to_schedule(modality: str, row_index: int, gap_type: str, gap_start: str, gap_end: str, use_staged: bool) -> tuple:
+    """
+    Add a gap (time exclusion) to a worker's shift.
+    The gap punches out time from the worker's shift.
+    - If gap covers entire shift: delete the row
+    - If gap at start: move start_time forward
+    - If gap at end: move end_time backward
+    - If gap in middle: split into two rows
+
+    Args:
+        modality: The modality to update
+        row_index: The DataFrame index of the row to add gap to
+        gap_type: Type of gap (e.g., 'custom', 'Board', etc.)
+        gap_start: Gap start time in HH:MM format
+        gap_end: Gap end time in HH:MM format
+        use_staged: If True, modify staged data. If False, modify live data.
+
+    Returns:
+        (success: bool, action: str or None, error_message: str or None)
+        action is one of: 'deleted', 'start_adjusted', 'end_adjusted', 'split'
+    """
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+    df = data_dict['working_hours_df']
+
+    if not _validate_row_index(df, row_index):
+        return False, None, 'Invalid row index'
+
+    try:
+        row = df.loc[row_index].copy()
+        worker_name = row['PPL']
+
+        # Parse times
+        gap_start_time = datetime.strptime(gap_start, TIME_FORMAT).time()
+        gap_end_time = datetime.strptime(gap_end, TIME_FORMAT).time()
+
+        # Validate gap times
+        if gap_start_time >= gap_end_time:
+            return False, None, 'Gap start time must be before gap end time'
+
+        shift_start = row['start_time']
+        shift_end = row['end_time']
+
+        # Convert to comparable datetime for calculations
+        base_date = datetime.today()
+        shift_start_dt = datetime.combine(base_date, shift_start)
+        shift_end_dt = datetime.combine(base_date, shift_end)
+        gap_start_dt = datetime.combine(base_date, gap_start_time)
+        gap_end_dt = datetime.combine(base_date, gap_end_time)
+
+        # Check if gap is within shift
+        if gap_end_dt <= shift_start_dt or gap_start_dt >= shift_end_dt:
+            return False, None, 'Gap is outside worker shift times'
+
+        log_prefix = "STAGED: " if use_staged else ""
+
+        # Case 1: Gap covers entire shift
+        if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
+            data_dict['working_hours_df'] = df.drop(index=row_index).reset_index(drop=True)
+            backup_dataframe(modality, use_staged=use_staged)
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
+            return True, 'deleted', None
+
+        # Case 2: Gap at start of shift
+        elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
+            df.at[row_index, 'start_time'] = gap_end_time
+            df.at[row_index, 'TIME'] = f"{gap_end_time.strftime(TIME_FORMAT)}-{shift_end.strftime(TIME_FORMAT)}"
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            df.at[row_index, 'shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=use_staged)
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) at start for {worker_name}: new start {gap_end_time}")
+            return True, 'start_adjusted', None
+
+        # Case 3: Gap at end of shift
+        elif shift_start_dt < gap_start_dt < shift_end_dt and gap_end_dt >= shift_end_dt:
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime(TIME_FORMAT)}-{gap_start_time.strftime(TIME_FORMAT)}"
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=use_staged)
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) at end for {worker_name}: new end {gap_start_time}")
+            return True, 'end_adjusted', None
+
+        # Case 4: Gap in middle - split into two rows
+        else:
+            # Update original row to end at gap start
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime(TIME_FORMAT)}-{gap_start_time.strftime(TIME_FORMAT)}"
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+
+            # Create new row starting after gap
+            new_row = row.to_dict()
+            new_row['start_time'] = gap_end_time
+            new_row['end_time'] = shift_end
+            new_row['TIME'] = f"{gap_end_time.strftime(TIME_FORMAT)}-{shift_end.strftime(TIME_FORMAT)}"
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+
+            # Append new row
+            data_dict['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            backup_dataframe(modality, use_staged=use_staged)
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
+            return True, 'split', None
+
+    except ValueError as e:
+        return False, None, f'Invalid time format: {e}'
+    except Exception as e:
+        return False, None, str(e)
+
+
+# -----------------------------------------------------------
 # Startup: initialize each modality – zuerst das aktuelle Live-Backup, dann das Default-File
 # -----------------------------------------------------------
 for mod, d in modality_data.items():
@@ -3095,38 +3417,8 @@ def get_prep_data():
                     # Save the initial staged copy
                     backup_dataframe(modality, use_staged=True)
 
-        d = staged_modality_data[modality]
-        df = d.get('working_hours_df')
-
-        if df is not None and not df.empty:
-            # Convert DataFrame to list of dicts for JSON
-            data = []
-            for idx, row in df.iterrows():
-                worker_data = {
-                    'row_index': int(idx),
-                    'PPL': row['PPL'],
-                    'start_time': row['start_time'].strftime('%H:%M') if pd.notnull(row['start_time']) else '',
-                    'end_time': row['end_time'].strftime('%H:%M') if pd.notnull(row['end_time']) else '',
-                }
-
-                # Add all skill columns
-                for skill in SKILL_COLUMNS:
-                    worker_data[skill] = int(row.get(skill, 0))
-
-                # Add tasks (stored as comma-separated string or list)
-                tasks_val = row.get('tasks', '')
-                if isinstance(tasks_val, list):
-                    worker_data['tasks'] = tasks_val
-                elif isinstance(tasks_val, str) and tasks_val:
-                    worker_data['tasks'] = [t.strip() for t in tasks_val.split(',') if t.strip()]
-                else:
-                    worker_data['tasks'] = []
-
-                data.append(worker_data)
-
-            result[modality] = data
-        else:
-            result[modality] = []
+        df = staged_modality_data[modality].get('working_hours_df')
+        result[modality] = _df_to_api_response(df)
 
     return jsonify(result)
 
@@ -3137,67 +3429,19 @@ def update_prep_row():
     """
     Update a single worker row in STAGED working_hours_df (next-day planning).
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
-        updates = data.get('updates', {})
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
+    updates = data.get('updates', {})
 
-        if modality not in staged_modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in staged_modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = staged_modality_data[modality]['working_hours_df']
+    success, error = _update_schedule_row(modality, row_index, updates, use_staged=True)
 
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
-
-        # Apply updates
-        for col, value in updates.items():
-            if col in ['start_time', 'end_time']:
-                # Parse time string
-                try:
-                    df.at[row_index, col] = datetime.strptime(value, '%H:%M').time()
-                except:
-                    return jsonify({'error': f'Invalid time format for {col}'}), 400
-            elif col in SKILL_COLUMNS or col == 'Modifier':
-                # Update skill or modifier
-                df.at[row_index, col] = value
-            elif col == 'PPL':
-                # Update worker name and canonical_id
-                df.at[row_index, col] = value
-                df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
-            elif col == 'tasks':
-                # Tasks stored as comma-separated string
-                if isinstance(value, list):
-                    df.at[row_index, 'tasks'] = ', '.join(value)
-                else:
-                    df.at[row_index, 'tasks'] = value
-
-        # Recalculate shift_duration if times changed
-        if 'start_time' in updates or 'end_time' in updates:
-            start = df.at[row_index, 'start_time']
-            end = df.at[row_index, 'end_time']
-            if pd.notnull(start) and pd.notnull(end):
-                start_dt = datetime.combine(datetime.today(), start)
-                end_dt = datetime.combine(datetime.today(), end)
-                if end_dt < start_dt:
-                    end_dt += timedelta(days=1)
-                df.at[row_index, 'shift_duration'] = (end_dt - start_dt).seconds / 3600
-
-        # Update TIME column to reflect changes
-        if 'start_time' in updates or 'end_time' in updates:
-            start = df.at[row_index, 'start_time']
-            end = df.at[row_index, 'end_time']
-            if 'TIME' in df.columns:
-                df.at[row_index, 'TIME'] = f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
-
-        # Save staged data after update
-        backup_dataframe(modality, use_staged=True)
-
+    if success:
         return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/prep-next-day/add-worker', methods=['POST'])
@@ -3206,60 +3450,18 @@ def add_prep_worker():
     """
     Add a new worker row to STAGED working_hours_df (next-day planning).
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        worker_data = data.get('worker_data', {})
+    data = request.json
+    modality = data.get('modality')
+    worker_data = data.get('worker_data', {})
 
-        if modality not in staged_modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in staged_modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = staged_modality_data[modality]['working_hours_df']
+    success, row_index, error = _add_worker_to_schedule(modality, worker_data, use_staged=True)
 
-        # Build new row
-        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
-        new_row = {
-            'PPL': ppl_name,
-            'canonical_id': get_canonical_worker_id(ppl_name),
-            'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), '%H:%M').time(),
-            'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), '%H:%M').time(),
-            'Modifier': float(worker_data.get('Modifier', 1.0)),
-        }
-
-        # Add TIME column
-        new_row['TIME'] = f"{new_row['start_time'].strftime('%H:%M')}-{new_row['end_time'].strftime('%H:%M')}"
-
-        # Add skill columns
-        for skill in SKILL_COLUMNS:
-            new_row[skill] = int(worker_data.get(skill, 0))
-
-        # Add tasks (stored as comma-separated string)
-        tasks = worker_data.get('tasks', [])
-        if isinstance(tasks, list):
-            new_row['tasks'] = ', '.join(tasks)
-        else:
-            new_row['tasks'] = tasks or ''
-
-        # Calculate shift_duration
-        start_dt = datetime.combine(datetime.today(), new_row['start_time'])
-        end_dt = datetime.combine(datetime.today(), new_row['end_time'])
-        if end_dt < start_dt:
-            end_dt += timedelta(days=1)
-        new_row['shift_duration'] = (end_dt - start_dt).seconds / 3600
-
-        # Append to DataFrame
-        if df is None or df.empty:
-            staged_modality_data[modality]['working_hours_df'] = pd.DataFrame([new_row])
-        else:
-            staged_modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
-        # Save staged data after adding
-        backup_dataframe(modality, use_staged=True)
-
-        return jsonify({'success': True, 'row_index': len(staged_modality_data[modality]['working_hours_df']) - 1})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if success:
+        return jsonify({'success': True, 'row_index': row_index})
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/prep-next-day/delete-worker', methods=['POST'])
@@ -3268,29 +3470,18 @@ def delete_prep_worker():
     """
     Delete a worker row from STAGED working_hours_df (next-day planning).
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
 
-        if modality not in staged_modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in staged_modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = staged_modality_data[modality]['working_hours_df']
+    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=True)
 
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
-
-        # Delete row
-        staged_modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
-
-        # Save staged data after deletion
-        backup_dataframe(modality, use_staged=True)
-
+    if success:
         return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/prep-next-day/activate', methods=['POST'])
@@ -3432,26 +3623,8 @@ def get_live_data():
     result = {}
 
     for modality in allowed_modalities:
-        d = modality_data[modality]
-        df = d.get('working_hours_df')
-
-        if df is not None and not df.empty:
-            data = []
-            for idx, row in df.iterrows():
-                worker_data = {
-                    'row_index': int(idx),
-                    'PPL': row['PPL'],
-                    'start_time': row['start_time'].strftime('%H:%M') if pd.notnull(row.get('start_time')) else '',
-                    'end_time': row['end_time'].strftime('%H:%M') if pd.notnull(row.get('end_time')) else '',
-                    'tasks': row.get('tasks', ''),
-                }
-                # Add all skill columns
-                for skill in SKILL_COLUMNS:
-                    worker_data[skill] = int(row.get(skill, 0)) if pd.notnull(row.get(skill)) else 0
-                data.append(worker_data)
-            result[modality] = data
-        else:
-            result[modality] = []
+        df = modality_data[modality].get('working_hours_df')
+        result[modality] = _df_to_api_response(df)
 
     return jsonify(result)
 
@@ -3463,65 +3636,20 @@ def update_live_row():
     Update a single worker row in LIVE working_hours_df.
     IMPORTANT: Does NOT reset counters - changes apply immediately.
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
-        updates = data.get('updates', {})
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
+    updates = data.get('updates', {})
 
-        if modality not in modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+    success, error = _update_schedule_row(modality, row_index, updates, use_staged=False)
 
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
-
-        # Apply updates
-        for col, value in updates.items():
-            if col in ['start_time', 'end_time']:
-                try:
-                    df.at[row_index, col] = datetime.strptime(value, '%H:%M').time()
-                except:
-                    return jsonify({'error': f'Invalid time format for {col}'}), 400
-            elif col in SKILL_COLUMNS or col == 'Modifier':
-                df.at[row_index, col] = value
-            elif col == 'PPL':
-                df.at[row_index, col] = value
-                df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
-            elif col == 'tasks':
-                if isinstance(value, list):
-                    df.at[row_index, 'tasks'] = ', '.join(value)
-                else:
-                    df.at[row_index, 'tasks'] = value
-
-        # Recalculate shift_duration if times changed
-        if 'start_time' in updates or 'end_time' in updates:
-            start = df.at[row_index, 'start_time']
-            end = df.at[row_index, 'end_time']
-            if pd.notnull(start) and pd.notnull(end):
-                start_dt = datetime.combine(datetime.today(), start)
-                end_dt = datetime.combine(datetime.today(), end)
-                if end_dt < start_dt:
-                    end_dt += timedelta(days=1)
-                df.at[row_index, 'shift_duration'] = (end_dt - start_dt).seconds / 3600
-
-        # Update TIME column
-        if 'start_time' in updates or 'end_time' in updates:
-            start = df.at[row_index, 'start_time']
-            end = df.at[row_index, 'end_time']
-            if 'TIME' in df.columns:
-                df.at[row_index, 'TIME'] = f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
-
-        # Save live data after update (NO counter reset)
-        backup_dataframe(modality, use_staged=False)
-
+    if success:
         selection_logger.info(f"Live schedule updated for {modality}, row {row_index} (no counter reset)")
-
         return jsonify({'success': True})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/live-schedule/add-worker', methods=['POST'])
@@ -3532,53 +3660,17 @@ def add_live_worker():
     IMPORTANT: Does NOT reset counters - worker is added immediately.
     Initializes counter for new worker at 0.
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        worker_data = data.get('worker_data', {})
+    data = request.json
+    modality = data.get('modality')
+    worker_data = data.get('worker_data', {})
 
-        if modality not in modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+    ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
+    success, row_index, error = _add_worker_to_schedule(modality, worker_data, use_staged=False)
 
-        # Build new row
-        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
-        new_row = {
-            'PPL': ppl_name,
-            'canonical_id': get_canonical_worker_id(ppl_name),
-            'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), '%H:%M').time(),
-            'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), '%H:%M').time(),
-            'Modifier': float(worker_data.get('Modifier', 1.0)),
-        }
-
-        # Add TIME column
-        new_row['TIME'] = f"{new_row['start_time'].strftime('%H:%M')}-{new_row['end_time'].strftime('%H:%M')}"
-
-        # Add skill columns
-        for skill in SKILL_COLUMNS:
-            new_row[skill] = int(worker_data.get(skill, 0))
-
-        # Add tasks
-        tasks = worker_data.get('tasks', [])
-        if isinstance(tasks, list):
-            new_row['tasks'] = ', '.join(tasks)
-        else:
-            new_row['tasks'] = tasks or ''
-
-        # Calculate shift_duration
-        start_dt = datetime.combine(datetime.today(), new_row['start_time'])
-        end_dt = datetime.combine(datetime.today(), new_row['end_time'])
-        if end_dt < start_dt:
-            end_dt += timedelta(days=1)
-        new_row['shift_duration'] = (end_dt - start_dt).seconds / 3600
-
-        # Append to DataFrame
-        if df is None or df.empty:
-            modality_data[modality]['working_hours_df'] = pd.DataFrame([new_row])
-        else:
-            modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
+    if success:
         # Initialize counter for new worker at 0 (don't reset existing counters)
         d = modality_data[modality]
         if ppl_name not in d['draw_counts']:
@@ -3591,15 +3683,10 @@ def add_live_worker():
             if ppl_name not in d['skill_counts'][skill]:
                 d['skill_counts'][skill][ppl_name] = 0
 
-        # Save live data after adding (NO counter reset for existing workers)
-        backup_dataframe(modality, use_staged=False)
-
         selection_logger.info(f"Worker {ppl_name} added to LIVE {modality} schedule (no counter reset)")
+        return jsonify({'success': True, 'row_index': row_index})
 
-        return jsonify({'success': True, 'row_index': len(modality_data[modality]['working_hours_df']) - 1})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/live-schedule/delete-worker', methods=['POST'])
@@ -3609,34 +3696,20 @@ def delete_live_worker():
     Delete a worker row from LIVE working_hours_df.
     IMPORTANT: Does NOT reset counters for remaining workers.
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
 
-        if modality not in modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
+    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=False)
 
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
-
-        # Get worker name before deletion for logging
-        worker_name = df.iloc[row_index]['PPL']
-
-        # Delete row
-        modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
-
-        # Save live data after deletion (NO counter reset)
-        backup_dataframe(modality, use_staged=False)
-
+    if success:
         selection_logger.info(f"Worker {worker_name} deleted from LIVE {modality} schedule (no counter reset)")
-
         return jsonify({'success': True})
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/live-schedule/add-gap', methods=['POST'])
@@ -3650,94 +3723,21 @@ def add_live_gap():
     - If gap at end: move end_time backward
     - If gap in middle: split into two rows
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
-        gap_type = data.get('gap_type', 'custom')
-        gap_start = data.get('gap_start')
-        gap_end = data.get('gap_end')
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
+    gap_type = data.get('gap_type', 'custom')
+    gap_start = data.get('gap_start')
+    gap_end = data.get('gap_end')
 
-        if modality not in modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = modality_data[modality]['working_hours_df']
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
+    success, action, error = _add_gap_to_schedule(modality, row_index, gap_type, gap_start, gap_end, use_staged=False)
 
-        row = df.iloc[row_index].copy()
-        worker_name = row['PPL']
-
-        # Parse times
-        gap_start_time = datetime.strptime(gap_start, '%H:%M').time()
-        gap_end_time = datetime.strptime(gap_end, '%H:%M').time()
-        shift_start = row['start_time']
-        shift_end = row['end_time']
-
-        # Convert to comparable datetime for calculations
-        base_date = datetime.today()
-        shift_start_dt = datetime.combine(base_date, shift_start)
-        shift_end_dt = datetime.combine(base_date, shift_end)
-        gap_start_dt = datetime.combine(base_date, gap_start_time)
-        gap_end_dt = datetime.combine(base_date, gap_end_time)
-
-        # Check if gap is within shift
-        if gap_end_dt <= shift_start_dt or gap_start_dt >= shift_end_dt:
-            return jsonify({'error': 'Gap is outside worker shift times'}), 400
-
-        # Case 1: Gap covers entire shift
-        if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
-            modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
-            backup_dataframe(modality, use_staged=False)
-            selection_logger.info(f"Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
-            return jsonify({'success': True, 'action': 'deleted'})
-
-        # Case 2: Gap at start of shift
-        elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
-            df.at[row_index, 'start_time'] = gap_end_time
-            df.at[row_index, 'TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
-            # Recalculate shift_duration
-            new_start_dt = datetime.combine(base_date, gap_end_time)
-            df.at[row_index, 'shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
-            backup_dataframe(modality, use_staged=False)
-            selection_logger.info(f"Gap ({gap_type}) at start for {worker_name}: new start {gap_end_time}")
-            return jsonify({'success': True, 'action': 'start_adjusted'})
-
-        # Case 3: Gap at end of shift
-        elif shift_start_dt < gap_start_dt < shift_end_dt and gap_end_dt >= shift_end_dt:
-            df.at[row_index, 'end_time'] = gap_start_time
-            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
-            # Recalculate shift_duration
-            new_end_dt = datetime.combine(base_date, gap_start_time)
-            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
-            backup_dataframe(modality, use_staged=False)
-            selection_logger.info(f"Gap ({gap_type}) at end for {worker_name}: new end {gap_start_time}")
-            return jsonify({'success': True, 'action': 'end_adjusted'})
-
-        # Case 4: Gap in middle - split into two rows
-        else:
-            # Update original row to end at gap start
-            df.at[row_index, 'end_time'] = gap_start_time
-            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
-            new_end_dt = datetime.combine(base_date, gap_start_time)
-            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
-
-            # Create new row starting after gap
-            new_row = row.copy()
-            new_row['start_time'] = gap_end_time
-            new_row['end_time'] = shift_end
-            new_row['TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
-            new_start_dt = datetime.combine(base_date, gap_end_time)
-            new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
-
-            # Append new row
-            modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            backup_dataframe(modality, use_staged=False)
-            selection_logger.info(f"Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
-            return jsonify({'success': True, 'action': 'split'})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if success:
+        return jsonify({'success': True, 'action': action})
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/prep-next-day/add-gap', methods=['POST'])
@@ -3747,92 +3747,21 @@ def add_staged_gap():
     Add a gap (time exclusion) to a worker's shift in STAGED data.
     Same logic as live gap but operates on staged_modality_data.
     """
-    try:
-        data = request.json
-        modality = data.get('modality')
-        row_index = data.get('row_index')
-        gap_type = data.get('gap_type', 'custom')
-        gap_start = data.get('gap_start')
-        gap_end = data.get('gap_end')
+    data = request.json
+    modality = data.get('modality')
+    row_index = data.get('row_index')
+    gap_type = data.get('gap_type', 'custom')
+    gap_start = data.get('gap_start')
+    gap_end = data.get('gap_end')
 
-        if modality not in staged_modality_data:
-            return jsonify({'error': 'Invalid modality'}), 400
+    if modality not in staged_modality_data:
+        return jsonify({'error': 'Invalid modality'}), 400
 
-        df = staged_modality_data[modality]['working_hours_df']
-        if df is None or row_index >= len(df):
-            return jsonify({'error': 'Invalid row index'}), 400
+    success, action, error = _add_gap_to_schedule(modality, row_index, gap_type, gap_start, gap_end, use_staged=True)
 
-        row = df.iloc[row_index].copy()
-        worker_name = row['PPL']
-
-        # Parse times
-        gap_start_time = datetime.strptime(gap_start, '%H:%M').time()
-        gap_end_time = datetime.strptime(gap_end, '%H:%M').time()
-        shift_start = row['start_time']
-        shift_end = row['end_time']
-
-        # Convert to comparable datetime for calculations
-        base_date = datetime.today()
-        shift_start_dt = datetime.combine(base_date, shift_start)
-        shift_end_dt = datetime.combine(base_date, shift_end)
-        gap_start_dt = datetime.combine(base_date, gap_start_time)
-        gap_end_dt = datetime.combine(base_date, gap_end_time)
-
-        # Check if gap is within shift
-        if gap_end_dt <= shift_start_dt or gap_start_dt >= shift_end_dt:
-            return jsonify({'error': 'Gap is outside worker shift times'}), 400
-
-        # Case 1: Gap covers entire shift
-        if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
-            staged_modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
-            backup_dataframe(modality, use_staged=True)
-            selection_logger.info(f"STAGED: Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
-            return jsonify({'success': True, 'action': 'deleted'})
-
-        # Case 2: Gap at start of shift
-        elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
-            df.at[row_index, 'start_time'] = gap_end_time
-            df.at[row_index, 'TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
-            new_start_dt = datetime.combine(base_date, gap_end_time)
-            df.at[row_index, 'shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
-            backup_dataframe(modality, use_staged=True)
-            selection_logger.info(f"STAGED: Gap ({gap_type}) at start for {worker_name}: new start {gap_end_time}")
-            return jsonify({'success': True, 'action': 'start_adjusted'})
-
-        # Case 3: Gap at end of shift
-        elif shift_start_dt < gap_start_dt < shift_end_dt and gap_end_dt >= shift_end_dt:
-            df.at[row_index, 'end_time'] = gap_start_time
-            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
-            new_end_dt = datetime.combine(base_date, gap_start_time)
-            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
-            backup_dataframe(modality, use_staged=True)
-            selection_logger.info(f"STAGED: Gap ({gap_type}) at end for {worker_name}: new end {gap_start_time}")
-            return jsonify({'success': True, 'action': 'end_adjusted'})
-
-        # Case 4: Gap in middle - split into two rows
-        else:
-            # Update original row to end at gap start
-            df.at[row_index, 'end_time'] = gap_start_time
-            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
-            new_end_dt = datetime.combine(base_date, gap_start_time)
-            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
-
-            # Create new row starting after gap
-            new_row = row.copy()
-            new_row['start_time'] = gap_end_time
-            new_row['end_time'] = shift_end
-            new_row['TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
-            new_start_dt = datetime.combine(base_date, gap_end_time)
-            new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
-
-            # Append new row
-            staged_modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            backup_dataframe(modality, use_staged=True)
-            selection_logger.info(f"STAGED: Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
-            return jsonify({'success': True, 'action': 'split'})
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if success:
+        return jsonify({'success': True, 'action': action})
+    return jsonify({'error': error}), 400
 
 
 @app.route('/api/<modality>/<role>', methods=['GET'])

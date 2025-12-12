@@ -305,63 +305,74 @@
     let entriesData = { today: [], tomorrow: [] };  // Grouped by worker -> entries
     let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
     let currentEditEntry = null;
+    let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have been loaded
 
-    // Tab switching
-    function switchTab(tab) {
+    // Utility: Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      if (text === null || text === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
+
+    // Tab switching with lazy loading
+    async function switchTab(tab) {
       currentTab = tab;
       document.getElementById('tab-today').className = tab === 'today' ? 'tab-btn active-today' : 'tab-btn';
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab-btn active-tomorrow' : 'tab-btn';
       document.getElementById('content-today').className = tab === 'today' ? 'tab-content active' : 'tab-content';
       document.getElementById('content-tomorrow').className = tab === 'tomorrow' ? 'tab-content active' : 'tab-content';
+
+      // Lazy load data for the selected tab if not already loaded
+      if (!dataLoaded[tab]) {
+        await loadTabData(tab);
+      }
     }
 
-    // Load data and build flat entries
-    async function loadData() {
+    // Load data for a specific tab (lazy loading)
+    async function loadTabData(tab) {
       try {
-        // Load today's LIVE data
-        const todayResponse = await fetch('/api/live-schedule/data');
-        if (!todayResponse.ok) {
-          const text = await todayResponse.text();
-          console.error('Today API error:', text);
-          rawData.today = {};
+        const endpoint = tab === 'today' ? '/api/live-schedule/data' : '/api/prep-next-day/data';
+        const response = await fetch(endpoint);
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error(`${tab} API error:`, text);
+          rawData[tab] = {};
         } else {
-          const contentType = todayResponse.headers.get('content-type');
+          const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
-            rawData.today = await todayResponse.json();
+            rawData[tab] = await response.json();
           } else {
-            console.error('Today API returned non-JSON');
-            rawData.today = {};
+            console.error(`${tab} API returned non-JSON`);
+            rawData[tab] = {};
           }
         }
-        const todayResult = buildEntriesByWorker(rawData.today);
-        entriesData.today = todayResult.entries;
-        workerCounts.today = todayResult.counts;
 
-        // Load tomorrow's STAGED data
-        const tomorrowResponse = await fetch('/api/prep-next-day/data');
-        if (!tomorrowResponse.ok) {
-          const text = await tomorrowResponse.text();
-          console.error('Tomorrow API error:', text);
-          rawData.tomorrow = {};
-        } else {
-          const contentType = tomorrowResponse.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            rawData.tomorrow = await tomorrowResponse.json();
-          } else {
-            console.error('Tomorrow API returned non-JSON');
-            rawData.tomorrow = {};
-          }
-        }
-        const tomorrowResult = buildEntriesByWorker(rawData.tomorrow);
-        entriesData.tomorrow = tomorrowResult.entries;
-        workerCounts.tomorrow = tomorrowResult.counts;
+        const result = buildEntriesByWorker(rawData[tab]);
+        entriesData[tab] = result.entries;
+        workerCounts[tab] = result.counts;
+        dataLoaded[tab] = true;
 
-        renderTable('today');
-        renderTable('tomorrow');
+        renderTable(tab);
       } catch (error) {
-        console.error('Load error:', error);
-        showMessage('error', `Error loading data: ${error.message}`);
+        console.error(`Load error for ${tab}:`, error);
+        showMessage('error', `Error loading ${tab} data: ${error.message}`);
       }
+    }
+
+    // Load data for both tabs (used after mutations)
+    async function loadData() {
+      // Reset loaded flags to force refresh
+      dataLoaded.today = false;
+      dataLoaded.tomorrow = false;
+
+      // Load current tab first (visible to user)
+      await loadTabData(currentTab);
+
+      // Load other tab in background
+      const otherTab = currentTab === 'today' ? 'tomorrow' : 'today';
+      loadTabData(otherTab);  // Don't await - load in background
     }
 
     // Build grouped entries list (per worker) and count workers for duplicate detection
@@ -427,6 +438,7 @@
 
       groups.forEach((group, gIdx) => {
         const isDuplicate = counts[group.worker] > 1;
+        const escapedWorker = escapeHtml(group.worker);
         const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${counts[group.worker]}x</span>` : '';
 
         group.entries.forEach((entry, eIdx) => {
@@ -437,17 +449,19 @@
             tr.classList.add('row-skill-flag');
           }
 
-          // Worker cell spans all entries for this worker
+          // Worker cell spans all entries for this worker (XSS-safe)
           if (eIdx === 0) {
-            tr.innerHTML += `<td rowspan="${group.entries.length}"><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${group.worker}</span>${duplicateBadge}</td>`;
+            tr.innerHTML += `<td rowspan="${group.entries.length}"><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${escapedWorker}</span>${duplicateBadge}</td>`;
           }
 
           const modKey = (entry.modality || '').toString().toLowerCase();
           const badgeClass = modKey ? `badge-${modKey}` : 'badge-default';
-          const modalityLabel = entry.modality ? entry.modality.toUpperCase() : '-';
+          const modalityLabel = escapeHtml(entry.modality ? entry.modality.toUpperCase() : '-');
           tr.innerHTML += `<td><span class="badge ${badgeClass}">${modalityLabel}</span></td>`;
 
-          tr.innerHTML += `<td class="shift-time">${entry.start_time} - ${entry.end_time}</td>`;
+          const escapedStartTime = escapeHtml(entry.start_time);
+          const escapedEndTime = escapeHtml(entry.end_time);
+          tr.innerHTML += `<td class="shift-time">${escapedStartTime} - ${escapedEndTime}</td>`;
 
           SKILLS.forEach(skill => {
             const val = entry.skills[skill];
@@ -455,7 +469,9 @@
             tr.innerHTML += `<td class="skill-cell"><span class="skill-val ${valClass}">${val}</span></td>`;
           });
 
-          const taskDisplay = entry.task || '<span style="color: #999; font-size: 0.75rem;">-</span>';
+          // Task display (XSS-safe)
+          const escapedTask = escapeHtml(entry.task);
+          const taskDisplay = escapedTask || '<span style="color: #999; font-size: 0.75rem;">-</span>';
           const isExclusion = entry.task && EXCLUSION_RULES.some(r => r.match && entry.task.includes(r.match));
           tr.innerHTML += `<td><span class="task-badge ${isExclusion ? 'exclusion' : ''}">${taskDisplay}</span></td>`;
 
@@ -608,12 +624,14 @@
 
       let html = '';
 
+      // XSS-safe rendering
+      const escapedWorker = escapeHtml(group.worker);
       const duplicateBadge = workerCounts[tab][group.worker] > 1 ? `<span class="duplicate-badge">${workerCounts[tab][group.worker]}x</span>` : '';
       html += `<div style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center;">
-        <div><strong>${group.worker}</strong> ${duplicateBadge}</div>
+        <div><strong>${escapedWorker}</strong> ${duplicateBadge}</div>
         <div style="display: flex; align-items: center; gap: 0.4rem;">
           <label style="font-size: 0.8rem; color: #555;">Shift:</label>
-          <select id="edit-shift-select" style="padding: 0.35rem;">${group.entries.map((e, idx) => `<option value="${idx}" ${idx === entryIdx ? 'selected' : ''}>${e.modality.toUpperCase()} ${e.start_time}-${e.end_time}</option>`).join('')}</select>
+          <select id="edit-shift-select" style="padding: 0.35rem;">${group.entries.map((e, idx) => `<option value="${idx}" ${idx === entryIdx ? 'selected' : ''}>${escapeHtml(e.modality.toUpperCase())} ${escapeHtml(e.start_time)}-${escapeHtml(e.end_time)}</option>`).join('')}</select>
         </div>
       </div>`;
 
@@ -662,8 +680,8 @@
 
       if (group.entries.length > 1) {
         html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #eef2f7; border-radius: 4px;">
-          <strong>All shifts for ${group.worker}:</strong>
-          <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem; color: #444;">${group.entries.map((e, idx) => `<li>${idx === entryIdx ? '<strong>▶</strong>' : ''} ${e.modality.toUpperCase()} ${e.start_time}-${e.end_time} (${e.task || 'no task'})</li>`).join('')}</ul>
+          <strong>All shifts for ${escapedWorker}:</strong>
+          <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem; color: #444;">${group.entries.map((e, idx) => `<li>${idx === entryIdx ? '<strong>▶</strong>' : ''} ${escapeHtml(e.modality.toUpperCase())} ${escapeHtml(e.start_time)}-${escapeHtml(e.end_time)} (${escapeHtml(e.task) || 'no task'})</li>`).join('')}</ul>
         </div>`;
       }
 
@@ -684,7 +702,7 @@
         </div>
       </div>`;
 
-      document.getElementById('modal-title').textContent = `Edit Entry - ${entry.worker}`;
+      document.getElementById('modal-title').textContent = `Edit Entry - ${group.worker}`;  // textContent is XSS-safe
       document.getElementById('modal-content').innerHTML = html;
 
       const shiftSelect = document.getElementById('edit-shift-select');
@@ -825,9 +843,15 @@
         if (gapType) {
           const gapStart = document.getElementById('edit-gap-start').value;
           const gapEnd = document.getElementById('edit-gap-end').value;
+
+          // Validate gap times
+          if (gapStart >= gapEnd) {
+            throw new Error('Gap start time must be before end time');
+          }
+
           const gapEndpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
 
-          await fetch(gapEndpoint, {
+          const gapResponse = await fetch(gapEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -838,6 +862,11 @@
               gap_end: gapEnd
             })
           });
+
+          if (!gapResponse.ok) {
+            const gapResult = await gapResponse.json().catch(() => ({}));
+            throw new Error(gapResult.error || 'Failed to add gap');
+          }
         }
 
         closeModal();
@@ -889,8 +918,8 @@
       setTimeout(() => { container.innerHTML = ''; }, 5000);
     }
 
-    // Initialize
-    loadData();
+    // Initialize - only load current tab (lazy loading)
+    loadTabData('today');
   </script>
 </body>
 </html>
