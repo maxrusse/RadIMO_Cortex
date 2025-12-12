@@ -144,6 +144,15 @@
             </select>
           </div>
           <div class="form-group">
+            <label>Task/Role</label>
+            <select id="add-task-today" onchange="onTaskRoleChange('today')">
+              <option value="">-- Select Task --</option>
+              {% for task in task_roles %}
+              <option value="{{ task.name }}">{{ task.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" id="modality-group-today" style="display: none;">
             <label>Modality</label>
             <select id="add-modality-today">
               {% for mod in modalities %}
@@ -152,7 +161,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Shift</label>
+            <label>Shift Time</label>
             <select id="add-shift-today" onchange="onShiftChange('today')">
               {% for shift_name, shift_data in shift_times.items() %}
               <option value="{{ shift_name }}" data-times="{{ shift_data|tojson }}">
@@ -169,22 +178,39 @@
               <input type="time" id="add-end-today" value="15:00" style="width: 100px;">
             </div>
           </div>
-          <div class="form-group">
-            <label>Tasks</label>
-            <div class="task-dropdown">
-              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown('today')">Select Tasks ▼</button>
-              <div id="task-dropdown-today" class="task-dropdown-content">
-                {% for rule in medweb_mapping.get('rules', []) %}
-                {% if rule.get('exclusion') %}
-                <label><input type="checkbox" value="{{ rule.match }}"> {{ rule.match }}</label>
-                {% endif %}
-                {% endfor %}
-              </div>
-            </div>
-          </div>
           <button class="btn btn-success" onclick="addWorker('today')">Add to Today</button>
         </div>
         <div id="worker-skills-today" class="worker-skills-preview"></div>
+      </div>
+
+      <!-- Add Gap Panel for Today -->
+      <div class="add-worker-panel" style="border-color: #dc3545; margin-top: 1rem;">
+        <h4 style="color: #dc3545;">+ Add Gap (Remove Time)</h4>
+        <div class="add-worker-row">
+          <div class="form-group">
+            <label>Worker</label>
+            <select id="gap-worker-today">
+              <option value="">-- Select Worker --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Gap Type</label>
+            <select id="gap-type-today" onchange="onGapTypeChange('today')">
+              <option value="custom">Custom Time</option>
+              {% for rule in exclusion_rules %}
+              <option value="{{ rule.match }}">{{ rule.match }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" id="gap-time-group-today">
+            <label>Gap Von - Bis</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <input type="time" id="gap-start-today" value="12:00" style="width: 100px;">
+              <input type="time" id="gap-end-today" value="13:00" style="width: 100px;">
+            </div>
+          </div>
+          <button class="btn btn-danger" onclick="addGap('today')">Add Gap</button>
+        </div>
       </div>
 
       <div class="filter-row">
@@ -261,6 +287,15 @@
             </select>
           </div>
           <div class="form-group">
+            <label>Task/Role</label>
+            <select id="add-task-tomorrow" onchange="onTaskRoleChange('tomorrow')">
+              <option value="">-- Select Task --</option>
+              {% for task in task_roles %}
+              <option value="{{ task.name }}">{{ task.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" id="modality-group-tomorrow" style="display: none;">
             <label>Modality</label>
             <select id="add-modality-tomorrow">
               {% for mod in modalities %}
@@ -269,7 +304,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Shift</label>
+            <label>Shift Time</label>
             <select id="add-shift-tomorrow" onchange="onShiftChange('tomorrow')">
               {% for shift_name, shift_data in shift_times.items() %}
               <option value="{{ shift_name }}" data-times="{{ shift_data|tojson }}">
@@ -286,22 +321,39 @@
               <input type="time" id="add-end-tomorrow" value="15:00" style="width: 100px;">
             </div>
           </div>
-          <div class="form-group">
-            <label>Tasks</label>
-            <div class="task-dropdown">
-              <button type="button" class="btn btn-secondary" onclick="toggleTaskDropdown('tomorrow')">Select Tasks ▼</button>
-              <div id="task-dropdown-tomorrow" class="task-dropdown-content">
-                {% for rule in medweb_mapping.get('rules', []) %}
-                {% if rule.get('exclusion') %}
-                <label><input type="checkbox" value="{{ rule.match }}"> {{ rule.match }}</label>
-                {% endif %}
-                {% endfor %}
-              </div>
-            </div>
-          </div>
           <button class="btn btn-warning" onclick="addWorker('tomorrow')">Add to Tomorrow</button>
         </div>
         <div id="worker-skills-tomorrow" class="worker-skills-preview"></div>
+      </div>
+
+      <!-- Add Gap Panel for Tomorrow -->
+      <div class="add-worker-panel tomorrow" style="border-color: #dc3545; margin-top: 1rem;">
+        <h4 style="color: #dc3545;">+ Add Gap (Remove Time)</h4>
+        <div class="add-worker-row">
+          <div class="form-group">
+            <label>Worker</label>
+            <select id="gap-worker-tomorrow">
+              <option value="">-- Select Worker --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Gap Type</label>
+            <select id="gap-type-tomorrow" onchange="onGapTypeChange('tomorrow')">
+              <option value="custom">Custom Time</option>
+              {% for rule in exclusion_rules %}
+              <option value="{{ rule.match }}">{{ rule.match }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group" id="gap-time-group-tomorrow">
+            <label>Gap Von - Bis</label>
+            <div style="display: flex; gap: 0.25rem;">
+              <input type="time" id="gap-start-tomorrow" value="12:00" style="width: 100px;">
+              <input type="time" id="gap-end-tomorrow" value="13:00" style="width: 100px;">
+            </div>
+          </div>
+          <button class="btn btn-danger" onclick="addGap('tomorrow')">Add Gap</button>
+        </div>
       </div>
 
       <div class="filter-row">
@@ -355,6 +407,8 @@
     const MODALITIES = {{ modalities|default([])|tojson }};
     const SHIFT_TIMES = {{ shift_times|default({})|tojson }};
     const WORKER_SKILLS = {{ worker_skills|default({})|tojson }};  // Full skill matrix from roster
+    const TASK_ROLES = {{ task_roles|default([])|tojson }};  // Roles like CT Assistent, MR Spätdienst, etc.
+    const EXCLUSION_RULES = {{ exclusion_rules|default([])|tojson }};  // Boards, meetings, etc.
 
     // State management
     let currentTab = 'today';
@@ -401,6 +455,9 @@
 
         renderTable('today');
         renderTable('tomorrow');
+
+        // Populate gap worker dropdowns with current workers
+        populateGapWorkerDropdowns();
       } catch (error) {
         showMessage('error', `Error loading data: ${error.message}`);
       }
@@ -506,34 +563,204 @@
       });
     }
 
-    // Handle worker dropdown change - update skills preview
-    function onWorkerSelectChange(tab) {
-      const workerSelect = document.getElementById(`add-worker-${tab}`);
+    // Handle Task/Role dropdown change - auto-set modality and shift
+    function onTaskRoleChange(tab) {
+      const taskSelect = document.getElementById(`add-task-${tab}`);
+      const modalityGroup = document.getElementById(`modality-group-${tab}`);
       const modalitySelect = document.getElementById(`add-modality-${tab}`);
+      const shiftSelect = document.getElementById(`add-shift-${tab}`);
       const previewDiv = document.getElementById(`worker-skills-${tab}`);
 
-      const worker = workerSelect.value;
-      const modality = modalitySelect.value;
-
-      if (!worker || !WORKER_SKILLS[worker]) {
+      const taskName = taskSelect.value;
+      if (!taskName) {
+        modalityGroup.style.display = 'none';
         previewDiv.innerHTML = '';
         return;
       }
 
-      // Get skills for this worker and modality
-      const workerData = WORKER_SKILLS[worker];
-      const modalitySkills = workerData[modality] || workerData['default'] || {};
+      // Find the task in TASK_ROLES
+      const task = TASK_ROLES.find(t => t.name === taskName);
+      if (!task) return;
 
-      let html = '<strong>Skills for ' + worker + ' (' + modality.toUpperCase() + '):</strong> ';
-      SKILLS.forEach(skill => {
-        const value = modalitySkills[skill] !== undefined ? modalitySkills[skill] : 0;
-        let badgeClass = 'passive';
-        if (value === 1) badgeClass = 'active';
-        else if (value === -1) badgeClass = 'excluded';
-        html += `<span class="skill-badge ${badgeClass}">${skill}: ${value}</span>`;
+      // Handle modality: show dropdown only if multiple modalities
+      if (task.modalities && task.modalities.length > 1) {
+        // Multiple modalities - show dropdown with only valid options
+        modalityGroup.style.display = 'block';
+        modalitySelect.innerHTML = task.modalities.map(m =>
+          `<option value="${m}">${m.toUpperCase()}</option>`
+        ).join('');
+      } else if (task.modalities && task.modalities.length === 1) {
+        // Single modality - auto-select and hide dropdown
+        modalityGroup.style.display = 'none';
+        modalitySelect.innerHTML = `<option value="${task.modalities[0]}" selected>${task.modalities[0].toUpperCase()}</option>`;
+      }
+
+      // Auto-select shift from task config
+      if (task.shift && SHIFT_TIMES[task.shift]) {
+        shiftSelect.value = task.shift;
+        onShiftChange(tab);  // Trigger time update
+      }
+
+      // Show task's base_skills as preview
+      if (task.base_skills) {
+        let html = `<strong>Task Skills (${taskName}):</strong> `;
+        SKILLS.forEach(skill => {
+          const value = task.base_skills[skill] !== undefined ? task.base_skills[skill] : 0;
+          let badgeClass = 'passive';
+          if (value === 1) badgeClass = 'active';
+          else if (value === -1) badgeClass = 'excluded';
+          html += `<span class="skill-badge ${badgeClass}">${skill}: ${value}</span>`;
+        });
+        previewDiv.innerHTML = html;
+      }
+    }
+
+    // Handle worker dropdown change - update skills preview
+    function onWorkerSelectChange(tab) {
+      const workerSelect = document.getElementById(`add-worker-${tab}`);
+      const taskSelect = document.getElementById(`add-task-${tab}`);
+      const previewDiv = document.getElementById(`worker-skills-${tab}`);
+
+      const worker = workerSelect.value;
+      const taskName = taskSelect.value;
+
+      if (!worker) {
+        // If task is selected, keep showing task skills
+        if (taskName) {
+          onTaskRoleChange(tab);
+        } else {
+          previewDiv.innerHTML = '';
+        }
+        return;
+      }
+
+      // If task is selected, get modality from task
+      if (taskName) {
+        const task = TASK_ROLES.find(t => t.name === taskName);
+        if (task && task.base_skills) {
+          // Show combined view: task skills + worker info
+          let html = `<strong>Worker: ${worker} | Task: ${taskName}</strong><br>`;
+          html += '<span style="font-size: 0.75rem; color: #666;">Skills from task config:</span> ';
+          SKILLS.forEach(skill => {
+            const value = task.base_skills[skill] !== undefined ? task.base_skills[skill] : 0;
+            let badgeClass = 'passive';
+            if (value === 1) badgeClass = 'active';
+            else if (value === -1) badgeClass = 'excluded';
+            html += `<span class="skill-badge ${badgeClass}">${skill}: ${value}</span>`;
+          });
+          previewDiv.innerHTML = html;
+          return;
+        }
+      }
+
+      // Fallback: no task selected, show worker skills if available
+      if (WORKER_SKILLS[worker]) {
+        const workerData = WORKER_SKILLS[worker];
+        const defaultSkills = workerData['default'] || {};
+        let html = `<strong>Worker: ${worker}</strong><br>`;
+        SKILLS.forEach(skill => {
+          const value = defaultSkills[skill] !== undefined ? defaultSkills[skill] : 0;
+          let badgeClass = 'passive';
+          if (value === 1) badgeClass = 'active';
+          else if (value === -1) badgeClass = 'excluded';
+          html += `<span class="skill-badge ${badgeClass}">${skill}: ${value}</span>`;
+        });
+        previewDiv.innerHTML = html;
+      }
+    }
+
+    // Handle Gap Type change - show/hide custom time inputs
+    function onGapTypeChange(tab) {
+      const gapTypeSelect = document.getElementById(`gap-type-${tab}`);
+      const gapTimeGroup = document.getElementById(`gap-time-group-${tab}`);
+      const gapStartInput = document.getElementById(`gap-start-${tab}`);
+      const gapEndInput = document.getElementById(`gap-end-${tab}`);
+
+      const gapType = gapTypeSelect.value;
+
+      if (gapType === 'custom') {
+        gapTimeGroup.style.display = 'block';
+      } else {
+        // Find exclusion rule and get predefined time if available
+        const rule = EXCLUSION_RULES.find(r => r.match === gapType);
+        if (rule && rule.schedule) {
+          // Get today's day name in German
+          const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+          const today = days[new Date().getDay()];
+          const timeRange = rule.schedule[today];
+          if (timeRange) {
+            const [start, end] = timeRange.split('-');
+            gapStartInput.value = start;
+            gapEndInput.value = end;
+          }
+        }
+        gapTimeGroup.style.display = 'block';  // Always show for confirmation
+      }
+    }
+
+    // Add gap (time exclusion) to worker
+    async function addGap(tab) {
+      const gapWorkerSelect = document.getElementById(`gap-worker-${tab}`);
+      const gapTypeSelect = document.getElementById(`gap-type-${tab}`);
+      const gapStartInput = document.getElementById(`gap-start-${tab}`);
+      const gapEndInput = document.getElementById(`gap-end-${tab}`);
+
+      const workerInfo = gapWorkerSelect.value;
+      const gapType = gapTypeSelect.value;
+      const gapStart = gapStartInput.value;
+      const gapEnd = gapEndInput.value;
+
+      if (!workerInfo) {
+        showMessage('error', 'Please select a worker');
+        return;
+      }
+      if (!gapStart || !gapEnd) {
+        showMessage('error', 'Please specify gap times');
+        return;
+      }
+
+      // Parse worker info (format: "modality|rowIndex|workerName")
+      const [modality, rowIndex, workerName] = workerInfo.split('|');
+
+      const endpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modality,
+            row_index: parseInt(rowIndex),
+            gap_type: gapType,
+            gap_start: gapStart,
+            gap_end: gapEnd
+          })
+        });
+
+        if (response.ok) {
+          showMessage('success', `Gap added to ${workerName} (${gapStart}-${gapEnd})`);
+          await loadData();
+        } else {
+          const result = await response.json();
+          showMessage('error', result.error || 'Failed to add gap');
+        }
+      } catch (error) {
+        showMessage('error', error.message);
+      }
+    }
+
+    // Populate gap worker dropdowns from current data
+    function populateGapWorkerDropdowns() {
+      ['today', 'tomorrow'].forEach(tab => {
+        const gapWorkerSelect = document.getElementById(`gap-worker-${tab}`);
+        gapWorkerSelect.innerHTML = '<option value="">-- Select Worker --</option>';
+
+        allData[tab].forEach(row => {
+          const value = `${row._modality}|${row.row_index}|${row.PPL}`;
+          const label = `${row.PPL} (${row._modality.toUpperCase()}) ${row.start_time}-${row.end_time}`;
+          gapWorkerSelect.innerHTML += `<option value="${value}">${label}</option>`;
+        });
       });
-
-      previewDiv.innerHTML = html;
     }
 
     // Handle select change in table row
@@ -646,20 +873,33 @@
     // Add worker
     async function addWorker(tab) {
       const workerSelect = document.getElementById(`add-worker-${tab}`);
+      const taskSelect = document.getElementById(`add-task-${tab}`);
       const modalitySelect = document.getElementById(`add-modality-${tab}`);
       const shiftSelect = document.getElementById(`add-shift-${tab}`);
       const startInput = document.getElementById(`add-start-${tab}`);
       const endInput = document.getElementById(`add-end-${tab}`);
 
       const workerName = workerSelect.value;
+      const taskName = taskSelect.value;
       const modality = modalitySelect.value;
 
       if (!workerName) {
         showMessage('error', 'Please select a worker');
         return;
       }
+      if (!taskName) {
+        showMessage('error', 'Please select a task/role');
+        return;
+      }
 
-      // Get times
+      // Get the task config
+      const task = TASK_ROLES.find(t => t.name === taskName);
+      if (!task) {
+        showMessage('error', 'Invalid task selected');
+        return;
+      }
+
+      // Get times from shift selection
       let startTime, endTime;
       if (shiftSelect.value === 'custom') {
         startTime = startInput.value || '07:00';
@@ -673,17 +913,10 @@
         }
       }
 
-      // Get tasks
-      const taskCheckboxes = document.querySelectorAll(`#task-dropdown-${tab} input[type="checkbox"]:checked`);
-      const selectedTasks = Array.from(taskCheckboxes).map(cb => cb.value);
-
-      // Get skills from roster for this worker + modality
-      const workerData = WORKER_SKILLS[workerName] || {};
-      const modalitySkills = workerData[modality] || workerData['default'] || {};
-
+      // Get skills from task's base_skills (not from worker roster)
       let workerSkills = {};
       SKILLS.forEach(skill => {
-        workerSkills[skill] = modalitySkills[skill] !== undefined ? modalitySkills[skill] : 0;
+        workerSkills[skill] = task.base_skills && task.base_skills[skill] !== undefined ? task.base_skills[skill] : 0;
       });
 
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
@@ -699,19 +932,20 @@
               start_time: startTime,
               end_time: endTime,
               Modifier: 1.0,
-              tasks: selectedTasks,
+              tasks: [taskName],  // Task/role name from config
               ...workerSkills
             }
           })
         });
 
         if (response.ok) {
-          showMessage('success', `Worker "${workerName}" added to ${modality.toUpperCase()}`);
+          showMessage('success', `${workerName} added as ${taskName} (${modality.toUpperCase()})`);
           // Reset form
           workerSelect.value = '';
+          taskSelect.value = '';
           document.getElementById(`worker-skills-${tab}`).innerHTML = '';
           document.getElementById(`custom-time-group-${tab}`).style.display = 'none';
-          taskCheckboxes.forEach(cb => cb.checked = false);
+          document.getElementById(`modality-group-${tab}`).style.display = 'none';
           await loadData();
         } else {
           showMessage('error', 'Failed to add worker');
@@ -740,19 +974,6 @@
         }
       }
     }
-
-    // Toggle task dropdown
-    function toggleTaskDropdown(tab) {
-      const dropdown = document.getElementById(`task-dropdown-${tab}`);
-      dropdown.classList.toggle('show');
-    }
-
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.task-dropdown')) {
-        document.querySelectorAll('.task-dropdown-content').forEach(d => d.classList.remove('show'));
-      }
-    });
 
     // Load from CSV
     async function loadFromCSV(mode) {

@@ -3034,6 +3034,27 @@ def prep_next_day():
         roster = {}
     worker_list = list(roster.keys())
 
+    # Build task/role list from medweb_mapping rules (non-exclusion only)
+    # These are the roles like "CT Assistent", "MR Spätdienst", etc.
+    medweb_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
+    task_roles = []
+    for rule in medweb_rules:
+        if not rule.get('exclusion'):  # Only non-exclusion rules = actual roles
+            task_role = {
+                'name': rule.get('match', ''),
+                'modality': rule.get('modality'),  # Single modality
+                'modalities': rule.get('modalities', []),  # Multiple modalities
+                'shift': rule.get('shift', 'Fruehdienst'),
+                'base_skills': rule.get('base_skills', {})
+            }
+            # If single modality, convert to list for consistency
+            if task_role['modality'] and not task_role['modalities']:
+                task_role['modalities'] = [task_role['modality']]
+            task_roles.append(task_role)
+
+    # Get exclusion rules for "gap" functionality (boards, meetings, etc.)
+    exclusion_rules = [r for r in medweb_rules if r.get('exclusion')]
+
     return render_template(
         'prep_next_day.html',
         target_date=next_day.strftime('%Y-%m-%d'),
@@ -3044,6 +3065,8 @@ def prep_next_day():
         modality_settings=MODALITY_SETTINGS,
         shift_times=APP_CONFIG.get('shift_times', {}),
         medweb_mapping=APP_CONFIG.get('medweb_mapping', {}),
+        task_roles=task_roles,  # Role tasks from config (CT Assistent, etc.)
+        exclusion_rules=exclusion_rules,  # Exclusion tasks (boards, meetings)
         worker_list=worker_list,
         worker_skills=roster  # Full skill matrix for worker dropdowns
     )
@@ -3609,6 +3632,202 @@ def delete_live_worker():
         selection_logger.info(f"Worker {worker_name} deleted from LIVE {modality} schedule (no counter reset)")
 
         return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/live-schedule/add-gap', methods=['POST'])
+@admin_required
+def add_live_gap():
+    """
+    Add a gap (time exclusion) to a worker's shift in LIVE data.
+    The gap punches out time from the worker's shift.
+    - If gap covers entire shift: delete the row
+    - If gap at start: move start_time forward
+    - If gap at end: move end_time backward
+    - If gap in middle: split into two rows
+    """
+    try:
+        data = request.json
+        modality = data.get('modality')
+        row_index = data.get('row_index')
+        gap_type = data.get('gap_type', 'custom')
+        gap_start = data.get('gap_start')
+        gap_end = data.get('gap_end')
+
+        if modality not in modality_data:
+            return jsonify({'error': 'Invalid modality'}), 400
+
+        df = modality_data[modality]['working_hours_df']
+        if df is None or row_index >= len(df):
+            return jsonify({'error': 'Invalid row index'}), 400
+
+        row = df.iloc[row_index].copy()
+        worker_name = row['PPL']
+
+        # Parse times
+        gap_start_time = datetime.strptime(gap_start, '%H:%M').time()
+        gap_end_time = datetime.strptime(gap_end, '%H:%M').time()
+        shift_start = row['start_time']
+        shift_end = row['end_time']
+
+        # Convert to comparable datetime for calculations
+        base_date = datetime.today()
+        shift_start_dt = datetime.combine(base_date, shift_start)
+        shift_end_dt = datetime.combine(base_date, shift_end)
+        gap_start_dt = datetime.combine(base_date, gap_start_time)
+        gap_end_dt = datetime.combine(base_date, gap_end_time)
+
+        # Check if gap is within shift
+        if gap_end_dt <= shift_start_dt or gap_start_dt >= shift_end_dt:
+            return jsonify({'error': 'Gap is outside worker shift times'}), 400
+
+        # Case 1: Gap covers entire shift
+        if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
+            modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
+            backup_dataframe(modality, use_staged=False)
+            selection_logger.info(f"Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
+            return jsonify({'success': True, 'action': 'deleted'})
+
+        # Case 2: Gap at start of shift
+        elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
+            df.at[row_index, 'start_time'] = gap_end_time
+            df.at[row_index, 'TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
+            # Recalculate shift_duration
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            df.at[row_index, 'shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=False)
+            selection_logger.info(f"Gap ({gap_type}) at start for {worker_name}: new start {gap_end_time}")
+            return jsonify({'success': True, 'action': 'start_adjusted'})
+
+        # Case 3: Gap at end of shift
+        elif shift_start_dt < gap_start_dt < shift_end_dt and gap_end_dt >= shift_end_dt:
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
+            # Recalculate shift_duration
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=False)
+            selection_logger.info(f"Gap ({gap_type}) at end for {worker_name}: new end {gap_start_time}")
+            return jsonify({'success': True, 'action': 'end_adjusted'})
+
+        # Case 4: Gap in middle - split into two rows
+        else:
+            # Update original row to end at gap start
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+
+            # Create new row starting after gap
+            new_row = row.copy()
+            new_row['start_time'] = gap_end_time
+            new_row['end_time'] = shift_end
+            new_row['TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+
+            # Append new row
+            modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            backup_dataframe(modality, use_staged=False)
+            selection_logger.info(f"Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
+            return jsonify({'success': True, 'action': 'split'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/prep-next-day/add-gap', methods=['POST'])
+@admin_required
+def add_staged_gap():
+    """
+    Add a gap (time exclusion) to a worker's shift in STAGED data.
+    Same logic as live gap but operates on staged_modality_data.
+    """
+    try:
+        data = request.json
+        modality = data.get('modality')
+        row_index = data.get('row_index')
+        gap_type = data.get('gap_type', 'custom')
+        gap_start = data.get('gap_start')
+        gap_end = data.get('gap_end')
+
+        if modality not in staged_modality_data:
+            return jsonify({'error': 'Invalid modality'}), 400
+
+        df = staged_modality_data[modality]['working_hours_df']
+        if df is None or row_index >= len(df):
+            return jsonify({'error': 'Invalid row index'}), 400
+
+        row = df.iloc[row_index].copy()
+        worker_name = row['PPL']
+
+        # Parse times
+        gap_start_time = datetime.strptime(gap_start, '%H:%M').time()
+        gap_end_time = datetime.strptime(gap_end, '%H:%M').time()
+        shift_start = row['start_time']
+        shift_end = row['end_time']
+
+        # Convert to comparable datetime for calculations
+        base_date = datetime.today()
+        shift_start_dt = datetime.combine(base_date, shift_start)
+        shift_end_dt = datetime.combine(base_date, shift_end)
+        gap_start_dt = datetime.combine(base_date, gap_start_time)
+        gap_end_dt = datetime.combine(base_date, gap_end_time)
+
+        # Check if gap is within shift
+        if gap_end_dt <= shift_start_dt or gap_start_dt >= shift_end_dt:
+            return jsonify({'error': 'Gap is outside worker shift times'}), 400
+
+        # Case 1: Gap covers entire shift
+        if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
+            staged_modality_data[modality]['working_hours_df'] = df.drop(df.index[row_index]).reset_index(drop=True)
+            backup_dataframe(modality, use_staged=True)
+            selection_logger.info(f"STAGED: Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
+            return jsonify({'success': True, 'action': 'deleted'})
+
+        # Case 2: Gap at start of shift
+        elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
+            df.at[row_index, 'start_time'] = gap_end_time
+            df.at[row_index, 'TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            df.at[row_index, 'shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=True)
+            selection_logger.info(f"STAGED: Gap ({gap_type}) at start for {worker_name}: new start {gap_end_time}")
+            return jsonify({'success': True, 'action': 'start_adjusted'})
+
+        # Case 3: Gap at end of shift
+        elif shift_start_dt < gap_start_dt < shift_end_dt and gap_end_dt >= shift_end_dt:
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+            backup_dataframe(modality, use_staged=True)
+            selection_logger.info(f"STAGED: Gap ({gap_type}) at end for {worker_name}: new end {gap_start_time}")
+            return jsonify({'success': True, 'action': 'end_adjusted'})
+
+        # Case 4: Gap in middle - split into two rows
+        else:
+            # Update original row to end at gap start
+            df.at[row_index, 'end_time'] = gap_start_time
+            df.at[row_index, 'TIME'] = f"{shift_start.strftime('%H:%M')}-{gap_start_time.strftime('%H:%M')}"
+            new_end_dt = datetime.combine(base_date, gap_start_time)
+            df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+
+            # Create new row starting after gap
+            new_row = row.copy()
+            new_row['start_time'] = gap_end_time
+            new_row['end_time'] = shift_end
+            new_row['TIME'] = f"{gap_end_time.strftime('%H:%M')}-{shift_end.strftime('%H:%M')}"
+            new_start_dt = datetime.combine(base_date, gap_end_time)
+            new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+
+            # Append new row
+            staged_modality_data[modality]['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            backup_dataframe(modality, use_staged=True)
+            selection_logger.info(f"STAGED: Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
+            return jsonify({'success': True, 'action': 'split'})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
