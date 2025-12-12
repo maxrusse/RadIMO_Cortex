@@ -600,8 +600,7 @@ def normalize_skill(skill_value: Optional[str]) -> str:
 
 
 def get_available_modalities_for_skill(skill: str) -> dict:
-    """Return all modalities as available (always show all modality buttons)"""
-    # Always show all modalities - user can click and get "no one available" if needed
+    """Return modalities to display for the given skill (currently all remain visible)."""
     return {modality: True for modality in allowed_modalities}
 
 # -----------------------------------------------------------
@@ -3055,6 +3054,9 @@ def prep_next_day():
     # Get exclusion rules for "gap" functionality (boards, meetings, etc.)
     exclusion_rules = [r for r in medweb_rules if r.get('exclusion')]
 
+    # Worker skills from JSON roster (used to prefill skills in UI)
+    worker_skills = load_worker_skill_json()
+
     return render_template(
         'prep_next_day.html',
         target_date=next_day.strftime('%Y-%m-%d'),
@@ -3065,7 +3067,10 @@ def prep_next_day():
         modality_settings=MODALITY_SETTINGS,
         shift_times=APP_CONFIG.get('shift_times', {}),
         medweb_mapping=APP_CONFIG.get('medweb_mapping', {}),
-        worker_list=worker_list
+        worker_list=worker_list,
+        worker_skills=worker_skills,
+        task_roles=task_roles,
+        exclusion_rules=exclusion_rules
     )
 
 

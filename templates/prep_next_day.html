@@ -40,6 +40,7 @@
     .edit-table th, .edit-table td { padding: 0.5rem; text-align: left; border: 1px solid #ddd; vertical-align: top; }
     .edit-table th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
     .edit-table tr:hover { background: #f8f9fa; }
+    .row-skill-flag { background: #e9f7ef; }
 
     /* Badges */
     .badge { display: inline-block; padding: 0.2rem 0.4rem; margin: 0.1rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600; }
@@ -301,7 +302,7 @@
     // State
     let currentTab = 'today';
     let rawData = { today: {}, tomorrow: {} };  // Raw modality data
-    let entriesData = { today: [], tomorrow: [] };  // Flat list of entries (one row per entry)
+    let entriesData = { today: [], tomorrow: [] };  // Grouped by worker -> entries
     let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
     let currentEditEntry = null;
 
@@ -332,7 +333,7 @@
             rawData.today = {};
           }
         }
-        const todayResult = buildEntries(rawData.today);
+        const todayResult = buildEntriesByWorker(rawData.today);
         entriesData.today = todayResult.entries;
         workerCounts.today = todayResult.counts;
 
@@ -351,7 +352,7 @@
             rawData.tomorrow = {};
           }
         }
-        const tomorrowResult = buildEntries(rawData.tomorrow);
+        const tomorrowResult = buildEntriesByWorker(rawData.tomorrow);
         entriesData.tomorrow = tomorrowResult.entries;
         workerCounts.tomorrow = tomorrowResult.counts;
 
@@ -363,17 +364,15 @@
       }
     }
 
-    // Build flat entries list (one row per entry) and count workers for duplicate detection
-    function buildEntries(data) {
-      const entries = [];
-      const counts = {};  // Count how many entries per worker
+    // Build grouped entries list (per worker) and count workers for duplicate detection
+    function buildEntriesByWorker(data) {
+      const counts = {};
+      const grouped = {};
 
       MODALITIES.forEach(mod => {
         const modData = data[mod] || [];
         modData.forEach(row => {
           const workerName = row.PPL;
-
-          // Count occurrences
           counts[workerName] = (counts[workerName] || 0) + 1;
 
           // Parse task - handle both string and array formats
@@ -382,7 +381,7 @@
             taskStr = taskStr.filter(t => t && t.trim()).join(', ');
           }
 
-          entries.push({
+          const entry = {
             worker: workerName,
             modality: mod,
             row_index: row.row_index,
@@ -393,67 +392,81 @@
               return acc;
             }, {}),
             task: taskStr
-          });
+          };
+
+          if (!grouped[workerName]) {
+            grouped[workerName] = { worker: workerName, entries: [] };
+          }
+          grouped[workerName].entries.push(entry);
         });
       });
 
-      // Sort by worker name, then by start time
-      entries.sort((a, b) => {
-        if (a.worker !== b.worker) return a.worker.localeCompare(b.worker);
-        return a.start_time.localeCompare(b.start_time);
+      // Sort entries within each worker by start time
+      Object.values(grouped).forEach(group => {
+        group.entries.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
       });
+
+      // Sort workers alphabetically
+      const entries = Object.values(grouped).sort((a, b) => a.worker.localeCompare(b.worker));
 
       return { entries, counts };
     }
 
-    // Render table with one row per entry
+    // Render grouped table by worker
     function renderTable(tab) {
       const tbody = document.getElementById(`table-body-${tab}`);
       tbody.innerHTML = '';
 
-      const entries = entriesData[tab];
+      const groups = entriesData[tab];
       const counts = workerCounts[tab];
 
-      if (entries.length === 0) {
+      if (!groups || groups.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${5 + SKILLS.length}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
         return;
       }
 
-      entries.forEach((entry, idx) => {
-        const tr = document.createElement('tr');
-        const isDuplicate = counts[entry.worker] > 1;
+      groups.forEach((group, gIdx) => {
+        const isDuplicate = counts[group.worker] > 1;
+        const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${counts[group.worker]}x</span>` : '';
 
-        // Worker name (text with duplicate indicator)
-        const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${counts[entry.worker]}x</span>` : '';
-        tr.innerHTML += `<td><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${entry.worker}</span>${duplicateBadge}</td>`;
+        group.entries.forEach((entry, eIdx) => {
+          const tr = document.createElement('tr');
 
-        // Modality (badge)
-        const badgeClass = `badge-${entry.modality}` || 'badge-default';
-        tr.innerHTML += `<td><span class="badge ${badgeClass}">${entry.modality.toUpperCase()}</span></td>`;
+          const hasSkillOne = SKILLS.some(skill => entry.skills[skill] === 1);
+          if (hasSkillOne) {
+            tr.classList.add('row-skill-flag');
+          }
 
-        // Shift (time display)
-        tr.innerHTML += `<td class="shift-time">${entry.start_time} - ${entry.end_time}</td>`;
+          // Worker cell spans all entries for this worker
+          if (eIdx === 0) {
+            tr.innerHTML += `<td rowspan="${group.entries.length}"><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${group.worker}</span>${duplicateBadge}</td>`;
+          }
 
-        // Skills (one cell per skill with value)
-        SKILLS.forEach(skill => {
-          const val = entry.skills[skill];
-          const valClass = `skill-val-${val}`;
-          tr.innerHTML += `<td class="skill-cell"><span class="skill-val ${valClass}">${val}</span></td>`;
+          const modKey = (entry.modality || '').toString().toLowerCase();
+          const badgeClass = modKey ? `badge-${modKey}` : 'badge-default';
+          const modalityLabel = entry.modality ? entry.modality.toUpperCase() : '-';
+          tr.innerHTML += `<td><span class="badge ${badgeClass}">${modalityLabel}</span></td>`;
+
+          tr.innerHTML += `<td class="shift-time">${entry.start_time} - ${entry.end_time}</td>`;
+
+          SKILLS.forEach(skill => {
+            const val = entry.skills[skill];
+            const valClass = `skill-val-${val}`;
+            tr.innerHTML += `<td class="skill-cell"><span class="skill-val ${valClass}">${val}</span></td>`;
+          });
+
+          const taskDisplay = entry.task || '<span style="color: #999; font-size: 0.75rem;">-</span>';
+          const isExclusion = entry.task && EXCLUSION_RULES.some(r => r.match && entry.task.includes(r.match));
+          tr.innerHTML += `<td><span class="task-badge ${isExclusion ? 'exclusion' : ''}">${taskDisplay}</span></td>`;
+
+          tr.innerHTML += `
+            <td class="action-cell">
+              <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${gIdx}, ${eIdx})" title="Edit Entry">Edit</button>
+              <button class="btn btn-small btn-danger" onclick="deleteEntry('${tab}', ${gIdx}, ${eIdx})" title="Delete">Del</button>
+            </td>`;
+
+          tbody.appendChild(tr);
         });
-
-        // Task
-        const taskDisplay = entry.task || '<span style="color: #999; font-size: 0.75rem;">-</span>';
-        const isExclusion = entry.task && EXCLUSION_RULES.some(r => entry.task.includes(r.match));
-        tr.innerHTML += `<td><span class="task-badge ${isExclusion ? 'exclusion' : ''}">${taskDisplay}</span></td>`;
-
-        // Actions (Edit and Delete)
-        tr.innerHTML += `
-          <td class="action-cell">
-            <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${idx})" title="Edit Entry">Edit</button>
-            <button class="btn btn-small btn-danger" onclick="deleteEntry('${tab}', ${idx})" title="Delete">Del</button>
-          </td>`;
-
-        tbody.appendChild(tr);
       });
     }
 
@@ -553,8 +566,10 @@
     }
 
     // Delete single entry
-    async function deleteEntry(tab, entryIdx) {
-      const entry = entriesData[tab][entryIdx];
+    async function deleteEntry(tab, groupIdx, entryIdx) {
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
+      const entry = group.entries[entryIdx];
       if (!entry) return;
 
       if (!confirm(`Delete entry for ${entry.worker} (${entry.modality.toUpperCase()} ${entry.start_time}-${entry.end_time})?`)) return;
@@ -575,26 +590,40 @@
     }
 
     // Open Edit modal for an entry - edit shift, skills, task
-    function openEditModal(tab, entryIdx) {
-      const entry = entriesData[tab][entryIdx];
-      if (!entry) return;
+    function openEditModal(tab, groupIdx, entryIdx = 0) {
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
 
-      currentEditEntry = { tab, entryIdx, entry };
+      currentEditEntry = { tab, groupIdx, entryIdx };
+      renderEditModalContent();
+      document.getElementById('edit-modal').classList.add('show');
+    }
+
+    function renderEditModalContent() {
+      const { tab, groupIdx, entryIdx } = currentEditEntry;
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
+      const entry = group.entries[entryIdx];
+      if (!entry) return;
 
       let html = '';
 
-      // Worker name (display only)
-      html += `<div style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
-        <strong>${entry.worker}</strong> - ${entry.modality.toUpperCase()}
+      const duplicateBadge = workerCounts[tab][group.worker] > 1 ? `<span class="duplicate-badge">${workerCounts[tab][group.worker]}x</span>` : '';
+      html += `<div style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center;">
+        <div><strong>${group.worker}</strong> ${duplicateBadge}</div>
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <label style="font-size: 0.8rem; color: #555;">Shift:</label>
+          <select id="edit-shift-select" style="padding: 0.35rem;">${group.entries.map((e, idx) => `<option value="${idx}" ${idx === entryIdx ? 'selected' : ''}>${e.modality.toUpperCase()} ${e.start_time}-${e.end_time}</option>`).join('')}</select>
+        </div>
       </div>`;
 
       // Shift times
       html += `<div style="margin-bottom: 1rem;">
         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Shift:</label>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <input type="time" id="edit-start-time" value="${entry.start_time}" style="padding: 0.5rem;">
+          <input type="time" id="edit-start-time" value="${entry.start_time || '07:00'}" style="padding: 0.5rem;">
           <span>-</span>
-          <input type="time" id="edit-end-time" value="${entry.end_time}" style="padding: 0.5rem;">
+          <input type="time" id="edit-end-time" value="${entry.end_time || '15:00'}" style="padding: 0.5rem;">
         </div>
       </div>`;
 
@@ -605,9 +634,13 @@
           <option value="">-- No Task --</option>`;
       TASK_ROLES.forEach(task => {
         const selected = entry.task && entry.task.includes(task.name) ? 'selected' : '';
-        html += `<option value="${task.name}" ${selected}>${task.name}</option>`;
+        html += `<option value="${task.name}" ${selected} data-skills='${JSON.stringify(task.base_skills || {})}'>${task.name}</option>`;
       });
       html += `</select>
+        <div style="margin-top: 0.35rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-small btn-secondary" type="button" onclick="applyTaskSkillPreset()">Apply Task Skills</button>
+          <button class="btn btn-small btn-secondary" type="button" onclick="applyWorkerSkillPreset('${group.worker.replace(/'/g, "&#39;")}')">Apply Worker Skills</button>
+        </div>
       </div>`;
 
       // Skills editing
@@ -626,6 +659,13 @@
         </div>`;
       });
       html += `</div></div>`;
+
+      if (group.entries.length > 1) {
+        html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #eef2f7; border-radius: 4px;">
+          <strong>All shifts for ${group.worker}:</strong>
+          <ul style="margin: 0.5rem 0 0 1rem; font-size: 0.9rem; color: #444;">${group.entries.map((e, idx) => `<li>${idx === entryIdx ? '<strong>▶</strong>' : ''} ${e.modality.toUpperCase()} ${e.start_time}-${e.end_time} (${e.task || 'no task'})</li>`).join('')}</ul>
+        </div>`;
+      }
 
       // Gap section
       html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 4px;">
@@ -646,7 +686,14 @@
 
       document.getElementById('modal-title').textContent = `Edit Entry - ${entry.worker}`;
       document.getElementById('modal-content').innerHTML = html;
-      document.getElementById('edit-modal').classList.add('show');
+
+      const shiftSelect = document.getElementById('edit-shift-select');
+      if (shiftSelect) {
+        shiftSelect.addEventListener('change', (ev) => {
+          currentEditEntry.entryIdx = parseInt(ev.target.value, 10) || 0;
+          renderEditModalContent();
+        });
+      }
     }
 
     function onEditGapTypeChange() {
@@ -676,10 +723,67 @@
       }
     }
 
+    function applySkillValues(skillMap = {}) {
+      SKILLS.forEach(skill => {
+        if (skillMap[skill] !== undefined) {
+          const el = document.getElementById(`edit-skill-${skill}`);
+          if (el) {
+            el.value = skillMap[skill];
+          }
+        }
+      });
+    }
+
+    function applyTaskSkillPreset() {
+      const taskSelect = document.getElementById('edit-task');
+      if (!taskSelect) return;
+      const option = taskSelect.options[taskSelect.selectedIndex];
+      if (!option || !option.dataset.skills) return;
+
+      try {
+        const skills = JSON.parse(option.dataset.skills) || {};
+        applySkillValues(skills);
+      } catch (err) {
+        console.error('Failed to apply task skill preset', err);
+      }
+    }
+
+    function applyWorkerSkillPreset(workerName) {
+      const preset = WORKER_SKILLS[workerName];
+      if (!preset) {
+        showMessage('error', `No skill preset found for ${workerName}`);
+        return;
+      }
+
+      const { tab, groupIdx, entryIdx } = currentEditEntry || {};
+      const group = entriesData[tab]?.[groupIdx];
+      const entry = group?.entries?.[entryIdx];
+      const modalityKey = (entry?.modality || '').toLowerCase();
+
+      const modalitySkills = modalityKey && preset[modalityKey] ? preset[modalityKey] : null;
+      const skills = preset.skills || modalitySkills || preset;
+
+      const sanitized = {};
+      SKILLS.forEach(skill => {
+        if (skills && skills[skill] !== undefined) {
+          // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
+          const val = skills[skill];
+          sanitized[skill] = val > 0 ? 0 : val;
+        }
+      });
+
+      applySkillValues(sanitized);
+    }
+
     async function saveModalChanges() {
       if (!currentEditEntry) return;
 
-      const { tab, entryIdx, entry } = currentEditEntry;
+      const { tab, groupIdx, entryIdx } = currentEditEntry;
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
+      const entry = group.entries[entryIdx];
+      if (!entry) return;
+
       const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
 
       // Gather updated values
