@@ -279,12 +279,12 @@
         <div class="add-worker-row">
           <div class="form-group">
             <label>Worker Name</label>
-            <select id="add-worker-tomorrow" onchange="onWorkerSelectChange('tomorrow')">
-              <option value="">-- Select Worker --</option>
+            <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 200px;" list="worker-list-datalist" autocomplete="off">
+            <datalist id="worker-list-datalist">
               {% for worker in worker_list %}
-              <option value="{{ worker }}">{{ worker }}</option>
+              <option value="{{ worker }}">
               {% endfor %}
-            </select>
+            </datalist>
           </div>
           <div class="form-group">
             <label>Task/Role</label>
