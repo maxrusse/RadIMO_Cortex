@@ -49,18 +49,21 @@
     .badge-mammo { background: #e83e8c; color: white; }
     .badge-default { background: #6c757d; color: white; }
 
-    /* Shift display */
-    .shift-item { display: block; font-size: 0.75rem; padding: 0.15rem 0; border-bottom: 1px dotted #ddd; }
-    .shift-item:last-child { border-bottom: none; }
-    .shift-modality { font-weight: 600; color: #666; }
-
     /* Skill cells */
     .skill-cell { text-align: center; font-size: 0.7rem; }
-    .skill-values { display: flex; flex-direction: column; gap: 0.1rem; }
-    .skill-val { padding: 0.1rem 0.2rem; border-radius: 2px; }
+    .skill-val { padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.75rem; }
     .skill-val-1 { background: #d4edda; color: #155724; }
     .skill-val-0 { background: #fff3cd; color: #856404; }
     .skill-val--1 { background: #f8d7da; color: #721c24; }
+
+    /* Duplicate worker indicator */
+    .worker-name { font-weight: 500; }
+    .worker-name.duplicate { position: relative; }
+    .worker-name.duplicate::after { content: '★'; color: #ffc107; margin-left: 0.3rem; font-size: 0.8rem; }
+    .duplicate-badge { background: #ffc107; color: #333; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.65rem; margin-left: 0.3rem; font-weight: 600; }
+
+    /* Shift time display */
+    .shift-time { font-family: monospace; font-size: 0.85rem; }
 
     /* Task badges */
     .task-badge { display: inline-block; padding: 0.15rem 0.4rem; margin: 0.1rem; border-radius: 3px; font-size: 0.7rem; background: #e9ecef; color: #495057; }
@@ -181,24 +184,25 @@
         </div>
       </div>
 
-      <!-- Worker Table -->
+      <!-- Worker Table - One row per entry -->
       <div class="table-container">
         <table class="edit-table">
           <thead>
             <tr>
               <th>Worker</th>
-              <th>Modalities</th>
-              <th>Shifts</th>
+              <th>Modality</th>
+              <th>Shift</th>
               {% for skill in skills %}
               <th class="skill-cell">{{ skill }}</th>
               {% endfor %}
-              <th>Tasks / Gaps</th>
+              <th>Task</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="table-body-today"></tbody>
         </table>
       </div>
+      <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
     </div>
   </div>
 
@@ -250,24 +254,25 @@
         </div>
       </div>
 
-      <!-- Worker Table -->
+      <!-- Worker Table - One row per entry -->
       <div class="table-container">
         <table class="edit-table">
           <thead>
             <tr>
               <th>Worker</th>
-              <th>Modalities</th>
-              <th>Shifts</th>
+              <th>Modality</th>
+              <th>Shift</th>
               {% for skill in skills %}
               <th class="skill-cell">{{ skill }}</th>
               {% endfor %}
-              <th>Tasks / Gaps</th>
+              <th>Task</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="table-body-tomorrow"></tbody>
         </table>
       </div>
+      <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
     </div>
   </div>
 
@@ -283,35 +288,6 @@
     </div>
   </div>
 
-  <!-- Gap Modal -->
-  <div class="modal-overlay" id="gap-modal">
-    <div class="modal">
-      <h3>Add Gap / Exclusion</h3>
-      <div style="margin-bottom: 1rem;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Gap Type:</label>
-        <select id="gap-type-select" onchange="onGapTypeSelect()" style="width: 100%; padding: 0.5rem;">
-          <option value="custom">Custom Time</option>
-          {% for rule in exclusion_rules|default([]) %}
-          <option value="{{ rule.match }}" data-schedule="{{ rule.schedule|tojson if rule.schedule else '{}' }}">{{ rule.match }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div style="margin-bottom: 1rem;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Time:</label>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <input type="time" id="gap-start" value="12:00" style="padding: 0.5rem;">
-          <span>-</span>
-          <input type="time" id="gap-end" value="13:00" style="padding: 0.5rem;">
-        </div>
-      </div>
-      <input type="hidden" id="gap-worker-key">
-      <input type="hidden" id="gap-tab">
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeGapModal()">Cancel</button>
-        <button class="btn btn-danger" onclick="saveGap()">Add Gap</button>
-      </div>
-    </div>
-  </div>
 
   <script>
     // Configuration from backend
@@ -325,8 +301,9 @@
     // State
     let currentTab = 'today';
     let rawData = { today: {}, tomorrow: {} };  // Raw modality data
-    let groupedData = { today: {}, tomorrow: {} };  // Grouped by worker
-    let currentEditWorker = null;
+    let entriesData = { today: [], tomorrow: [] };  // Flat list of entries (one row per entry)
+    let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
+    let currentEditEntry = null;
 
     // Tab switching
     function switchTab(tab) {
@@ -337,7 +314,7 @@
       document.getElementById('content-tomorrow').className = tab === 'tomorrow' ? 'tab-content active' : 'tab-content';
     }
 
-    // Load and group data
+    // Load data and build flat entries
     async function loadData() {
       try {
         // Load today's LIVE data
@@ -355,7 +332,9 @@
             rawData.today = {};
           }
         }
-        groupedData.today = groupByWorker(rawData.today);
+        const todayResult = buildEntries(rawData.today);
+        entriesData.today = todayResult.entries;
+        workerCounts.today = todayResult.counts;
 
         // Load tomorrow's STAGED data
         const tomorrowResponse = await fetch('/api/prep-next-day/data');
@@ -372,7 +351,9 @@
             rawData.tomorrow = {};
           }
         }
-        groupedData.tomorrow = groupByWorker(rawData.tomorrow);
+        const tomorrowResult = buildEntries(rawData.tomorrow);
+        entriesData.tomorrow = tomorrowResult.entries;
+        workerCounts.tomorrow = tomorrowResult.counts;
 
         renderTable('today');
         renderTable('tomorrow');
@@ -382,24 +363,27 @@
       }
     }
 
-    // Group rows by worker (PPL) - one row per worker with all their shifts/modalities
-    function groupByWorker(data) {
-      const workers = {};
+    // Build flat entries list (one row per entry) and count workers for duplicate detection
+    function buildEntries(data) {
+      const entries = [];
+      const counts = {};  // Count how many entries per worker
 
       MODALITIES.forEach(mod => {
         const modData = data[mod] || [];
         modData.forEach(row => {
           const workerName = row.PPL;
-          if (!workers[workerName]) {
-            workers[workerName] = {
-              name: workerName,
-              entries: [],  // All shift entries
-              modalities: new Set(),
-              tasks: new Set()
-            };
+
+          // Count occurrences
+          counts[workerName] = (counts[workerName] || 0) + 1;
+
+          // Parse task - handle both string and array formats
+          let taskStr = row.tasks || '';
+          if (Array.isArray(taskStr)) {
+            taskStr = taskStr.filter(t => t && t.trim()).join(', ');
           }
 
-          workers[workerName].entries.push({
+          entries.push({
+            worker: workerName,
             modality: mod,
             row_index: row.row_index,
             start_time: row.start_time,
@@ -408,91 +392,65 @@
               acc[skill] = row[skill] !== undefined ? row[skill] : 0;
               return acc;
             }, {}),
-            tasks: row.tasks || ''
+            task: taskStr
           });
-
-          workers[workerName].modalities.add(mod);
-
-          // Parse tasks - handle both string and array formats
-          let taskStr = row.tasks || '';
-          if (Array.isArray(taskStr)) {
-            taskStr.forEach(t => {
-              if (t && t.trim()) workers[workerName].tasks.add(t.trim());
-            });
-          } else if (typeof taskStr === 'string' && taskStr) {
-            taskStr.split(',').map(t => t.trim()).filter(t => t).forEach(t => {
-              workers[workerName].tasks.add(t);
-            });
-          }
         });
       });
 
-      return workers;
+      // Sort by worker name, then by start time
+      entries.sort((a, b) => {
+        if (a.worker !== b.worker) return a.worker.localeCompare(b.worker);
+        return a.start_time.localeCompare(b.start_time);
+      });
+
+      return { entries, counts };
     }
 
-    // Render grouped table
+    // Render table with one row per entry
     function renderTable(tab) {
       const tbody = document.getElementById(`table-body-${tab}`);
       tbody.innerHTML = '';
 
-      const workers = groupedData[tab];
-      const workerNames = Object.keys(workers).sort();
+      const entries = entriesData[tab];
+      const counts = workerCounts[tab];
 
-      if (workerNames.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${6 + SKILLS.length}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
+      if (entries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${5 + SKILLS.length}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
         return;
       }
 
-      workerNames.forEach(workerName => {
-        const worker = workers[workerName];
+      entries.forEach((entry, idx) => {
         const tr = document.createElement('tr');
+        const isDuplicate = counts[entry.worker] > 1;
 
-        // Worker name (dropdown to change)
-        tr.innerHTML += `
-          <td>
-            <select class="worker-select" data-worker="${workerName}" onchange="changeWorkerName('${tab}', '${workerName}', this.value)">
-              <option value="${workerName}" selected>${workerName}</option>
-              ${Object.keys(WORKER_SKILLS).filter(w => w !== workerName && !workers[w]).map(w =>
-                `<option value="${w}">${w}</option>`
-              ).join('')}
-            </select>
-          </td>`;
+        // Worker name (text with duplicate indicator)
+        const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${counts[entry.worker]}x</span>` : '';
+        tr.innerHTML += `<td><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${entry.worker}</span>${duplicateBadge}</td>`;
 
-        // Modalities (badges)
-        const modBadges = Array.from(worker.modalities).map(mod => {
-          const badgeClass = `badge-${mod}` || 'badge-default';
-          return `<span class="badge ${badgeClass}">${mod.toUpperCase()}</span>`;
-        }).join('');
-        tr.innerHTML += `<td>${modBadges}</td>`;
+        // Modality (badge)
+        const badgeClass = `badge-${entry.modality}` || 'badge-default';
+        tr.innerHTML += `<td><span class="badge ${badgeClass}">${entry.modality.toUpperCase()}</span></td>`;
 
-        // Shifts (grouped by modality)
-        const shiftsHtml = worker.entries.map(e => {
-          return `<span class="shift-item"><span class="shift-modality">${e.modality.toUpperCase()}:</span> ${e.start_time}-${e.end_time}</span>`;
-        }).join('');
-        tr.innerHTML += `<td>${shiftsHtml}</td>`;
+        // Shift (time display)
+        tr.innerHTML += `<td class="shift-time">${entry.start_time} - ${entry.end_time}</td>`;
 
-        // Skills (show value per modality entry)
+        // Skills (one cell per skill with value)
         SKILLS.forEach(skill => {
-          const skillVals = worker.entries.map(e => {
-            const val = e.skills[skill];
-            const valClass = `skill-val-${val}`;
-            return `<span class="skill-val ${valClass}" title="${e.modality.toUpperCase()}">${val}</span>`;
-          }).join('');
-          tr.innerHTML += `<td class="skill-cell"><div class="skill-values">${skillVals}</div></td>`;
+          const val = entry.skills[skill];
+          const valClass = `skill-val-${val}`;
+          tr.innerHTML += `<td class="skill-cell"><span class="skill-val ${valClass}">${val}</span></td>`;
         });
 
-        // Tasks (badges with edit button)
-        const taskBadges = Array.from(worker.tasks).map(t => {
-          const isExclusion = EXCLUSION_RULES.some(r => r.match === t);
-          return `<span class="task-badge ${isExclusion ? 'exclusion' : ''}">${t}</span>`;
-        }).join('') || '<span style="color: #999; font-size: 0.75rem;">No tasks</span>';
-        tr.innerHTML += `<td>${taskBadges} <button class="btn btn-small btn-secondary" onclick="editTasks('${tab}', '${workerName}')">Edit</button></td>`;
+        // Task
+        const taskDisplay = entry.task || '<span style="color: #999; font-size: 0.75rem;">-</span>';
+        const isExclusion = entry.task && EXCLUSION_RULES.some(r => entry.task.includes(r.match));
+        tr.innerHTML += `<td><span class="task-badge ${isExclusion ? 'exclusion' : ''}">${taskDisplay}</span></td>`;
 
-        // Actions
+        // Actions (Edit and Delete)
         tr.innerHTML += `
           <td class="action-cell">
-            <button class="btn btn-small btn-warning" onclick="openGapModal('${tab}', '${workerName}')" title="Add Gap">+Gap</button>
-            <button class="btn btn-small btn-danger" onclick="deleteWorker('${tab}', '${workerName}')" title="Delete">Del</button>
+            <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${idx})" title="Edit Entry">Edit</button>
+            <button class="btn btn-small btn-danger" onclick="deleteEntry('${tab}', ${idx})" title="Delete">Del</button>
           </td>`;
 
         tbody.appendChild(tr);
@@ -594,143 +552,192 @@
       }
     }
 
-    // Change worker name (rename all entries)
-    async function changeWorkerName(tab, oldName, newName) {
-      if (oldName === newName) return;
+    // Delete single entry
+    async function deleteEntry(tab, entryIdx) {
+      const entry = entriesData[tab][entryIdx];
+      if (!entry) return;
 
-      const worker = groupedData[tab][oldName];
-      if (!worker) return;
-
-      const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-
-      try {
-        // Update all entries for this worker
-        for (const entry of worker.entries) {
-          await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              modality: entry.modality,
-              row_index: entry.row_index,
-              updates: { PPL: newName }
-            })
-          });
-        }
-        showMessage('success', `Renamed ${oldName} to ${newName}`);
-        await loadData();
-      } catch (error) {
-        showMessage('error', error.message);
-        await loadData();  // Reload to reset dropdown
-      }
-    }
-
-    // Delete worker (all entries)
-    async function deleteWorker(tab, workerName) {
-      if (!confirm(`Delete all entries for ${workerName}?`)) return;
-
-      const worker = groupedData[tab][workerName];
-      if (!worker) return;
+      if (!confirm(`Delete entry for ${entry.worker} (${entry.modality.toUpperCase()} ${entry.start_time}-${entry.end_time})?`)) return;
 
       const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
 
       try {
-        // Delete entries in reverse order (highest index first) to avoid index shifting issues
-        const entries = [...worker.entries].sort((a, b) => b.row_index - a.row_index);
-        for (const entry of entries) {
-          await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index })
-          });
-        }
-        showMessage('success', `Deleted ${workerName}`);
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index })
+        });
+        showMessage('success', `Deleted entry for ${entry.worker}`);
         await loadData();
       } catch (error) {
         showMessage('error', error.message);
       }
     }
 
-    // Edit tasks modal
-    function editTasks(tab, workerName) {
-      currentEditWorker = { tab, workerName };
-      const worker = groupedData[tab][workerName];
+    // Open Edit modal for an entry - edit shift, skills, task
+    function openEditModal(tab, entryIdx) {
+      const entry = entriesData[tab][entryIdx];
+      if (!entry) return;
 
-      let html = '<div style="margin-bottom: 1rem;">';
-      html += '<label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Current Tasks:</label>';
-      html += '<div id="current-tasks">';
-      worker.tasks.forEach(task => {
-        html += `<span class="task-badge" style="margin: 0.2rem;">${task} <span style="cursor: pointer; color: #dc3545;" onclick="removeTask('${task}')">&times;</span></span>`;
-      });
-      if (worker.tasks.size === 0) {
-        html += '<span style="color: #999;">No tasks</span>';
-      }
-      html += '</div></div>';
+      currentEditEntry = { tab, entryIdx, entry };
 
-      html += '<div style="margin-bottom: 1rem;">';
-      html += '<label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Add Task:</label>';
-      html += '<select id="add-task-modal" style="width: 100%; padding: 0.5rem;">';
-      html += '<option value="">-- Select Task --</option>';
+      let html = '';
+
+      // Worker name (display only)
+      html += `<div style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
+        <strong>${entry.worker}</strong> - ${entry.modality.toUpperCase()}
+      </div>`;
+
+      // Shift times
+      html += `<div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Shift:</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <input type="time" id="edit-start-time" value="${entry.start_time}" style="padding: 0.5rem;">
+          <span>-</span>
+          <input type="time" id="edit-end-time" value="${entry.end_time}" style="padding: 0.5rem;">
+        </div>
+      </div>`;
+
+      // Task selection from config
+      html += `<div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Task/Role:</label>
+        <select id="edit-task" style="width: 100%; padding: 0.5rem;">
+          <option value="">-- No Task --</option>`;
       TASK_ROLES.forEach(task => {
-        if (!worker.tasks.has(task.name)) {
-          html += `<option value="${task.name}">${task.name}</option>`;
-        }
+        const selected = entry.task && entry.task.includes(task.name) ? 'selected' : '';
+        html += `<option value="${task.name}" ${selected}>${task.name}</option>`;
       });
-      html += '</select>';
-      html += '</div>';
+      html += `</select>
+      </div>`;
 
-      document.getElementById('modal-title').textContent = `Edit Tasks - ${workerName}`;
+      // Skills editing
+      html += `<div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Skills:</label>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">`;
+      SKILLS.forEach(skill => {
+        const val = entry.skills[skill] || 0;
+        html += `<div style="display: flex; align-items: center; gap: 0.3rem;">
+          <span style="font-size: 0.8rem; min-width: 60px;">${skill}:</span>
+          <select id="edit-skill-${skill}" style="padding: 0.3rem; font-size: 0.85rem;">
+            <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
+            <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
+            <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
+          </select>
+        </div>`;
+      });
+      html += `</div></div>`;
+
+      // Gap section
+      html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 4px;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Add Gap (optional):</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <select id="edit-gap-type" onchange="onEditGapTypeChange()" style="padding: 0.4rem; min-width: 150px;">
+            <option value="">-- No Gap --</option>
+            <option value="custom">Custom Time</option>`;
+      EXCLUSION_RULES.forEach(rule => {
+        html += `<option value="${rule.match}" data-schedule='${JSON.stringify(rule.schedule || {})}'>${rule.match}</option>`;
+      });
+      html += `</select>
+          <input type="time" id="edit-gap-start" value="12:00" style="padding: 0.4rem;" disabled>
+          <span>-</span>
+          <input type="time" id="edit-gap-end" value="13:00" style="padding: 0.4rem;" disabled>
+        </div>
+      </div>`;
+
+      document.getElementById('modal-title').textContent = `Edit Entry - ${entry.worker}`;
       document.getElementById('modal-content').innerHTML = html;
       document.getElementById('edit-modal').classList.add('show');
     }
 
-    function removeTask(taskName) {
-      const tasksDiv = document.getElementById('current-tasks');
-      const badges = tasksDiv.querySelectorAll('.task-badge');
-      badges.forEach(badge => {
-        if (badge.textContent.includes(taskName)) {
-          badge.remove();
+    function onEditGapTypeChange() {
+      const select = document.getElementById('edit-gap-type');
+      const startInput = document.getElementById('edit-gap-start');
+      const endInput = document.getElementById('edit-gap-end');
+
+      if (!select.value) {
+        startInput.disabled = true;
+        endInput.disabled = true;
+        return;
+      }
+
+      startInput.disabled = false;
+      endInput.disabled = false;
+
+      const option = select.options[select.selectedIndex];
+      if (option.value !== 'custom' && option.dataset.schedule) {
+        const schedule = JSON.parse(option.dataset.schedule);
+        const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+        const today = days[new Date().getDay()];
+        if (schedule[today]) {
+          const [start, end] = schedule[today].split('-');
+          startInput.value = start;
+          endInput.value = end;
         }
-      });
-      if (tasksDiv.children.length === 0) {
-        tasksDiv.innerHTML = '<span style="color: #999;">No tasks</span>';
       }
     }
 
     async function saveModalChanges() {
-      if (!currentEditWorker) return;
+      if (!currentEditEntry) return;
 
-      const { tab, workerName } = currentEditWorker;
-      const worker = groupedData[tab][workerName];
-
-      // Get current tasks from modal
-      const tasksDiv = document.getElementById('current-tasks');
-      const badges = tasksDiv.querySelectorAll('.task-badge');
-      const tasks = Array.from(badges).map(b => b.textContent.replace('×', '').trim());
-
-      // Add newly selected task
-      const addTaskSelect = document.getElementById('add-task-modal');
-      if (addTaskSelect && addTaskSelect.value) {
-        tasks.push(addTaskSelect.value);
-      }
-
+      const { tab, entryIdx, entry } = currentEditEntry;
       const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
 
+      // Gather updated values
+      const startTime = document.getElementById('edit-start-time').value;
+      const endTime = document.getElementById('edit-end-time').value;
+      const task = document.getElementById('edit-task').value;
+
+      const skillUpdates = {};
+      SKILLS.forEach(skill => {
+        skillUpdates[skill] = parseInt(document.getElementById(`edit-skill-${skill}`).value);
+      });
+
+      const updates = {
+        start_time: startTime,
+        end_time: endTime,
+        tasks: task,
+        ...skillUpdates
+      };
+
       try {
-        // Update first entry with tasks (tasks are shared across all entries)
-        if (worker.entries.length > 0) {
-          const entry = worker.entries[0];
-          await fetch(endpoint, {
+        // Update the entry
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modality: entry.modality,
+            row_index: entry.row_index,
+            updates: updates
+          })
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Failed to update');
+        }
+
+        // Check if gap needs to be added
+        const gapType = document.getElementById('edit-gap-type').value;
+        if (gapType) {
+          const gapStart = document.getElementById('edit-gap-start').value;
+          const gapEnd = document.getElementById('edit-gap-end').value;
+          const gapEndpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
+
+          await fetch(gapEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               modality: entry.modality,
               row_index: entry.row_index,
-              updates: { tasks: tasks.join(', ') }
+              gap_type: gapType,
+              gap_start: gapStart,
+              gap_end: gapEnd
             })
           });
         }
+
         closeModal();
-        showMessage('success', 'Tasks updated');
+        showMessage('success', 'Entry updated');
         await loadData();
       } catch (error) {
         showMessage('error', error.message);
@@ -739,82 +746,9 @@
 
     function closeModal() {
       document.getElementById('edit-modal').classList.remove('show');
-      currentEditWorker = null;
+      currentEditEntry = null;
     }
 
-    // Gap modal
-    function openGapModal(tab, workerName) {
-      document.getElementById('gap-worker-key').value = workerName;
-      document.getElementById('gap-tab').value = tab;
-      document.getElementById('gap-type-select').value = 'custom';
-      document.getElementById('gap-start').value = '12:00';
-      document.getElementById('gap-end').value = '13:00';
-      document.getElementById('gap-modal').classList.add('show');
-    }
-
-    function onGapTypeSelect() {
-      const select = document.getElementById('gap-type-select');
-      const option = select.options[select.selectedIndex];
-
-      if (option.value !== 'custom' && option.dataset.schedule) {
-        const schedule = JSON.parse(option.dataset.schedule);
-        const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-        const today = days[new Date().getDay()];
-
-        if (schedule[today]) {
-          const [start, end] = schedule[today].split('-');
-          document.getElementById('gap-start').value = start;
-          document.getElementById('gap-end').value = end;
-        }
-      }
-    }
-
-    async function saveGap() {
-      const workerName = document.getElementById('gap-worker-key').value;
-      const tab = document.getElementById('gap-tab').value;
-      const gapType = document.getElementById('gap-type-select').value;
-      const gapStart = document.getElementById('gap-start').value;
-      const gapEnd = document.getElementById('gap-end').value;
-
-      const worker = groupedData[tab][workerName];
-      if (!worker || worker.entries.length === 0) {
-        showMessage('error', 'Worker not found');
-        return;
-      }
-
-      // Apply gap to first entry (or could be all entries)
-      const entry = worker.entries[0];
-      const endpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
-
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality: entry.modality,
-            row_index: entry.row_index,
-            gap_type: gapType,
-            gap_start: gapStart,
-            gap_end: gapEnd
-          })
-        });
-
-        if (response.ok) {
-          closeGapModal();
-          showMessage('success', `Gap added to ${workerName}`);
-          await loadData();
-        } else {
-          const result = await response.json();
-          showMessage('error', result.error || 'Failed to add gap');
-        }
-      } catch (error) {
-        showMessage('error', error.message);
-      }
-    }
-
-    function closeGapModal() {
-      document.getElementById('gap-modal').classList.remove('show');
-    }
 
     // Load from CSV
     async function loadFromCSV(mode) {
