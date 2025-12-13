@@ -146,6 +146,10 @@ skill_modality_overrides:
   # ct:
   #   Chest: 1.0     # Override CT×Chest
 
+# Skill dashboard behavior
+skill_dashboard:
+  hide_invalid_combinations: false
+
 balancer:
   enabled: true
   min_assignments_per_skill: 5

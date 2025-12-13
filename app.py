@@ -330,12 +330,23 @@ def _build_app_config() -> Dict[str, Any]:
     # Include shift_times (from config.yaml)
     config['shift_times'] = raw_config.get('shift_times', {})
 
+    # Skill dashboard behavior
+    skill_dashboard_config = raw_config.get('skill_dashboard', {})
+    if not isinstance(skill_dashboard_config, dict):
+        skill_dashboard_config = {}
+    config['skill_dashboard'] = {
+        'hide_invalid_combinations': bool(
+            skill_dashboard_config.get('hide_invalid_combinations', False)
+        )
+    }
+
     return config
 
 
 APP_CONFIG = _build_app_config()
 MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
+SKILL_DASHBOARD_SETTINGS = APP_CONFIG.get('skill_dashboard', {})
 allowed_modalities = list(MODALITY_SETTINGS.keys())
 default_modality = allowed_modalities[0] if allowed_modalities else 'ct'
 modality_labels = {
