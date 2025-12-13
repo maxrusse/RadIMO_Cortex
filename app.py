@@ -330,12 +330,23 @@ def _build_app_config() -> Dict[str, Any]:
     # Include shift_times (from config.yaml)
     config['shift_times'] = raw_config.get('shift_times', {})
 
+    # Skill dashboard behavior
+    skill_dashboard_config = raw_config.get('skill_dashboard', {})
+    if not isinstance(skill_dashboard_config, dict):
+        skill_dashboard_config = {}
+    config['skill_dashboard'] = {
+        'hide_invalid_combinations': bool(
+            skill_dashboard_config.get('hide_invalid_combinations', False)
+        )
+    }
+
     return config
 
 
 APP_CONFIG = _build_app_config()
 MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
+SKILL_DASHBOARD_SETTINGS = APP_CONFIG.get('skill_dashboard', {})
 allowed_modalities = list(MODALITY_SETTINGS.keys())
 default_modality = allowed_modalities[0] if allowed_modalities else 'ct'
 modality_labels = {
@@ -600,9 +611,26 @@ def normalize_skill(skill_value: Optional[str]) -> str:
 
 
 def get_available_modalities_for_skill(skill: str) -> dict:
-    """Return all modalities as available (always show all modality buttons)"""
-    # Always show all modalities - user can click and get "no one available" if needed
-    return {modality: True for modality in allowed_modalities}
+    """Return modalities to display for the given skill.
+
+    If ``hide_invalid_combinations`` is enabled in ``skill_dashboard`` config,
+    modalities that explicitly restrict valid skills will be hidden for skills
+    not present in that list. Otherwise all modalities remain visible.
+    """
+
+    hide_invalid = SKILL_DASHBOARD_SETTINGS.get('hide_invalid_combinations', False)
+    available: Dict[str, bool] = {}
+
+    for modality in allowed_modalities:
+        if hide_invalid:
+            valid_skills = MODALITY_SETTINGS.get(modality, {}).get('valid_skills')
+            if isinstance(valid_skills, list) and valid_skills and skill not in valid_skills:
+                available[modality] = False
+                continue
+
+        available[modality] = True
+
+    return available
 
 # -----------------------------------------------------------
 # TIME / DATE HELPERS (unchanged)
@@ -3055,6 +3083,9 @@ def prep_next_day():
     # Get exclusion rules for "gap" functionality (boards, meetings, etc.)
     exclusion_rules = [r for r in medweb_rules if r.get('exclusion')]
 
+    # Worker skills from JSON roster (used to prefill skills in UI)
+    worker_skills = load_worker_skill_json()
+
     return render_template(
         'prep_next_day.html',
         target_date=next_day.strftime('%Y-%m-%d'),
@@ -3065,7 +3096,10 @@ def prep_next_day():
         modality_settings=MODALITY_SETTINGS,
         shift_times=APP_CONFIG.get('shift_times', {}),
         medweb_mapping=APP_CONFIG.get('medweb_mapping', {}),
-        worker_list=worker_list
+        worker_list=worker_list,
+        worker_skills=worker_skills,
+        task_roles=task_roles,
+        exclusion_rules=exclusion_rules
     )
 
 
