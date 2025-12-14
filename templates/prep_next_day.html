@@ -938,6 +938,9 @@
       // Gap section
       html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #fff3cd; border-radius: 4px;">
         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Add Gap (optional):</label>
+        <p style="font-size: 0.75rem; color: #856404; margin: 0 0 0.5rem 0;">
+          <strong>Note:</strong> Gaps modify shift times directly. Gap at start/end adjusts times. Gap in middle splits into two entries.
+        </p>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <select id="edit-gap-type" onchange="onEditGapTypeChange()" style="padding: 0.4rem; min-width: 150px;">
             <option value="">-- No Gap --</option>
@@ -1011,6 +1014,16 @@
       try {
         const skills = JSON.parse(option.dataset.skills) || {};
         applySkillValues(skills);
+
+        // Also apply modifier from task config
+        const taskName = option.value;
+        const taskConfig = TASK_ROLES.find(t => t.name === taskName);
+        if (taskConfig && taskConfig.modifier !== undefined) {
+          const modifierSelect = document.getElementById('edit-modifier');
+          if (modifierSelect) {
+            modifierSelect.value = taskConfig.modifier.toString();
+          }
+        }
       } catch (err) {
         console.error('Failed to apply task skill preset', err);
       }
@@ -1163,10 +1176,14 @@
       setTimeout(() => { loadStatus.textContent = ''; }, 5000);
     }
 
-    // Show message
+    // Show message (XSS-safe)
     function showMessage(type, message) {
       const container = document.getElementById('message-container');
-      container.innerHTML = `<div class="message ${type}">${message}</div>`;
+      const div = document.createElement('div');
+      div.className = `message ${type}`;
+      div.textContent = message;  // textContent is XSS-safe
+      container.innerHTML = '';
+      container.appendChild(div);
       setTimeout(() => { container.innerHTML = ''; }, 5000);
     }
 
