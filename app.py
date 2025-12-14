@@ -76,7 +76,6 @@ DEFAULT_BALANCER = {
     'min_assignments_per_skill': 5,
     'imbalance_threshold_pct': 30,
     'allow_fallback_on_imbalance': True,
-    'skill_2_multiplier': 2.0,  # Extra weight multiplier for skill=2 (weighted/freshman entries)
 }
 
 
@@ -1190,13 +1189,17 @@ def build_working_hours_from_medweb(
                     end_dt += pd.Timedelta(days=1)
                 duration_hours = (end_dt - start_dt).seconds / 3600
 
+                # Get modifier from rule config (default 1.0)
+                # Modifier controls workload: 0.5 = freshman (counts double), 2.0 = experienced (counts half)
+                rule_modifier = rule.get('modifier', 1.0)
+
                 rows_per_modality[modality].append({
                     'PPL': ppl_str,
                     'canonical_id': canonical_id,
                     'start_time': start_time,
                     'end_time': end_time,
                     'shift_duration': duration_hours,
-                    'Modifier': 1.0,  # Can be extended with modifier_overrides
+                    'Modifier': rule_modifier,
                     'tasks': '',  # Initialize empty tasks column
                     **final_skills
                 })
@@ -2122,18 +2125,15 @@ def _get_or_create_assignments(modality: str, canonical_id: str) -> dict:
         assignments[canonical_id]['total'] = 0
     return assignments[canonical_id]
 
-def update_global_assignment(person: str, role: str, modality: str, skill_value: int = 1) -> str:
+def update_global_assignment(person: str, role: str, modality: str) -> str:
     canonical_id = get_canonical_worker_id(person)
-    # Get the modifier (default 1.0). Values > 1 mean more work, < 1 mean less work.
+    # Get the modifier (default 1.0). Values < 1 mean less work capacity (e.g., 0.5 = freshman counts double)
+    # Values > 1 mean more work capacity (e.g., 2.0 = experienced counts half)
     modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
     modifier = _coerce_float(modifier, 1.0)
     # Use helper that checks for skill×modality overrides first
+    # Note: skill=2 is just a visual marker - weight is controlled by Modifier field
     weight = get_skill_modality_weight(role, modality) * modifier
-
-    # Apply skill=2 multiplier for weighted/freshman entries (extra workload)
-    if skill_value == 2:
-        skill_2_mult = BALANCER_SETTINGS.get('skill_2_multiplier', 2.0)
-        weight *= skill_2_mult
 
     global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
         global_worker_data['weighted_counts_per_mod'][modality].get(canonical_id, 0.0) + weight
@@ -3252,7 +3252,8 @@ def prep_next_day():
                 'modality': rule.get('modality'),  # Single modality
                 'modalities': rule.get('modalities', []),  # Multiple modalities
                 'shift': rule.get('shift', 'Fruehdienst'),
-                'base_skills': rule.get('base_skills', {})
+                'base_skills': rule.get('base_skills', {}),
+                'modifier': rule.get('modifier', 1.0)  # Workload modifier (0.5=freshman, 2.0=exp)
             }
             # If single modality, convert to list for consistency
             if task_role['modality'] and not task_role['modalities']:
@@ -3590,10 +3591,11 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                         d['skill_counts'][actual_skill][person] = 0
                     d['skill_counts'][actual_skill][person] += 1
 
-                    # Get skill value for this worker (used for modifier and skill=2 handling)
+                    # Get skill value for this worker
                     skill_value = candidate.get(actual_skill, 0)
 
                     # Determine if modifier should apply
+                    # Modifier controls weight: 0.5 = freshman (counts double), 2.0 = experienced (counts half)
                     modifier = 1.0
                     modifier_active_only = BALANCER_SETTINGS.get('modifier_applies_to_active_only', False)
 
@@ -3609,18 +3611,11 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                         d['WeightedCounts'][person] = 0.0
 
                     # Calculate weight with skill×modality factor and modifier
+                    # Note: skill=2 is just a visual marker - weight is controlled by Modifier
                     local_weight = get_skill_modality_weight(actual_skill, actual_modality) * modifier
-
-                    # Apply skill=2 multiplier for weighted/freshman entries (extra workload)
-                    if skill_value == 2:
-                        skill_2_mult = BALANCER_SETTINGS.get('skill_2_multiplier', 2.0)
-                        local_weight *= skill_2_mult
-
                     d['WeightedCounts'][person] += local_weight
 
-                # Pass skill_value to global assignment for consistent skill=2 handling
-                skill_val_for_global = candidate.get(actual_skill, 1) if actual_skill in SKILL_COLUMNS else 1
-                canonical_id = update_global_assignment(person, actual_skill, actual_modality, skill_val_for_global)
+                canonical_id = update_global_assignment(person, actual_skill, actual_modality)
                 
                 skill_counts = {}
                 for skill in SKILL_COLUMNS:

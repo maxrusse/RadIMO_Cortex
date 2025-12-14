@@ -195,7 +195,7 @@
             <select id="add-task-today" onchange="onTaskChange('today')" style="min-width: 180px;">
               <option value="">-- Select Task --</option>
               {% for task in task_roles|default([]) %}
-              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}">{{ task.name }}</option>
+              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}" data-modifier="{{ task.modifier|default(1.0) }}">{{ task.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -283,7 +283,7 @@
             <select id="add-task-tomorrow" onchange="onTaskChange('tomorrow')" style="min-width: 180px;">
               <option value="">-- Select Task --</option>
               {% for task in task_roles|default([]) %}
-              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}">{{ task.name }}</option>
+              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}" data-modifier="{{ task.modifier|default(1.0) }}">{{ task.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -776,6 +776,7 @@
       const taskOption = taskSelect.options[taskSelect.selectedIndex];
       const taskSkills = JSON.parse(taskOption.dataset.skills || '{}');
       const shiftName = taskOption.dataset.shift || 'Fruehdienst';
+      const taskModifier = parseFloat(taskOption.dataset.modifier) || 1.0;
 
       // Get times from shift config
       const shiftConfig = SHIFT_TIMES[shiftName] || {};
@@ -794,7 +795,7 @@
               PPL: workerName,
               start_time: startTime,
               end_time: endTime,
-              Modifier: 1.0,
+              Modifier: taskModifier,  // Use modifier from task config (0.5=freshman, 2.0=exp)
               tasks: taskName,
               ...SKILLS.reduce((acc, skill) => {
                 acc[skill] = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
