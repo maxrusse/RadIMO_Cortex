@@ -65,8 +65,16 @@
     .agg-all-0 { background: #ffc107; color: #333; }        /* All = 0: Yellow */
     .agg-any-0 { background: #ffe69c; color: #856404; }     /* Any = 0: Light yellow */
     .agg-all-neg { background: #dc3545; color: white; }     /* All = -1: Red */
-    .agg-any-neg { background: #f1aeb5; color: #721c24; }   /* Any = -1: Light red */
     .agg-mixed { background: #e9ecef; color: #495057; }     /* Mixed values */
+
+    /* Skill value 2 = weighted/freshman (extra load) */
+    .skill-val-2 { background: #17a2b8; color: white; }
+    .agg-has-weighted { border: 2px solid #17a2b8; }
+
+    /* Workload modifier badge */
+    .modifier-badge { display: inline-block; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; }
+    .modifier-high { background: #17a2b8; color: white; }    /* Modifier > 1: higher weight */
+    .modifier-low { background: #6f42c1; color: white; }     /* Modifier < 1: lower weight (freshman) */
 
     /* View toggle */
     .view-toggle { display: flex; gap: 0; border: 2px solid #004892; border-radius: 6px; overflow: hidden; }
@@ -216,8 +224,8 @@
           <span class="agg-val agg-all-1">■</span> All=1
           <span class="agg-val agg-any-1">■</span> Any=1
           <span class="agg-val agg-all-0">■</span> All=0
-          <span class="agg-val agg-any-0">■</span> Any=0
           <span class="agg-val agg-all-neg">■</span> All=-1
+          <span class="agg-val skill-val-2">2</span> Weighted
         </div>
       </div>
 
@@ -304,8 +312,8 @@
           <span class="agg-val agg-all-1">■</span> All=1
           <span class="agg-val agg-any-1">■</span> Any=1
           <span class="agg-val agg-all-0">■</span> All=0
-          <span class="agg-val agg-any-0">■</span> Any=0
           <span class="agg-val agg-all-neg">■</span> All=-1
+          <span class="agg-val skill-val-2">2</span> Weighted
         </div>
       </div>
 
@@ -375,22 +383,22 @@
     }
 
     // Calculate aggregated proficiency class for a set of values
+    // Priority: Positive (1) values lead the coloring over negative (-1) values
     function getAggregatedClass(values) {
       if (!values || values.length === 0) return 'agg-mixed';
 
-      const allOne = values.every(v => v === 1);
-      const anyOne = values.some(v => v === 1);
+      const allOne = values.every(v => v === 1 || v === 2);  // Include skill=2 (weighted/freshman)
+      const anyOne = values.some(v => v === 1 || v === 2);
       const allZero = values.every(v => v === 0);
       const anyZero = values.some(v => v === 0);
       const allNeg = values.every(v => v === -1);
-      const anyNeg = values.some(v => v === -1);
 
+      // Positive values take priority - if any positive, show green colors
       if (allOne) return 'agg-all-1';
-      if (allNeg) return 'agg-all-neg';
+      if (anyOne) return 'agg-any-1';  // Any positive wins over negatives
       if (allZero) return 'agg-all-0';
-      if (anyOne) return 'agg-any-1';
-      if (anyNeg) return 'agg-any-neg';
       if (anyZero) return 'agg-any-0';
+      if (allNeg) return 'agg-all-neg';
       return 'agg-mixed';
     }
 
@@ -399,7 +407,14 @@
       if (!values || values.length === 0) return '-';
       const allSame = values.every(v => v === values[0]);
       if (allSame) return values[0];
-      return values.join('/');
+      // Show unique values sorted (2, 1, 0, -1)
+      const unique = [...new Set(values)].sort((a, b) => b - a);
+      return unique.join('/');
+    }
+
+    // Check if values contain weighted entries (skill=2)
+    function hasWeightedEntries(values) {
+      return values && values.some(v => v === 2);
     }
 
     // Utility: Escape HTML to prevent XSS
@@ -493,6 +508,7 @@
             row_index: row.row_index,
             start_time: row.start_time,
             end_time: row.end_time,
+            modifier: row.Modifier !== undefined ? row.Modifier : 1.0,  // Workload modifier
             skills: SKILLS.reduce((acc, skill) => {
               acc[skill] = row[skill] !== undefined ? row[skill] : 0;
               return acc;
@@ -584,14 +600,20 @@
           // Worker name
           tr.innerHTML += `<td><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${escapedWorker}</span>${duplicateBadge}</td>`;
 
-          // Entries column: show all shifts as badges
-          let entriesHtml = '<td style="max-width: 200px;">';
+          // Entries column: show all shifts as badges with modifier
+          let entriesHtml = '<td style="max-width: 250px;">';
           group.entries.forEach((entry, eIdx) => {
             const modKey = (entry.modality || '').toString().toLowerCase();
             const badgeClass = modKey ? `badge-${modKey}` : 'badge-default';
             const modalityLabel = escapeHtml(entry.modality ? entry.modality.toUpperCase() : '-');
             const timeStr = `${escapeHtml(entry.start_time)}-${escapeHtml(entry.end_time)}`;
-            entriesHtml += `<div style="margin: 2px 0;"><span class="badge ${badgeClass}">${modalityLabel}</span> <span style="font-size: 0.7rem; color: #666;">${timeStr}</span></div>`;
+            // Show modifier badge if not 1.0
+            let modifierBadge = '';
+            if (entry.modifier && entry.modifier !== 1.0) {
+              const modClass = entry.modifier < 1.0 ? 'modifier-low' : 'modifier-high';
+              modifierBadge = `<span class="modifier-badge ${modClass}">${entry.modifier}x</span>`;
+            }
+            entriesHtml += `<div style="margin: 2px 0;"><span class="badge ${badgeClass}">${modalityLabel}</span> <span style="font-size: 0.7rem; color: #666;">${timeStr}</span>${modifierBadge}</div>`;
           });
           entriesHtml += '</td>';
           tr.innerHTML += entriesHtml;
@@ -620,14 +642,20 @@
           // Worker name
           tr.innerHTML += `<td><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${escapedWorker}</span>${duplicateBadge}</td>`;
 
-          // Entries column: show all shifts as badges
-          let entriesHtml = '<td style="max-width: 200px;">';
+          // Entries column: show all shifts as badges with modifier
+          let entriesHtml = '<td style="max-width: 250px;">';
           group.entries.forEach((entry, eIdx) => {
             const modKey = (entry.modality || '').toString().toLowerCase();
             const badgeClass = modKey ? `badge-${modKey}` : 'badge-default';
             const modalityLabel = escapeHtml(entry.modality ? entry.modality.toUpperCase() : '-');
             const timeStr = `${escapeHtml(entry.start_time)}-${escapeHtml(entry.end_time)}`;
-            entriesHtml += `<div style="margin: 2px 0;"><span class="badge ${badgeClass}">${modalityLabel}</span> <span style="font-size: 0.7rem; color: #666;">${timeStr}</span></div>`;
+            // Show modifier badge if not 1.0
+            let modifierBadge = '';
+            if (entry.modifier && entry.modifier !== 1.0) {
+              const modClass = entry.modifier < 1.0 ? 'modifier-low' : 'modifier-high';
+              modifierBadge = `<span class="modifier-badge ${modClass}">${entry.modifier}x</span>`;
+            }
+            entriesHtml += `<div style="margin: 2px 0;"><span class="badge ${badgeClass}">${modalityLabel}</span> <span style="font-size: 0.7rem; color: #666;">${timeStr}</span>${modifierBadge}</div>`;
           });
           entriesHtml += '</td>';
           tr.innerHTML += entriesHtml;
@@ -847,13 +875,21 @@
         </div>
       </div>`;
 
-      // Shift times
+      // Shift times and modifier
       html += `<div style="margin-bottom: 1rem;">
         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Shift:</label>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <input type="time" id="edit-start-time" value="${entry.start_time || '07:00'}" style="padding: 0.5rem;">
           <span>-</span>
           <input type="time" id="edit-end-time" value="${entry.end_time || '15:00'}" style="padding: 0.5rem;">
+          <span style="margin-left: 1rem; font-size: 0.85rem; color: #555;">Workload:</span>
+          <select id="edit-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
+            <option value="0.5" ${entry.modifier === 0.5 ? 'selected' : ''}>0.5x (Freshman)</option>
+            <option value="0.75" ${entry.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+            <option value="1.0" ${!entry.modifier || entry.modifier === 1.0 ? 'selected' : ''}>1.0x (Normal)</option>
+            <option value="1.5" ${entry.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+            <option value="2.0" ${entry.modifier === 2.0 ? 'selected' : ''}>2.0x (Exp)</option>
+          </select>
         </div>
       </div>`;
 
@@ -873,10 +909,10 @@
         </div>
       </div>`;
 
-      // Skills editing
+      // Skills editing (with skill=2 for weighted/freshman entries)
       html += `<div style="margin-bottom: 1rem;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Skills:</label>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem;">`;
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Skills: <span style="font-size: 0.75rem; color: #666;">(2 = weighted/extra load)</span></label>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem;">`;
       SKILLS.forEach(skill => {
         const val = entry.skills[skill] || 0;
         html += `<div style="display: flex; align-items: center; gap: 0.3rem;">
@@ -885,6 +921,7 @@
             <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
             <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
             <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
+            <option value="2" ${val === 2 ? 'selected' : ''}>2 (weighted)</option>
           </select>
         </div>`;
       });
@@ -1020,6 +1057,7 @@
       const startTime = document.getElementById('edit-start-time').value;
       const endTime = document.getElementById('edit-end-time').value;
       const task = document.getElementById('edit-task').value;
+      const modifier = parseFloat(document.getElementById('edit-modifier').value) || 1.0;
 
       const skillUpdates = {};
       SKILLS.forEach(skill => {
@@ -1030,6 +1068,7 @@
         start_time: startTime,
         end_time: endTime,
         tasks: task,
+        Modifier: modifier,
         ...skillUpdates
       };
 
