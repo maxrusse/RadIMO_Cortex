@@ -100,6 +100,8 @@
       padding: 1rem;
       background: #fff;
       min-height: 150px;
+      max-height: 60vh;
+      overflow-y: auto;
     }
     .legend {
       display: flex;
@@ -235,240 +237,159 @@
     const skillSlugMap = {{ skill_slug_map|tojson }};
     const skillColorMap = {{ skill_color_map|tojson }};
 
-    // Global variables for filtering
     let originalData = null;
     let timelineInstance = null;
     let currentFilter = 'all';
-    let dynamicStyleSheet = null;  // Single stylesheet for all timeline items
+    const gradientCache = new Map();
 
-    // Utility: Escape HTML to prevent XSS
     function escapeHtml(text) {
-      if (text === null || text === undefined) return '';
+      if (text == null) return '';
       const div = document.createElement('div');
       div.textContent = String(text);
       return div.innerHTML;
     }
 
-    // Initialize dynamic stylesheet (created once, reused)
-    function initDynamicStyleSheet() {
-      if (!dynamicStyleSheet) {
-        const style = document.createElement('style');
-        style.id = 'timeline-dynamic-styles';
-        document.head.appendChild(style);
-        dynamicStyleSheet = style.sheet;
+    function buildGradient(skills) {
+      if (!skills || skills.length === 0) return 'background:#fff;';
+      const key = skills.join('|');
+      if (gradientCache.has(key)) return gradientCache.get(key);
+
+      const colors = skills.map(s => skillColorMap[s] || '#ccc');
+      const sw = 10, gw = 15;
+      let css;
+      if (colors.length === 1) {
+        css = `background:repeating-linear-gradient(90deg,${colors[0]} 0,${colors[0]} ${sw}px,#fff ${sw}px,#fff ${sw+gw}px);`;
+      } else {
+        const stops = colors.map((c,i) => `${c} ${i*sw}px,${c} ${(i+1)*sw}px`);
+        const bw = colors.length * sw;
+        stops.push(`#fff ${bw}px,#fff ${bw+gw}px`);
+        css = `background:repeating-linear-gradient(90deg,${stops.join(',')});`;
       }
-      // Clear existing rules
-      while (dynamicStyleSheet.cssRules.length > 0) {
-        dynamicStyleSheet.deleteRule(0);
-      }
+      gradientCache.set(key, css);
+      return css;
     }
 
-    function buildGradient(skills) {
-      const stripeWidth = 10;
-      const gapWidth = 15;
-      if (!skills || skills.length === 0) {
-        return "background: #ffffff;";
-      }
-      const colors = skills.map(slug => skillColorMap[slug] || '#cccccc');
-      if (colors.length === 1) {
-        const color = colors[0];
-        return `background: repeating-linear-gradient(
-          90deg,
-          ${color} 0px,
-          ${color} ${stripeWidth}px,
-          #ffffff ${stripeWidth}px,
-          #ffffff ${stripeWidth + gapWidth}px
-        );`;
-      }
-      const stops = colors.map((color, idx) => {
-        const start = idx * stripeWidth;
-        const end = start + stripeWidth;
-        return `${color} ${start}px, ${color} ${end}px`;
-      });
-      const blockWidth = colors.length * stripeWidth;
-      stops.push(`#ffffff ${blockWidth}px, #ffffff ${blockWidth + gapWidth}px`);
-      const period = blockWidth + gapWidth;
-      return `background: repeating-linear-gradient(90deg, ${stops.join(', ')}, #ffffff ${period}px);`;
+    function isSkillActive(val) {
+      if (val === 'w' || val === 'W') return true;
+      const n = Number(val);
+      return !isNaN(n) && n >= 1;
     }
 
     function buildTimeline() {
-      const timelineContainer = document.getElementById('timeline-container');
+      const container = document.getElementById('timeline-container');
       let dfData;
       try {
         dfData = JSON.parse('{{ debug_data|safe }}');
       } catch (e) {
-        console.error("Failed to parse timeline data:", e);
-        timelineContainer.innerHTML = "<p>Error loading timeline data</p>";
+        container.innerHTML = '<p>Error loading timeline data</p>';
         return;
       }
-      // Filter out placeholder entries
-      dfData = dfData.filter(entry => entry.TIME !== '00:00-00:00');
-      if (dfData.length === 0) {
-        timelineContainer.innerHTML = "<p>No active schedule entries found</p>";
+      dfData = dfData.filter(e => e.TIME !== '00:00-00:00');
+      if (!dfData.length) {
+        container.innerHTML = '<p>No active schedule entries found</p>';
         return;
       }
-
-      // Store original data globally for filtering
       originalData = dfData;
-
-      // Build initial timeline with all data
       renderTimeline(originalData);
     }
 
     function renderTimeline(dfData) {
-      const timelineContainer = document.getElementById('timeline-container');
-
-      if (!dfData || dfData.length === 0) {
-        timelineContainer.innerHTML = "<p>No workers match the selected filter</p>";
+      const container = document.getElementById('timeline-container');
+      if (!dfData || !dfData.length) {
+        container.innerHTML = '<p>No workers match the selected filter</p>';
         return;
       }
 
-      // Initialize/reset dynamic stylesheet for batched styles
-      initDynamicStyleSheet();
-
+      const cssRules = [];
       const items = [];
-      const groups = [];
       const groupMap = {};
-      dfData.forEach((entry) => {
-        const groupId = entry.PPL;
-        const startTimeParts = entry.start_time.split(':');
-        const startDateTime = new Date();
-        startDateTime.setHours(parseInt(startTimeParts[0], 10), parseInt(startTimeParts[1], 10), 0);
-        if (!groupMap[groupId]) {
-          groupMap[groupId] = { id: groupId, order: startDateTime };
-          groups.push(groupMap[groupId]);
-        } else {
-          if (startDateTime < groupMap[groupId].order) {
-            groupMap[groupId].order = startDateTime;
-          }
-        }
-      });
-      groups.sort((a, b) => a.order - b.order);
-      // Escape group content for XSS safety
-      const finalGroups = groups.map(group => ({ id: group.id, content: escapeHtml(group.id) }));
+      const groups = [];
 
-      dfData.forEach((entry, index) => {
-        const startTimeParts = entry.start_time.split(':');
-        const endTimeParts = entry.end_time.split(':');
-        const startDateTime = new Date();
-        startDateTime.setHours(parseInt(startTimeParts[0], 10), parseInt(startTimeParts[1], 10), 0);
-        const endDateTime = new Date();
-        endDateTime.setHours(parseInt(endTimeParts[0], 10), parseInt(endTimeParts[1], 10), 0);
-        const activeSkills = [];
-        skillColumns.forEach(skillName => {
-          if (entry[skillName] > 0) {
-            const slug = skillSlugMap[skillName] || skillName.toLowerCase();
-            activeSkills.push(slug);
-          }
-        });
+      dfData.forEach((entry, idx) => {
+        const gid = entry.PPL;
+        const [sh, sm] = entry.start_time.split(':').map(Number);
+        const [eh, em] = entry.end_time.split(':').map(Number);
+        const start = new Date(); start.setHours(sh, sm, 0, 0);
+        const end = new Date(); end.setHours(eh, em, 0, 0);
 
-        const customClass = `timeline-item-${index}`;
-        // Add rule to shared stylesheet instead of creating new <style> element
-        try {
-          dynamicStyleSheet.insertRule(`.${customClass} { ${buildGradient(activeSkills)} }`, dynamicStyleSheet.cssRules.length);
-        } catch (e) {
-          console.warn('Failed to insert CSS rule:', e);
+        if (!groupMap[gid]) {
+          groupMap[gid] = { id: gid, order: start };
+          groups.push(groupMap[gid]);
+        } else if (start < groupMap[gid].order) {
+          groupMap[gid].order = start;
         }
 
-        // Build tooltip with XSS-safe escaping
-        const escapedPPL = escapeHtml(entry.PPL);
-        const escapedTime = escapeHtml(entry.TIME);
-        const escapedModality = entry._modality ? escapeHtml(entry._modality.toUpperCase()) : '';
-        const escapedSkills = activeSkills.map(s => escapeHtml(s)).join(', ');
-        const modalityInfo = escapedModality ? `<br>Modality: ${escapedModality}` : '';
+        const activeSkills = skillColumns
+          .filter(s => isSkillActive(entry[s]))
+          .map(s => skillSlugMap[s] || s.toLowerCase());
 
+        const cls = `ti-${idx}`;
+        cssRules.push(`.${cls}{${buildGradient(activeSkills)}}`);
+
+        const mod = entry._modality ? `<br>Modality: ${escapeHtml(entry._modality.toUpperCase())}` : '';
         items.push({
-          id: index,
-          group: entry.PPL,
-          start: startDateTime,
-          end: endDateTime,
+          id: idx,
+          group: gid,
+          start,
+          end,
           content: '',
-          title: `${escapedPPL}${modalityInfo}<br>Zeit: ${escapedTime}<br>Skills: ${escapedSkills}`,
-          className: customClass
+          title: `${escapeHtml(gid)}${mod}<br>Zeit: ${escapeHtml(entry.TIME)}<br>Skills: ${activeSkills.map(escapeHtml).join(', ')}`,
+          className: cls
         });
       });
 
-      // Create date objects for timeline bounds (don't mutate same object)
-      const now = new Date();
-      const minTime = new Date();
-      minTime.setHours(6, 0, 0, 0);
-      const maxTime = new Date();
-      maxTime.setHours(20, 0, 0, 0);
+      groups.sort((a, b) => a.order - b.order);
+      const finalGroups = groups.map(g => ({ id: g.id, content: escapeHtml(g.id) }));
 
-      const options = {
+      let styleEl = document.getElementById('timeline-styles');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'timeline-styles';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = cssRules.join('');
+
+      const now = new Date();
+      const minTime = new Date(); minTime.setHours(6, 0, 0, 0);
+      const maxTime = new Date(); maxTime.setHours(20, 0, 0, 0);
+
+      if (timelineInstance) timelineInstance.destroy();
+
+      timelineInstance = new vis.Timeline(container, items, finalGroups, {
         zoomable: true,
         moveable: true,
         stack: false,
         min: minTime,
         max: maxTime,
+        zoomMin: 1000 * 60 * 60,
+        zoomMax: 1000 * 60 * 60 * 14,
         showCurrentTime: true,
-        format: {
-          minorLabels: {
-            hour: 'HH:mm',
-            minute: 'HH:mm'
-          }
-        },
-        orientation: {
-          axis: 'top',
-          item: 'top'
-        },
-        margin: { item: { vertical: 10 } },
-        verticalScroll: true,
-      };
-      // Destroy existing timeline if it exists
-      if (timelineInstance) {
-        timelineInstance.destroy();
-      }
+        format: { minorLabels: { hour: 'HH:mm', minute: 'HH:mm' } },
+        orientation: { axis: 'top', item: 'top' },
+        margin: { item: { vertical: 6 } },
+        verticalScroll: true
+      });
 
-      const timeline = new vis.Timeline(timelineContainer, items, finalGroups, options);
-      timelineInstance = timeline;
-
-      setInterval(() => {
-        if (timelineInstance) {
-          timelineInstance.setCurrentTime(new Date());
-        }
-      }, 60000);
-
-      // Set initial window around current time
-      const windowStart = new Date();
-      windowStart.setHours(Math.max(6, now.getHours() - 1), 0, 0, 0);
-      const windowEnd = new Date();
-      windowEnd.setHours(Math.min(20, now.getHours() + 3), 0, 0, 0);
-      timeline.setWindow(windowStart, windowEnd);
+      const wStart = new Date(); wStart.setHours(Math.max(6, now.getHours() - 1), 0, 0, 0);
+      const wEnd = new Date(); wEnd.setHours(Math.min(20, now.getHours() + 3), 0, 0, 0);
+      timelineInstance.setWindow(wStart, wEnd);
     }
 
-    /**
-     * Filter timeline by skill
-     * @param {string} skill - The skill to filter by ('all' or skill name)
-     */
     function filterTimeline(skill) {
-      // Update button states - only for skill filter bar (second one)
-      const skillFilterBars = document.querySelectorAll('.skill-filter-bar');
-      if (skillFilterBars.length > 1) {
-        const buttons = skillFilterBars[1].querySelectorAll('.filter-btn');
-        buttons.forEach(btn => btn.classList.remove('active'));
+      const bars = document.querySelectorAll('.skill-filter-bar');
+      if (bars.length > 1) {
+        bars[1].querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         event.target.classList.add('active');
       }
-
       currentFilter = skill;
-
       if (skill === 'all') {
-        // Show all workers
         renderTimeline(originalData);
       } else {
-        // Filter data to show only workers with this skill active (value >= 1, incl. weighted)
-        const filteredData = originalData.filter(entry => {
-          const skillValue = Number(entry[skill]);
-          return !Number.isNaN(skillValue) && skillValue >= 1;
-        });
-
-        renderTimeline(filteredData);
+        renderTimeline(originalData.filter(e => isSkillActive(e[skill])));
       }
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-      buildTimeline();
-    });
+    document.addEventListener('DOMContentLoaded', buildTimeline);
   </script>
 </body>
 </html>
