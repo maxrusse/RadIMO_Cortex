@@ -309,8 +309,7 @@
   </div>
 
   <script>
-    let requestInProgress = false;
-    let timerInterval, lastClickTime, disableTimeout;
+    let timerInterval, lastClickTime;
     let currentSkill = "{{ skill }}";
     let lastModalityUsed = "";
 
@@ -326,9 +325,7 @@
     // All modality buttons are always visible
 
     function getNextAssignment(modality, skill, forcePrimary = false) {
-      if (requestInProgress) return;
       lastModalityUsed = modality;
-      updateButtonsState(true);
       const endpoint = forcePrimary
         ? `/api/${modality}/${skill}/strict`
         : `/api/${modality}/${skill}`;
@@ -348,7 +345,6 @@
         .catch(e => {
           console.error("API error:", e);
           showResult('', modality);
-          updateButtonsState(false);
         });
     }
 
@@ -423,24 +419,7 @@
       document.body.removeChild(textarea);
     }
 
-    function updateButtonsState(disabled) {
-      if (!disabled && requestInProgress) return;
-      requestInProgress = disabled;
-      document.querySelectorAll('.assignment-btn').forEach(button => {
-        button.disabled = disabled;
-        disabled ? button.classList.add('btn-disabled') : button.classList.remove('btn-disabled');
-      });
-      if (disableTimeout) clearTimeout(disableTimeout);
-      if (disabled) {
-        disableTimeout = setTimeout(() => {
-          requestInProgress = false;
-          document.querySelectorAll('.assignment-btn').forEach(button => {
-            button.disabled = false;
-            button.classList.remove('btn-disabled');
-          });
-        }, 3000);
-      }
-    }
+    // Buttons stay accessible - no disabling needed
   </script>
 </body>
 </html>
