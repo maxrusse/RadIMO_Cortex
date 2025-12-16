@@ -265,9 +265,9 @@ medweb_mapping:
       shift: "Fruehdienst"
       base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # Weighted/Freshman entries: skill=2 marks as weighted, Modifier controls workload factor
-    # Modifier 0.5 = counts double (1/0.5 = 2x), good for beginners who need more supervision
-    # skill=2 is just a visual marker in UI - Modifier controls the actual weight calculation
+    # Weighted entries: skill=2 (shown as 'w' in UI) marks as weighted, Modifier controls workload factor
+    # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
+    # skill=2/'w' is just a visual marker in UI - Modifier controls the actual weight calculation
     - match: "MSK Anfänger"
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"

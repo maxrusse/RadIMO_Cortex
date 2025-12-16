@@ -1190,7 +1190,7 @@ def build_working_hours_from_medweb(
                 duration_hours = (end_dt - start_dt).seconds / 3600
 
                 # Get modifier from rule config (default 1.0)
-                # Modifier controls workload: 0.5 = freshman (counts double), 2.0 = experienced (counts half)
+                # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
                 rule_modifier = rule.get('modifier', 1.0)
 
                 rows_per_modality[modality].append({
@@ -2127,12 +2127,12 @@ def _get_or_create_assignments(modality: str, canonical_id: str) -> dict:
 
 def update_global_assignment(person: str, role: str, modality: str) -> str:
     canonical_id = get_canonical_worker_id(person)
-    # Get the modifier (default 1.0). Values < 1 mean less work capacity (e.g., 0.5 = freshman counts double)
-    # Values > 1 mean more work capacity (e.g., 2.0 = experienced counts half)
+    # Get the modifier (default 1.0). Values < 1 mean less work capacity (counts more toward load)
+    # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5
     modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
     modifier = _coerce_float(modifier, 1.0)
     # Use helper that checks for skill×modality overrides first
-    # Note: skill=2 is just a visual marker - weight is controlled by Modifier field
+    # Note: skill=2 ('w' in UI) is just a visual marker - weight is controlled by Modifier field
     weight = get_skill_modality_weight(role, modality) * modifier
 
     global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
@@ -3253,7 +3253,7 @@ def prep_next_day():
                 'modalities': rule.get('modalities', []),  # Multiple modalities
                 'shift': rule.get('shift', 'Fruehdienst'),
                 'base_skills': rule.get('base_skills', {}),
-                'modifier': rule.get('modifier', 1.0)  # Workload modifier (0.5=freshman, 2.0=exp)
+                'modifier': rule.get('modifier', 1.0)  # Workload modifier (0.5-1.5 range)
             }
             # If single modality, convert to list for consistency
             if task_role['modality'] and not task_role['modalities']:
@@ -3595,7 +3595,7 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                     skill_value = candidate.get(actual_skill, 0)
 
                     # Determine if modifier should apply
-                    # Modifier controls weight: 0.5 = freshman (counts double), 2.0 = experienced (counts half)
+                    # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity)
                     modifier = 1.0
                     modifier_active_only = BALANCER_SETTINGS.get('modifier_applies_to_active_only', False)
 
@@ -3611,7 +3611,7 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                         d['WeightedCounts'][person] = 0.0
 
                     # Calculate weight with skill×modality factor and modifier
-                    # Note: skill=2 is just a visual marker - weight is controlled by Modifier
+                    # Note: skill=2 ('w' in UI) is just a visual marker - weight is controlled by Modifier
                     local_weight = get_skill_modality_weight(actual_skill, actual_modality) * modifier
                     d['WeightedCounts'][person] += local_weight
 

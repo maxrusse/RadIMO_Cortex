@@ -116,14 +116,15 @@ All admin pages require login with the admin password from `config.yaml`.
 | Worker | Text | "Dr. Müller (AM)" |
 | Start Time | HH:MM | "07:00" |
 | End Time | HH:MM | "15:00" |
-| Skills | -1, 0, 1 | 1 (active) |
-| Modifier | Decimal | 1.0 |
+| Skills | -1, 0, 1, w | 1 (active) |
+| Modifier | 0.5-1.5 | 1.0 |
 
 ### Skill Value Colors
 
 - 🟢 **Green (1)** = Active
 - 🟡 **Yellow (0)** = Passive/Fallback
 - 🔴 **Red (-1)** = Excluded
+- 🔵 **Blue (w)** = Weighted (visual marker)
 
 ### Example: Fix Wrong Shift Time
 
