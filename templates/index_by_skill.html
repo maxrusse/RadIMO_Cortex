@@ -141,15 +141,6 @@
       opacity: 0.7;
       color: #ddd !important;
     }
-    .btn:disabled::after, .btn.btn-disabled::after {
-      content: "Bitte warten...";
-      position: absolute;
-      bottom: 10px;
-      left: 0;
-      right: 0;
-      font-size: 0.9rem;
-      opacity: 0.9;
-    }
     .btn:hover {
       filter: brightness(1.1);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -157,11 +148,11 @@
     .btn:active { transform: scale(0.98); }
 
     .modality-main-btn {
-      flex: 1 1 66%;
+      flex: 1 1 50%;
     }
 
     .modality-strict-btn {
-      flex: 0 0 34%;
+      flex: 0 0 50%;
       min-height: 120px;
       font-size: 1.4rem;
       padding: 0.5rem;
@@ -279,8 +270,8 @@
     <div id="buttonGrid" class="button-grid">
       {% for mod_key in modality_order %}
         {% set mod = modalities[mod_key] %}
-        {% set is_available = available_modalities.get(mod_key, False) %}
-        <div class="modality-button-wrapper" data-modality="{{ mod_key }}" {% if not is_available %}style="display: none;"{% endif %}>
+        {% set is_visible = mod_key in visible_modalities %}
+        <div class="modality-button-wrapper" data-modality="{{ mod_key }}" {% if not is_visible %}style="display: none;"{% endif %}>
           <button id="mod-btn-{{ mod_key }}"
             data-modality="{{ mod_key }}"
             onclick="getNextAssignment('{{ mod_key }}', '{{ skill }}')"
@@ -332,37 +323,13 @@
       return div.innerHTML;
     }
 
-    const modalityButtonMap = {};
-    document.querySelectorAll('.modality-button-wrapper').forEach(wrapper => {
-      const modality = wrapper.dataset.modality;
-      if (modality) {
-        modalityButtonMap[modality] = wrapper;
-      }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-      setInterval(quickReload, 60000);
-      quickReload();
-    });
-
-    function quickReload() {
-      fetch('/api/quick_reload?skill={{ skill }}')
-        .then(response => response.json())
-        .then(data => {
-          if (data.available_modalities) {
-            for (const [modality, isAvailable] of Object.entries(data.available_modalities)) {
-              const wrapper = modalityButtonMap[modality];
-              if (wrapper) wrapper.style.display = isAvailable ? '' : 'none';
-            }
-          }
-        })
-        .catch(e => console.error("Quick reload error:", e));
-    }
+    // Button visibility is now controlled by config only
+    // All modality buttons are always visible
 
     function getNextAssignment(modality, skill, forcePrimary = false) {
       if (requestInProgress) return;
       lastModalityUsed = modality;
-      updateButtonsState(true);
+      setButtonsDisabled(true);
       const endpoint = forcePrimary
         ? `/api/${modality}/${skill}/strict`
         : `/api/${modality}/${skill}`;
@@ -382,7 +349,7 @@
         .catch(e => {
           console.error("API error:", e);
           showResult('', modality);
-          updateButtonsState(false);
+          setButtonsDisabled(false);
         });
     }
 
@@ -457,20 +424,19 @@
       document.body.removeChild(textarea);
     }
 
-    function updateButtonsState(disabled) {
+    // Disable buttons for 3 seconds after click (no text overlay)
+    function setButtonsDisabled(disabled) {
       if (!disabled && requestInProgress) return;
       requestInProgress = disabled;
-      document.querySelectorAll('.assignment-btn').forEach(button => {
-        button.disabled = disabled;
-        disabled ? button.classList.add('btn-disabled') : button.classList.remove('btn-disabled');
+      document.querySelectorAll('.assignment-btn').forEach(btn => {
+        btn.disabled = disabled;
       });
       if (disableTimeout) clearTimeout(disableTimeout);
       if (disabled) {
         disableTimeout = setTimeout(() => {
           requestInProgress = false;
-          document.querySelectorAll('.assignment-btn').forEach(button => {
-            button.disabled = false;
-            button.classList.remove('btn-disabled');
+          document.querySelectorAll('.assignment-btn').forEach(btn => {
+            btn.disabled = false;
           });
         }, 3000);
       }
