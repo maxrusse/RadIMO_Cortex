@@ -697,10 +697,10 @@
             const shift = group?.shiftsArray?.[change.shiftIdx];
             if (!group || !shift) continue;
 
-            // Only add if any skill is >= 0 (not all -1)
+            // Only add if any skill is set to 0/1/w (skip pure -1 placeholders)
             const hasActiveSkill = SKILLS.some(skill => {
               const val = change.updates[skill];
-              return val !== undefined && val >= 0;
+              return val !== undefined && isNonNegativeSkillValue(val);
             });
             if (!hasActiveSkill) continue;
 
@@ -911,9 +911,16 @@
             skills: SKILLS.reduce((acc, skill) => {
               if (isGapRow) { acc[skill] = -1; return acc; }
               const rawVal = row[skill];
+              const hasRaw = rawVal !== undefined && rawVal !== '';
               const fallback = rosterSkills[skill];
-              const parsed = rawVal === undefined || rawVal === '' ? undefined : parseInt(rawVal);
-              acc[skill] = parsed !== undefined ? parsed : (fallback !== undefined ? fallback : 0);
+              const hasFallback = fallback !== undefined && fallback !== '';
+
+              const normalizedRaw = hasRaw ? normalizeSkillValueJS(rawVal) : undefined;
+              const normalizedFallback = hasFallback ? normalizeSkillValueJS(fallback) : undefined;
+
+              acc[skill] = hasRaw
+                ? normalizedRaw
+                : (hasFallback ? normalizedFallback : 0);
               return acc;
             }, {}),
             task: taskStr
@@ -1815,7 +1822,7 @@
       const skills = {};
       SKILLS.forEach(skill => {
         const el = document.getElementById(`modal-add-skill-${skill}`);
-        skills[skill] = el ? parseInt(el.value) : 0;
+        skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
       });
 
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
@@ -2104,7 +2111,7 @@
             SKILLS.forEach(skill => {
               const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
               if (el) {
-                skillUpdates[skill] = parseInt(el.value);
+                skillUpdates[skill] = normalizeSkillValueJS(el.value);
               }
             });
 
@@ -2112,7 +2119,7 @@
             const rowIndexEl = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-rowindex`);
             const rowIndex = rowIndexEl ? parseInt(rowIndexEl.value) : modData.row_index;
 
-            const hasActiveSkill = Object.values(skillUpdates).some(v => v !== undefined && v >= 0);
+            const hasActiveSkill = Object.values(skillUpdates).some(v => v !== undefined && isNonNegativeSkillValue(v));
 
             if (rowIndex < 0) {
               if (!hasActiveSkill) continue;  // Nothing to add
