@@ -436,7 +436,8 @@
   </div>
   
   <script>
-    let timerInterval, lastClickTime;
+    let requestInProgress = false;
+    let timerInterval, lastClickTime, disableTimeout;
     let currentModality = "{{ modality }}";
     let lastSkillUsed = "";
 
@@ -452,7 +453,9 @@
     // No dynamic hiding based on worker availability
 
     function getNextAssignment(skill, forcePrimary = false) {
+      if (requestInProgress) return;
       lastSkillUsed = skill;
+      setButtonsDisabled(true);
       const endpoint = forcePrimary
         ? `/api/${currentModality}/${skill}/strict`
         : `/api/${currentModality}/${skill}`;
@@ -472,6 +475,7 @@
         .catch(e => {
           console.error("API error:", e);
           showResult('', skill);
+          setButtonsDisabled(false);
         });
     }
 
@@ -545,7 +549,23 @@
       document.body.removeChild(textarea);
     }
 
-    // Buttons stay accessible - no disabling needed
+    // Disable buttons for 3 seconds after click (no text overlay)
+    function setButtonsDisabled(disabled) {
+      if (!disabled && requestInProgress) return;
+      requestInProgress = disabled;
+      document.querySelectorAll('.assignment-btn').forEach(btn => {
+        btn.disabled = disabled;
+      });
+      if (disableTimeout) clearTimeout(disableTimeout);
+      if (disabled) {
+        disableTimeout = setTimeout(() => {
+          requestInProgress = false;
+          document.querySelectorAll('.assignment-btn').forEach(btn => {
+            btn.disabled = false;
+          });
+        }, 3000);
+      }
+    }
 
     // Info Text Edit Functions
     {% if is_admin %}
