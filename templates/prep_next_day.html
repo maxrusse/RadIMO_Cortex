@@ -486,13 +486,22 @@
       renderTable(tab);
     }
 
-    // Track inline skill change
-    function onInlineSkillChange(tab, modKey, rowIndex, skill, value) {
-      const key = `${modKey}-${rowIndex}`;
-      if (!pendingChanges[tab][key]) {
-        pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
+    // Track inline skill change (supports adding new modalities with rowIndex=-1)
+    function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shiftIdx) {
+      // Handle new modality additions (rowIndex = -1)
+      if (rowIndex === -1) {
+        const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
+        if (!pendingChanges[tab][key]) {
+          pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, updates: {} };
+        }
+        pendingChanges[tab][key].updates[skill] = parseInt(value);
+      } else {
+        const key = `${modKey}-${rowIndex}`;
+        if (!pendingChanges[tab][key]) {
+          pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
+        }
+        pendingChanges[tab][key].updates[skill] = parseInt(value);
       }
-      pendingChanges[tab][key].updates[skill] = parseInt(value);
 
       // Update save button count
       const count = Object.keys(pendingChanges[tab]).length;
@@ -502,7 +511,7 @@
       }
     }
 
-    // Save all inline changes
+    // Save all inline changes (handles both updates and new modality additions)
     async function saveInlineChanges(tab) {
       const changes = Object.values(pendingChanges[tab]);
       if (changes.length === 0) {
@@ -510,19 +519,59 @@
         return;
       }
 
-      const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
+      const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
+      const addEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
 
       try {
         for (const change of changes) {
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(change)
-          });
+          if (change.isNew) {
+            // New modality addition - need to add via add-worker endpoint
+            const group = entriesData[tab][change.groupIdx];
+            const shift = group?.shiftsArray?.[change.shiftIdx];
+            if (!group || !shift) continue;
 
-          if (!response.ok) {
-            const result = await response.json();
-            throw new Error(result.error || 'Failed to update');
+            // Only add if any skill is >= 0 (not all -1)
+            const hasActiveSkill = SKILLS.some(skill => {
+              const val = change.updates[skill];
+              return val !== undefined && val >= 0;
+            });
+            if (!hasActiveSkill) continue;
+
+            // Build worker_data for the new modality
+            const workerData = {
+              PPL: group.worker,
+              start_time: shift.start_time,
+              end_time: shift.end_time,
+              Modifier: change.updates.Modifier || 1.0,
+              tasks: shift.task || ''
+            };
+            // Add all skills (use -1 as default for unspecified)
+            SKILLS.forEach(skill => {
+              workerData[skill] = change.updates[skill] !== undefined ? change.updates[skill] : -1;
+            });
+
+            const response = await fetch(addEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ modality: change.modality, worker_data: workerData })
+            });
+
+            if (!response.ok) {
+              const result = await response.json();
+              console.warn(`Failed to add ${change.modality}: ${result.error}`);
+            }
+          } else {
+            // Existing entry update
+            const response = await fetch(updateEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(change)
+            });
+
+            if (!response.ok) {
+              const result = await response.json();
+              throw new Error(result.error || 'Failed to update');
+            }
           }
         }
 
@@ -719,11 +768,12 @@
     // Render table header - shifts with skill columns (colored headers with names)
     function renderTableHeader(tab) {
       const thead = document.getElementById(`table-head-${tab}`);
+      const isEditMode = editMode[tab];
 
       // Header: Worker | Shift | Mod | [Skills with colors] | Mod.(w) | Task | Actions
       let headerHtml = '<tr>';
       headerHtml += '<th>Worker</th>';
-      headerHtml += '<th>Shift</th>';
+      headerHtml += `<th>${isEditMode ? 'Shift (editable)' : 'Shift'}</th>`;
       headerHtml += '<th>Mod</th>';
 
       // Skill columns with colors from config
@@ -743,6 +793,7 @@
     }
 
     // Render grouped table by worker - one row per modality entry with skill columns
+    // Shows ALL modalities for each shift (even those with -1)
     function renderTable(tab) {
       // First update the header
       renderTableHeader(tab);
@@ -768,27 +819,36 @@
 
         const escapedWorker = escapeHtml(group.worker);
 
-        // Count total rows for this worker (sum of modalities across all shifts)
+        // Count total rows: each shift shows ALL modalities
         let totalRows = 0;
         shifts.forEach(shift => {
-          totalRows += Object.keys(shift.modalities).length;
+          // In edit mode, show ALL modalities; in view mode, only assigned ones
+          totalRows += isEditMode ? MODALITIES.length : Object.keys(shift.modalities).length;
         });
 
         const isDuplicate = totalRows > 1;
-        const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${totalRows}x</span>` : '';
+        const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} shifts</span>` : '';
 
         let rowIdx = 0;
         shifts.forEach((shift, shiftIdx) => {
-          const modKeys = Object.keys(shift.modalities).sort();
-          const numMods = modKeys.length;
+          // In edit mode, show ALL modalities; in view mode, only assigned ones
+          const modKeysToShow = isEditMode ? MODALITIES.map(m => m.toLowerCase()) : Object.keys(shift.modalities).sort();
+          const numMods = modKeysToShow.length;
 
-          modKeys.forEach((modKey, modIdx) => {
-            const modData = shift.modalities[modKey];
+          modKeysToShow.forEach((modKey, modIdx) => {
+            const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
+            const isAssigned = shift.modalities[modKey] !== undefined;
             const tr = document.createElement('tr');
 
             // Add visual separator for first row of each worker
             if (rowIdx === 0) {
               tr.classList.add('worker-group-first');
+            }
+
+            // Dim unassigned modalities
+            if (!isAssigned) {
+              tr.style.opacity = '0.5';
+              tr.style.background = '#f9f9f9';
             }
 
             // Worker name (only on first row, with rowspan for all entries)
@@ -798,23 +858,37 @@
 
             // Shift time (rowspan for modalities in same shift)
             if (modIdx === 0) {
-              tr.innerHTML += `<td rowspan="${numMods}" style="vertical-align: middle;"><span class="shift-time">${escapeHtml(shift.start_time)}-${escapeHtml(shift.end_time)}</span></td>`;
+              if (isEditMode) {
+                // Editable time inputs
+                tr.innerHTML += `<td rowspan="${numMods}" style="vertical-align: middle;">
+                  <input type="time" value="${shift.start_time || '07:00'}"
+                    onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'start', this.value)"
+                    style="padding: 0.15rem; font-size: 0.75rem; width: 70px;">
+                  -
+                  <input type="time" value="${shift.end_time || '15:00'}"
+                    onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'end', this.value)"
+                    style="padding: 0.15rem; font-size: 0.75rem; width: 70px;">
+                </td>`;
+              } else {
+                tr.innerHTML += `<td rowspan="${numMods}" style="vertical-align: middle;"><span class="shift-time">${escapeHtml(shift.start_time)}-${escapeHtml(shift.end_time)}</span></td>`;
+              }
             }
 
             // Modality badge
             const badgeClass = `badge-${modKey}`;
-            tr.innerHTML += `<td><span class="badge ${badgeClass}">${modKey.toUpperCase()}</span></td>`;
+            const badgeStyle = !isAssigned ? 'opacity: 0.4;' : '';
+            tr.innerHTML += `<td><span class="badge ${badgeClass}" style="${badgeStyle}">${modKey.toUpperCase()}</span>${!isAssigned && isEditMode ? '<small style="color:#999;"> (add)</small>' : ''}</td>`;
 
             // Skill columns
             SKILLS.forEach(skill => {
-              const val = modData.skills[skill] || 0;
+              const val = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
               const skillSettings = SKILL_SETTINGS[skill] || {};
               const skillColor = skillSettings.button_color || '#6c757d';
 
               if (isEditMode) {
-                // Edit mode: dropdown
+                // Edit mode: dropdown (for unassigned, default to -1)
                 tr.innerHTML += `<td style="text-align: center; padding: 0.2rem;">
-                  <select onchange="onInlineSkillChange('${tab}', '${modKey}', ${modData.row_index}, '${skill}', this.value)"
+                  <select onchange="onInlineSkillChange('${tab}', '${modKey}', ${modData.row_index}, '${skill}', this.value, ${gIdx}, ${shiftIdx})"
                     style="padding: 0.1rem; font-size: 0.7rem; width: 36px; border: 2px solid ${skillColor};">
                     <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
                     <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
@@ -834,8 +908,8 @@
             const hasWeighted = Object.values(modData.skills).some(v => v === 2);
             if (isEditMode) {
               tr.innerHTML += `<td style="text-align: center; padding: 0.2rem;">
-                <select onchange="onInlineModifierChange('${tab}', '${modKey}', ${modData.row_index}, this.value)"
-                  style="padding: 0.1rem; font-size: 0.7rem; width: 50px;" ${!hasWeighted ? 'disabled title="Enable w skill first"' : ''}>
+                <select onchange="onInlineModifierChange('${tab}', '${modKey}', ${modData.row_index}, this.value, ${gIdx}, ${shiftIdx})"
+                  style="padding: 0.1rem; font-size: 0.7rem; width: 50px;">
                   <option value="0.5" ${modData.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
                   <option value="0.75" ${modData.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
                   <option value="1.0" ${!modData.modifier || modData.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
@@ -875,8 +949,36 @@
       });
     }
 
+    // Track inline time change
+    function onInlineTimeChange(tab, groupIdx, shiftIdx, field, value) {
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
+      const shift = group.shiftsArray?.[shiftIdx];
+      if (!shift) return;
+
+      // Update all modalities in this shift with new time
+      Object.keys(shift.modalities).forEach(modKey => {
+        const modData = shift.modalities[modKey];
+        const key = `${modKey}-${modData.row_index}`;
+        if (!pendingChanges[tab][key]) {
+          pendingChanges[tab][key] = { modality: modKey, row_index: modData.row_index, updates: {} };
+        }
+        pendingChanges[tab][key].updates[field === 'start' ? 'start_time' : 'end_time'] = value;
+      });
+    }
+
     // Track inline modifier change
-    function onInlineModifierChange(tab, modKey, rowIndex, value) {
+    function onInlineModifierChange(tab, modKey, rowIndex, value, groupIdx, shiftIdx) {
+      // Handle new modality additions (rowIndex = -1)
+      if (rowIndex === -1) {
+        const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
+        if (!pendingChanges[tab][key]) {
+          pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, updates: {} };
+        }
+        pendingChanges[tab][key].updates['Modifier'] = parseFloat(value);
+        return;
+      }
+
       const key = `${modKey}-${rowIndex}`;
       if (!pendingChanges[tab][key]) {
         pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
