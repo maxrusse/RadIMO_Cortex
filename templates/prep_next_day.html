@@ -209,6 +209,43 @@
           </div>
           <button class="btn btn-success" onclick="addWorker('today')">Add</button>
         </div>
+        <!-- Expandable Time & Skills Section -->
+        <div id="add-options-today" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
+          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start;">
+            <div class="form-group">
+              <label>Start Time</label>
+              <input type="time" id="add-start-time-today" value="07:00" style="padding: 0.3rem;">
+            </div>
+            <div class="form-group">
+              <label>End Time</label>
+              <input type="time" id="add-end-time-today" value="15:00" style="padding: 0.3rem;">
+            </div>
+            <div class="form-group">
+              <label>Modifier</label>
+              <select id="add-modifier-today" style="padding: 0.3rem;">
+                <option value="0.5">0.5x (Freshman)</option>
+                <option value="1.0" selected>1.0x (Normal)</option>
+                <option value="2.0">2.0x (Experienced)</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top: 0.5rem;">
+            <label style="font-size: 0.85rem; font-weight: 500;">Skills:</label>
+            <div id="add-skills-today" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
+              {% for skill in skills %}
+              <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <select id="add-skill-{{ skill }}-today" style="padding: 0.2rem; font-size: 0.8rem; width: 50px;">
+                  <option value="-1">-1</option>
+                  <option value="0" selected>0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+                <span style="font-size: 0.75rem;">{{ skill }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- View Toggle -->
@@ -296,6 +333,43 @@
             </select>
           </div>
           <button class="btn btn-warning" onclick="addWorker('tomorrow')">Add</button>
+        </div>
+        <!-- Expandable Time & Skills Section -->
+        <div id="add-options-tomorrow" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
+          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start;">
+            <div class="form-group">
+              <label>Start Time</label>
+              <input type="time" id="add-start-time-tomorrow" value="07:00" style="padding: 0.3rem;">
+            </div>
+            <div class="form-group">
+              <label>End Time</label>
+              <input type="time" id="add-end-time-tomorrow" value="15:00" style="padding: 0.3rem;">
+            </div>
+            <div class="form-group">
+              <label>Modifier</label>
+              <select id="add-modifier-tomorrow" style="padding: 0.3rem;">
+                <option value="0.5">0.5x (Freshman)</option>
+                <option value="1.0" selected>1.0x (Normal)</option>
+                <option value="2.0">2.0x (Experienced)</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top: 0.5rem;">
+            <label style="font-size: 0.85rem; font-weight: 500;">Skills:</label>
+            <div id="add-skills-tomorrow" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
+              {% for skill in skills %}
+              <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <select id="add-skill-{{ skill }}-tomorrow" style="padding: 0.2rem; font-size: 0.8rem; width: 50px;">
+                  <option value="-1">-1</option>
+                  <option value="0" selected>0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                </select>
+                <span style="font-size: 0.75rem;">{{ skill }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -731,10 +805,12 @@
       const taskSelect = document.getElementById(`add-task-${tab}`);
       const modalityGroup = document.getElementById(`modality-select-${tab}`);
       const modalitySelect = document.getElementById(`add-modality-${tab}`);
+      const optionsPanel = document.getElementById(`add-options-${tab}`);
 
       const option = taskSelect.options[taskSelect.selectedIndex];
       if (!option || !option.value) {
         modalityGroup.style.display = 'none';
+        optionsPanel.style.display = 'none';
         return;
       }
 
@@ -749,6 +825,32 @@
         modalityGroup.style.display = 'none';
         modalitySelect.innerHTML = `<option value="${modalities[0]}">${modalities[0].toUpperCase()}</option>`;
       }
+
+      // Show options panel and prefill values from task config
+      optionsPanel.style.display = 'block';
+
+      // Prefill times from shift config
+      const shiftName = option.dataset.shift || 'Fruehdienst';
+      const shiftConfig = SHIFT_TIMES[shiftName] || {};
+      const shiftDefault = shiftConfig.default || '07:00-15:00';
+      const [startTime, endTime] = shiftDefault.split('-');
+      document.getElementById(`add-start-time-${tab}`).value = startTime;
+      document.getElementById(`add-end-time-${tab}`).value = endTime;
+
+      // Prefill modifier from task config
+      const taskModifier = parseFloat(option.dataset.modifier) || 1.0;
+      const modifierSelect = document.getElementById(`add-modifier-${tab}`);
+      modifierSelect.value = taskModifier.toString();
+
+      // Prefill skills from task config
+      const taskSkills = JSON.parse(option.dataset.skills || '{}');
+      SKILLS.forEach(skill => {
+        const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
+        if (skillSelect) {
+          const val = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
+          skillSelect.value = val.toString();
+        }
+      });
     }
 
     // Add worker
@@ -772,16 +874,19 @@
       if (!workerName) { showMessage('error', 'Please enter/select a worker'); return; }
       if (!taskName) { showMessage('error', 'Please select a task/role'); return; }
 
-      // Get task config
-      const taskOption = taskSelect.options[taskSelect.selectedIndex];
-      const taskSkills = JSON.parse(taskOption.dataset.skills || '{}');
-      const shiftName = taskOption.dataset.shift || 'Fruehdienst';
-      const taskModifier = parseFloat(taskOption.dataset.modifier) || 1.0;
+      // Get times from form fields (user can edit these)
+      const startTime = document.getElementById(`add-start-time-${tab}`).value;
+      const endTime = document.getElementById(`add-end-time-${tab}`).value;
 
-      // Get times from shift config
-      const shiftConfig = SHIFT_TIMES[shiftName] || {};
-      const shiftDefault = shiftConfig.default || '07:00-15:00';
-      const [startTime, endTime] = shiftDefault.split('-');
+      // Get modifier from form field (user can edit)
+      const modifier = parseFloat(document.getElementById(`add-modifier-${tab}`).value) || 1.0;
+
+      // Get skills from form fields (user can edit these)
+      const skills = {};
+      SKILLS.forEach(skill => {
+        const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
+        skills[skill] = skillSelect ? parseInt(skillSelect.value) : 0;
+      });
 
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
 
@@ -795,12 +900,9 @@
               PPL: workerName,
               start_time: startTime,
               end_time: endTime,
-              Modifier: taskModifier,  // Use modifier from task config (0.5=freshman, 2.0=exp)
+              Modifier: modifier,
               tasks: taskName,
-              ...SKILLS.reduce((acc, skill) => {
-                acc[skill] = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
-                return acc;
-              }, {})
+              ...skills
             }
           })
         });
@@ -812,6 +914,7 @@
           if (workerInput) workerInput.value = '';
           taskSelect.value = '';
           document.getElementById(`modality-select-${tab}`).style.display = 'none';
+          document.getElementById(`add-options-${tab}`).style.display = 'none';
           await loadData();
         } else {
           const errData = await response.json().catch(() => ({}));
