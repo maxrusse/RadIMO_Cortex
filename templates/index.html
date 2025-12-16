@@ -369,13 +369,12 @@
   <section class="card">
     <div id="buttonGrid" class="button-grid">
       {% for skill in skill_definitions %}
-        {% set is_valid_for_modality = skill.name in valid_skills %}
-        {% set is_visible = is_valid_for_modality and skill.always_visible %}
+        {% set is_visible = skill.name in visible_skills %}
         {% set style_parts = ['--btn-bg: ' ~ skill.button_color, '--btn-text: ' ~ skill.text_color] %}
         {% if not is_visible %}
           {% set style_parts = style_parts + ['display: none;'] %}
         {% endif %}
-        <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}" data-valid="{{ is_valid_for_modality|lower }}" style="{{ '; '.join(style_parts) }}">
+        <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}" style="{{ '; '.join(style_parts) }}">
           <button id="skill-btn-{{ skill.slug }}"
             data-skill-name="{{ skill.name }}"
             onclick="getNextAssignment('{{ skill.name }}')"

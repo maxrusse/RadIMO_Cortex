@@ -2691,16 +2691,19 @@ def index():
     modality = resolve_modality_from_request()
     d = modality_data[modality]
 
-    # Get valid skills for this modality (for hiding irrelevant buttons)
-    # Button visibility is controlled by config only (always_visible + valid_skills)
+    # Button visibility controlled by config:
+    # - valid_skills: positive filter (only show these) - if not set, all skills
+    # - hidden_skills: negative filter (hide these) - if not set, none hidden
     modality_config = MODALITY_SETTINGS.get(modality, {})
-    valid_skills = modality_config.get('valid_skills', SKILL_COLUMNS)  # All skills if not specified
+    valid_skills = set(modality_config.get('valid_skills', SKILL_COLUMNS))
+    hidden_skills = set(modality_config.get('hidden_skills', []))
+    visible_skills = [s for s in SKILL_COLUMNS if s in valid_skills and s not in hidden_skills]
 
     return render_template(
         'index.html',
         info_texts=d.get('info_texts', []),
         modality=modality,
-        valid_skills=valid_skills,
+        visible_skills=visible_skills,
         is_admin=session.get('admin_logged_in', False)
     )
 
@@ -3779,8 +3782,8 @@ def quick_reload():
     now = get_local_berlin_now()
     checks = run_operational_checks('reload', force=True)
 
-    # Button visibility is config-based only (always_visible), not worker-based
-    available_buttons = {entry['slug']: entry['always_visible'] for entry in SKILL_TEMPLATES}
+    # Button visibility handled by template (valid_skills/hidden_skills in config)
+    available_buttons = {entry['slug']: True for entry in SKILL_TEMPLATES}
             
     # Rebuild per-skill counts:
     skill_counts = {}
