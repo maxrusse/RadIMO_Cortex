@@ -2691,29 +2691,13 @@ def index():
     modality = resolve_modality_from_request()
     d = modality_data[modality]
 
-    # Determine available specialties based on currently active working hours
-    available_specialties = {SKILL_SLUG_MAP[skill]: False for skill in SKILL_COLUMNS}
-    if d['working_hours_df'] is not None:
-        active_df = _filter_active_rows(d['working_hours_df'], get_local_berlin_now())
-        for skill in SKILL_COLUMNS:
-            slug = SKILL_SLUG_MAP[skill]
-            available_specialties[slug] = bool(
-                active_df is not None
-                and (skill in active_df.columns)
-                and (active_df[skill].sum() > 0)
-            )
-
-    for entry in SKILL_TEMPLATES:
-        if entry['always_visible']:
-            available_specialties[entry['slug']] = True
-
     # Get valid skills for this modality (for hiding irrelevant buttons)
+    # Button visibility is controlled by config only (always_visible + valid_skills)
     modality_config = MODALITY_SETTINGS.get(modality, {})
     valid_skills = modality_config.get('valid_skills', SKILL_COLUMNS)  # All skills if not specified
 
     return render_template(
         'index.html',
-        available_specialties=available_specialties,
         info_texts=d.get('info_texts', []),
         modality=modality,
         valid_skills=valid_skills,
@@ -2724,13 +2708,11 @@ def index():
 @app.route('/by-skill')
 def index_by_skill():
     """
-    Skill-based view: navigate by skill, see all modalities as buttons
+    Skill-based view: navigate by skill, see all modalities as buttons.
+    All modality buttons are always visible (config-based, not worker-based).
     """
     skill = request.args.get('skill', SKILL_COLUMNS[0] if SKILL_COLUMNS else 'Notfall')
     skill = normalize_skill(skill)
-
-    # Determine available modalities for this skill (check working hours)
-    available_modalities_dict = get_available_modalities_for_skill(skill)
 
     # Get info texts from first modality (they're typically the same)
     info_texts = []
@@ -2741,7 +2723,6 @@ def index_by_skill():
     return render_template(
         'index_by_skill.html',
         skill=skill,
-        available_modalities=available_modalities_dict,
         info_texts=info_texts
     )
 
@@ -3785,36 +3766,21 @@ def quick_reload():
     skill_param = request.args.get('skill')
 
     if skill_param:
-        # Skill-based view: return available modalities for this skill
-        skill = normalize_skill(skill_param)
-        available_modalities_dict = get_available_modalities_for_skill(skill)
+        # Skill-based view: all modality buttons always visible (config-based)
         checks = run_operational_checks('reload', force=True)
         return jsonify({
-            "available_modalities": available_modalities_dict,
+            "available_modalities": {mod: True for mod in allowed_modalities},
             "operational_checks": checks,
         })
 
-    # Modality-based view (existing logic)
+    # Modality-based view
     modality = resolve_modality_from_request()
     d = modality_data[modality]
     now = get_local_berlin_now()
     checks = run_operational_checks('reload', force=True)
 
-    # Determine available buttons based on currently active working hours
-    available_buttons = {SKILL_SLUG_MAP[skill]: False for skill in SKILL_COLUMNS}
-    if d['working_hours_df'] is not None:
-        active_df = _filter_active_rows(d['working_hours_df'], now)
-        for skill in SKILL_COLUMNS:
-            slug = SKILL_SLUG_MAP[skill]
-            available_buttons[slug] = bool(
-                active_df is not None
-                and (skill in active_df.columns)
-                and (active_df[skill].sum() > 0)
-            )
-
-    for entry in SKILL_TEMPLATES:
-        if entry['always_visible']:
-            available_buttons[entry['slug']] = True
+    # Button visibility is config-based only (always_visible), not worker-based
+    available_buttons = {entry['slug']: entry['always_visible'] for entry in SKILL_TEMPLATES}
             
     # Rebuild per-skill counts:
     skill_counts = {}

@@ -139,15 +139,6 @@
       opacity: 0.7;
       color: #ddd !important;
     }
-    .btn:disabled::after, .btn.btn-disabled::after {
-      content: "Bitte warten...";
-      position: absolute;
-      bottom: 10px;
-      left: 0;
-      right: 0;
-      font-size: 0.9rem;
-      opacity: 0.9;
-    }
     .btn:hover {
       filter: brightness(1.1);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -160,11 +151,11 @@
     }
 
     .skill-main-btn {
-      flex: 1 1 66%;
+      flex: 1 1 50%;
     }
 
     .skill-strict-btn {
-      flex: 0 0 34%;
+      flex: 0 0 50%;
       min-height: 120px;
       font-size: 1.4rem;
       padding: 0.5rem;
@@ -379,10 +370,9 @@
     <div id="buttonGrid" class="button-grid">
       {% for skill in skill_definitions %}
         {% set is_valid_for_modality = skill.name in valid_skills %}
+        {% set is_visible = is_valid_for_modality and skill.always_visible %}
         {% set style_parts = ['--btn-bg: ' ~ skill.button_color, '--btn-text: ' ~ skill.text_color] %}
-        {% if not is_valid_for_modality %}
-          {% set style_parts = style_parts + ['display: none;'] %}
-        {% elif skill.optional and not available_specialties.get(skill.slug, False) %}
+        {% if not is_visible %}
           {% set style_parts = style_parts + ['display: none;'] %}
         {% endif %}
         <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}" data-valid="{{ is_valid_for_modality|lower }}" style="{{ '; '.join(style_parts) }}">
@@ -459,30 +449,8 @@
       return div.innerHTML;
     }
 
-    const skillButtonMap = {};
-    document.querySelectorAll('.skill-button-wrapper').forEach(wrapper => {
-      const slug = wrapper.dataset.skillSlug;
-      if (slug) {
-        skillButtonMap[slug] = wrapper;
-      }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-      setInterval(quickReload, 60000);
-      quickReload();
-    });
-
-    function quickReload() {
-      fetch('/api/quick_reload?modality={{ modality }}')
-        .then(response => response.json())
-        .then(data => {
-          for (const [slug, isAvailable] of Object.entries(data.available_buttons)) {
-            const wrapper = skillButtonMap[slug];
-            if (wrapper) wrapper.style.display = isAvailable ? '' : 'none';
-          }
-        })
-        .catch(e => console.error("Quick reload error:", e));
-    }
+    // Button visibility is now controlled by config only (always_visible + valid_skills)
+    // No dynamic hiding based on worker availability
 
     function getNextAssignment(skill, forcePrimary = false) {
       if (requestInProgress) return;
