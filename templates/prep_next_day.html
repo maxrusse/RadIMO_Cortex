@@ -995,7 +995,7 @@
       const isEditMode = editMode[tab];
       const modalKeys = MODALITIES.map(m => m.toLowerCase());
 
-      // First header row: Worker/Shift/Task, grouped skill columns, single modifier, actions
+      // First header row: Worker/Shift/Task, grouped skill columns, modifier group, actions
       let headerHtml = '<tr class="header-top">';
       headerHtml += '<th rowspan="2" class="worker-col">Worker</th>';
       headerHtml += `<th rowspan="2" class="shift-col">${isEditMode ? 'Shift (editable)' : 'Shift'}</th>`;
@@ -1008,7 +1008,7 @@
         headerHtml += `<th colspan="${modalKeys.length}" class="skill-header" style="background:${btnColor}; color:${textColor};">${escapeHtml(skill)}</th>`;
       });
 
-      headerHtml += '<th rowspan="2" style="min-width:70px;">Mod.(w)</th>';
+      headerHtml += `<th colspan="${modalKeys.length}">Mod.(w)</th>`;
       headerHtml += '<th rowspan="2">Actions</th>';
       headerHtml += '</tr>';
 
@@ -1021,6 +1021,13 @@
           const shortLabel = label.substring(0, 2).toUpperCase();
           headerHtml += `<th class="sub-col">${shortLabel}</th>`;
         });
+      });
+
+      modalKeys.forEach(mod => {
+        const modSettings = MODALITY_SETTINGS[mod] || {};
+        const label = (modSettings.label || mod).replace(/-/g, '');
+        const shortLabel = label.substring(0, 2).toUpperCase();
+        headerHtml += `<th class="sub-col">${shortLabel}</th>`;
       });
 
       headerHtml += '</tr>';
@@ -1092,8 +1099,8 @@
       const visibleGroups = [];
 
       const modCount = MODALITIES.length;
-      // Calculate column count: Worker + Shift + Task + (Skills × Modalities) + Modifier + Actions
-      const colCount = 3 + (SKILLS.length * modCount) + 1 + 1;
+      // Calculate column count: Worker + Shift + Task + (Skills × Modalities) + (Modifiers × Modalities) + Actions
+      const colCount = 3 + (SKILLS.length * modCount) + modCount + 1;
 
       if (!groups || groups.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
@@ -1136,12 +1143,8 @@
             tr.innerHTML += `<td class="grid-cell shift-col">${shiftLabel}${gapInfo ? `<div style="font-size:0.7rem;color:#555;">${gapInfo}</div>` : ''}</td>`;
           }
 
-          const gapNames = (shift.gaps || []).map(g => escapeHtml(g.type || 'Gap')).filter(Boolean);
-          const taskParts = [];
-          if (shift.task) taskParts.push(escapeHtml(shift.task));
-          if (gapNames.length) taskParts.push(gapNames.join(', '));
-          const taskLabel = taskParts.length ? taskParts.join(' / ') : 'Gap';
-          tr.innerHTML += `<td class="grid-cell task-col">${taskLabel ? `<span class="task-badge">${taskLabel}</span>` : '<span style="color:#aaa;">-</span>'}</td>`;
+          const taskStr = shift.task || '';
+          tr.innerHTML += `<td class="grid-cell task-col">${taskStr ? `<span class="task-badge">${escapeHtml(taskStr)}</span>` : '<span style="color:#aaa;">-</span>'}</td>`;
 
           SKILLS.forEach(skill => {
             modKeysToShow.forEach(modKey => {
@@ -1154,32 +1157,40 @@
 
               if (isEditMode) {
                 tr.innerHTML += `<td class="${cellClass}">
-                  <input class="grid-select" type="text" value="${displaySkillValue(val)}" inputmode="numeric" pattern="-?\\d|w" onchange="onInlineSkillChange('${tab}', '${modKey}', ${modData.row_index}, '${skill}', this.value, ${gIdx}, ${shiftIdx})" style="text-align:center;">
+                  <select class="grid-select" onchange="onInlineSkillChange('${tab}', '${modKey}', ${modData.row_index}, '${skill}', this.value, ${gIdx}, ${shiftIdx})">
+                    <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
+                    <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
+                    <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
+                    <option value="w" ${isWeightedSkill(val) ? 'selected' : ''}>w</option>
+                  </select>
                 </td>`;
               } else {
                 const displayVal = displaySkillValue(val);
-                tr.innerHTML += `<td class="${cellClass}"><span class="grid-badge skill-val">${displayVal}</span></td>`;
+                tr.innerHTML += `<td class="${cellClass}"><span class="grid-badge skill-val ${skillClass}" style="border-color:${skillColor};">${displayVal}</span></td>`;
               }
             });
           });
 
-          const primaryMod = modKeysToShow.map(modKey => shift.modalities[modKey]).find(m => m && m.row_index >= 0) || shift.modalities[modKeysToShow[0]] || { modifier: shift.modifier || 1 };
-          const hasWeighted = Object.values(primaryMod.skills || {}).some(v => isWeightedSkill(v));
-          const cellClass = `grid-cell grid-modifier`;
-          if (isEditMode) {
-            tr.innerHTML += `<td class="${cellClass}">
-              <select class="grid-select" onchange="onInlineShiftModifierChange('${tab}', ${gIdx}, ${shiftIdx}, this.value)">
-                <option value="0.5" ${primaryMod.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
-                <option value="0.75" ${primaryMod.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
-                <option value="1" ${primaryMod.modifier === 1 || primaryMod.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
-                <option value="1.25" ${primaryMod.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
-                <option value="1.5" ${primaryMod.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
-              </select>
-            </td>`;
-          } else {
-            const modClass = '';
-            tr.innerHTML += `<td class="${cellClass}"><span class="modifier-badge ${modClass}">${(primaryMod.modifier || 1.0).toFixed(2)}x</span></td>`;
-          }
+          modKeysToShow.forEach(modKey => {
+            const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
+            const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
+            const hasWeighted = Object.values(modData.skills).some(v => isWeightedSkill(v));
+            const cellClass = `grid-cell grid-modifier ${isAssigned ? '' : 'ghost'}`;
+            if (isEditMode) {
+              tr.innerHTML += `<td class="${cellClass}">
+                <select class="grid-select" onchange="onInlineModifierChange('${tab}', '${modKey}', ${modData.row_index}, this.value, ${gIdx}, ${shiftIdx})">
+                  <option value="0.5" ${modData.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
+                  <option value="0.75" ${modData.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+                  <option value="1" ${modData.modifier === 1 || modData.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
+                  <option value="1.25" ${modData.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
+                  <option value="1.5" ${modData.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+                </select>
+              </td>`;
+            } else {
+              const modClass = hasWeighted ? 'modifier-high' : '';
+              tr.innerHTML += `<td class="${cellClass}"><span class="modifier-badge ${modClass}">${(modData.modifier || 1.0).toFixed(2)}x</span></td>`;
+            }
+          });
 
           if (shiftIdx === 0) {
             tr.innerHTML += `
