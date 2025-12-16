@@ -265,19 +265,19 @@ medweb_mapping:
       shift: "Fruehdienst"
       base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # Weighted entries: skill=2 (shown as 'w' in UI) marks as weighted, Modifier controls workload factor
+    # Weighted entries: skill='w' marks assisted workers; Modifier controls workload factor
     # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
-    # skill=2/'w' is just a visual marker in UI - Modifier controls the actual weight calculation
+    # 'w' is just a visual marker in UI - Modifier controls the actual weight calculation
     - match: "MSK Anfänger"
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 2, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: w, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
       modifier: 0.5  # Freshman: assignments count double toward their load
 
     - match: "CT Anfänger"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 2, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      base_skills: {Notfall: w, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
       modifier: 0.5  # Freshman: assignments count double
 
     - match: "Cardvask Team"
@@ -440,7 +440,7 @@ worker_skill_roster:
       Privat: 0
       Gyn: 0
       Päd: 0
-      MSK: 2      # weighted / assisted
+      MSK: w      # weighted / assisted
       Abdomen: 0
       Chest: 0
       Cardvask: 0

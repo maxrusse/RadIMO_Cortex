@@ -82,7 +82,7 @@ Real-time assignment with load balancing
 ### Skill System
 | Value | Name | Behavior |
 |-------|------|----------|
-| **2** | Weighted | Visual marker for weighted entries (Modifier controls load) |
+| **w** | Weighted | Visual marker for weighted entries (Modifier controls load) |
 | **1** | Active | Primary routing - actively performs this skill |
 | **0** | Passive | Fallback only - can help if needed |
 | **-1** | Excluded | Never assigned - cannot do this skill |

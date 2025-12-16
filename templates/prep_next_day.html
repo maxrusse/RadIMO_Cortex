@@ -71,8 +71,8 @@
     .agg-all-neg { background: #dc3545; color: white; }     /* All = -1: Red */
     .agg-mixed { background: #e9ecef; color: #495057; }     /* Mixed values */
 
-    /* Skill value 2/'w' = weighted (visual marker only) */
-    .skill-val-2 { background: #17a2b8; color: white; }
+    /* Skill value 'w' = weighted (visual marker only) */
+    .skill-val-w { background: #17a2b8; color: white; }
     .agg-has-weighted { border: 2px solid #17a2b8; }
 
     /* Workload modifier badge */
@@ -247,7 +247,7 @@
                   <option value="-1">-1</option>
                   <option value="0" selected>0</option>
                   <option value="1">1</option>
-                  <option value="2">w</option>
+                  <option value="w">w</option>
                 </select>
                 <span style="font-size: 0.75rem;">{{ skill }}</span>
               </div>
@@ -267,7 +267,7 @@
           <span class="skill-val skill-val-1">1</span> Active
           <span class="skill-val skill-val-0">0</span> Passive
           <span class="skill-val skill-val--1">-1</span> Excluded
-          <span class="skill-val skill-val-2">w</span> Weighted
+          <span class="skill-val skill-val-w">w</span> Weighted
         </div>
       </div>
 
@@ -370,7 +370,7 @@
                   <option value="-1">-1</option>
                   <option value="0" selected>0</option>
                   <option value="1">1</option>
-                  <option value="2">w</option>
+                  <option value="w">w</option>
                 </select>
                 <span style="font-size: 0.75rem;">{{ skill }}</span>
               </div>
@@ -390,7 +390,7 @@
           <span class="skill-val skill-val-1">1</span> Active
           <span class="skill-val skill-val-0">0</span> Passive
           <span class="skill-val skill-val--1">-1</span> Excluded
-          <span class="skill-val skill-val-2">w</span> Weighted
+          <span class="skill-val skill-val-w">w</span> Weighted
         </div>
       </div>
 
@@ -473,6 +473,23 @@
     let editMode = { today: true, tomorrow: true };  // Inline edit mode defaults to ON
     let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
 
+    function normalizeSkillValueJS(value) {
+      if (value === undefined || value === null) return 0;
+      if (value === 'w' || value === 'W') return 'w';
+      if (typeof value === 'string' && value.trim() === '') return 0;
+      const parsed = parseInt(value, 10);
+      if (!isNaN(parsed) && parsed === 2) return 'w';
+      return isNaN(parsed) ? value : parsed;
+    }
+
+    function isWeightedSkill(value) {
+      return value === 'w' || value === 'W' || value === 2;
+    }
+
+    function displaySkillValue(value) {
+      return isWeightedSkill(value) ? 'w' : value;
+    }
+
     function applyEditModeUI(tab) {
       // Update button
       const btn = document.getElementById(`edit-mode-btn-${tab}`);
@@ -500,14 +517,16 @@
 
     // Track inline skill change (supports adding new modalities with rowIndex=-1)
     function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shiftIdx, el = null) {
+      const normalizedVal = normalizeSkillValueJS(value);
+
       // Handle new modality additions (rowIndex = -1)
       if (rowIndex === -1) {
         const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
         if (!pendingChanges[tab][key]) {
           pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, updates: {} };
         }
-        pendingChanges[tab][key].updates[skill] = parseInt(value);
-        if (parseInt(value) === 2) {
+        pendingChanges[tab][key].updates[skill] = normalizedVal;
+        if (isWeightedSkill(normalizedVal)) {
           const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
           pendingChanges[tab][key].updates['Modifier'] = currentWeight;
         } else {
@@ -518,8 +537,8 @@
         if (!pendingChanges[tab][key]) {
           pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
         }
-        pendingChanges[tab][key].updates[skill] = parseInt(value);
-        if (parseInt(value) === 2) {
+        pendingChanges[tab][key].updates[skill] = normalizedVal;
+        if (isWeightedSkill(normalizedVal)) {
           const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
           pendingChanges[tab][key].updates['Modifier'] = currentWeight;
         } else {
@@ -528,7 +547,7 @@
       }
 
       if (el && el.nextElementSibling) {
-        el.nextElementSibling.style.display = value === '2' ? '' : 'none';
+        el.nextElementSibling.style.display = isWeightedSkill(normalizedVal) ? '' : 'none';
       }
 
       // Update save button count
@@ -617,11 +636,12 @@
     function getAggregatedClass(values) {
       if (!values || values.length === 0) return 'agg-mixed';
 
-      const allOne = values.every(v => v === 1 || v === 2);  // Include skill=2 (weighted/freshman)
-      const anyOne = values.some(v => v === 1 || v === 2);
-      const allZero = values.every(v => v === 0);
-      const anyZero = values.some(v => v === 0);
-      const allNeg = values.every(v => v === -1);
+      const normalized = values.map(v => normalizeSkillValueJS(v));
+      const allOne = normalized.every(v => v === 1 || isWeightedSkill(v));  // Include weighted/freshman
+      const anyOne = normalized.some(v => v === 1 || isWeightedSkill(v));
+      const allZero = normalized.every(v => v === 0);
+      const anyZero = normalized.some(v => v === 0);
+      const allNeg = normalized.every(v => v === -1);
 
       // Positive values take priority - if any positive, show green colors
       if (allOne) return 'agg-all-1';
@@ -635,16 +655,21 @@
     // Get display value for aggregated cell
     function getAggregatedDisplay(values) {
       if (!values || values.length === 0) return '-';
-      const allSame = values.every(v => v === values[0]);
-      if (allSame) return values[0];
-      // Show unique values sorted (2, 1, 0, -1)
-      const unique = [...new Set(values)].sort((a, b) => b - a);
-      return unique.join('/');
+      const normalized = values.map(v => normalizeSkillValueJS(v));
+      const allSame = normalized.every(v => v === normalized[0]);
+      if (allSame) return displaySkillValue(normalized[0]);
+      // Show unique values sorted (w/1, 0, -1)
+      const unique = [...new Set(normalized)].sort((a, b) => {
+        const aVal = isWeightedSkill(a) ? 1 : a;
+        const bVal = isWeightedSkill(b) ? 1 : b;
+        return bVal - aVal;
+      });
+      return unique.map(displaySkillValue).join('/');
     }
 
-    // Check if values contain weighted entries (skill=2)
+    // Check if values contain weighted entries (skill='w')
     function hasWeightedEntries(values) {
-      return values && values.some(v => v === 2);
+      return values && values.some(v => isWeightedSkill(v));
     }
 
     // Utility: Escape HTML to prevent XSS
@@ -916,7 +941,8 @@
             modKeysToShow.forEach(modKey => {
               const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
               const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-              const val = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
+              const rawVal = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
+              const val = normalizeSkillValueJS(rawVal);
               const badgeClass = `badge-${modKey}`;
               const chipClass = isAssigned ? 'mod-skill-chip' : 'mod-skill-chip ghost';
 
@@ -926,13 +952,13 @@
                     <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
                     <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
                     <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
-                    <option value="2" ${val === 2 ? 'selected' : ''}>w</option>
+                    <option value="w" ${isWeightedSkill(val) ? 'selected' : ''}>w</option>
                   </select></label>`;
               } else {
                 const skillSettings = SKILL_SETTINGS[skill] || {};
                 const skillColor = skillSettings.button_color || '#6c757d';
-                const skillClass = val === 2 ? 'skill-val-2' : `skill-val-${val}`;
-                const displayVal = val === 2 ? 'w' : val;
+                const skillClass = isWeightedSkill(val) ? 'skill-val-w' : `skill-val-${val}`;
+                const displayVal = displaySkillValue(val);
                 cellHtml += `<span class="${chipClass}" style="border-color:${skillColor};"><span class="badge ${badgeClass}">${modKey.toUpperCase()}</span><span class="skill-val ${skillClass}" style="border:1px solid ${skillColor}; min-width:22px; text-align:center;">${displayVal}</span></span>`;
               }
             });
@@ -946,7 +972,7 @@
           modKeysToShow.forEach(modKey => {
             const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
             const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-            const hasWeighted = Object.values(modData.skills).some(v => v === 2);
+            const hasWeighted = Object.values(modData.skills).some(v => isWeightedSkill(v));
             const chipClass = isAssigned ? 'mod-skill-chip' : 'mod-skill-chip ghost';
             const badgeClass = `badge-${modKey}`;
             if (isEditMode) {
@@ -1346,13 +1372,14 @@
             </td>`;
 
           SKILLS.forEach(skill => {
-            const val = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
+            const rawVal = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
+            const val = normalizeSkillValueJS(rawVal);
             html += `<td style="padding: 0.2rem; border: 1px solid #ddd; text-align: center;">
               <select id="edit-shift-${shiftIdx}-${modKey}-skill-${skill}" style="padding: 0.15rem; font-size: 0.75rem; width: 38px;">
                 <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
                 <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
                 <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
-                <option value="2" ${val === 2 ? 'selected' : ''}>w</option>
+                <option value="w" ${isWeightedSkill(val) ? 'selected' : ''}>w</option>
               </select>
             </td>`;
           });
@@ -1421,7 +1448,7 @@
               <option value="-1">-1</option>
               <option value="0" selected>0</option>
               <option value="1">1</option>
-              <option value="2">w</option>
+              <option value="w">w</option>
             </select>
             <span style="font-size: 0.7rem;">${escapeHtml(skill)}</span>
           </div>`;

@@ -613,6 +613,59 @@ def normalize_skill(skill_value: Optional[str]) -> str:
     return SKILL_COLUMNS[0] if SKILL_COLUMNS else 'Notfall'
 
 
+WEIGHTED_SKILL_MARKER = 'w'
+
+
+def normalize_skill_value(value: Any) -> Any:
+    """Normalize skill values and convert legacy weighted marker ``2`` to ``'w'``."""
+
+    if value is None:
+        return 0
+
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.lower() == WEIGHTED_SKILL_MARKER:
+            return WEIGHTED_SKILL_MARKER
+        if cleaned == '':
+            return 0
+        try:
+            parsed = int(float(cleaned))
+        except ValueError:
+            return 0
+    else:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    if parsed == 2:
+        return WEIGHTED_SKILL_MARKER
+    return parsed
+
+
+def skill_value_to_numeric(value: Any) -> int:
+    """Convert skill values to numeric form for comparisons (``'w'`` → 1)."""
+
+    if value == WEIGHTED_SKILL_MARKER:
+        return 1
+    try:
+        parsed = int(float(value))
+        return 1 if parsed == 2 else parsed
+    except (TypeError, ValueError):
+        return 0
+
+
+def is_weighted_skill(value: Any) -> bool:
+    """Check whether a skill value represents a weighted/assisted assignment."""
+
+    if value == WEIGHTED_SKILL_MARKER:
+        return True
+    try:
+        return int(float(value)) == 2
+    except (TypeError, ValueError):
+        return False
+
+
 def get_available_modalities_for_skill(skill: str) -> dict:
     """Return modalities to display for the given skill (currently all remain visible)."""
     return {modality: True for modality in allowed_modalities}
@@ -700,7 +753,11 @@ def _filter_active_rows(df: Optional[pd.DataFrame], current_dt: datetime) -> Opt
         lambda row: _is_now_in_shift(row['start_time'], row['end_time'], current_dt),
         axis=1
     )
-    return df[active_mask]
+    active_df = df[active_mask].copy()
+    for skill in SKILL_COLUMNS:
+        if skill in active_df.columns:
+            active_df[skill] = active_df[skill].apply(skill_value_to_numeric)
+    return active_df
 
 
 def _calculate_shift_duration_hours(start_time: time, end_time: time) -> float:
@@ -1696,7 +1753,7 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
             continue
 
         # Get skill value for this worker (take first row if multiple shifts)
-        skill_value = worker_rows[column].iloc[0]
+        skill_value = skill_value_to_numeric(worker_rows[column].iloc[0])
         if skill_value < 1:
             # Passive worker (0) or excluded (-1), skip from minimum checks
             continue
@@ -2132,7 +2189,7 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
     modifier = _coerce_float(modifier, 1.0)
     # Use helper that checks for skill×modality overrides first
-    # Note: skill=2 ('w' in UI) is just a visual marker - weight is controlled by Modifier field
+    # Note: skill='w' is just a visual marker - weight is controlled by Modifier field
     weight = get_skill_modality_weight(role, modality) * modifier
 
     global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
@@ -2293,7 +2350,8 @@ def _df_to_api_response(df: pd.DataFrame) -> list:
 
         # Add all skill columns
         for skill in SKILL_COLUMNS:
-            worker_data[skill] = int(row.get(skill, 0)) if pd.notnull(row.get(skill)) else 0
+            value = row.get(skill, 0)
+            worker_data[skill] = normalize_skill_value(value) if pd.notnull(value) else 0
 
         # Add tasks (stored as comma-separated string or list)
         tasks_val = row.get('tasks', '')
@@ -2333,8 +2391,10 @@ def _update_schedule_row(modality: str, row_index: int, updates: dict, use_stage
             if col in ['start_time', 'end_time']:
                 # Parse time string
                 df.at[row_index, col] = datetime.strptime(value, TIME_FORMAT).time()
-            elif col in SKILL_COLUMNS or col == 'Modifier':
-                df.at[row_index, col] = value
+            elif col in SKILL_COLUMNS:
+                df.at[row_index, col] = normalize_skill_value(value)
+            elif col == 'Modifier':
+                df.at[row_index, col] = float(value)
             elif col == 'PPL':
                 df.at[row_index, col] = value
                 df.at[row_index, 'canonical_id'] = get_canonical_worker_id(value)
@@ -2398,7 +2458,7 @@ def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) 
 
         # Add skill columns
         for skill in SKILL_COLUMNS:
-            new_row[skill] = int(worker_data.get(skill, 0))
+            new_row[skill] = normalize_skill_value(worker_data.get(skill, 0))
 
         # Add tasks
         tasks = worker_data.get('tasks', [])
@@ -3593,7 +3653,7 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                     d['skill_counts'][actual_skill][person] += 1
 
                     # Get skill value for this worker
-                    skill_value = candidate.get(actual_skill, 0)
+                    skill_value = skill_value_to_numeric(candidate.get(actual_skill, 0))
 
                     # Determine if modifier should apply
                     # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity)
@@ -3612,7 +3672,7 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                         d['WeightedCounts'][person] = 0.0
 
                     # Calculate weight with skill×modality factor and modifier
-                    # Note: skill=2 ('w' in UI) is just a visual marker - weight is controlled by Modifier
+                    # Note: skill='w' is just a visual marker - weight is controlled by Modifier
                     local_weight = get_skill_modality_weight(actual_skill, actual_modality) * modifier
                     d['WeightedCounts'][person] += local_weight
 
@@ -3621,7 +3681,9 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                 skill_counts = {}
                 for skill in SKILL_COLUMNS:
                     if skill in d['skill_counts']:
-                        skill_counts[skill] = {w: int(v) for w, v in d['skill_counts'][skill].items()}
+                        skill_counts[skill] = {
+                            w: skill_value_to_numeric(v) for w, v in d['skill_counts'][skill].items()
+                        }
                     else:
                         skill_counts[skill] = {}
 
