@@ -62,10 +62,7 @@
 
     /* Skill cells */
     .skill-cell { text-align: center; font-size: 0.7rem; }
-    .skill-val { padding: 0.15rem 0.35rem; border-radius: 3px; font-size: 0.72rem; }
-    .skill-val-1 { background: #d4edda; color: #155724; }
-    .skill-val-0 { background: #fff3cd; color: #856404; }
-    .skill-val--1 { background: #f8d7da; color: #721c24; }
+    .skill-val { padding: 0.15rem 0.35rem; border-radius: 3px; font-size: 0.72rem; background: #f4f4f4; color: #333; border: 1px solid #ddd; }
 
     /* Multi-modality chips per skill */
     .mod-skill-grid { display: flex; flex-wrap: wrap; gap: 0.2rem; }
@@ -77,16 +74,16 @@
 
     /* Aggregated skill/modality cells */
     .agg-cell { text-align: center; font-size: 0.7rem; min-width: 50px; }
-    .agg-val { padding: 0.25rem 0.4rem; border-radius: 3px; font-size: 0.72rem; display: inline-block; min-width: 30px; }
-    .agg-all-1 { background: #28a745; color: white; }       /* All = 1: Full green */
-    .agg-any-1 { background: #8fd19e; color: #155724; }     /* Any = 1: Light green */
-    .agg-all-0 { background: #ffc107; color: #333; }        /* All = 0: Yellow */
-    .agg-any-0 { background: #ffe69c; color: #856404; }     /* Any = 0: Light yellow */
-    .agg-all-neg { background: #dc3545; color: white; }     /* All = -1: Red */
-    .agg-mixed { background: #e9ecef; color: #495057; }     /* Mixed values */
+    .agg-val { padding: 0.25rem 0.4rem; border-radius: 3px; font-size: 0.72rem; display: inline-block; min-width: 30px; background: #f7f7f7; border: 1px solid #e1e1e1; color: #333; }
+    .agg-all-1 { background: #f7f7f7; }       /* Neutralize colors */
+    .agg-any-1 { background: #f7f7f7; }
+    .agg-all-0 { background: #f7f7f7; }
+    .agg-any-0 { background: #f7f7f7; }
+    .agg-all-neg { background: #f7f7f7; }
+    .agg-mixed { background: #f7f7f7; }
 
     /* Skill value 'w' = weighted (visual marker only) */
-    .skill-val-w { background: #17a2b8; color: white; }
+    .skill-val-w { background: #f4f4f4; color: #333; border: 1px solid #ddd; }
     .agg-has-weighted { border: 2px solid #17a2b8; }
 
     /* Workload modifier badge */
@@ -100,6 +97,20 @@
     .view-toggle-btn:hover { background: #e9ecef; }
     .view-toggle-btn.active { background: #004892; color: white; }
     .view-toggle-container { display: flex; align-items: center; gap: 0.75rem; }
+
+    /* Filters */
+    .filter-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.75rem; }
+    .filter-group { display: flex; flex-direction: column; gap: 0.2rem; }
+    .filter-group label { font-size: 0.75rem; color: #555; }
+    .filter-group select { padding: 0.3rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.82rem; min-width: 140px; }
+    .filter-toggle { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: #333; }
+
+    /* Summary */
+    .summary-wrapper { margin-top: 0.75rem; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 0.75rem; }
+    .summary-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; color: #004892; }
+    .summary-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .summary-table th, .summary-table td { border: 1px solid #ddd; padding: 0.25rem 0.4rem; text-align: center; }
+    .summary-table th { background: #eef1f5; }
 
     /* Duplicate worker indicator */
     .worker-name { font-weight: 500; }
@@ -197,11 +208,14 @@
       <span id="load-status-today" style="color: #666;"></span>
     </div>
 
-    <div class="card">
+      <div class="card">
       <!-- Add Worker Panel -->
       <div class="add-panel">
-        <h4>+ Add Worker</h4>
-        <div class="add-row">
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+          <button class="btn btn-primary" onclick="toggleAddPanel('today')">+ Add Worker</button>
+          <span style="font-size:0.8rem; color:#666;">Quick add like the edit popup.</span>
+        </div>
+        <div class="add-row" id="add-panel-body-today" style="display:none;">
           <div class="form-group">
             <label>Worker</label>
             <select id="add-worker-today" onchange="onWorkerChange('today')" style="min-width: 180px;">
@@ -257,12 +271,7 @@
             <div id="add-skills-today" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
               {% for skill in skills %}
               <div style="display: flex; align-items: center; gap: 0.25rem;">
-                <select id="add-skill-{{ skill }}-today" style="padding: 0.2rem; font-size: 0.8rem; width: 50px;">
-                  <option value="-1">-1</option>
-                  <option value="0" selected>0</option>
-                  <option value="1">1</option>
-                  <option value="w">w</option>
-                </select>
+                <input id="add-skill-{{ skill }}-today" type="text" inputmode="numeric" pattern="-?\d|w" value="0" style="padding: 0.2rem; font-size: 0.8rem; width: 40px; text-align: center;">
                 <span style="font-size: 0.75rem;">{{ skill }}</span>
               </div>
               {% endfor %}
@@ -285,6 +294,30 @@
         </div>
       </div>
 
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Filter Modality</label>
+          <select id="filter-modality-today" onchange="updateTableFilter('today')">
+            <option value="">All</option>
+            {% for mod in modalities %}
+            <option value="{{ mod|lower }}">{{ mod|upper }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Filter Skill</label>
+          <select id="filter-skill-today" onchange="updateTableFilter('today')">
+            <option value="">All</option>
+            {% for skill in skills %}
+            <option value="{{ skill }}">{{ skill }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="filter-toggle">
+          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')"> Hide 0 entries
+        </label>
+      </div>
+
       <!-- Worker Table - One row per entry -->
       <div class="table-container">
         <table class="edit-table compact-grid" id="edit-table-today">
@@ -303,6 +336,7 @@
           <tbody id="table-body-today"></tbody>
         </table>
       </div>
+      <div id="summary-today" class="summary-wrapper"></div>
       <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
     </div>
   </div>
@@ -320,11 +354,14 @@
       <span id="load-status-tomorrow" style="color: #666;"></span>
     </div>
 
-    <div class="card">
+      <div class="card">
       <!-- Add Worker Panel -->
       <div class="add-panel tomorrow">
-        <h4>+ Add Worker</h4>
-        <div class="add-row">
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+          <button class="btn btn-primary" onclick="toggleAddPanel('tomorrow')">+ Add Worker</button>
+          <span style="font-size:0.8rem; color:#666;">Quick add like the edit popup.</span>
+        </div>
+        <div class="add-row" id="add-panel-body-tomorrow" style="display:none;">
           <div class="form-group">
             <label>Worker Name</label>
             <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 200px;" list="worker-list-datalist" autocomplete="off" onchange="onWorkerChange('tomorrow')" oninput="onWorkerChange('tomorrow')">
@@ -380,12 +417,7 @@
             <div id="add-skills-tomorrow" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
               {% for skill in skills %}
               <div style="display: flex; align-items: center; gap: 0.25rem;">
-                <select id="add-skill-{{ skill }}-tomorrow" style="padding: 0.2rem; font-size: 0.8rem; width: 50px;">
-                  <option value="-1">-1</option>
-                  <option value="0" selected>0</option>
-                  <option value="1">1</option>
-                  <option value="w">w</option>
-                </select>
+                <input id="add-skill-{{ skill }}-tomorrow" type="text" inputmode="numeric" pattern="-?\d|w" value="0" style="padding: 0.2rem; font-size: 0.8rem; width: 40px; text-align: center;">
                 <span style="font-size: 0.75rem;">{{ skill }}</span>
               </div>
               {% endfor %}
@@ -408,6 +440,30 @@
         </div>
       </div>
 
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Filter Modality</label>
+          <select id="filter-modality-tomorrow" onchange="updateTableFilter('tomorrow')">
+            <option value="">All</option>
+            {% for mod in modalities %}
+            <option value="{{ mod|lower }}">{{ mod|upper }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Filter Skill</label>
+          <select id="filter-skill-tomorrow" onchange="updateTableFilter('tomorrow')">
+            <option value="">All</option>
+            {% for skill in skills %}
+            <option value="{{ skill }}">{{ skill }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="filter-toggle">
+          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')"> Hide 0 entries
+        </label>
+      </div>
+
       <!-- Worker Table - One row per entry -->
       <div class="table-container">
         <table class="edit-table compact-grid" id="edit-table-tomorrow">
@@ -426,6 +482,7 @@
           <tbody id="table-body-tomorrow"></tbody>
         </table>
       </div>
+      <div id="summary-tomorrow" class="summary-wrapper"></div>
       <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
     </div>
   </div>
@@ -478,14 +535,17 @@
     })();
 
     // State
-    let currentTab = 'today';
-    let rawData = { today: {}, tomorrow: {} };  // Raw modality data
-    let entriesData = { today: [], tomorrow: [] };  // Grouped by worker -> shifts (time-based)
-    let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
-    let currentEditEntry = null;
-    let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have been loaded
-    let editMode = { today: true, tomorrow: true };  // Inline edit mode defaults to ON
-    let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
+      let currentTab = 'today';
+      let rawData = { today: {}, tomorrow: {} };  // Raw modality data
+      let entriesData = { today: [], tomorrow: [] };  // Grouped by worker -> shifts (time-based)
+      let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
+      let currentEditEntry = null;
+      let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have been loaded
+      let editMode = { today: true, tomorrow: true };  // Inline edit mode defaults to ON
+      let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
+      let tableFilters = { today: { modality: '', skill: '', hideZero: false }, tomorrow: { modality: '', skill: '', hideZero: false } };
+
+      const ACTIVE_SKILL_VALUES = new Set([1, '1', 'w', 'W', -1, '-1']);
 
     function normalizeSkillValueJS(value) {
       if (value === undefined || value === null) return 0;
@@ -502,6 +562,52 @@
 
     function displaySkillValue(value) {
       return isWeightedSkill(value) ? 'w' : value;
+    }
+
+    function isActiveSkillValue(value) {
+      return ACTIVE_SKILL_VALUES.has(value);
+    }
+
+    function shiftMatchesFilters(shift, filter) {
+      if (!filter) return true;
+      const { modality, skill, hideZero } = filter;
+      const filterActive = Boolean(modality || skill || hideZero);
+      if (!filterActive) return true;
+
+      const modalitiesToCheck = modality ? [modality] : MODALITIES.map(m => m.toLowerCase());
+      let matchFound = false;
+
+      for (const modKey of modalitiesToCheck) {
+        const modData = shift.modalities[modKey];
+        if (!modData) continue;
+
+        if (skill) {
+          const val = modData.skills[skill];
+          if (hideZero ? isActiveSkillValue(val) : val !== undefined) {
+            matchFound = true;
+            break;
+          }
+        } else {
+          const hasSkill = SKILLS.some(s => {
+            const val = modData.skills[s];
+            return hideZero ? isActiveSkillValue(val) : val !== undefined;
+          });
+          if (hasSkill) {
+            matchFound = true;
+            break;
+          }
+        }
+      }
+
+      return matchFound;
+    }
+
+    function updateTableFilter(tab) {
+      const modality = (document.getElementById(`filter-modality-${tab}`)?.value || '').toLowerCase();
+      const skill = document.getElementById(`filter-skill-${tab}`)?.value || '';
+      const hideZero = document.getElementById(`filter-hide-zero-${tab}`)?.checked || false;
+      tableFilters[tab] = { modality, skill, hideZero };
+      renderTable(tab);
     }
 
     function applyEditModeUI(tab) {
@@ -708,6 +814,17 @@
       }
     }
 
+    function toggleAddPanel(tab) {
+      const body = document.getElementById(`add-panel-body-${tab}`);
+      const options = document.getElementById(`add-options-${tab}`);
+      if (!body) return;
+      const shouldShow = body.style.display === 'none';
+      body.style.display = shouldShow ? 'flex' : 'none';
+      if (options && !shouldShow) {
+        options.style.display = 'none';
+      }
+    }
+
     // Load data for a specific tab (lazy loading)
     async function loadTabData(tab) {
       try {
@@ -778,6 +895,9 @@
             taskStr = taskStr.filter(t => t && t.trim()).join(', ');
           }
 
+          const taskLower = (taskStr || '').toLowerCase();
+          const isGapRow = taskLower.includes('board') || taskLower.includes('gap');
+
           const rosterPreset = (WORKER_SKILLS[workerName] || {});
           const rosterSkills = rosterPreset[mod] || rosterPreset.default || {};
 
@@ -789,6 +909,7 @@
             end_time: row.end_time || '15:00',
             modifier: row.Modifier !== undefined ? row.Modifier : 1.0,
             skills: SKILLS.reduce((acc, skill) => {
+              if (isGapRow) { acc[skill] = -1; return acc; }
               const rawVal = row[skill];
               const fallback = rosterSkills[skill];
               const parsed = rawVal === undefined || rawVal === '' ? undefined : parseInt(rawVal);
@@ -916,6 +1037,54 @@
 
     // Render grouped table by worker - one row per modality entry with skill columns
     // Shows ALL modalities for each shift (even those with -1)
+    function renderSummary(tab, groups) {
+      const summaryEl = document.getElementById(`summary-${tab}`);
+      if (!summaryEl) return;
+
+      const counts = {};
+      SKILLS.forEach(skill => {
+        counts[skill] = {};
+        MODALITIES.forEach(mod => counts[skill][mod.toLowerCase()] = 0);
+      });
+
+      groups.forEach(group => {
+        const shifts = group.shiftsArray || [];
+        SKILLS.forEach(skill => {
+          MODALITIES.forEach(mod => {
+            const modKey = mod.toLowerCase();
+            const hasActive = shifts.some(shift => {
+              const modData = shift.modalities[modKey];
+              if (!modData) return false;
+              const val = modData.skills[skill];
+              return isActiveSkillValue(val);
+            });
+            if (hasActive) {
+              counts[skill][modKey] += 1;
+            }
+          });
+        });
+      });
+
+      let html = '<div class="summary-title">Active counts by skill & modality (w and 1 counted once per worker)</div>';
+      html += '<table class="summary-table"><thead><tr><th>Skill</th>';
+      MODALITIES.forEach(mod => {
+        const label = mod.toUpperCase();
+        html += `<th>${label}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      SKILLS.forEach(skill => {
+        html += `<tr><td style="text-align:left; font-weight:600;">${escapeHtml(skill)}</td>`;
+        MODALITIES.forEach(mod => {
+          html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      summaryEl.innerHTML = html;
+    }
+
     function renderTable(tab) {
       // First update the header
       renderTableHeader(tab);
@@ -924,8 +1093,10 @@
       tbody.innerHTML = '';
 
       const groups = entriesData[tab];
-      const counts = workerCounts[tab];
       const isEditMode = editMode[tab];
+      const filter = tableFilters[tab] || {};
+      const filterActive = Boolean(filter.modality || filter.skill || filter.hideZero);
+      const visibleGroups = [];
 
       const modCount = MODALITIES.length;
       // Calculate column count: Worker + Shift + Task + (Skills × Modalities) + (Modifiers × Modalities) + Actions
@@ -933,6 +1104,7 @@
 
       if (!groups || groups.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
+        renderSummary(tab, []);
         return;
       }
 
@@ -940,13 +1112,16 @@
         const shifts = group.shiftsArray || [];
         if (shifts.length === 0) return;
 
+        const shiftsToRender = filterActive ? shifts.filter(shift => shiftMatchesFilters(shift, filter)) : shifts;
+        if (filterActive && shiftsToRender.length === 0) return;
+
         const escapedWorker = escapeHtml(group.worker);
 
-        const totalRows = shifts.length;
+        const totalRows = shiftsToRender.length;
         const isDuplicate = shifts.length > 1;
         const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} shifts</span>` : '';
 
-        shifts.forEach((shift, shiftIdx) => {
+        shiftsToRender.forEach((shift, shiftIdx) => {
           const tr = document.createElement('tr');
           const modKeysToShow = MODALITIES.map(m => m.toLowerCase());
 
@@ -975,7 +1150,8 @@
             modKeysToShow.forEach(modKey => {
               const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
               const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-              const rawVal = modData.skills[skill] !== undefined ? modData.skills[skill] : -1;
+              const isGap = (shift.gaps || []).length > 0 || (shift.task || '').toLowerCase().includes('board');
+              const rawVal = isGap ? -1 : (modData.skills[skill] !== undefined ? modData.skills[skill] : -1);
               const val = normalizeSkillValueJS(rawVal);
               const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
 
@@ -989,9 +1165,6 @@
                   </select>
                 </td>`;
               } else {
-                const skillSettings = SKILL_SETTINGS[skill] || {};
-                const skillColor = skillSettings.button_color || '#6c757d';
-                const skillClass = isWeightedSkill(val) ? 'skill-val-w' : `skill-val-${val}`;
                 const displayVal = displaySkillValue(val);
                 tr.innerHTML += `<td class="${cellClass}"><span class="grid-badge skill-val ${skillClass}" style="border-color:${skillColor};">${displayVal}</span></td>`;
               }
@@ -1029,7 +1202,19 @@
 
           tbody.appendChild(tr);
         });
+
+        visibleGroups.push({ ...group, shiftsArray: shiftsToRender });
       });
+
+      if (filterActive && tbody.children.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 1.25rem; color: #666;">No rows match the current filters.</td></tr>`;
+      }
+
+      if (!filterActive) {
+        renderSummary(tab, groups);
+      } else {
+        renderSummary(tab, visibleGroups);
+      }
     }
 
     // Track inline time change
@@ -1050,23 +1235,24 @@
       });
     }
 
-    // Track inline modifier change
-    function onInlineModifierChange(tab, modKey, rowIndex, value, groupIdx, shiftIdx) {
-      // Handle new modality additions (rowIndex = -1)
-      if (rowIndex === -1) {
-        const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
-        if (!pendingChanges[tab][key]) {
-          pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, updates: {} };
-        }
-        pendingChanges[tab][key].updates['Modifier'] = parseFloat(value);
-        return;
-      }
+    // Track inline modifier change for the whole shift (one modifier)
+    function onInlineShiftModifierChange(tab, groupIdx, shiftIdx, value) {
+      const group = entriesData[tab][groupIdx];
+      if (!group) return;
+      const shift = group.shiftsArray?.[shiftIdx];
+      if (!shift) return;
 
-      const key = `${modKey}-${rowIndex}`;
-      if (!pendingChanges[tab][key]) {
-        pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
-      }
-      pendingChanges[tab][key].updates['Modifier'] = parseFloat(value);
+      const parsed = parseFloat(value);
+      shift.modifier = parsed;
+
+      Object.entries(shift.modalities).forEach(([modKey, modData]) => {
+        if (modData.row_index === undefined || modData.row_index < 0) return;
+        const key = `${modKey}-${modData.row_index}`;
+        if (!pendingChanges[tab][key]) {
+          pendingChanges[tab][key] = { modality: modKey, row_index: modData.row_index, updates: {} };
+        }
+        pendingChanges[tab][key].updates['Modifier'] = parsed;
+      });
     }
 
     // Delete all entries for a worker
@@ -1240,7 +1426,11 @@
       const skills = {};
       SKILLS.forEach(skill => {
         const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
-        skills[skill] = skillSelect ? parseInt(skillSelect.value) : 0;
+        if (!skillSelect) { skills[skill] = 0; return; }
+        const raw = (skillSelect.value || '').trim();
+        if (raw === 'w') { skills[skill] = 'w'; return; }
+        const parsed = parseInt(raw);
+        skills[skill] = Number.isNaN(parsed) ? 0 : parsed;
       });
 
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
