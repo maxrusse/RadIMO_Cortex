@@ -121,7 +121,6 @@
       display: grid;
       grid-template-columns: 120px 1fr;
       min-width: 800px;
-      position: relative;
     }
 
     /* Time header */
@@ -216,20 +215,23 @@
       position: relative;
     }
 
-    /* Current time indicator */
+    /* Current time indicator - contained within timeline grid */
+    .timeline-grid {
+      position: relative;
+    }
     .current-time-line {
       position: absolute;
-      top: 0;
+      top: 32px; /* Below header */
       bottom: 0;
       width: 2px;
       background: #dc3545;
-      z-index: 20;
+      z-index: 8;
       pointer-events: none;
     }
     .current-time-line::before {
       content: '';
       position: absolute;
-      top: -4px;
+      top: 0;
       left: -4px;
       width: 10px;
       height: 10px;
@@ -359,6 +361,8 @@
     const skillSlugMap = {{ skill_slug_map|tojson }};
     const skillColorMap = {{ skill_color_map|tojson }};
     const modColorMap = {{ modality_color_map|tojson }};
+    const currentModality = '{{ modality }}';
+    const isAllView = currentModality === 'all';
 
     // Timeline config
     const TIMELINE_START = 6;  // 6:00
@@ -382,10 +386,22 @@
       });
     }
 
-    // Convert time string to percentage position
+    // Convert time string to minutes for comparison (with null check)
+    function timeToMinutes(timeStr) {
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return 0;
+      const [h, m] = parts.map(Number);
+      return (h || 0) * 60 + (m || 0);
+    }
+
+    // Convert time string to percentage position (with null check)
     function timeToPercent(timeStr) {
-      const [h, m] = timeStr.split(':').map(Number);
-      const hours = h + m / 60;
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return 0;
+      const [h, m] = parts.map(Number);
+      const hours = (h || 0) + (m || 0) / 60;
       const clamped = Math.max(TIMELINE_START, Math.min(TIMELINE_END, hours));
       return ((clamped - TIMELINE_START) / TIMELINE_HOURS) * 100;
     }
@@ -411,6 +427,38 @@
       const div = document.createElement('div');
       div.textContent = String(text);
       return div.innerHTML;
+    }
+
+    // Merge entries with same time range, combining skills across modalities
+    function mergeEntriesByTime(entries) {
+      const timeMap = new Map();
+
+      entries.forEach(entry => {
+        const timeKey = `${entry.start_time}-${entry.end_time}`;
+        if (!timeMap.has(timeKey)) {
+          timeMap.set(timeKey, {
+            start_time: entry.start_time,
+            end_time: entry.end_time,
+            TIME: entry.TIME,
+            modalities: new Set(),
+            skillValues: {} // skill -> max value across modalities
+          });
+        }
+        const merged = timeMap.get(timeKey);
+        if (entry._modality) merged.modalities.add(entry._modality.toUpperCase());
+
+        // Merge skills - take highest active value for each skill
+        skillColumns.forEach(s => {
+          const val = entry[s];
+          const isActive = isSkillActive(val);
+          if (isActive) {
+            // Store the skill as active if any modality has it active
+            merged.skillValues[s] = 1;
+          }
+        });
+      });
+
+      return Array.from(timeMap.values());
     }
 
     // Build the timeline
@@ -444,7 +492,7 @@
         header.appendChild(slot);
       }
 
-      // Group entries by worker, then by shift time
+      // Group entries by worker name (merge across modalities in ALL view)
       const workerMap = new Map();
       data.forEach(entry => {
         const worker = entry.PPL;
@@ -456,27 +504,31 @@
 
       // Sort workers by earliest start time
       const sortedWorkers = Array.from(workerMap.entries()).sort((a, b) => {
-        const aStart = Math.min(...a[1].map(e => {
-          const [h, m] = e.start_time.split(':').map(Number);
-          return h * 60 + m;
-        }));
-        const bStart = Math.min(...b[1].map(e => {
-          const [h, m] = e.start_time.split(':').map(Number);
-          return h * 60 + m;
-        }));
+        const aStart = Math.min(...a[1].map(e => timeToMinutes(e.start_time)));
+        const bStart = Math.min(...b[1].map(e => timeToMinutes(e.start_time)));
         return aStart - bStart;
       });
 
       // Create worker rows
       sortedWorkers.forEach(([worker, entries]) => {
-        // Collect all skills this worker has
+        // In ALL view, merge entries by time slot
+        const processedEntries = isAllView ? mergeEntriesByTime(entries) : entries;
+
+        // Collect all skills this worker has (across all entries)
         const workerSkills = new Set();
-        entries.forEach(entry => {
-          skillColumns.forEach(s => {
-            if (isSkillActive(entry[s])) {
+        processedEntries.forEach(entry => {
+          if (isAllView) {
+            // For merged entries, check skillValues
+            Object.keys(entry.skillValues || {}).forEach(s => {
               workerSkills.add(skillSlugMap[s] || s.toLowerCase());
-            }
-          });
+            });
+          } else {
+            skillColumns.forEach(s => {
+              if (isSkillActive(entry[s])) {
+                workerSkills.add(skillSlugMap[s] || s.toLowerCase());
+              }
+            });
+          }
         });
 
         const row = document.createElement('div');
@@ -489,14 +541,17 @@
         nameCell.className = 'worker-name-cell';
         nameCell.textContent = worker;
 
-        // Add modality badge if showing all
-        const modality = entries[0]._modality;
-        if (modality && '{{ modality }}' === 'all') {
-          const badge = document.createElement('span');
-          badge.className = 'mod-badge';
-          badge.style.background = modColorMap[modality] || '#666';
-          badge.textContent = modality.toUpperCase();
-          nameCell.appendChild(badge);
+        // In ALL view, show modality badges for all modalities the worker is in
+        if (isAllView) {
+          const allMods = new Set();
+          entries.forEach(e => { if (e._modality) allMods.add(e._modality); });
+          allMods.forEach(mod => {
+            const badge = document.createElement('span');
+            badge.className = 'mod-badge';
+            badge.style.background = modColorMap[mod] || '#666';
+            badge.textContent = mod.toUpperCase();
+            nameCell.appendChild(badge);
+          });
         }
 
         // Timeline cell
@@ -504,16 +559,32 @@
         timelineCell.className = 'worker-timeline';
 
         // Create shift bars
-        entries.forEach(entry => {
+        processedEntries.forEach(entry => {
           const left = timeToPercent(entry.start_time);
           const right = timeToPercent(entry.end_time);
           const width = right - left;
 
           if (width <= 0) return;
 
-          const activeSkills = skillColumns
-            .filter(s => isSkillActive(entry[s]))
-            .map(s => skillSlugMap[s] || s.toLowerCase());
+          let activeSkills;
+          let tooltipMods = '';
+
+          if (isAllView && entry.skillValues) {
+            // Merged entry - get skills from skillValues
+            activeSkills = Object.keys(entry.skillValues)
+              .map(s => skillSlugMap[s] || s.toLowerCase());
+            if (entry.modalities && entry.modalities.size > 0) {
+              tooltipMods = `Modalities: ${Array.from(entry.modalities).join(', ')}\n`;
+            }
+          } else {
+            // Single modality entry
+            activeSkills = skillColumns
+              .filter(s => isSkillActive(entry[s]))
+              .map(s => skillSlugMap[s] || s.toLowerCase());
+            if (entry._modality) {
+              tooltipMods = `Modality: ${entry._modality.toUpperCase()}\n`;
+            }
+          }
 
           const bar = document.createElement('div');
           bar.className = 'shift-bar';
@@ -523,8 +594,7 @@
           bar.dataset.skills = activeSkills.join(',');
 
           // Tooltip
-          const modInfo = entry._modality ? `Modality: ${entry._modality.toUpperCase()}\n` : '';
-          bar.title = `${worker}\n${modInfo}Zeit: ${entry.TIME}\nSkills: ${activeSkills.join(', ')}`;
+          bar.title = `${worker}\n${tooltipMods}Zeit: ${entry.TIME}\nSkills: ${activeSkills.join(', ')}`;
 
           timelineCell.appendChild(bar);
         });
@@ -539,7 +609,7 @@
       setInterval(updateCurrentTimeLine, 60000); // Update every minute
     }
 
-    // Update current time line
+    // Update current time line - positioned within timeline grid
     function updateCurrentTimeLine() {
       const existing = document.getElementById('current-time-line');
       if (existing) existing.remove();
@@ -547,19 +617,22 @@
       const now = new Date();
       const currentHour = now.getHours() + now.getMinutes() / 60;
 
+      // Only show if within timeline bounds
       if (currentHour < TIMELINE_START || currentHour > TIMELINE_END) return;
 
       const percent = ((currentHour - TIMELINE_START) / TIMELINE_HOURS) * 100;
 
+      const grid = document.getElementById('timeline-grid');
       const line = document.createElement('div');
       line.id = 'current-time-line';
       line.className = 'current-time-line';
+      // Position: 120px for worker column + percentage of remaining width
       line.style.left = `calc(120px + (100% - 120px) * ${percent / 100})`;
 
-      document.querySelector('.timeline-wrapper').appendChild(line);
+      grid.appendChild(line);
     }
 
-    // Filter by skill
+    // Filter by skill - simple show/hide based on skill presence
     function filterBySkill(skill) {
       const grid = document.getElementById('timeline-grid');
       const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn[data-skill]');
@@ -572,27 +645,25 @@
       // Update filter state
       grid.dataset.filter = skill;
 
-      // Filter rows
+      // Filter rows - simply show/hide based on skill (no opacity changes)
       const rows = grid.querySelectorAll('.worker-row');
       rows.forEach(row => {
         if (skill === 'all') {
           row.style.display = '';
-          row.querySelectorAll('.shift-bar').forEach(bar => bar.style.opacity = '1');
         } else {
-          const skillSlug = Object.entries(skillSlugMap).find(([k, v]) =>
-            v === skill.toLowerCase() || k === skill
-          )?.[1] || skill.toLowerCase();
+          // Find the skill slug - check both by label and by column name
+          let skillSlug = skill.toLowerCase();
+          for (const [colName, slug] of Object.entries(skillSlugMap)) {
+            if (slug === skill.toLowerCase() || colName === skill || slug === skill) {
+              skillSlug = slug;
+              break;
+            }
+          }
 
-          const workerSkills = (row.dataset.skills || '').split(',');
-          const hasSkill = workerSkills.includes(skillSlug);
+          const workerSkills = (row.dataset.skills || '').split(',').filter(s => s);
+          const hasSkill = workerSkills.some(ws => ws === skillSlug || ws.toLowerCase() === skillSlug);
 
           row.style.display = hasSkill ? '' : 'none';
-
-          // Highlight matching shift bars
-          row.querySelectorAll('.shift-bar').forEach(bar => {
-            const barSkills = (bar.dataset.skills || '').split(',');
-            bar.style.opacity = barSkills.includes(skillSlug) ? '1' : '0.3';
-          });
         }
       });
     }
