@@ -37,48 +37,48 @@
     /* Table Styles */
     .table-container { overflow: visible; }
     .edit-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-    .edit-table th, .edit-table td { padding: 0.25rem 0.3rem; text-align: left; border: 1px solid #ddd; vertical-align: top; }
+    .edit-table th, .edit-table td { padding: 0.15rem 0.2rem; text-align: left; border: 1px solid #e5e5e5; vertical-align: top; }
     .edit-table th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
     .edit-table tr:hover { background: #f8f9fa; }
     .compact-grid th { text-align: center; }
-    .compact-grid .header-top th { font-size: 0.75rem; padding: 0.35rem 0.25rem; }
-    .compact-grid .header-sub th { font-size: 0.7rem; padding: 0.2rem 0.25rem; background: #eef1f5; }
-    .compact-grid .sub-col { min-width: 38px; }
+    .compact-grid .header-top th { font-size: 0.75rem; padding: 0.25rem 0.15rem; }
+    .compact-grid .header-sub th { font-size: 0.7rem; padding: 0.15rem 0.15rem; background: #eef1f5; }
+    .compact-grid .sub-col { min-width: 32px; }
     .compact-grid .skill-header { color: white; }
     .compact-grid .grid-row td { text-align: center; vertical-align: middle; }
-    .compact-grid .worker-col { min-width: 170px; text-align: left !important; }
-    .compact-grid .shift-col { min-width: 150px; text-align: left !important; }
-    .compact-grid .task-col { min-width: 120px; text-align: left !important; }
+    .compact-grid .worker-col { min-width: 150px; text-align: left !important; }
+    .compact-grid .shift-col { min-width: 130px; text-align: left !important; }
+    .compact-grid .task-col { min-width: 100px; text-align: left !important; }
     .grid-select { width: 100%; padding: 0.15rem; font-size: 0.72rem; }
-    .grid-input { width: 28px; padding: 0.1rem; font-size: 0.72rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; font-weight: 600; }
+    .grid-input { width: 24px; padding: 0.1rem; font-size: 0.72rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; font-weight: 600; }
     .grid-input:focus { outline: 2px solid #004892; border-color: #004892; }
-    .grid-mod-input { width: 36px; padding: 0.1rem; font-size: 0.68rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; }
+    .grid-mod-input { width: 32px; padding: 0.1rem; font-size: 0.68rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; }
     .grid-mod-input:focus { outline: 2px solid #17a2b8; border-color: #17a2b8; }
-    .grid-badge { display: inline-block; min-width: 32px; padding: 0.15rem 0.25rem; border-radius: 4px; border: 1px solid #ddd; }
+    .grid-badge { display: inline-block; min-width: 28px; padding: 0.1rem 0.2rem; border-radius: 4px; border: 1px solid #ddd; }
     .grid-cell { background: #fff; }
     .grid-cell.ghost { background: #fafafa; color: #999; }
-    .grid-modifier { min-width: 50px; }
+    .grid-modifier { min-width: 42px; }
     .row-skill-flag { background: #e9f7ef; }
 
     /* Badges - colors are dynamically generated from MODALITY_SETTINGS */
-    .badge { display: inline-block; padding: 0.2rem 0.4rem; margin: 0.1rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600; }
+    .badge { display: inline-block; padding: 0.15rem 0.3rem; margin: 0.05rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600; }
     .badge-default { background: #6c757d; color: white; }
 
     /* Skill cells */
     .skill-cell { text-align: center; font-size: 0.7rem; }
-    .skill-val { padding: 0.15rem 0.35rem; border-radius: 3px; font-size: 0.72rem; background: #f4f4f4; color: #333; border: 1px solid #ddd; }
+    .skill-val { padding: 0.1rem 0.25rem; border-radius: 3px; font-size: 0.72rem; background: #f4f4f4; color: #333; border: 1px solid #ddd; }
 
     /* Multi-modality chips per skill */
-    .mod-skill-grid { display: flex; flex-wrap: wrap; gap: 0.2rem; }
-    .mod-skill-chip { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.2rem; border-radius: 4px; background: #f8f9fa; border: 1px solid #dee2e6; }
+    .mod-skill-grid { display: flex; flex-wrap: wrap; gap: 0.15rem; }
+    .mod-skill-chip { display: inline-flex; align-items: center; gap: 0.15rem; padding: 0.1rem 0.15rem; border-radius: 4px; background: #f8f9fa; border: 1px solid #dee2e6; }
     .mod-skill-chip .badge { margin: 0; }
-    .mod-skill-chip select { padding: 0.1rem; font-size: 0.7rem; width: 42px; }
+    .mod-skill-chip select { padding: 0.1rem; font-size: 0.7rem; width: 38px; }
     .mod-skill-chip.ghost { opacity: 0.7; border-style: dashed; }
-    .skill-bundle { min-width: 120px; }
+    .skill-bundle { min-width: 100px; }
 
     /* Aggregated skill/modality cells */
-    .agg-cell { text-align: center; font-size: 0.7rem; min-width: 50px; }
-    .agg-val { padding: 0.25rem 0.4rem; border-radius: 3px; font-size: 0.72rem; display: inline-block; min-width: 30px; background: #f7f7f7; border: 1px solid #e1e1e1; color: #333; }
+    .agg-cell { text-align: center; font-size: 0.7rem; min-width: 42px; }
+    .agg-val { padding: 0.15rem 0.3rem; border-radius: 3px; font-size: 0.72rem; display: inline-block; min-width: 26px; background: #f7f7f7; border: 1px solid #e1e1e1; color: #333; }
     .agg-all-1 { background: #f7f7f7; }       /* Neutralize colors */
     .agg-any-1 { background: #f7f7f7; }
     .agg-all-0 { background: #f7f7f7; }
@@ -982,11 +982,36 @@
 
     // Tab switching with lazy loading
     async function switchTab(tab) {
+      const previousTab = currentTab;
       currentTab = tab;
       document.getElementById('tab-today').className = tab === 'today' ? 'tab-btn active-today' : 'tab-btn';
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab-btn active-tomorrow' : 'tab-btn';
       document.getElementById('content-today').className = tab === 'today' ? 'tab-content active' : 'tab-content';
       document.getElementById('content-tomorrow').className = tab === 'tomorrow' ? 'tab-content active' : 'tab-content';
+
+      // Preserve filter state when switching tabs
+      if (previousTab && previousTab !== tab) {
+        const prevFilter = tableFilters[previousTab];
+        if (prevFilter) {
+          // Copy filter state to new tab
+          tableFilters[tab] = { ...prevFilter };
+
+          // Update UI dropdowns for new tab
+          const modalitySelect = document.getElementById(`filter-modality-${tab}`);
+          const skillSelect = document.getElementById(`filter-skill-${tab}`);
+          const hideZeroCheckbox = document.getElementById(`filter-hide-zero-${tab}`);
+
+          if (modalitySelect && prevFilter.modality !== undefined) {
+            modalitySelect.value = prevFilter.modality;
+          }
+          if (skillSelect && prevFilter.skill !== undefined) {
+            skillSelect.value = prevFilter.skill;
+          }
+          if (hideZeroCheckbox && prevFilter.hideZero !== undefined) {
+            hideZeroCheckbox.checked = prevFilter.hideZero;
+          }
+        }
+      }
 
       // Lazy load data for the selected tab if not already loaded
       if (!dataLoaded[tab]) {
