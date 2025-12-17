@@ -453,8 +453,8 @@ for mod in allowed_modalities:
 # -----------------------------------------------------------
 global_worker_data = {
     'worker_ids': {},  # Map of worker name variations to canonical ID
-    # Modality-specific weighted counts and assignments:
-    'weighted_counts_per_mod': {mod: {} for mod in allowed_modalities},
+    # Single global weighted counts (consolidated across all modalities):
+    'weighted_counts': {},  # {worker_id: count}
     'assignments_per_mod': {mod: {} for mod in allowed_modalities},
     'last_reset_date': None  # Global reset date tracker
 }
@@ -493,7 +493,7 @@ def save_state():
         state = {
             'global_worker_data': {
                 'worker_ids': global_worker_data['worker_ids'],
-                'weighted_counts_per_mod': global_worker_data['weighted_counts_per_mod'],
+                'weighted_counts': global_worker_data['weighted_counts'],
                 'assignments_per_mod': global_worker_data['assignments_per_mod'],
                 'last_reset_date': global_worker_data['last_reset_date'].isoformat() if global_worker_data['last_reset_date'] else None
             },
@@ -534,7 +534,19 @@ def load_state():
         if 'global_worker_data' in state:
             gwd = state['global_worker_data']
             global_worker_data['worker_ids'] = gwd.get('worker_ids', {})
-            global_worker_data['weighted_counts_per_mod'] = gwd.get('weighted_counts_per_mod', {mod: {} for mod in allowed_modalities})
+            # Load new single weighted_counts or migrate from old per-modality structure
+            if 'weighted_counts' in gwd:
+                global_worker_data['weighted_counts'] = gwd.get('weighted_counts', {})
+            elif 'weighted_counts_per_mod' in gwd:
+                # Migrate from old per-modality structure by summing all modalities
+                old_per_mod = gwd.get('weighted_counts_per_mod', {})
+                migrated_counts = {}
+                for mod_counts in old_per_mod.values():
+                    for worker_id, count in mod_counts.items():
+                        migrated_counts[worker_id] = migrated_counts.get(worker_id, 0.0) + count
+                global_worker_data['weighted_counts'] = migrated_counts
+            else:
+                global_worker_data['weighted_counts'] = {}
             global_worker_data['assignments_per_mod'] = gwd.get('assignments_per_mod', {mod: {} for mod in allowed_modalities})
 
             last_reset_str = gwd.get('last_reset_date')
@@ -1484,10 +1496,8 @@ def validate_excel_structure(df: pd.DataFrame, required_columns) -> (bool, str):
 # Helper functions to compute global totals across modalities
 # -----------------------------------------------------------
 def get_global_weighted_count(canonical_id):
-    total = 0.0
-    for mod in allowed_modalities:
-        total += global_worker_data['weighted_counts_per_mod'][mod].get(canonical_id, 0.0)
-    return total
+    """Get single global weighted count for a worker (consolidated across all modalities)."""
+    return global_worker_data['weighted_counts'].get(canonical_id, 0.0)
 
 def get_global_assignments(canonical_id):
     totals = {skill: 0 for skill in SKILL_COLUMNS}
@@ -1539,7 +1549,7 @@ def initialize_data(file_path: str, modality: str):
     d['WeightedCounts'] = {}
 
     # Also reset global counters specific to this modality
-    global_worker_data['weighted_counts_per_mod'][modality] = {}
+    # Note: weighted_counts is now a single global value, reset during daily reset only
     global_worker_data['assignments_per_mod'][modality] = {}
 
     with lock:
@@ -2113,6 +2123,7 @@ def check_and_perform_daily_reset():
         )
         if should_reset_global:
             global_worker_data['last_reset_date'] = today
+            global_worker_data['weighted_counts'] = {}  # Reset global weighted counts on daily reset
             save_state()  # Persist reset date to disk
             selection_logger.info("Performed global reset based on modality scheduled uploads.")
         
@@ -2164,7 +2175,7 @@ def check_and_perform_daily_reset():
             else:
                 selection_logger.info(f"No scheduled file found for modality {mod}. Keeping old data.")
             d['last_reset_date'] = today
-            global_worker_data['weighted_counts_per_mod'][mod] = {}
+            # Note: weighted_counts is now a single global value, reset at global level above
             global_worker_data['assignments_per_mod'][mod] = {}
             save_state()  # Persist reset to disk
             
@@ -2192,8 +2203,9 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     # Note: skill='w' is just a visual marker - weight is controlled by Modifier field
     weight = get_skill_modality_weight(role, modality) * modifier
 
-    global_worker_data['weighted_counts_per_mod'][modality][canonical_id] = \
-        global_worker_data['weighted_counts_per_mod'][modality].get(canonical_id, 0.0) + weight
+    # Update single global weighted count (consolidated across all modalities)
+    global_worker_data['weighted_counts'][canonical_id] = \
+        global_worker_data['weighted_counts'].get(canonical_id, 0.0) + weight
 
     assignments = _get_or_create_assignments(modality, canonical_id)
     assignments[role] += 1
@@ -3080,6 +3092,9 @@ def upload_file():
 
             # CRITICAL: Acquire lock before modifying global state
             with lock:
+                # Reset global weighted counts once before processing modalities
+                global_worker_data['weighted_counts'] = {}
+
                 # Reset all counters and apply to modality_data
                 for modality, df in modality_dfs.items():
                     d = modality_data[modality]
@@ -3088,7 +3103,6 @@ def upload_file():
                     d['draw_counts'] = {}
                     d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
                     d['WeightedCounts'] = {}
-                    global_worker_data['weighted_counts_per_mod'][modality] = {}
                     global_worker_data['assignments_per_mod'][modality] = {}
 
                     # Load DataFrame
@@ -3261,6 +3275,9 @@ def load_today_from_master():
 
         # Reset counters and apply to modality_data
         with lock:
+            # Reset global weighted counts once before processing modalities
+            global_worker_data['weighted_counts'] = {}
+
             for modality, df in modality_dfs.items():
                 d = modality_data[modality]
 
@@ -3268,7 +3285,6 @@ def load_today_from_master():
                 d['draw_counts'] = {}
                 d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
                 d['WeightedCounts'] = {}
-                global_worker_data['weighted_counts_per_mod'][modality] = {}
                 global_worker_data['assignments_per_mod'][modality] = {}
 
                 # Load DataFrame

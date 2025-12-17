@@ -210,79 +210,10 @@
       <strong>Load Today from CSV:</strong>
       <button class="btn btn-success" onclick="loadFromCSV('today')">Load Today</button>
       <span id="load-status-today" style="color: #666;"></span>
+      <button class="btn btn-primary" onclick="openAddWorkerModal('today')" style="margin-left: auto;">+ Add Worker</button>
     </div>
 
       <div class="card">
-      <!-- Add Worker Panel -->
-      <div class="add-panel">
-        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
-          <button class="btn btn-primary" onclick="toggleAddPanel('today')">+ Add Worker</button>
-          <span style="font-size:0.8rem; color:#666;">Quick add like the edit popup.</span>
-        </div>
-        <div class="add-row" id="add-panel-body-today" style="display:none;">
-          <div class="form-group">
-            <label>Worker</label>
-            <select id="add-worker-today" onchange="onWorkerChange('today')" style="min-width: 180px;">
-              <option value="">-- Select Worker --</option>
-              {% for worker in worker_list %}
-              <option value="{{ worker }}">{{ worker }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Task/Role</label>
-            <select id="add-task-today" onchange="onTaskChange('today')" style="min-width: 180px;">
-              <option value="">-- Select Task --</option>
-              {% for task in task_roles|default([]) %}
-              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}" data-modifier="{{ task.modifier|default(1.0) }}">{{ task.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group" id="modality-select-today" style="display: none;">
-            <label>Modality</label>
-            <select id="add-modality-today">
-              {% for mod in modalities %}
-              <option value="{{ mod }}">{{ mod|upper }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <button class="btn btn-success" onclick="addWorker('today')">Add</button>
-        </div>
-        <!-- Expandable Time & Skills Section -->
-        <div id="add-options-today" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
-          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start;">
-            <div class="form-group">
-              <label>Start Time</label>
-              <input type="time" id="add-start-time-today" value="07:00" style="padding: 0.3rem;">
-            </div>
-            <div class="form-group">
-              <label>End Time</label>
-              <input type="time" id="add-end-time-today" value="15:00" style="padding: 0.3rem;">
-            </div>
-            <div class="form-group">
-              <label>Modifier</label>
-              <select id="add-modifier-today" style="padding: 0.3rem;">
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1.0" selected>1.0x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-              </select>
-            </div>
-          </div>
-          <div style="margin-top: 0.5rem;">
-            <label style="font-size: 0.85rem; font-weight: 500;">Skills:</label>
-            <div id="add-skills-today" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
-              {% for skill in skills %}
-              <div style="display: flex; align-items: center; gap: 0.25rem;">
-                <input id="add-skill-{{ skill }}-today" type="text" inputmode="numeric" pattern="-?\d|w" value="0" style="padding: 0.2rem; font-size: 0.8rem; width: 40px; text-align: center;">
-                <span style="font-size: 0.75rem;">{{ skill }}</span>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- Controls -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
@@ -357,80 +288,10 @@
       <strong>Load Next Day from CSV:</strong>
       <button class="btn btn-warning" onclick="loadFromCSV('next')">Load Next Day</button>
       <span id="load-status-tomorrow" style="color: #666;"></span>
+      <button class="btn btn-primary" onclick="openAddWorkerModal('tomorrow')" style="margin-left: auto;">+ Add Worker</button>
     </div>
 
       <div class="card">
-      <!-- Add Worker Panel -->
-      <div class="add-panel tomorrow">
-        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
-          <button class="btn btn-primary" onclick="toggleAddPanel('tomorrow')">+ Add Worker</button>
-          <span style="font-size:0.8rem; color:#666;">Quick add like the edit popup.</span>
-        </div>
-        <div class="add-row" id="add-panel-body-tomorrow" style="display:none;">
-          <div class="form-group">
-            <label>Worker Name</label>
-            <input type="text" id="add-worker-input" placeholder="e.g. Dr. Müller" style="width: 200px;" list="worker-list-datalist" autocomplete="off" onchange="onWorkerChange('tomorrow')" oninput="onWorkerChange('tomorrow')">
-            <datalist id="worker-list-datalist">
-              {% for worker in worker_list %}
-              <option value="{{ worker }}">
-              {% endfor %}
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label>Task/Role</label>
-            <select id="add-task-tomorrow" onchange="onTaskChange('tomorrow')" style="min-width: 180px;">
-              <option value="">-- Select Task --</option>
-              {% for task in task_roles|default([]) %}
-              <option value="{{ task.name }}" data-modalities="{{ task.modalities|tojson }}" data-shift="{{ task.shift }}" data-skills="{{ task.base_skills|tojson }}" data-modifier="{{ task.modifier|default(1.0) }}">{{ task.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group" id="modality-select-tomorrow" style="display: none;">
-            <label>Modality</label>
-            <select id="add-modality-tomorrow">
-              {% for mod in modalities %}
-              <option value="{{ mod }}">{{ mod|upper }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <button class="btn btn-warning" onclick="addWorker('tomorrow')">Add</button>
-        </div>
-        <!-- Expandable Time & Skills Section -->
-        <div id="add-options-tomorrow" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e0e0e0;">
-          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start;">
-            <div class="form-group">
-              <label>Start Time</label>
-              <input type="time" id="add-start-time-tomorrow" value="07:00" style="padding: 0.3rem;">
-            </div>
-            <div class="form-group">
-              <label>End Time</label>
-              <input type="time" id="add-end-time-tomorrow" value="15:00" style="padding: 0.3rem;">
-            </div>
-            <div class="form-group">
-              <label>Modifier</label>
-              <select id="add-modifier-tomorrow" style="padding: 0.3rem;">
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1.0" selected>1.0x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-              </select>
-            </div>
-          </div>
-          <div style="margin-top: 0.5rem;">
-            <label style="font-size: 0.85rem; font-weight: 500;">Skills:</label>
-            <div id="add-skills-tomorrow" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem;">
-              {% for skill in skills %}
-              <div style="display: flex; align-items: center; gap: 0.25rem;">
-                <input id="add-skill-{{ skill }}-tomorrow" type="text" inputmode="numeric" pattern="-?\d|w" value="0" style="padding: 0.2rem; font-size: 0.8rem; width: 40px; text-align: center;">
-                <span style="font-size: 0.75rem;">{{ skill }}</span>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Controls -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -504,6 +365,24 @@
     </div>
   </div>
 
+  <!-- Add Worker Modal -->
+  <div class="modal-overlay" id="add-worker-modal">
+    <div class="modal" style="max-width: 800px;">
+      <h3 id="add-worker-modal-title">Add Worker</h3>
+      <div id="add-worker-modal-content"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeAddWorkerModal()">Cancel</button>
+        <button class="btn btn-success" onclick="saveAddWorkerModal()">Add Worker</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Worker list datalist for autocomplete -->
+  <datalist id="worker-list-datalist">
+    {% for worker in worker_list %}
+    <option value="{{ worker }}">
+    {% endfor %}
+  </datalist>
 
   <script>
     // Configuration from backend
@@ -550,6 +429,12 @@
       let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
       let tableFilters = { today: { modality: '', skill: '', hideZero: false }, tomorrow: { modality: '', skill: '', hideZero: false } };
       let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
+
+      // Add Worker Modal state
+      let addWorkerModalState = {
+        tab: null,
+        tasks: []  // Array of { task, modality, start_time, end_time, modifier, skills }
+      };
 
       function toggleDisplayOrder() {
         displayOrder = displayOrder === 'modality-first' ? 'skill-first' : 'modality-first';
@@ -1016,17 +901,6 @@
       // Lazy load data for the selected tab if not already loaded
       if (!dataLoaded[tab]) {
         await loadTabData(tab);
-      }
-    }
-
-    function toggleAddPanel(tab) {
-      const body = document.getElementById(`add-panel-body-${tab}`);
-      const options = document.getElementById(`add-options-${tab}`);
-      if (!body) return;
-      const shouldShow = body.style.display === 'none';
-      body.style.display = shouldShow ? 'flex' : 'none';
-      if (options && !shouldShow) {
-        options.style.display = 'none';
       }
     }
 
@@ -1546,193 +1420,6 @@
         }
         showMessage('success', `Deleted all entries for ${group.worker}`);
         await loadData();
-      } catch (error) {
-        showMessage('error', error.message);
-      }
-    }
-
-    // Task dropdown change - auto-select modality (shift comes from task config)
-    // Auto-prepull skills from worker roster when worker is selected (if no task selected)
-    function onWorkerChange(tab) {
-      const workerSelect = document.getElementById(`add-worker-${tab}`);
-      const workerInput = document.getElementById('add-worker-input');
-      const taskSelect = document.getElementById(`add-task-${tab}`);
-      const optionsPanel = document.getElementById(`add-options-${tab}`);
-
-      let workerName = workerSelect ? workerSelect.value : (workerInput ? workerInput.value : '');
-
-      // If no task selected and worker has roster entry, prepull skills from roster
-      if (workerName && (!taskSelect.value || taskSelect.value === '')) {
-        const preset = WORKER_SKILLS[workerName];
-        if (preset) {
-          optionsPanel.style.display = 'block';
-          const skills = preset.skills || preset;
-          SKILLS.forEach(skill => {
-            const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
-            if (skillSelect && skills && skills[skill] !== undefined) {
-              // Limit roster presets to 0/-1; positive values reserved for CSV/manual
-              const val = skills[skill];
-              skillSelect.value = (val > 0 ? 0 : val).toString();
-            }
-          });
-        }
-      }
-    }
-
-    function onTaskChange(tab) {
-      const taskSelect = document.getElementById(`add-task-${tab}`);
-      const modalityGroup = document.getElementById(`modality-select-${tab}`);
-      const modalitySelect = document.getElementById(`add-modality-${tab}`);
-      const optionsPanel = document.getElementById(`add-options-${tab}`);
-      const workerSelect = document.getElementById(`add-worker-${tab}`);
-      const workerInput = document.getElementById('add-worker-input');
-
-      const option = taskSelect.options[taskSelect.selectedIndex];
-      if (!option || !option.value) {
-        modalityGroup.style.display = 'none';
-        // If no task but worker selected, still show options with worker skills
-        const workerName = workerSelect ? workerSelect.value : (workerInput ? workerInput.value : '');
-        if (workerName) {
-          onWorkerChange(tab);
-        } else {
-          optionsPanel.style.display = 'none';
-        }
-        return;
-      }
-
-      // Get modalities from data attribute
-      const modalities = JSON.parse(option.dataset.modalities || '[]');
-
-      // Show modality dropdown if multiple options
-      if (modalities.length > 1) {
-        modalityGroup.style.display = 'block';
-        modalitySelect.innerHTML = modalities.map(m => `<option value="${m}">${m.toUpperCase()}</option>`).join('');
-      } else if (modalities.length === 1) {
-        modalityGroup.style.display = 'none';
-        modalitySelect.innerHTML = `<option value="${modalities[0]}">${modalities[0].toUpperCase()}</option>`;
-      }
-
-      // Show options panel and prefill values from task config
-      optionsPanel.style.display = 'block';
-
-      // Prefill times from shift config
-      const shiftName = option.dataset.shift || 'Fruehdienst';
-      const shiftConfig = SHIFT_TIMES[shiftName] || {};
-      const shiftDefault = shiftConfig.default || '07:00-15:00';
-      const [startTime, endTime] = shiftDefault.split('-');
-      document.getElementById(`add-start-time-${tab}`).value = startTime;
-      document.getElementById(`add-end-time-${tab}`).value = endTime;
-
-      // Prefill modifier from task config
-      const taskModifier = parseFloat(option.dataset.modifier) || 1.0;
-      const modifierSelect = document.getElementById(`add-modifier-${tab}`);
-      modifierSelect.value = taskModifier.toString();
-
-      // Prefill skills from task config (auto-apply, no button needed)
-      const taskSkills = JSON.parse(option.dataset.skills || '{}');
-      SKILLS.forEach(skill => {
-        const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
-        if (skillSelect) {
-          const val = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
-          skillSelect.value = val.toString();
-        }
-      });
-
-      // If worker also selected, merge with worker roster skills (task takes priority for active skills)
-      const workerName = workerSelect ? workerSelect.value : (workerInput ? workerInput.value : '');
-      if (workerName) {
-        const preset = WORKER_SKILLS[workerName];
-        if (preset) {
-          const rosterSkills = preset.skills || preset;
-          SKILLS.forEach(skill => {
-            // Only apply roster skill if task didn't set it to active (1 or 2)
-            const taskVal = taskSkills[skill];
-            if (taskVal === undefined || taskVal <= 0) {
-              const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
-              if (skillSelect && rosterSkills && rosterSkills[skill] !== undefined) {
-                const val = rosterSkills[skill];
-                // Roster -1 values override task 0 values
-                if (val === -1) {
-                  skillSelect.value = '-1';
-                }
-              }
-            }
-          });
-        }
-      }
-    }
-
-    // Add worker
-    async function addWorker(tab) {
-      // Get worker name - handle both select and input
-      let workerName;
-      const workerSelect = document.getElementById(`add-worker-${tab}`);
-      const workerInput = document.getElementById('add-worker-input');
-      if (workerSelect) {
-        workerName = workerSelect.value;
-      } else if (workerInput) {
-        workerName = workerInput.value;
-      }
-
-      const taskSelect = document.getElementById(`add-task-${tab}`);
-      const modalitySelect = document.getElementById(`add-modality-${tab}`);
-
-      const taskName = taskSelect.value;
-      const modality = modalitySelect.value;
-
-      if (!workerName) { showMessage('error', 'Please enter/select a worker'); return; }
-      if (!taskName) { showMessage('error', 'Please select a task/role'); return; }
-
-      // Get times from form fields (user can edit these)
-      const startTime = document.getElementById(`add-start-time-${tab}`).value;
-      const endTime = document.getElementById(`add-end-time-${tab}`).value;
-
-      // Get modifier from form field (user can edit)
-      const modifier = parseFloat(document.getElementById(`add-modifier-${tab}`).value) || 1.0;
-
-      // Get skills from form fields (user can edit these)
-      const skills = {};
-      SKILLS.forEach(skill => {
-        const skillSelect = document.getElementById(`add-skill-${skill}-${tab}`);
-        if (!skillSelect) { skills[skill] = 0; return; }
-        const raw = (skillSelect.value || '').trim();
-        if (raw === 'w') { skills[skill] = 'w'; return; }
-        const parsed = parseInt(raw);
-        skills[skill] = Number.isNaN(parsed) ? 0 : parsed;
-      });
-
-      const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
-
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality,
-            worker_data: {
-              PPL: workerName,
-              start_time: startTime,
-              end_time: endTime,
-              Modifier: modifier,
-              tasks: taskName,
-              ...skills
-            }
-          })
-        });
-
-        if (response.ok) {
-          showMessage('success', `${workerName} added as ${taskName}`);
-          // Reset form
-          if (workerSelect) workerSelect.value = '';
-          if (workerInput) workerInput.value = '';
-          taskSelect.value = '';
-          document.getElementById(`modality-select-${tab}`).style.display = 'none';
-          document.getElementById(`add-options-${tab}`).style.display = 'none';
-          await loadData();
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          showMessage('error', errData.error || 'Failed to add worker');
-        }
       } catch (error) {
         showMessage('error', error.message);
       }
@@ -2494,6 +2181,282 @@
       document.getElementById('edit-modal').classList.remove('show');
       currentEditEntry = null;
     }
+
+    // =============================================
+    // ADD WORKER MODAL FUNCTIONS
+    // =============================================
+
+    function openAddWorkerModal(tab) {
+      addWorkerModalState.tab = tab;
+      addWorkerModalState.tasks = [];
+      // Start with one empty task
+      addTaskToAddWorkerModal();
+      renderAddWorkerModalContent();
+      document.getElementById('add-worker-modal').classList.add('show');
+      document.getElementById('add-worker-modal-title').textContent = tab === 'today' ? 'Add Worker (Today)' : 'Add Worker (Tomorrow)';
+    }
+
+    function closeAddWorkerModal() {
+      document.getElementById('add-worker-modal').classList.remove('show');
+      addWorkerModalState.tab = null;
+      addWorkerModalState.tasks = [];
+    }
+
+    function addTaskToAddWorkerModal() {
+      // Find default task to prefill
+      const defaultTask = TASK_ROLES.find(t => !t.exclusion) || {};
+      const defaultMod = (defaultTask.modalities && defaultTask.modalities[0]) || MODALITIES[0] || 'ct';
+      const shiftConfig = SHIFT_TIMES[defaultTask.shift || 'Fruehdienst'] || {};
+      const [startTime, endTime] = (shiftConfig.default || '07:00-15:00').split('-');
+
+      // Default skills from task
+      const defaultSkills = {};
+      SKILLS.forEach(skill => {
+        defaultSkills[skill] = defaultTask.base_skills ? (defaultTask.base_skills[skill] || 0) : 0;
+      });
+
+      addWorkerModalState.tasks.push({
+        task: defaultTask.name || '',
+        modality: defaultMod,
+        start_time: startTime,
+        end_time: endTime,
+        modifier: defaultTask.modifier || 1.0,
+        skills: defaultSkills
+      });
+    }
+
+    function removeTaskFromAddWorkerModal(idx) {
+      if (addWorkerModalState.tasks.length <= 1) {
+        showMessage('error', 'At least one task is required');
+        return;
+      }
+      addWorkerModalState.tasks.splice(idx, 1);
+      renderAddWorkerModalContent();
+    }
+
+    function updateAddWorkerTask(idx, field, value) {
+      if (!addWorkerModalState.tasks[idx]) return;
+      addWorkerModalState.tasks[idx][field] = value;
+
+      // If task changed, update modality, times, modifier, and skills
+      if (field === 'task') {
+        const taskConfig = TASK_ROLES.find(t => t.name === value);
+        if (taskConfig) {
+          const task = addWorkerModalState.tasks[idx];
+          task.modality = (taskConfig.modalities && taskConfig.modalities[0]) || task.modality;
+
+          const shiftConfig = SHIFT_TIMES[taskConfig.shift || 'Fruehdienst'] || {};
+          const [startTime, endTime] = (shiftConfig.default || '07:00-15:00').split('-');
+          task.start_time = startTime;
+          task.end_time = endTime;
+          task.modifier = taskConfig.modifier || 1.0;
+
+          // Update skills from task config
+          SKILLS.forEach(skill => {
+            task.skills[skill] = taskConfig.base_skills ? (taskConfig.base_skills[skill] || 0) : 0;
+          });
+
+          // Apply worker roster exclusions (-1) if worker is selected
+          const workerInput = document.getElementById('add-worker-name-input');
+          const workerName = workerInput ? workerInput.value.trim() : '';
+          if (workerName && WORKER_SKILLS[workerName]) {
+            const rosterSkills = WORKER_SKILLS[workerName].skills || WORKER_SKILLS[workerName];
+            SKILLS.forEach(skill => {
+              if (rosterSkills[skill] === -1 && (task.skills[skill] === 0 || task.skills[skill] === undefined)) {
+                task.skills[skill] = -1;
+              }
+            });
+          }
+
+          renderAddWorkerModalContent();
+        }
+      }
+    }
+
+    function updateAddWorkerSkill(idx, skill, value) {
+      if (!addWorkerModalState.tasks[idx]) return;
+      const raw = (value || '').toString().trim();
+      addWorkerModalState.tasks[idx].skills[skill] = raw === 'w' ? 'w' : (parseInt(raw, 10) || 0);
+    }
+
+    function onAddWorkerNameChange() {
+      const workerInput = document.getElementById('add-worker-name-input');
+      const workerName = workerInput ? workerInput.value.trim() : '';
+
+      if (workerName && WORKER_SKILLS[workerName]) {
+        const rosterSkills = WORKER_SKILLS[workerName].skills || WORKER_SKILLS[workerName];
+        // Apply roster -1 values to any task with 0 value for that skill
+        addWorkerModalState.tasks.forEach(task => {
+          SKILLS.forEach(skill => {
+            if (rosterSkills[skill] === -1 && (task.skills[skill] === 0 || task.skills[skill] === undefined)) {
+              task.skills[skill] = -1;
+            }
+          });
+        });
+        renderAddWorkerModalContent();
+      }
+    }
+
+    function renderAddWorkerModalContent() {
+      const container = document.getElementById('add-worker-modal-content');
+      const workerInput = document.getElementById('add-worker-name-input');
+      const currentWorkerName = workerInput ? workerInput.value : '';
+
+      let html = '';
+
+      // Worker name input
+      html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Worker Name</label>
+          <input type="text" id="add-worker-name-input" value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Dr. Müller"
+                 list="worker-list-datalist" autocomplete="off" onchange="onAddWorkerNameChange()" oninput="onAddWorkerNameChange()"
+                 style="width: 100%; max-width: 300px; padding: 0.5rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+      </div>`;
+
+      // Tasks section
+      html += `<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <label style="font-weight: 600; font-size: 1rem;">Tasks/Shifts</label>
+        <button class="btn btn-success btn-small" onclick="addTaskToAddWorkerModal(); renderAddWorkerModalContent();">+ Add Task</button>
+      </div>`;
+
+      // Render each task
+      addWorkerModalState.tasks.forEach((task, idx) => {
+        const taskConfig = TASK_ROLES.find(t => t.name === task.task) || {};
+        const availableModalities = taskConfig.modalities || MODALITIES;
+        const borderColor = addWorkerModalState.tab === 'today' ? '#28a745' : '#ffc107';
+
+        html += `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 2px solid ${borderColor}; border-radius: 8px; background: #fafafa;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: #333;">Task ${idx + 1}</span>
+            <button class="btn btn-small" style="background: #dc3545; color: white;" onclick="removeTaskFromAddWorkerModal(${idx})">✕ Remove</button>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
+            <div style="flex: 1; min-width: 150px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">Task/Role</label>
+              <select onchange="updateAddWorkerTask(${idx}, 'task', this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+                <option value="">-- Select Task --</option>`;
+        TASK_ROLES.filter(t => !t.exclusion).forEach(t => {
+          html += `<option value="${escapeHtml(t.name)}" ${task.task === t.name ? 'selected' : ''}>${escapeHtml(t.name)}</option>`;
+        });
+        html += `</select>
+            </div>
+
+            <div style="min-width: 80px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">Modality</label>
+              <select onchange="updateAddWorkerTask(${idx}, 'modality', this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">`;
+        availableModalities.forEach(mod => {
+          html += `<option value="${mod}" ${task.modality === mod ? 'selected' : ''}>${mod.toUpperCase()}</option>`;
+        });
+        html += `</select>
+            </div>
+
+            <div style="min-width: 90px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">Start</label>
+              <input type="time" value="${task.start_time}" onchange="updateAddWorkerTask(${idx}, 'start_time', this.value)" style="padding: 0.4rem; font-size: 0.85rem;">
+            </div>
+
+            <div style="min-width: 90px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">End</label>
+              <input type="time" value="${task.end_time}" onchange="updateAddWorkerTask(${idx}, 'end_time', this.value)" style="padding: 0.4rem; font-size: 0.85rem;">
+            </div>
+
+            <div style="min-width: 70px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">Modifier</label>
+              <select onchange="updateAddWorkerTask(${idx}, 'modifier', parseFloat(this.value))" style="padding: 0.4rem; font-size: 0.85rem;">
+                <option value="0.5" ${task.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
+                <option value="0.75" ${task.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+                <option value="1.0" ${!task.modifier || task.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
+                <option value="1.25" ${task.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
+                <option value="1.5" ${task.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size: 0.75rem; color: #666; display: block; margin-bottom: 0.25rem;">Skills:</label>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">`;
+        SKILLS.forEach(skill => {
+          const skillSettings = SKILL_SETTINGS[skill] || {};
+          const btnColor = skillSettings.button_color || '#6c757d';
+          const skillVal = task.skills[skill] !== undefined ? task.skills[skill] : 0;
+          html += `<div style="display: flex; align-items: center; gap: 0.2rem;">
+              <select onchange="updateAddWorkerSkill(${idx}, '${skill}', this.value)" style="padding: 0.2rem; font-size: 0.75rem; width: 42px;">
+                <option value="-1" ${skillVal === -1 ? 'selected' : ''}>-1</option>
+                <option value="0" ${skillVal === 0 ? 'selected' : ''}>0</option>
+                <option value="1" ${skillVal === 1 ? 'selected' : ''}>1</option>
+                <option value="w" ${skillVal === 'w' ? 'selected' : ''}>w</option>
+              </select>
+              <span style="font-size: 0.7rem; background: ${btnColor}; color: ${skillSettings.text_color || '#fff'}; padding: 0.1rem 0.3rem; border-radius: 3px;">${escapeHtml(skill)}</span>
+            </div>`;
+        });
+        html += `</div>
+          </div>
+        </div>`;
+      });
+
+      container.innerHTML = html;
+    }
+
+    async function saveAddWorkerModal() {
+      const workerInput = document.getElementById('add-worker-name-input');
+      const workerName = workerInput ? workerInput.value.trim() : '';
+
+      if (!workerName) {
+        showMessage('error', 'Please enter a worker name');
+        return;
+      }
+
+      if (addWorkerModalState.tasks.length === 0) {
+        showMessage('error', 'Please add at least one task');
+        return;
+      }
+
+      const { tab, tasks } = addWorkerModalState;
+      const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
+
+      try {
+        // Add each task as a separate entry
+        for (const task of tasks) {
+          if (!task.task) {
+            showMessage('error', 'Please select a task for all entries');
+            return;
+          }
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              modality: task.modality,
+              worker_data: {
+                PPL: workerName,
+                start_time: task.start_time,
+                end_time: task.end_time,
+                Modifier: task.modifier,
+                tasks: task.task,
+                ...task.skills
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to add worker');
+          }
+        }
+
+        closeAddWorkerModal();
+        showMessage('success', `${workerName} added with ${tasks.length} task(s)`);
+        await loadData();
+      } catch (error) {
+        showMessage('error', error.message);
+      }
+    }
+
+    // =============================================
+    // END ADD WORKER MODAL FUNCTIONS
+    // =============================================
 
 
     // Load from CSV
