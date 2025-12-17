@@ -17,6 +17,7 @@
       --timeline-start:  6;  /* 6:00 */
       --timeline-end:    20; /* 20:00 */
       --timeline-hours:  14; /* 20 - 6 */
+      --worker-col-width: 180px; /* Width of worker name column */
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -119,7 +120,7 @@
 
     .timeline-grid {
       display: grid;
-      grid-template-columns: 120px 1fr;
+      grid-template-columns: var(--worker-col-width) 1fr;
       min-width: 800px;
     }
 
@@ -596,11 +597,12 @@
       const percent = ((currentHour - TIMELINE_START) / TIMELINE_HOURS) * 100;
 
       const grid = document.getElementById('timeline-grid');
+      const workerColWidth = getComputedStyle(document.documentElement).getPropertyValue('--worker-col-width').trim();
       const line = document.createElement('div');
       line.id = 'current-time-line';
       line.className = 'current-time-line';
-      // Position: 120px for worker column + percentage of remaining width
-      line.style.left = `calc(120px + (100% - 120px) * ${percent / 100})`;
+      // Position: worker column width + percentage of remaining width
+      line.style.left = `calc(${workerColWidth} + (100% - ${workerColWidth}) * ${percent / 100})`;
 
       grid.appendChild(line);
     }
