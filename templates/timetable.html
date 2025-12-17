@@ -386,16 +386,22 @@
       });
     }
 
-    // Convert time string to minutes for comparison
+    // Convert time string to minutes for comparison (with null check)
     function timeToMinutes(timeStr) {
-      const [h, m] = timeStr.split(':').map(Number);
-      return h * 60 + m;
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return 0;
+      const [h, m] = parts.map(Number);
+      return (h || 0) * 60 + (m || 0);
     }
 
-    // Convert time string to percentage position
+    // Convert time string to percentage position (with null check)
     function timeToPercent(timeStr) {
-      const [h, m] = timeStr.split(':').map(Number);
-      const hours = h + m / 60;
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split(':');
+      if (parts.length < 2) return 0;
+      const [h, m] = parts.map(Number);
+      const hours = (h || 0) + (m || 0) / 60;
       const clamped = Math.max(TIMELINE_START, Math.min(TIMELINE_END, hours));
       return ((clamped - TIMELINE_START) / TIMELINE_HOURS) * 100;
     }
@@ -626,7 +632,7 @@
       grid.appendChild(line);
     }
 
-    // Filter by skill
+    // Filter by skill - simple show/hide based on skill presence
     function filterBySkill(skill) {
       const grid = document.getElementById('timeline-grid');
       const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn[data-skill]');
@@ -639,27 +645,25 @@
       // Update filter state
       grid.dataset.filter = skill;
 
-      // Filter rows
+      // Filter rows - simply show/hide based on skill (no opacity changes)
       const rows = grid.querySelectorAll('.worker-row');
       rows.forEach(row => {
         if (skill === 'all') {
           row.style.display = '';
-          row.querySelectorAll('.shift-bar').forEach(bar => bar.style.opacity = '1');
         } else {
-          const skillSlug = Object.entries(skillSlugMap).find(([k, v]) =>
-            v === skill.toLowerCase() || k === skill
-          )?.[1] || skill.toLowerCase();
+          // Find the skill slug - check both by label and by column name
+          let skillSlug = skill.toLowerCase();
+          for (const [colName, slug] of Object.entries(skillSlugMap)) {
+            if (slug === skill.toLowerCase() || colName === skill || slug === skill) {
+              skillSlug = slug;
+              break;
+            }
+          }
 
-          const workerSkills = (row.dataset.skills || '').split(',');
-          const hasSkill = workerSkills.includes(skillSlug);
+          const workerSkills = (row.dataset.skills || '').split(',').filter(s => s);
+          const hasSkill = workerSkills.some(ws => ws === skillSlug || ws.toLowerCase() === skillSlug);
 
           row.style.display = hasSkill ? '' : 'none';
-
-          // Highlight matching shift bars
-          row.querySelectorAll('.shift-bar').forEach(bar => {
-            const barSkills = (bar.dataset.skills || '').split(',');
-            bar.style.opacity = barSkills.includes(skillSlug) ? '1' : '0.3';
-          });
         }
       });
     }
