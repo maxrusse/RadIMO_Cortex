@@ -306,9 +306,9 @@
   <!-- Modality Filter Bar -->
   <div class="skill-filter-bar">
     <label>Modality:</label>
-    <a href="{{ url_for('timetable', modality='all', skill=skill_filter) }}" class="filter-btn {% if modality == 'all' %}active{% endif %}">ALL</a>
+    <a href="#" class="filter-btn {% if modality == 'all' %}active{% endif %}" data-modality="all" onclick="changeModality(event, 'all')">ALL</a>
     {% for mod in modality_order %}
-    <a href="{{ url_for('timetable', modality=mod, skill=skill_filter) }}" class="filter-btn {% if modality == mod %}active{% endif %}" style="{% if modality == mod %}background: {{ modalities[mod].nav_color }}; border-color: {{ modalities[mod].nav_color }}; color: white;{% endif %}">{{ modality_labels[mod] }}</a>
+    <a href="#" class="filter-btn {% if modality == mod %}active{% endif %}" data-modality="{{ mod }}" onclick="changeModality(event, '{{ mod }}')" style="{% if modality == mod %}background: {{ modalities[mod].nav_color }}; border-color: {{ modalities[mod].nav_color }}; color: white;{% endif %}">{{ modality_labels[mod] }}</a>
     {% endfor %}
   </div>
 
@@ -605,6 +605,23 @@
       line.style.left = `calc(${workerColWidth} + (100% - ${workerColWidth}) * ${percent / 100})`;
 
       grid.appendChild(line);
+    }
+
+    // Change modality while preserving skill filter
+    function changeModality(event, modality) {
+      event.preventDefault();
+      const url = new URL(window.location);
+      const currentSkill = url.searchParams.get('skill') || 'all';
+
+      // Build new URL with modality and current skill filter
+      const newUrl = new URL(window.location.origin + '/timetable');
+      newUrl.searchParams.set('modality', modality);
+      if (currentSkill !== 'all') {
+        newUrl.searchParams.set('skill', currentSkill);
+      }
+
+      // Navigate to new URL
+      window.location.href = newUrl.toString();
     }
 
     // Filter by skill - simple show/hide based on skill presence
