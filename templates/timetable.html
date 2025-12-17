@@ -290,7 +290,11 @@
         return;
       }
       originalData = dfData;
-      renderTimeline(originalData);
+      // Initial render with 'all' filter - show entries with at least one active skill
+      // This matches the day edit filter behavior
+      renderTimeline(originalData.filter(e =>
+        skillColumns.some(s => isSkillActive(e[s]))
+      ));
     }
 
     function renderTimeline(dfData) {
@@ -383,7 +387,11 @@
       }
       currentFilter = skill;
       if (skill === 'all') {
-        renderTimeline(originalData);
+        // When 'all' is selected, show entries that have at least one active skill
+        // This matches the day edit filter behavior
+        renderTimeline(originalData.filter(e =>
+          skillColumns.some(s => isSkillActive(e[s]))
+        ));
       } else {
         renderTimeline(originalData.filter(e => isSkillActive(e[skill])));
       }
