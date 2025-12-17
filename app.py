@@ -3985,7 +3985,7 @@ def _prepare_df_for_timetable(df, mod):
 
 # Pre-computed timetable constants (static after config load)
 _TIMETABLE_SKILL_DEFS = [
-    {'label': SKILL_SETTINGS[s].get('label', s), 'button_color': SKILL_SETTINGS[s].get('button_color', '#ccc')}
+    {'label': SKILL_SETTINGS[s].get('label', s), 'button_color': SKILL_SETTINGS[s].get('button_color', '#ccc'), 'slug': SKILL_SLUG_MAP[s]}
     for s in SKILL_COLUMNS
 ]
 _TIMETABLE_SKILL_COLORS = {SKILL_SLUG_MAP[s]: SKILL_SETTINGS[s].get('button_color', '#ccc') for s in SKILL_COLUMNS}
