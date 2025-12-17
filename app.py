@@ -3996,6 +3996,7 @@ _TIMETABLE_MOD_LABELS = {k: v.get('label', k.upper()) for k, v in MODALITY_SETTI
 def timetable():
     requested = request.args.get('modality', 'all').lower()
     modality = 'all' if requested == 'all' else resolve_modality_from_request()
+    skill_filter = request.args.get('skill', 'all').lower()
 
     if modality == 'all':
         frames = [_prepare_df_for_timetable(modality_data[m]['working_hours_df'], m) for m in allowed_modalities]
@@ -4009,6 +4010,7 @@ def timetable():
         'timetable.html',
         debug_data=debug_data,
         modality=modality,
+        skill_filter=skill_filter,
         skills=SKILL_COLUMNS,
         skill_columns=SKILL_COLUMNS,
         skill_slug_map=SKILL_SLUG_MAP,
