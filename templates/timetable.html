@@ -239,20 +239,6 @@
       border-radius: 50%;
     }
 
-    /* Filter state - hide non-matching rows */
-    .timeline-grid[data-filter]:not([data-filter="all"]) .worker-row:not([data-has-skill]) {
-      display: none;
-    }
-
-    /* Modality badge */
-    .mod-badge {
-      font-size: 0.65rem;
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      margin-left: 0.5rem;
-      color: white;
-      font-weight: 500;
-    }
 
     /* Legend */
     .legend {
@@ -330,7 +316,7 @@
     <label>Filter by Skill:</label>
     <button class="filter-btn active" data-skill="all" onclick="filterBySkill('all')">All</button>
     {% for skill in skill_definitions %}
-    <button class="filter-btn" data-skill="{{ skill.label }}" onclick="filterBySkill('{{ skill.label }}')" style="border-left: 4px solid {{ skill.button_color }};">{{ skill.label }}</button>
+    <button class="filter-btn" data-skill="{{ skill.slug }}" onclick="filterBySkill('{{ skill.slug }}')" style="border-left: 4px solid {{ skill.button_color }};">{{ skill.label }}</button>
     {% endfor %}
   </div>
 
@@ -541,19 +527,6 @@
         nameCell.className = 'worker-name-cell';
         nameCell.textContent = worker;
 
-        // In ALL view, show modality badges for all modalities the worker is in
-        if (isAllView) {
-          const allMods = new Set();
-          entries.forEach(e => { if (e._modality) allMods.add(e._modality); });
-          allMods.forEach(mod => {
-            const badge = document.createElement('span');
-            badge.className = 'mod-badge';
-            badge.style.background = modColorMap[mod] || '#666';
-            badge.textContent = mod.toUpperCase();
-            nameCell.appendChild(badge);
-          });
-        }
-
         // Timeline cell
         const timelineCell = document.createElement('div');
         timelineCell.className = 'worker-timeline';
@@ -633,36 +606,26 @@
     }
 
     // Filter by skill - simple show/hide based on skill presence
-    function filterBySkill(skill) {
+    function filterBySkill(skillSlug) {
       const grid = document.getElementById('timeline-grid');
       const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn[data-skill]');
 
       // Update button states
       buttons.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.skill === skill);
+        btn.classList.toggle('active', btn.dataset.skill === skillSlug);
       });
 
       // Update filter state
-      grid.dataset.filter = skill;
+      grid.dataset.filter = skillSlug;
 
       // Filter rows - simply show/hide based on skill (no opacity changes)
       const rows = grid.querySelectorAll('.worker-row');
       rows.forEach(row => {
-        if (skill === 'all') {
+        if (skillSlug === 'all') {
           row.style.display = '';
         } else {
-          // Find the skill slug - check both by label and by column name
-          let skillSlug = skill.toLowerCase();
-          for (const [colName, slug] of Object.entries(skillSlugMap)) {
-            if (slug === skill.toLowerCase() || colName === skill || slug === skill) {
-              skillSlug = slug;
-              break;
-            }
-          }
-
           const workerSkills = (row.dataset.skills || '').split(',').filter(s => s);
-          const hasSkill = workerSkills.some(ws => ws === skillSlug || ws.toLowerCase() === skillSlug);
-
+          const hasSkill = workerSkills.some(ws => ws === skillSlug);
           row.style.display = hasSkill ? '' : 'none';
         }
       });

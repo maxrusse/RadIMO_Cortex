@@ -320,6 +320,7 @@
         <label class="filter-toggle">
           <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')"> Hide 0 entries
         </label>
+        <button id="display-order-toggle" class="btn btn-secondary" onclick="toggleDisplayOrder()" title="Current: Modalities as groups, skills as sub-columns. Click to switch." style="margin-left: auto;">Mod → Skill</button>
       </div>
 
       <!-- Worker Table - One row per entry -->
@@ -548,6 +549,20 @@
       let editMode = { today: true, tomorrow: true };  // Inline edit mode defaults to ON
       let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
       let tableFilters = { today: { modality: '', skill: '', hideZero: false }, tomorrow: { modality: '', skill: '', hideZero: false } };
+      let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
+
+      function toggleDisplayOrder() {
+        displayOrder = displayOrder === 'modality-first' ? 'skill-first' : 'modality-first';
+        const btn = document.getElementById('display-order-toggle');
+        if (btn) {
+          btn.textContent = displayOrder === 'modality-first' ? 'Mod → Skill' : 'Skill → Mod';
+          btn.title = displayOrder === 'modality-first'
+            ? 'Current: Modalities as groups, skills as sub-columns. Click to switch.'
+            : 'Current: Skills as groups, modalities as sub-columns. Click to switch.';
+        }
+        renderTable('today');
+        renderTable('tomorrow');
+      }
 
       const ACTIVE_SKILL_VALUES = new Set([1, '1', 'w', 'W', -1, '-1']);
 
@@ -1161,40 +1176,62 @@
       return { entries, counts };
     }
 
-    // Render table header - compact grid with skill x modality matrix
+    // Render table header - supports both modality-first and skill-first display orders
     function renderTableHeader(tab) {
       const thead = document.getElementById(`table-head-${tab}`);
       const isEditMode = editMode[tab];
       const modalKeys = MODALITIES.map(m => m.toLowerCase());
 
-      // First header row: Worker/Shift/Task, grouped skill columns, modifier group, actions
       let headerHtml = '<tr class="header-top">';
       headerHtml += '<th rowspan="2" class="worker-col">Worker</th>';
       headerHtml += `<th rowspan="2" class="shift-col">${isEditMode ? 'Shift (editable)' : 'Shift'}</th>`;
       headerHtml += '<th rowspan="2" class="task-col">Task</th>';
 
-      SKILLS.forEach(skill => {
-        const skillSettings = SKILL_SETTINGS[skill] || {};
-        const btnColor = skillSettings.button_color || '#6c757d';
-        const textColor = skillSettings.text_color || '#ffffff';
-        headerHtml += `<th colspan="${modalKeys.length}" class="skill-header" style="background:${btnColor}; color:${textColor};">${escapeHtml(skill)}</th>`;
-      });
+      if (displayOrder === 'modality-first') {
+        // Modalities as top-level columns (each spanning skill count)
+        modalKeys.forEach(mod => {
+          const modSettings = MODALITY_SETTINGS[mod] || {};
+          const label = (modSettings.label || mod).toUpperCase();
+          const navColor = modSettings.nav_color || '#6c757d';
+          headerHtml += `<th colspan="${SKILLS.length}" class="skill-header" style="background:${navColor}; color:#fff;">${label}</th>`;
+        });
+      } else {
+        // Skills as top-level columns (each spanning modality count)
+        SKILLS.forEach(skill => {
+          const skillSettings = SKILL_SETTINGS[skill] || {};
+          const btnColor = skillSettings.button_color || '#6c757d';
+          const textColor = skillSettings.text_color || '#ffffff';
+          headerHtml += `<th colspan="${modalKeys.length}" class="skill-header" style="background:${btnColor}; color:${textColor};">${escapeHtml(skill)}</th>`;
+        });
+      }
 
       headerHtml += `<th colspan="${modalKeys.length}">Mod.(w)</th>`;
       headerHtml += '<th rowspan="2">Actions</th>';
       headerHtml += '</tr>';
 
-      // Second header row: modality labels
+      // Second header row: sub-columns
       headerHtml += '<tr class="header-sub">';
-      SKILLS.forEach(() => {
-        modalKeys.forEach(mod => {
-          const modSettings = MODALITY_SETTINGS[mod] || {};
-          const label = (modSettings.label || mod).replace(/-/g, '');
-          const shortLabel = label.substring(0, 2).toUpperCase();
-          headerHtml += `<th class="sub-col">${shortLabel}</th>`;
+      if (displayOrder === 'modality-first') {
+        // Skill labels under each modality
+        modalKeys.forEach(() => {
+          SKILLS.forEach(skill => {
+            const shortLabel = skill.substring(0, 3);
+            headerHtml += `<th class="sub-col">${shortLabel}</th>`;
+          });
         });
-      });
+      } else {
+        // Modality labels under each skill
+        SKILLS.forEach(() => {
+          modalKeys.forEach(mod => {
+            const modSettings = MODALITY_SETTINGS[mod] || {};
+            const label = (modSettings.label || mod).replace(/-/g, '');
+            const shortLabel = label.substring(0, 2).toUpperCase();
+            headerHtml += `<th class="sub-col">${shortLabel}</th>`;
+          });
+        });
+      }
 
+      // Modifier sub-headers (one per modality)
       modalKeys.forEach(mod => {
         const modSettings = MODALITY_SETTINGS[mod] || {};
         const label = (modSettings.label || mod).replace(/-/g, '');
@@ -1237,21 +1274,42 @@
         });
       });
 
-      let html = '<div class="summary-title">Active counts by skill & modality (w and 1 counted once per worker)</div>';
-      html += '<table class="summary-table"><thead><tr><th>Skill</th>';
-      MODALITIES.forEach(mod => {
-        const label = mod.toUpperCase();
-        html += `<th>${label}</th>`;
-      });
-      html += '</tr></thead><tbody>';
-
-      SKILLS.forEach(skill => {
-        html += `<tr><td style="text-align:left; font-weight:600;">${escapeHtml(skill)}</td>`;
-        MODALITIES.forEach(mod => {
-          html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+      let html;
+      if (displayOrder === 'modality-first') {
+        html = '<div class="summary-title">Active counts by modality & skill (w and 1 counted once per worker)</div>';
+        html += '<table class="summary-table"><thead><tr><th>Modality</th>';
+        SKILLS.forEach(skill => {
+          html += `<th>${escapeHtml(skill)}</th>`;
         });
-        html += '</tr>';
-      });
+        html += '</tr></thead><tbody>';
+
+        MODALITIES.forEach(mod => {
+          const modSettings = MODALITY_SETTINGS[mod.toLowerCase()] || {};
+          const navColor = modSettings.nav_color || '#6c757d';
+          html += `<tr><td style="text-align:left; font-weight:600; background:${navColor}20;">${mod.toUpperCase()}</td>`;
+          SKILLS.forEach(skill => {
+            html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+          });
+          html += '</tr>';
+        });
+      } else {
+        html = '<div class="summary-title">Active counts by skill & modality (w and 1 counted once per worker)</div>';
+        html += '<table class="summary-table"><thead><tr><th>Skill</th>';
+        MODALITIES.forEach(mod => {
+          html += `<th>${mod.toUpperCase()}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        SKILLS.forEach(skill => {
+          const skillSettings = SKILL_SETTINGS[skill] || {};
+          const btnColor = skillSettings.button_color || '#6c757d';
+          html += `<tr><td style="text-align:left; font-weight:600; background:${btnColor}20;">${escapeHtml(skill)}</td>`;
+          MODALITIES.forEach(mod => {
+            html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+          });
+          html += '</tr>';
+        });
+      }
 
       html += '</tbody></table>';
       summaryEl.innerHTML = html;
@@ -1318,32 +1376,44 @@
           const taskStr = shift.task || '';
           tr.innerHTML += `<td class="grid-cell task-col">${taskStr ? `<span class="task-badge">${escapeHtml(taskStr)}</span>` : '<span style="color:#aaa;">-</span>'}</td>`;
 
-          SKILLS.forEach(skill => {
-            modKeysToShow.forEach(modKey => {
-              const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
-              const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-              const isGap = (shift.gaps || []).length > 0 || (shift.task || '').toLowerCase().includes('board');
-              const rawVal = isGap ? -1 : (modData.skills[skill] !== undefined ? modData.skills[skill] : -1);
-              const val = normalizeSkillValueJS(rawVal);
-              const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
+          // Render data cells based on display order
+          const renderCell = (modKey, skill) => {
+            const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
+            const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
+            const isGap = (shift.gaps || []).length > 0 || (shift.task || '').toLowerCase().includes('board');
+            const rawVal = isGap ? -1 : (modData.skills[skill] !== undefined ? modData.skills[skill] : -1);
+            const val = normalizeSkillValueJS(rawVal);
+            const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
 
-              const displayVal = displaySkillValue(val);
-              const skillClass = getSkillClass(val);
-              const skillColor = getSkillColor(val);
-              if (isEditMode) {
-                // Compact text input for quick edit - validates on blur
-                tr.innerHTML += `<td class="${cellClass}">
-                  <input type="text" class="grid-input" value="${displayVal}"
-                    data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
-                    data-skill="${skill}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
-                    onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)"
-                    style="background:${skillColor}20; border-color:${skillColor};">
-                </td>`;
-              } else {
-                tr.innerHTML += `<td class="${cellClass}"><span class="grid-badge skill-val ${skillClass}" style="border-color:${skillColor};">${displayVal}</span></td>`;
-              }
+            const displayVal = displaySkillValue(val);
+            const skillClass = getSkillClass(val);
+            const skillColor = getSkillColor(val);
+            if (isEditMode) {
+              return `<td class="${cellClass}">
+                <input type="text" class="grid-input" value="${displayVal}"
+                  data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
+                  data-skill="${skill}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
+                  onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)"
+                  style="background:${skillColor}20; border-color:${skillColor};">
+              </td>`;
+            } else {
+              return `<td class="${cellClass}"><span class="grid-badge skill-val ${skillClass}" style="border-color:${skillColor};">${displayVal}</span></td>`;
+            }
+          };
+
+          if (displayOrder === 'modality-first') {
+            modKeysToShow.forEach(modKey => {
+              SKILLS.forEach(skill => {
+                tr.innerHTML += renderCell(modKey, skill);
+              });
             });
-          });
+          } else {
+            SKILLS.forEach(skill => {
+              modKeysToShow.forEach(modKey => {
+                tr.innerHTML += renderCell(modKey, skill);
+              });
+            });
+          }
 
           modKeysToShow.forEach(modKey => {
             const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
