@@ -89,6 +89,15 @@
     .mod-skill-chip.ghost { opacity: 0.7; border-style: dashed; }
     .skill-bundle { min-width: 100px; }
 
+    /* Modal modality grid */
+    .modality-grid { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .modality-card { border: 1px solid #dee2e6; border-radius: 8px; padding: 0.5rem; background: #fafafa; }
+    .modality-card header { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; margin-bottom: 0.4rem; }
+    .modality-card header label { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.85rem; }
+    .modality-card .skills-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.35rem; }
+    .modality-card .skills-grid .skill-pill { display: flex; align-items: center; gap: 0.25rem; }
+    .modality-card .skills-grid select { padding: 0.2rem; font-size: 0.75rem; width: 44px; }
+
     /* Aggregated skill/modality cells */
     .agg-cell { text-align: center; font-size: 0.7rem; min-width: 42px; }
     .agg-val { padding: 0.15rem 0.3rem; font-size: 0.72rem; display: inline-block; min-width: 26px; background: #f7f7f7; color: #333; }
@@ -1550,8 +1559,8 @@
             // Background color based on display mode:
             // - modality-first: use modality background color
             // - skill-first: use skill background color (from button_color)
-            let cellBg = '#fff';
-            if (isAssigned) {
+            let cellBg = '#fafafa';
+            if (isAssigned && (val === 1 || isWeightedSkill(val))) {
               if (displayOrder === 'modality-first') {
                 const modSettings = MODALITY_SETTINGS[modKey] || {};
                 cellBg = modSettings.background_color || '#fff';
@@ -1560,8 +1569,6 @@
                 const skillBtnColor = skillSettings.button_color || '#6c757d';
                 cellBg = skillBtnColor + '15';  // 15% opacity for subtle background
               }
-            } else {
-              cellBg = '#fafafa';
             }
             const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
 
@@ -1778,158 +1785,208 @@
         <label style="font-weight: 600; font-size: 1rem;">Existing Shifts/Tasks</label>
       </div>`;
 
-      // Render each existing shift section (like Add Worker task cards)
-      shifts.forEach((shift, shiftIdx) => {
-        // Get the first assigned modality for this shift
-        const assignedMods = Object.entries(shift.modalities)
-          .filter(([_, data]) => data.row_index !== undefined && data.row_index >= 0)
-          .map(([mod]) => mod);
-        const primaryMod = assignedMods[0] || MODALITIES[0]?.toLowerCase() || 'ct';
-        const modData = shift.modalities[primaryMod] || { skills: {}, row_index: -1, modifier: shift.modifier || 1.0 };
 
-        // Detect if this is a gap entry (all skills are -1)
-        const isGapEntry = SKILLS.every(skill => {
-          const val = modData.skills[skill];
-          return val === -1 || val === '-1';
-        });
+// Render each existing shift section (like Add Worker task cards)
+shifts.forEach((shift, shiftIdx) => {
+  // Assigned modalities (row_index >= 0)
+  const assignedMods = Object.entries(shift.modalities)
+    .filter(([_, data]) => data.row_index !== undefined && data.row_index >= 0)
+    .map(([mod]) => mod);
 
-        html += `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 2px solid ${borderColor}; border-radius: 8px; background: #fafafa;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-weight: 600; color: #333;">Shift ${shiftIdx + 1}${isGapEntry ? ' <span style="background:#f8d7da;color:#721c24;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">GAP</span>' : ''}</span>
-            <button class="btn btn-small" style="background: #dc3545; color: white;" onclick="deleteShiftFromModal(${shiftIdx})">✕ Delete</button>
-          </div>
+  const anyAssigned = assignedMods.length > 0;
+  const primaryMod = assignedMods[0] || MODALITIES[0]?.toLowerCase() || 'ct';
+  const modData = shift.modalities[primaryMod] || { skills: {}, row_index: -1, modifier: shift.modifier || 1.0 };
 
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
-            <div style="flex: 1; min-width: 180px;">
-              <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
-              <select id="edit-shift-${shiftIdx}-task" onchange="onEditShiftTaskChange(${shiftIdx}, this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
-                ${renderTaskOptionsWithGroups(shift.task || '', true)}
-              </select>
-            </div>
+  // Detect if this is a gap entry (all skills are -1)
+  const isGapEntry = SKILLS.every(skill => {
+    const val = modData.skills[skill];
+    return val === -1 || val === '-1';
+  });
 
-            <div style="min-width: 80px;">
-              <label style="font-size: 0.75rem; color: #666; display: block;">Modality</label>
-              <select id="edit-shift-${shiftIdx}-modality" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">`;
-        MODALITIES.forEach(mod => {
-          const modLower = mod.toLowerCase();
-          const isSelected = assignedMods.includes(modLower);
-          html += `<option value="${mod}" ${isSelected ? 'selected' : ''}>${mod.toUpperCase()}</option>`;
-        });
-        html += `</select>
-            </div>
+  // Build timeline with gaps to make split shifts explicit
+  const segments = shift.timeSegments || [{ start: shift.start_time, end: shift.end_time }];
+  const gaps = shift.gaps || [];
+  const timelineItems = [];
+  segments.forEach(seg => timelineItems.push({ type: 'segment', start: seg.start, end: seg.end }));
+  gaps.forEach(g => timelineItems.push({ type: 'gap', start: g.start, end: g.end, activity: g.activity }));
+  timelineItems.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 
-            <div style="min-width: 90px;">
-              <label style="font-size: 0.75rem; color: #666; display: block;">Start</label>
-              <input type="time" id="edit-shift-${shiftIdx}-start" value="${shift.start_time || '07:00'}" style="padding: 0.4rem; font-size: 0.85rem;">
-            </div>
+  let timelineHtml = '<div class="shift-timeline">';
+  timelineItems.forEach(item => {
+    if (item.type === 'segment') {
+      timelineHtml += `<span class="shift-segment">${escapeHtml(item.start)}-${escapeHtml(item.end)}</span>`;
+    } else {
+      timelineHtml += `<span class="gap-indicator" title="${escapeHtml(item.activity || 'Gap')}">⏸ ${escapeHtml(item.start)}-${escapeHtml(item.end)}</span>`;
+    }
+  });
+  timelineHtml += '</div>';
 
-            <div style="min-width: 90px;">
-              <label style="font-size: 0.75rem; color: #666; display: block;">End</label>
-              <input type="time" id="edit-shift-${shiftIdx}-end" value="${shift.end_time || '15:00'}" style="padding: 0.4rem; font-size: 0.85rem;">
-            </div>
+  html += `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 2px solid ${borderColor}; border-radius: 8px; background: #fafafa;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+      <span style="font-weight: 600; color: #333;">Shift ${shiftIdx + 1}${isGapEntry ? ' <span style="background:#f8d7da;color:#721c24;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">GAP</span>' : ''}</span>
+      <div style="display:flex; gap:0.35rem; align-items:center;">
+        <span style="font-size:0.75rem; color:#555;">${anyAssigned ? 'Edit per modality' : 'Choose modalities'}</span>
+        <button class="btn btn-small" style="background: #dc3545; color: white;" onclick="deleteShiftFromModal(${shiftIdx})">✕ Delete</button>
+      </div>
+    </div>
 
-            <div style="min-width: 70px;">
-              <label style="font-size: 0.75rem; color: #666; display: block;">Modifier</label>
-              <select id="edit-shift-${shiftIdx}-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
-                <option value="0.5" ${shift.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
-                <option value="0.75" ${shift.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
-                <option value="1.0" ${!shift.modifier || shift.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
-                <option value="1.25" ${shift.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
-                <option value="1.5" ${shift.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
-              </select>
-            </div>
-          </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
+      <div style="flex: 1; min-width: 180px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
+        <select id="edit-shift-${shiftIdx}-task" onchange="onEditShiftTaskChange(${shiftIdx}, this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+          ${renderTaskOptionsWithGroups(shift.task || '', true)}
+        </select>
+      </div>
 
-          <div>
-            <label style="font-size: 0.75rem; color: #666; display: block; margin-bottom: 0.25rem;">Skills:</label>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">`;
+      <div style="min-width: 90px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">Start</label>
+        <input type="time" id="edit-shift-${shiftIdx}-start" value="${shift.start_time || '07:00'}" style="padding: 0.4rem; font-size: 0.85rem;">
+      </div>
 
-        // Store row indices for all modalities in this shift
-        Object.entries(shift.modalities).forEach(([modKey, data]) => {
-          html += `<input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowindex" value="${data.row_index !== undefined ? data.row_index : -1}">`;
-        });
+      <div style="min-width: 90px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">End</label>
+        <input type="time" id="edit-shift-${shiftIdx}-end" value="${shift.end_time || '15:00'}" style="padding: 0.4rem; font-size: 0.85rem;">
+      </div>
 
-        // Skills displayed inline like Add Worker modal (using primary modality's values)
-        SKILLS.forEach(skill => {
-          const skillSettings = SKILL_SETTINGS[skill] || {};
-          const btnColor = skillSettings.button_color || '#6c757d';
-          const rawVal = modData.skills[skill] !== undefined ? modData.skills[skill] : 0;
-          const val = normalizeSkillValueJS(rawVal);
-          html += `<div style="display: flex; align-items: center; gap: 0.2rem;">
-              <select id="edit-shift-${shiftIdx}-skill-${skill}" style="padding: 0.2rem; font-size: 0.75rem; width: 42px;">
-                <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
-                <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
-                <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
-                <option value="w" ${isWeightedSkill(val) ? 'selected' : ''}>w</option>
-              </select>
-              <span style="font-size: 0.7rem; background: ${btnColor}; color: ${skillSettings.text_color || '#fff'}; padding: 0.1rem 0.3rem; border-radius: 3px;">${escapeHtml(skill)}</span>
-            </div>`;
-        });
+      <div style="min-width: 70px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">Modifier</label>
+        <select id="edit-shift-${shiftIdx}-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
+          <option value="0.5" ${shift.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
+          <option value="0.75" ${shift.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+          <option value="1.0" ${!shift.modifier || shift.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
+          <option value="1.25" ${shift.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
+          <option value="1.5" ${shift.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+        </select>
+      </div>
 
-        html += `</div>
-          </div>
+      <div style="flex: 1; min-width: 240px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">Timeline (including gaps)</label>
+        ${timelineHtml}
+      </div>
+    </div>
+
+    <div style="margin-bottom:0.35rem; display:flex; justify-content: space-between; align-items:center;">
+      <label style="font-size:0.8rem; font-weight:600;">Skills per modality</label>
+      <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+        <button class="btn btn-small btn-secondary" type="button" onclick="applyPresetToShift(${shiftIdx}, document.getElementById('edit-shift-${shiftIdx}-task').value)">Apply task preset</button>
+        <button class="btn btn-small btn-primary" type="button" onclick="applyWorkerRosterToShift(${shiftIdx})">Apply roster</button>
+      </div>
+    </div>
+
+    <div class="modality-grid">`;
+
+  // Store row indices and render skills per modality
+  MODALITIES.forEach(mod => {
+    const modKey = mod.toLowerCase();
+    const data = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: shift.modifier || 1.0 };
+    const navColor = getModalityColor(modKey);
+    const bgColor = getModalityBgColor(modKey) + '30';
+    const rowIndex = data.row_index !== undefined ? data.row_index : -1;
+    const isSelected = rowIndex >= 0;
+
+    html += `<div class="modality-card" style="border-color:${navColor}; background:${bgColor};">
+      <header>
+        <label title="Toggle this modality">
+          <input type="checkbox" id="edit-shift-${shiftIdx}-mod-${modKey}-enabled" ${isSelected ? 'checked' : ''}>
+          <span style="color:${navColor};">${mod.toUpperCase()}</span>
+        </label>
+        <button class="btn btn-small btn-secondary" type="button" onclick="applyWorkerSkillPresetForShiftModality('${escapedWorker.replace('"','\\"').replace("'", "\\'")}', ${shiftIdx}, '${modKey}')">Roster - ${mod.toUpperCase()}</button>
+      </header>
+      <input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowindex" value="${rowIndex}">
+      <div class="skills-grid">`;
+
+    SKILLS.forEach(skill => {
+      const skillSettings = SKILL_SETTINGS[skill] || {};
+      const btnColor = skillSettings.button_color || '#6c757d';
+      const val = normalizeSkillValueJS(data.skills[skill] !== undefined ? data.skills[skill] : (isGapEntry ? -1 : 0));
+      html += `<div class="skill-pill">
+          <select id="edit-shift-${shiftIdx}-${modKey}-skill-${skill}">
+            <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
+            <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
+            <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
+            <option value="w" ${isWeightedSkill(val) ? 'selected' : ''}>w</option>
+          </select>
+          <span style="font-size: 0.7rem; background: ${btnColor}; color: ${skillSettings.text_color || '#fff'}; padding: 0.1rem 0.3rem; border-radius: 3px;">${escapeHtml(skill)}</span>
         </div>`;
-      });
+    });
 
-      // Add New Shift/Gap section (same styling as Add Worker modal)
-      html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <label style="font-weight: 600; color: #155724;">+ Add New Shift / Gap</label>
-          <button class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()">Add</button>
-        </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
-          <div style="flex: 1; min-width: 180px;">
-            <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
-            <select id="modal-add-task" onchange="onModalTaskChange()" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
-              ${renderTaskOptionsWithGroups('', true)}
-            </select>
-          </div>
-          <div style="min-width: 80px;">
-            <label style="font-size: 0.75rem; color: #666; display: block;">Modality</label>
-            <select id="modal-add-modality" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">`;
-      MODALITIES.forEach(mod => {
-        html += `<option value="${mod}">${mod.toUpperCase()}</option>`;
-      });
-      html += `</select>
-          </div>
-          <div style="min-width: 90px;">
-            <label style="font-size: 0.75rem; color: #666; display: block;">Start</label>
-            <input type="time" id="modal-add-start" value="07:00" style="padding: 0.4rem; font-size: 0.85rem;">
-          </div>
-          <div style="min-width: 90px;">
-            <label style="font-size: 0.75rem; color: #666; display: block;">End</label>
-            <input type="time" id="modal-add-end" value="15:00" style="padding: 0.4rem; font-size: 0.85rem;">
-          </div>
-          <div style="min-width: 70px;">
-            <label style="font-size: 0.75rem; color: #666; display: block;">Modifier</label>
-            <select id="modal-add-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1.0" selected>1.0x</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-            </select>
-          </div>
-        </div>
-        <div id="modal-add-skills">
-          <label style="font-size: 0.75rem; color: #666; display: block; margin-bottom: 0.25rem;">Skills:</label>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">`;
-      SKILLS.forEach(skill => {
-        const skillSettings = SKILL_SETTINGS[skill] || {};
-        const btnColor = skillSettings.button_color || '#6c757d';
-        html += `<div style="display: flex; align-items: center; gap: 0.2rem;">
-            <select id="modal-add-skill-${skill}" style="padding: 0.2rem; font-size: 0.75rem; width: 42px;">
-              <option value="-1">-1</option>
-              <option value="0" selected>0</option>
-              <option value="1">1</option>
-              <option value="w">w</option>
-            </select>
-            <span style="font-size: 0.7rem; background: ${btnColor}; color: ${skillSettings.text_color || '#fff'}; padding: 0.1rem 0.3rem; border-radius: 3px;">${escapeHtml(skill)}</span>
-          </div>`;
-      });
-      html += `</div>
-        </div>
+    html += `</div>
+    </div>`;
+  });
+
+  html += `</div>
+  </div>`;
+});
+
+
+
+// Add New Shift/Gap section (same styling as Add Worker modal)
+html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+    <label style="font-weight: 600; color: #155724;">+ Add New Shift / Gap</label>
+    <button class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()">Add</button>
+  </div>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
+    <div style="flex: 1; min-width: 180px;">
+      <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
+      <select id="modal-add-task" onchange="onModalTaskChange()" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
+        ${renderTaskOptionsWithGroups('', true)}
+      </select>
+    </div>
+    <div style="min-width: 90px;">
+      <label style="font-size: 0.75rem; color: #666; display: block;">Start</label>
+      <input type="time" id="modal-add-start" value="07:00" style="padding: 0.4rem; font-size: 0.85rem;">
+    </div>
+    <div style="min-width: 90px;">
+      <label style="font-size: 0.75rem; color: #666; display: block;">End</label>
+      <input type="time" id="modal-add-end" value="15:00" style="padding: 0.4rem; font-size: 0.85rem;">
+    </div>
+    <div style="min-width: 70px;">
+      <label style="font-size: 0.75rem; color: #666; display: block;">Modifier</label>
+      <select id="modal-add-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1.0" selected>1.0x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+      </select>
+    </div>
+  </div>
+  <div style="margin-bottom:0.35rem; display:flex; justify-content: space-between; align-items:center;">
+    <label style="font-size:0.8rem; font-weight:600;">Modalities & skills</label>
+    <span style="font-size:0.75rem; color:#555;">Select one or more modalities and set skills per modality</span>
+  </div>
+  <div class="modality-grid" id="modal-add-modality-grid">`;
+MODALITIES.forEach(mod => {
+  const modKey = mod.toLowerCase();
+  const navColor = getModalityColor(modKey);
+  const bgColor = getModalityBgColor(modKey) + '30';
+  html += `<div class="modality-card" style="border-color:${navColor}; background:${bgColor};">
+    <header>
+      <label title="Toggle this modality">
+        <input type="checkbox" id="modal-add-mod-${modKey}-enabled" ${mod === MODALITIES[0] ? 'checked' : ''}>
+        <span style="color:${navColor};">${mod.toUpperCase()}</span>
+      </label>
+    </header>
+    <div class="skills-grid">`;
+  SKILLS.forEach(skill => {
+    const skillSettings = SKILL_SETTINGS[skill] || {};
+    const btnColor = skillSettings.button_color || '#6c757d';
+    html += `<div class="skill-pill">
+        <select id="modal-add-${modKey}-skill-${skill}">
+          <option value="-1">-1</option>
+          <option value="0" selected>0</option>
+          <option value="1">1</option>
+          <option value="w">w</option>
+        </select>
+        <span style="font-size: 0.7rem; background: ${btnColor}; color: ${skillSettings.text_color || '#fff'}; padding: 0.1rem 0.3rem; border-radius: 3px;">${escapeHtml(skill)}</span>
       </div>`;
+  });
+  html += `</div>
+  </div>`;
+});
+html += `</div>
+</div>`;
 
       document.getElementById('modal-title').textContent = `Edit Worker - ${group.worker}`;
       document.getElementById('modal-content').innerHTML = html;
@@ -1960,10 +2017,13 @@
         const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
         if (modifierEl) modifierEl.value = '1.0';
 
-        // Set ALL skills to -1 for gaps
-        SKILLS.forEach(skill => {
-          const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-skill-${skill}`);
-          if (skillSelect) skillSelect.value = '-1';
+        // Set ALL skills to -1 for gaps across modalities
+        MODALITIES.forEach(mod => {
+          const modKey = mod.toLowerCase();
+          SKILLS.forEach(skill => {
+            const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+            if (skillSelect) skillSelect.value = '-1';
+          });
         });
       } else {
         // Regular shift selected
@@ -1978,20 +2038,27 @@
         const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
         if (modifierEl && taskConfig.modifier) modifierEl.value = taskConfig.modifier.toString();
 
-        // Set modality if available
-        const modalitySelect = document.getElementById(`edit-shift-${shiftIdx}-modality`);
-        if (modalitySelect && taskConfig.modalities && taskConfig.modalities[0]) {
-          modalitySelect.value = taskConfig.modalities[0];
-        }
+        // Enable modalities specified by the task
+        const enabledModalities = new Set((taskConfig.modalities || []).map(m => m.toLowerCase()));
+        MODALITIES.forEach(mod => {
+          const modKey = mod.toLowerCase();
+          const checkbox = document.getElementById(`edit-shift-${shiftIdx}-mod-${modKey}-enabled`);
+          if (checkbox && enabledModalities.size > 0) {
+            checkbox.checked = enabledModalities.has(modKey);
+          }
+        });
 
         // Set skills from task config
         const taskSkills = taskConfig.base_skills || {};
-        SKILLS.forEach(skill => {
-          const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-skill-${skill}`);
-          if (skillSelect) {
-            const val = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
-            skillSelect.value = val.toString();
-          }
+        MODALITIES.forEach(mod => {
+          const modKey = mod.toLowerCase();
+          SKILLS.forEach(skill => {
+            const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+            if (skillSelect) {
+              const val = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
+              skillSelect.value = val.toString();
+            }
+          });
         });
 
         // Apply worker roster exclusions (-1)
@@ -2000,15 +2067,18 @@
         if (group) {
           const preset = WORKER_SKILLS[group.worker];
           if (preset) {
-            const rosterSkills = preset.skills || preset;
-            SKILLS.forEach(skill => {
-              const taskVal = taskSkills[skill];
-              if (taskVal === undefined || taskVal <= 0) {
-                const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-skill-${skill}`);
-                if (skillSelect && rosterSkills && rosterSkills[skill] === -1) {
-                  skillSelect.value = '-1';
+            MODALITIES.forEach(mod => {
+              const modKey = mod.toLowerCase();
+              const rosterSkills = preset[modKey] || preset.skills || preset;
+              SKILLS.forEach(skill => {
+                const taskVal = taskSkills[skill];
+                if (taskVal === undefined || taskVal <= 0) {
+                  const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+                  if (skillSelect && rosterSkills && rosterSkills[skill] === -1) {
+                    skillSelect.value = '-1';
+                  }
                 }
-              }
+              });
             });
           }
         }
@@ -2051,75 +2121,55 @@
     // Handle task change in modal add shift section
     function onModalTaskChange() {
       const taskSelect = document.getElementById('modal-add-task');
-      const modalitySelect = document.getElementById('modal-add-modality');
-      const skillsContainer = document.getElementById('modal-add-skills');
-
-      const option = taskSelect.options[taskSelect.selectedIndex];
+      const option = taskSelect?.options[taskSelect.selectedIndex];
       if (!option || !option.value) {
-        skillsContainer.style.display = 'none';
         return;
       }
 
       const isGap = option.dataset.type === 'gap' || option.dataset.exclusion === 'true';
 
-      if (isGap) {
-        // Gap selected - set all skills to -1 and use schedule times
-        skillsContainer.style.display = 'block';
-
-        // Get schedule-based times for today
-        const schedule = JSON.parse(option.dataset.schedule || '{}');
-        const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-        const today = days[new Date().getDay()];
-        if (schedule[today]) {
-          const [startTime, endTime] = schedule[today].split('-');
-          document.getElementById('modal-add-start').value = startTime;
-          document.getElementById('modal-add-end').value = endTime;
-        } else {
-          // Default times if no schedule for today
-          document.getElementById('modal-add-start').value = '12:00';
-          document.getElementById('modal-add-end').value = '13:00';
-        }
-
-        // Set modifier to 1.0 for gaps
-        document.getElementById('modal-add-modifier').value = '1.0';
-
-        // Set ALL skills to -1 for gaps
-        SKILLS.forEach(skill => {
-          const skillSelect = document.getElementById(`modal-add-skill-${skill}`);
-          if (skillSelect) skillSelect.value = '-1';
-        });
-        return;
-      }
-
-      // Regular shift selected
-      skillsContainer.style.display = 'block';
-
-      // Set modality from task config
-      const modalities = JSON.parse(option.dataset.modalities || '[]');
-      if (modalities.length > 0) {
-        modalitySelect.value = modalities[0];
-      }
-
-      // Set times from shift config
+      // Set times
       const shiftName = option.dataset.shift || 'Fruehdienst';
       const shiftConfig = SHIFT_TIMES[shiftName] || {};
-      const shiftDefault = shiftConfig.default || '07:00-15:00';
-      const [startTime, endTime] = shiftDefault.split('-');
-      document.getElementById('modal-add-start').value = startTime;
-      document.getElementById('modal-add-end').value = endTime;
+      const schedule = JSON.parse(option.dataset.schedule || '{}');
+      const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+      const today = days[new Date().getDay()];
+      if (isGap && schedule[today]) {
+        const [startTime, endTime] = schedule[today].split('-');
+        document.getElementById('modal-add-start').value = startTime;
+        document.getElementById('modal-add-end').value = endTime;
+      } else {
+        const shiftDefault = shiftConfig.default || (isGap ? '12:00-13:00' : '07:00-15:00');
+        const [startTime, endTime] = shiftDefault.split('-');
+        document.getElementById('modal-add-start').value = startTime;
+        document.getElementById('modal-add-end').value = endTime;
+      }
 
       // Set modifier from task config
       const modifier = option.dataset.modifier || '1.0';
       document.getElementById('modal-add-modifier').value = modifier;
 
-      // Set skills from task config
-      const taskSkills = JSON.parse(option.dataset.skills || '{}');
-      SKILLS.forEach(skill => {
-        const skillSelect = document.getElementById(`modal-add-skill-${skill}`);
-        if (skillSelect) {
-          const val = taskSkills[skill] !== undefined ? taskSkills[skill] : 0;
-          skillSelect.value = val.toString();
+      // Determine which modalities to activate from task config (if provided)
+      const enabledModalities = new Set((JSON.parse(option.dataset.modalities || '[]') || []).map(m => m.toLowerCase()));
+      MODALITIES.forEach(mod => {
+        const modKey = mod.toLowerCase();
+        const checkbox = document.getElementById(`modal-add-mod-${modKey}-enabled`);
+        if (checkbox) {
+          checkbox.checked = enabledModalities.size === 0 ? checkbox.checked : enabledModalities.has(modKey);
         }
+      });
+
+      const taskSkills = JSON.parse(option.dataset.skills || '{}');
+
+      // Apply skills to each modality grid
+      MODALITIES.forEach(mod => {
+        const modKey = mod.toLowerCase();
+        SKILLS.forEach(skill => {
+          const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
+          if (!el) return;
+          const defaultVal = isGap ? -1 : (taskSkills[skill] !== undefined ? taskSkills[skill] : 0);
+          el.value = defaultVal.toString();
+        });
       });
 
       // Merge with worker roster skills (apply -1 exclusions)
@@ -2128,15 +2178,16 @@
       if (group) {
         const preset = WORKER_SKILLS[group.worker];
         if (preset) {
-          const rosterSkills = preset.skills || preset;
-          SKILLS.forEach(skill => {
-            const taskVal = taskSkills[skill];
-            if (taskVal === undefined || taskVal <= 0) {
-              const skillSelect = document.getElementById(`modal-add-skill-${skill}`);
-              if (skillSelect && rosterSkills && rosterSkills[skill] === -1) {
-                skillSelect.value = '-1';
+          MODALITIES.forEach(mod => {
+            const modKey = mod.toLowerCase();
+            const modalitySkills = preset[modKey] || null;
+            const rosterSkills = modalitySkills || preset.skills || preset;
+            SKILLS.forEach(skill => {
+              const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
+              if (el && rosterSkills && rosterSkills[skill] === -1 && (taskSkills[skill] === undefined || taskSkills[skill] <= 0)) {
+                el.value = '-1';
               }
-            }
+            });
           });
         }
       }
@@ -2145,32 +2196,35 @@
     // Initialize modal add-shift form with sensible defaults from config and roster
     function initializeModalAddForm() {
       const taskSelect = document.getElementById('modal-add-task');
-      const skillsContainer = document.getElementById('modal-add-skills');
+      if (!taskSelect) return;
 
-      if (!taskSelect || !skillsContainer) return;
+      // Ensure at least one modality is preselected
+      MODALITIES.forEach((mod, idx) => {
+        const cb = document.getElementById(`modal-add-mod-${mod.toLowerCase()}-enabled`);
+        if (cb && idx === 0) cb.checked = true;
+      });
 
-      // Auto-select first task if none chosen to trigger config preload
       if (!taskSelect.value && taskSelect.options.length > 1) {
         taskSelect.selectedIndex = 1;
       }
 
       if (taskSelect.value) {
         onModalTaskChange();
-        skillsContainer.style.display = 'block';
       } else {
-        // If no task available, still expose skills with roster defaults
-        skillsContainer.style.display = 'block';
+        // No task selected: still populate with roster defaults if present
         const { tab, groupIdx } = currentEditEntry || {};
         const group = entriesData[tab]?.[groupIdx];
         const preset = group ? WORKER_SKILLS[group.worker] : null;
-        const rosterSkills = preset ? (preset.skills || preset) : {};
-
-        SKILLS.forEach(skill => {
-          const el = document.getElementById(`modal-add-skill-${skill}`);
-          if (el) {
-            const val = rosterSkills[skill] !== undefined ? rosterSkills[skill] : 0;
-            el.value = val.toString();
-          }
+        MODALITIES.forEach(mod => {
+          const modKey = mod.toLowerCase();
+          const skills = preset ? (preset[modKey] || preset.skills || preset) : {};
+          SKILLS.forEach(skill => {
+            const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
+            if (el) {
+              const val = skills[skill] !== undefined ? skills[skill] : 0;
+              el.value = val.toString();
+            }
+          });
         });
       }
     }
@@ -2182,46 +2236,61 @@
       if (!group) return;
 
       const taskSelect = document.getElementById('modal-add-task');
-      const taskName = taskSelect.value;
-      const modality = document.getElementById('modal-add-modality').value;
+      const taskName = taskSelect?.value;
+      if (!taskName) {
+        showMessage('error', 'Please pick a role/task');
+        return;
+      }
+
+      const selectedModalities = MODALITIES.map(m => m.toLowerCase()).filter(modKey => {
+        const cb = document.getElementById(`modal-add-mod-${modKey}-enabled`);
+        return cb ? cb.checked : false;
+      });
+
+      if (selectedModalities.length === 0) {
+        showMessage('error', 'Select at least one modality');
+        return;
+      }
+
       const startTime = document.getElementById('modal-add-start').value;
       const endTime = document.getElementById('modal-add-end').value;
       const modifier = parseFloat(document.getElementById('modal-add-modifier').value) || 1.0;
 
-      // Gather skills
-      const skills = {};
-      SKILLS.forEach(skill => {
-        const el = document.getElementById(`modal-add-skill-${skill}`);
-        skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
-      });
-
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
 
       try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality,
-            worker_data: {
-              PPL: group.worker,
-              start_time: startTime,
-              end_time: endTime,
-              Modifier: modifier,
-              tasks: taskName,
-              ...skills
-            }
-          })
-        });
+        for (const modKey of selectedModalities) {
+          const skills = {};
+          SKILLS.forEach(skill => {
+            const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
+            skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
+          });
 
-        if (response.ok) {
-          showMessage('success', `Added new shift for ${group.worker}`);
-          closeModal();
-          await loadData();
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          showMessage('error', errData.error || 'Failed to add shift');
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              modality: modKey,
+              worker_data: {
+                PPL: group.worker,
+                start_time: startTime,
+                end_time: endTime,
+                Modifier: modifier,
+                tasks: taskName,
+                ...skills
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Failed to add shift for ${modKey.toUpperCase()}`);
+          }
         }
+
+        showMessage('success', `Added new shift for ${group.worker}`);
+        closeModal();
+        await loadData();
       } catch (error) {
         showMessage('error', error.message);
       }
@@ -2455,63 +2524,84 @@
       if (!group) return;
 
       const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
+      const addEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
+      const deleteEndpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
       const shifts = group.shiftsArray || [];
 
       try {
-        // Update all existing shifts with new simplified structure
         for (let shiftIdx = 0; shiftIdx < shifts.length; shiftIdx++) {
           const shift = shifts[shiftIdx];
 
-          // Get updated values from the simplified form
           const shiftTaskEl = document.getElementById(`edit-shift-${shiftIdx}-task`);
-          const shiftModalityEl = document.getElementById(`edit-shift-${shiftIdx}-modality`);
           const shiftStartEl = document.getElementById(`edit-shift-${shiftIdx}-start`);
           const shiftEndEl = document.getElementById(`edit-shift-${shiftIdx}-end`);
           const shiftModifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
 
           const shiftTask = shiftTaskEl ? shiftTaskEl.value : shift.task;
-          const selectedModality = shiftModalityEl ? shiftModalityEl.value.toLowerCase() : null;
           const shiftStart = shiftStartEl ? shiftStartEl.value : shift.start_time;
           const shiftEnd = shiftEndEl ? shiftEndEl.value : shift.end_time;
           const shiftModifier = shiftModifierEl ? parseFloat(shiftModifierEl.value) || 1.0 : shift.modifier || 1.0;
 
-          // Get skills from the simplified skill inputs
-          const skillUpdates = {};
-          SKILLS.forEach(skill => {
-            const el = document.getElementById(`edit-shift-${shiftIdx}-skill-${skill}`);
-            if (el) {
-              skillUpdates[skill] = normalizeSkillValueJS(el.value);
-            }
-          });
-
-          // Update all modalities that have row_index in this shift
           for (const [modKey, modData] of Object.entries(shift.modalities)) {
             const rowIndexEl = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-rowindex`);
             const rowIndex = rowIndexEl ? parseInt(rowIndexEl.value) : modData.row_index;
+            const enabled = document.getElementById(`edit-shift-${shiftIdx}-mod-${modKey}-enabled`)?.checked;
 
-            if (rowIndex >= 0) {
-              const updates = {
-                start_time: shiftStart,
-                end_time: shiftEnd,
-                Modifier: shiftModifier,
-                tasks: shiftTask,
-                ...skillUpdates
-              };
+            const skillUpdates = {};
+            SKILLS.forEach(skill => {
+              const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+              if (el) {
+                skillUpdates[skill] = normalizeSkillValueJS(el.value);
+              }
+            });
 
-              const response = await fetch(updateEndpoint, {
+            if (enabled) {
+              if (rowIndex >= 0) {
+                const updates = {
+                  start_time: shiftStart,
+                  end_time: shiftEnd,
+                  Modifier: shiftModifier,
+                  tasks: shiftTask,
+                  ...skillUpdates
+                };
+                const response = await fetch(updateEndpoint, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ modality: modKey, row_index: rowIndex, updates })
+                });
+                if (!response.ok) {
+                  const result = await response.json();
+                  throw new Error(result.error || `Failed to update ${modKey.toUpperCase()} entry`);
+                }
+              } else {
+                // create new modality entry
+                const response = await fetch(addEndpoint, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    modality: modKey,
+                    worker_data: {
+                      PPL: group.worker,
+                      start_time: shiftStart,
+                      end_time: shiftEnd,
+                      Modifier: shiftModifier,
+                      tasks: shiftTask,
+                      ...skillUpdates
+                    }
+                  })
+                });
+                if (!response.ok) {
+                  const result = await response.json().catch(() => ({}));
+                  throw new Error(result.error || `Failed to add ${modKey.toUpperCase()} entry`);
+                }
+              }
+            } else if (rowIndex >= 0) {
+              // delete existing modality entry if unchecked
+              await fetch(deleteEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  modality: modKey,
-                  row_index: rowIndex,
-                  updates: updates
-                })
+                body: JSON.stringify({ modality: modKey, row_index: rowIndex })
               });
-
-              if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.error || `Failed to update ${modKey.toUpperCase()} entry`);
-              }
             }
           }
         }
