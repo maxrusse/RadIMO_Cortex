@@ -3384,7 +3384,9 @@ def prep_next_day():
         worker_list=worker_list,
         worker_skills=worker_skills,
         task_roles=task_roles,
-        exclusion_rules=exclusion_rules
+        exclusion_rules=exclusion_rules,
+        skill_value_colors=APP_CONFIG.get('skill_value_colors', {}),
+        ui_colors=APP_CONFIG.get('ui_colors', {})
     )
 
 

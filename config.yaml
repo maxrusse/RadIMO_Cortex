@@ -155,6 +155,31 @@ skill_modality_overrides:
 skill_dashboard:
   hide_invalid_combinations: false
 
+# Skill value display colors (for prep page table)
+# These define how skill values 1, 0, -1, and 'w' are displayed
+skill_value_colors:
+  active:     # skill = 1 (primary assignment)
+    color: '#28a745'
+    label: 'Active'
+  passive:    # skill = 0 (fallback only)
+    color: '#6c757d'
+    label: 'Passive'
+  excluded:   # skill = -1 (never assign)
+    color: '#dc3545'
+    label: 'Excluded'
+  weighted:   # skill = 'w' (assisted/weighted)
+    color: '#17a2b8'
+    label: 'Weighted'
+
+# UI theme colors (for today/tomorrow tabs, success/error messages)
+ui_colors:
+  today_tab: '#28a745'        # Green for "Change Today"
+  tomorrow_tab: '#ffc107'     # Yellow for "Prep Tomorrow"
+  success: '#28a745'
+  error: '#dc3545'
+  warning: '#ffc107'
+  info: '#17a2b8'
+
 balancer:
   enabled: true
   min_assignments_per_skill: 5
