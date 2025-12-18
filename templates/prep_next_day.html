@@ -1218,35 +1218,45 @@
           .map(([key, shift]) => ({ ...shift, shiftKey: key }))
           .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
 
+        // Collect all gaps for this worker
+        const workerGaps = group.allGaps || [];
+
         // Merge consecutive shifts with same task (split shifts due to gaps)
         const mergedShifts = [];
         let currentMerged = null;
 
         shiftsArr.forEach(shift => {
+          // Check if there's a gap between currentMerged.end_time and shift.start_time
+          const hasGapBetween = currentMerged && workerGaps.some(g =>
+            g.start >= currentMerged.end_time && g.end <= shift.start_time
+          );
+
           if (!currentMerged) {
             currentMerged = {
               ...shift,
               timeSegments: [{ start: shift.start_time, end: shift.end_time }],
-              originalShifts: [shift]
+              originalShifts: [shift],
+              gaps: workerGaps
             };
-          } else if (currentMerged.task === shift.task && shift.gaps && shift.gaps.length > 0) {
-            // Same task with gaps - merge into one work period
+          } else if (currentMerged.task === shift.task && hasGapBetween) {
+            // Same task with gap between - merge into one work period
             currentMerged.timeSegments.push({ start: shift.start_time, end: shift.end_time });
             currentMerged.originalShifts.push(shift);
             currentMerged.end_time = shift.end_time;
-            // Merge modalities
+            // Merge modalities (prefer non-placeholder)
             Object.entries(shift.modalities).forEach(([modKey, modData]) => {
               if (!currentMerged.modalities[modKey] || currentMerged.modalities[modKey].placeholder) {
                 currentMerged.modalities[modKey] = modData;
               }
             });
           } else {
-            // Different task - save current and start new
+            // Different task or no gap - save current and start new
             mergedShifts.push(currentMerged);
             currentMerged = {
               ...shift,
               timeSegments: [{ start: shift.start_time, end: shift.end_time }],
-              originalShifts: [shift]
+              originalShifts: [shift],
+              gaps: workerGaps
             };
           }
         });
@@ -1482,35 +1492,44 @@
           const gaps = shift.gaps || [];
 
           if (isEditMode) {
-            // In edit mode, show first and last times (simplified)
+            // In edit mode, show editable times with gap info below
             const firstSeg = segments[0] || {};
             const lastSeg = segments[segments.length - 1] || firstSeg;
-            const shiftEditor = `<div style="display:flex; gap:0.2rem; align-items:center; font-size:0.7rem;">
+            let shiftEditor = `<div style="display:flex; gap:0.2rem; align-items:center; font-size:0.7rem;">
                 <input type="time" value="${firstSeg.start || '07:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'start', this.value)" style="padding: 0.1rem; font-size: 0.7rem; width: 65px;">
                 -
                 <input type="time" value="${lastSeg.end || '15:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'end', this.value)" style="padding: 0.1rem; font-size: 0.7rem; width: 65px;">
               </div>`;
-            tr.innerHTML += `<td class="grid-cell shift-col">${shiftEditor}</td>`;
-          } else {
-            // View mode: show timeline with gaps
-            let timelineHtml = '<div class="shift-timeline">';
-            segments.forEach((seg, i) => {
-              timelineHtml += `<span class="shift-segment">${escapeHtml(seg.start)}-${escapeHtml(seg.end)}</span>`;
-              // Check if there's a gap after this segment
-              const nextSeg = segments[i + 1];
-              if (nextSeg) {
-                const gapForThis = gaps.find(g => g.start >= seg.end && g.end <= nextSeg.start);
-                if (gapForThis) {
-                  timelineHtml += `<span class="gap-indicator" title="${escapeHtml(gapForThis.activity || 'Gap')}">${escapeHtml(gapForThis.start)}-${escapeHtml(gapForThis.end)}</span>`;
-                }
-              }
-            });
-            // Show any remaining gaps not between segments
-            if (segments.length === 1 && gaps.length > 0) {
+            // Show gaps in edit mode too
+            if (gaps.length > 0) {
               gaps.forEach(g => {
-                timelineHtml += `<span class="gap-indicator" title="${escapeHtml(g.activity || 'Gap')}">${escapeHtml(g.start)}-${escapeHtml(g.end)}</span>`;
+                shiftEditor += `<div class="gap-indicator" style="margin-top:0.1rem;" title="${escapeHtml(g.activity || 'Gap')}">⏸ ${escapeHtml(g.start)}-${escapeHtml(g.end)}</div>`;
               });
             }
+            tr.innerHTML += `<td class="grid-cell shift-col">${shiftEditor}</td>`;
+          } else {
+            // View mode: show timeline with segments and gaps in time order
+            let timelineHtml = '<div class="shift-timeline">';
+
+            // Build combined timeline: segments + gaps sorted by start time
+            const timelineItems = [];
+            segments.forEach(seg => {
+              timelineItems.push({ type: 'segment', start: seg.start, end: seg.end });
+            });
+            gaps.forEach(g => {
+              timelineItems.push({ type: 'gap', start: g.start, end: g.end, activity: g.activity });
+            });
+            timelineItems.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+            // Render in order
+            timelineItems.forEach(item => {
+              if (item.type === 'segment') {
+                timelineHtml += `<span class="shift-segment">${escapeHtml(item.start)}-${escapeHtml(item.end)}</span>`;
+              } else {
+                timelineHtml += `<span class="gap-indicator" title="${escapeHtml(item.activity || 'Gap')}">⏸ ${escapeHtml(item.start)}-${escapeHtml(item.end)}</span>`;
+              }
+            });
+
             timelineHtml += '</div>';
             tr.innerHTML += `<td class="grid-cell shift-col">${timelineHtml}</td>`;
           }
@@ -1586,11 +1605,18 @@
           }
 
           if (shiftIdx === 0) {
-            tr.innerHTML += `
-              <td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
-                <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
-                <button class="btn btn-small btn-danger" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete All">Del</button>
+            // Hide Edit/Del buttons in quick edit mode to avoid confusion
+            if (isEditMode) {
+              tr.innerHTML += `<td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle; color: #999; font-size: 0.7rem;">
+                <em>Save to edit</em>
               </td>`;
+            } else {
+              tr.innerHTML += `
+                <td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
+                  <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
+                  <button class="btn btn-small btn-danger" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete All">Del</button>
+                </td>`;
+            }
           }
 
           tbody.appendChild(tr);
