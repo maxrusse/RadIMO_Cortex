@@ -1269,7 +1269,7 @@ def build_working_hours_from_medweb(
                     'end_time': end_time,
                     'shift_duration': duration_hours,
                     'Modifier': rule_modifier,
-                    'tasks': '',  # Initialize empty tasks column
+                    'tasks': activity_desc,  # Store shift/role name from CSV
                     **final_skills
                 })
 

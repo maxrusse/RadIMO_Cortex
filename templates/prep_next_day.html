@@ -42,7 +42,7 @@
     .compact-grid .grid-row td { text-align: center; vertical-align: middle; }
     .compact-grid .worker-col { min-width: 150px; text-align: left !important; }
     .compact-grid .shift-col { min-width: 130px; text-align: left !important; }
-    .compact-grid .task-col { min-width: 100px; text-align: left !important; }
+    .compact-grid .task-col { min-width: 120px; text-align: left !important; }
     .grid-select { width: 100%; padding: 0.15rem; font-size: 0.72rem; }
     .grid-input { width: 24px; padding: 0.1rem; font-size: 0.72rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; font-weight: 600; }
     .grid-input:focus { outline: 2px solid #004892; border-color: #004892; }
@@ -257,7 +257,7 @@
               {% for skill in skills %}
               <th class="skill-cell">{{ skill }}</th>
               {% endfor %}
-              <th>Task</th>
+              <th>Shift/Task</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -333,7 +333,7 @@
               {% for skill in skills %}
               <th class="skill-cell">{{ skill }}</th>
               {% endfor %}
-              <th>Task</th>
+              <th>Shift/Task</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1187,7 +1187,7 @@
       let headerHtml = '<tr class="header-top">';
       headerHtml += '<th rowspan="2" class="worker-col">Worker</th>';
       headerHtml += `<th rowspan="2" class="shift-col">${isEditMode ? 'Shift (editable)' : 'Shift'}</th>`;
-      headerHtml += '<th rowspan="2" class="task-col">Task</th>';
+      headerHtml += '<th rowspan="2" class="task-col">Shift/Task</th>';
 
       if (displayOrder === 'modality-first') {
         // Modalities as top-level columns (each spanning skill count)
