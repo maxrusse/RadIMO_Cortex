@@ -348,6 +348,8 @@ MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
 SKILL_DASHBOARD_SETTINGS = APP_CONFIG.get('skill_dashboard', {})
 allowed_modalities = list(MODALITY_SETTINGS.keys())
+allowed_modalities_map = {m.lower(): m for m in allowed_modalities}
+allowed_modalities_lower = set(allowed_modalities_map.keys())
 default_modality = allowed_modalities[0] if allowed_modalities else 'ct'
 modality_labels = {
     mod: settings.get('label', mod.upper())
@@ -602,8 +604,8 @@ def inject_modality_settings():
 def normalize_modality(modality_value: Optional[str]) -> str:
     if not modality_value:
         return default_modality
-    modality_value = modality_value.lower()
-    return modality_value if modality_value in allowed_modalities else default_modality
+    modality_value_lower = modality_value.lower()
+    return allowed_modalities_map.get(modality_value_lower, default_modality)
 
 
 def resolve_modality_from_request() -> str:
@@ -2215,9 +2217,10 @@ def update_global_assignment(person: str, role: str, modality: str) -> str:
     # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5
     modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
     modifier = _coerce_float(modifier, 1.0)
+    modifier = modifier if modifier > 0 else 1.0
     # Use helper that checks for skill×modality overrides first
     # Note: skill='w' is just a visual marker - weight is controlled by Modifier field
-    weight = get_skill_modality_weight(role, modality) * modifier
+    weight = get_skill_modality_weight(role, modality) * (1.0 / modifier)
 
     # Update single global weighted count (consolidated across all modalities)
     global_worker_data['weighted_counts'][canonical_id] = \
@@ -2256,9 +2259,26 @@ def backup_dataframe(modality: str, use_staged: bool = False):
         backup_file = os.path.join(backup_dir, f"Cortex_{modality.upper()}{suffix}.xlsx")
         try:
             # Remove unwanted columns from backup
-            cols_to_backup = [col for col in d['working_hours_df'].columns
-                              if col not in ['start_time', 'end_time', 'shift_duration', 'canonical_id']]
-            df_backup = d['working_hours_df'][cols_to_backup].copy()
+            df_backup = d['working_hours_df'].copy()
+
+            # Ensure TIME column exists so start/end times can be reconstructed when reloading backups
+            if 'TIME' not in df_backup.columns and {'start_time', 'end_time'}.issubset(df_backup.columns):
+                def _fmt_time(value):
+                    if pd.isna(value):
+                        return ''
+                    return value.strftime('%H:%M') if hasattr(value, 'strftime') else str(value)
+
+                df_backup['TIME'] = (
+                    df_backup['start_time'].apply(_fmt_time) +
+                    '-' +
+                    df_backup['end_time'].apply(_fmt_time)
+                )
+
+            cols_to_backup = [
+                col for col in df_backup.columns
+                if col not in ['start_time', 'end_time', 'shift_duration', 'canonical_id']
+            ]
+            df_backup = df_backup[cols_to_backup].copy()
 
             with pd.ExcelWriter(backup_file, engine='openpyxl') as writer:
                 # Write the filtered DataFrame into sheet "Tabelle1"
@@ -2525,7 +2545,7 @@ def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) 
         return False, None, str(e)
 
 
-def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool) -> tuple:
+def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool, verify_ppl: Optional[str] = None) -> tuple:
     """
     Delete a worker row from working_hours_df.
 
@@ -2540,12 +2560,21 @@ def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool
     data_dict = _get_schedule_data_dict(modality, use_staged)
     df = data_dict['working_hours_df']
 
-    if not _validate_row_index(df, row_index):
+    try:
+        row_index_int = int(row_index)
+    except (TypeError, ValueError):
+        return False, None, 'Invalid row index'
+
+    if not _validate_row_index(df, row_index_int):
         return False, None, 'Invalid row index'
 
     try:
-        worker_name = df.loc[row_index, 'PPL']
-        data_dict['working_hours_df'] = df.drop(index=row_index).reset_index(drop=True)
+        worker_name = df.loc[row_index_int, 'PPL']
+
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
+
+        data_dict['working_hours_df'] = df.drop(index=row_index_int).reset_index(drop=True)
         backup_dataframe(modality, use_staged=use_staged)
         return True, worker_name, None
 
@@ -3488,6 +3517,7 @@ def update_prep_row():
     data = request.json
     modality = data.get('modality')
     row_index = data.get('row_index')
+    verify_ppl = data.get('verify_ppl')
     updates = data.get('updates', {})
 
     if modality not in staged_modality_data:
@@ -3533,7 +3563,7 @@ def delete_prep_worker():
     if modality not in staged_modality_data:
         return jsonify({'error': 'Invalid modality'}), 400
 
-    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=True)
+    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=True, verify_ppl=verify_ppl)
 
     if success:
         return jsonify({'success': True})
@@ -3570,6 +3600,7 @@ def update_live_row():
     data = request.json
     modality = data.get('modality')
     row_index = data.get('row_index')
+    verify_ppl = data.get('verify_ppl')
     updates = data.get('updates', {})
 
     if modality not in modality_data:
@@ -3634,7 +3665,7 @@ def delete_live_worker():
     if modality not in modality_data:
         return jsonify({'error': 'Invalid modality'}), 400
 
-    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=False)
+    success, worker_name, error = _delete_worker_from_schedule(modality, row_index, use_staged=False, verify_ppl=verify_ppl)
 
     if success:
         selection_logger.info(f"Worker {worker_name} deleted from LIVE {modality} schedule (no counter reset)")

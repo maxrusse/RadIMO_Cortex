@@ -1814,7 +1814,7 @@
           await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index })
+            body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index, verify_ppl: entry.worker })
           });
         }
         showMessage('success', `Deleted all entries for ${group.worker}`);
@@ -1839,7 +1839,7 @@
         await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index })
+          body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index, verify_ppl: entry.worker })
         });
         showMessage('success', `Deleted entry for ${entry.worker}`);
         await loadData();
@@ -1992,7 +1992,7 @@ shifts.forEach((shift, shiftIdx) => {
           <input type="checkbox" id="edit-shift-${shiftIdx}-mod-${modKey}-enabled" ${isSelected ? 'checked' : ''}>
           <span style="color:${navColor};">${mod.toUpperCase()}</span>
         </label>
-        <button class="btn btn-small btn-secondary" type="button" onclick="applyWorkerSkillPresetForShiftModality('${escapedWorker.replace('"','\\"').replace("'", "\\'")}', ${shiftIdx}, '${modKey}')">Roster - ${mod.toUpperCase()}</button>
+        <button class="btn btn-small btn-secondary" type="button" onclick="applyWorkerSkillPresetForShiftModality(${groupIdx}, ${shiftIdx}, '${modKey}')">Roster - ${mod.toUpperCase()}</button>
       </header>
       <input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowindex" value="${rowIndex}">
       <div class="skills-grid">`;
@@ -2208,7 +2208,7 @@ html += `</div>
             await fetch(endpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ modality: modKey, row_index: modData.row_index })
+              body: JSON.stringify({ modality: modKey, row_index: modData.row_index, verify_ppl: group.worker })
             });
           }
         }
@@ -2517,10 +2517,13 @@ html += `</div>
     }
 
     // Apply worker skill preset for a specific modality in a specific shift
-    function applyWorkerSkillPresetForShiftModality(workerName, shiftIdx, modKey) {
-      const preset = WORKER_SKILLS[workerName];
+    function applyWorkerSkillPresetForShiftModality(groupIdx, shiftIdx, modKey) {
+      const { tab } = currentEditEntry || {};
+      const group = entriesData[tab]?.[groupIdx];
+      const workerName = group?.worker;
+      const preset = workerName ? WORKER_SKILLS[workerName] : null;
       if (!preset) {
-        showMessage('error', `No skill preset found for ${workerName}`);
+        showMessage('error', `No skill preset found for ${workerName || 'worker'}`);
         return;
       }
 
@@ -2808,7 +2811,10 @@ html += `</div>
             });
           } else {
             // Regular shift selected
-            task.modality = (taskConfig.modalities && taskConfig.modalities[0]) || task.modality;
+            const validModalities = (taskConfig.modalities || []).map(m => m.toLowerCase());
+            if (validModalities.length > 0 && !validModalities.includes(task.modality.toLowerCase())) {
+              task.modality = validModalities[0];
+            }
 
             const shiftConfig = SHIFT_TIMES[taskConfig.shift || 'Fruehdienst'] || {};
             const [startTime, endTime] = (shiftConfig.default || '07:00-15:00').split('-');
