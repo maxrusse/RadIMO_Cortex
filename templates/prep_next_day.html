@@ -320,6 +320,7 @@
         <label class="filter-toggle">
           <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')"> Hide 0/-1
         </label>
+        <button id="display-order-toggle-tomorrow" class="btn btn-secondary" onclick="toggleDisplayOrder()" title="Current: Modalities as groups, skills as sub-columns. Click to switch." style="margin-left: auto;">Mod → Skill</button>
       </div>
 
       <!-- Worker Table - One row per entry -->
@@ -458,13 +459,18 @@
 
       function toggleDisplayOrder() {
         displayOrder = displayOrder === 'modality-first' ? 'skill-first' : 'modality-first';
-        const btn = document.getElementById('display-order-toggle');
-        if (btn) {
-          btn.textContent = displayOrder === 'modality-first' ? 'Mod → Skill' : 'Skill → Mod';
-          btn.title = displayOrder === 'modality-first'
-            ? 'Current: Modalities as groups, skills as sub-columns. Click to switch.'
-            : 'Current: Skills as groups, modalities as sub-columns. Click to switch.';
-        }
+        const newText = displayOrder === 'modality-first' ? 'Mod → Skill' : 'Skill → Mod';
+        const newTitle = displayOrder === 'modality-first'
+          ? 'Current: Modalities as groups, skills as sub-columns. Click to switch.'
+          : 'Current: Skills as groups, modalities as sub-columns. Click to switch.';
+        // Update both buttons (today and tomorrow tabs)
+        ['display-order-toggle', 'display-order-toggle-tomorrow'].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) {
+            btn.textContent = newText;
+            btn.title = newTitle;
+          }
+        });
         renderTable('today');
         renderTable('tomorrow');
       }

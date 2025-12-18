@@ -1273,11 +1273,22 @@ def build_working_hours_from_medweb(
                     **final_skills
                 })
 
-    # SECOND PASS: Apply exclusions to split/truncate shifts
+    # SECOND PASS: Apply exclusions to split/truncate shifts AND add gap rows
     if exclusions_per_worker:
         selection_logger.info(
             f"Applying time exclusions for {len(exclusions_per_worker)} workers on {weekday_name}"
         )
+
+        # First, collect which modalities each worker has shifts in
+        worker_modalities = {}  # {canonical_id: set of modalities}
+        worker_ppl = {}  # {canonical_id: PPL string}
+        for modality in rows_per_modality:
+            for shift in rows_per_modality[modality]:
+                worker_id = shift['canonical_id']
+                if worker_id not in worker_modalities:
+                    worker_modalities[worker_id] = set()
+                    worker_ppl[worker_id] = shift['PPL']
+                worker_modalities[worker_id].add(modality)
 
         for modality in rows_per_modality:
             if not rows_per_modality[modality]:
@@ -1301,6 +1312,20 @@ def build_working_hours_from_medweb(
                         exclusions_per_worker[worker_id],
                         target_date_obj
                     )
+                    # Add gap rows for each exclusion (with -1 for all skills)
+                    for excl in exclusions_per_worker[worker_id]:
+                        gap_skills = {s: -1 for s in SKILL_COLUMNS}
+                        gap_row = {
+                            'PPL': worker_ppl.get(worker_id, 'Unknown'),
+                            'canonical_id': worker_id,
+                            'start_time': excl['start_time'],
+                            'end_time': excl['end_time'],
+                            'shift_duration': 0,  # Gaps don't count as work time
+                            'Modifier': 0,  # Gaps have 0 modifier (no capacity)
+                            'tasks': excl['activity'],  # Show gap name (e.g., "Board")
+                            **gap_skills
+                        }
+                        worker_shifts.append(gap_row)
                 new_shifts.extend(worker_shifts)
 
             rows_per_modality[modality] = new_shifts
