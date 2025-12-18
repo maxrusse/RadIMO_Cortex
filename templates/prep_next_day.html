@@ -54,19 +54,24 @@
     .grid-input:focus { outline: 2px solid #004892; border-color: #004892; }
     .grid-mod-input { width: 32px; padding: 0.1rem; font-size: 0.68rem; text-align: center; border: 1px solid #ccc; border-radius: 3px; }
     .grid-mod-input:focus { outline: 2px solid #17a2b8; border-color: #17a2b8; }
-    .grid-badge { display: inline-block; min-width: 28px; padding: 0.1rem 0.2rem; border-radius: 4px; border: 1px solid #ddd; }
+    .grid-badge { display: inline-block; min-width: 20px; padding: 0.05rem 0.15rem; font-size: 0.72rem; font-weight: 600; text-align: center; }
     .grid-cell { background: #fff; }
     .grid-cell.ghost { background: #fafafa; color: #999; }
     .grid-modifier { min-width: 42px; }
+    .modifier-col { min-width: 50px; }
     .row-skill-flag { background: #e9f7ef; }
 
     /* Badges - colors are dynamically generated from MODALITY_SETTINGS */
     .badge { display: inline-block; padding: 0.15rem 0.3rem; margin: 0.05rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600; }
     .badge-default { background: #6c757d; color: white; }
 
-    /* Skill cells */
+    /* Skill cells - borderless, use background color only */
     .skill-cell { text-align: center; font-size: 0.7rem; }
-    .skill-val { padding: 0.1rem 0.25rem; border-radius: 3px; font-size: 0.72rem; background: #f4f4f4; color: #333; border: 1px solid #ddd; }
+    .skill-val { padding: 0.05rem 0.15rem; font-size: 0.72rem; font-weight: 600; text-align: center; }
+    .skill-val-1 { color: #28a745; }     /* Active - green text */
+    .skill-val-0 { color: #999; }        /* Passive - gray text */
+    .skill-val--1 { color: #dc3545; }    /* Excluded - red text */
+    .skill-val-w { color: #17a2b8; }     /* Weighted - teal text */
 
     /* Multi-modality chips per skill */
     .mod-skill-grid { display: flex; flex-wrap: wrap; gap: 0.15rem; }
@@ -78,17 +83,14 @@
 
     /* Aggregated skill/modality cells */
     .agg-cell { text-align: center; font-size: 0.7rem; min-width: 42px; }
-    .agg-val { padding: 0.15rem 0.3rem; border-radius: 3px; font-size: 0.72rem; display: inline-block; min-width: 26px; background: #f7f7f7; border: 1px solid #e1e1e1; color: #333; }
-    .agg-all-1 { background: #f7f7f7; }       /* Neutralize colors */
+    .agg-val { padding: 0.15rem 0.3rem; font-size: 0.72rem; display: inline-block; min-width: 26px; background: #f7f7f7; color: #333; }
+    .agg-all-1 { background: #f7f7f7; }
     .agg-any-1 { background: #f7f7f7; }
     .agg-all-0 { background: #f7f7f7; }
     .agg-any-0 { background: #f7f7f7; }
     .agg-all-neg { background: #f7f7f7; }
     .agg-mixed { background: #f7f7f7; }
-
-    /* Skill value 'w' = weighted (visual marker only) */
-    .skill-val-w { background: #f4f4f4; color: #333; border: 1px solid #ddd; }
-    .agg-has-weighted { border: 2px solid #17a2b8; }
+    .agg-has-weighted { color: #17a2b8; font-weight: bold; }
 
     /* Workload modifier badge */
     .modifier-badge { display: inline-block; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; }
@@ -249,7 +251,7 @@
           </select>
         </div>
         <label class="filter-toggle">
-          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')"> Hide 0 entries
+          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')"> Hide 0/-1
         </label>
         <button id="display-order-toggle" class="btn btn-secondary" onclick="toggleDisplayOrder()" title="Current: Modalities as groups, skills as sub-columns. Click to switch." style="margin-left: auto;">Mod → Skill</button>
       </div>
@@ -326,7 +328,7 @@
           </select>
         </div>
         <label class="filter-toggle">
-          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')"> Hide 0 entries
+          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')"> Hide 0/-1
         </label>
       </div>
 
@@ -449,7 +451,8 @@
         renderTable('tomorrow');
       }
 
-      const ACTIVE_SKILL_VALUES = new Set([1, '1', 'w', 'W', -1, '-1']);
+      // Active skill values for filtering - excludes 0 and -1 (only shows explicitly active workers)
+      const ACTIVE_SKILL_VALUES = new Set([1, '1', 'w', 'W']);
 
     function normalizeSkillValueJS(value) {
       if (value === undefined || value === null) return 0;
@@ -486,6 +489,14 @@
     // Helper: Get gaps (type='gap', exclusion=true)
     function getGapTasks() {
       return TASK_ROLES.filter(t => t.type === 'gap' || t.exclusion);
+    }
+
+    // Helper: Check if a task name is a gap (using config, not string matching)
+    function isGapTask(taskName) {
+      if (!taskName) return false;
+      const gapTasks = getGapTasks();
+      const taskLower = taskName.toLowerCase().trim();
+      return gapTasks.some(g => g.name && g.name.toLowerCase().trim() === taskLower);
     }
 
     // Helper: Render task/role dropdown with optgroups for Shifts vs Gaps
@@ -740,7 +751,7 @@
       }
     }
 
-    // Validate and save modifier input on blur
+    // Validate and save modifier input on blur (per-modality - legacy)
     function validateAndSaveModifier(el) {
       let parsed = parseFloat(el.value);
 
@@ -761,8 +772,40 @@
       onInlineModifierChange(tab, mod, parseInt(row), parsed, parseInt(gidx), parseInt(sidx));
     }
 
+    // Validate and save shift-level modifier (applies to all modalities in the shift)
+    function validateAndSaveShiftModifier(el) {
+      let parsed = parseFloat(el.value);
+
+      // Validate - clamp to valid range
+      if (isNaN(parsed) || parsed < 0.5) parsed = 0.5;
+      else if (parsed > 1.5) parsed = 1.5;
+
+      // Round to nearest valid value
+      const validValues = [0.5, 0.75, 1.0, 1.25, 1.5];
+      parsed = validValues.reduce((prev, curr) =>
+        Math.abs(curr - parsed) < Math.abs(prev - parsed) ? curr : prev
+      );
+
+      el.value = parsed;
+
+      // Trigger change tracking for ALL modalities in this shift
+      const { tab, gidx, sidx } = el.dataset;
+      onInlineShiftModifierChange(tab, parseInt(gidx), parseInt(sidx), parsed);
+
+      // Update save button count
+      const count = Object.keys(pendingChanges[tab]).length;
+      const saveBtn = document.getElementById(`save-inline-btn-${tab}`);
+      if (saveBtn) {
+        saveBtn.textContent = `Save ${count} change${count > 1 ? 's' : ''}`;
+      }
+    }
+
     // Handle keyboard for modifier input
     function handleModKeydown(event, el) {
+      // Determine if this is shift-level (no mod attribute) or modality-level modifier
+      const isShiftLevel = !el.dataset.mod;
+      const saveFunction = isShiftLevel ? validateAndSaveShiftModifier : validateAndSaveModifier;
+
       if (event.key === 'Enter') {
         el.blur();
         event.preventDefault();
@@ -772,7 +815,7 @@
         const idx = validValues.indexOf(val);
         const next = idx < validValues.length - 1 ? validValues[idx + 1] : validValues[validValues.length - 1];
         el.value = next;
-        validateAndSaveModifier(el);
+        saveFunction(el);
         event.preventDefault();
       } else if (event.key === 'ArrowDown') {
         const val = parseFloat(el.value) || 1.0;
@@ -780,7 +823,7 @@
         const idx = validValues.indexOf(val);
         const next = idx > 0 ? validValues[idx - 1] : validValues[0];
         el.value = next;
-        validateAndSaveModifier(el);
+        saveFunction(el);
         event.preventDefault();
       }
     }
@@ -1016,8 +1059,8 @@
             taskStr = taskStr.filter(t => t && t.trim()).join(', ');
           }
 
-          const taskLower = (taskStr || '').toLowerCase();
-          const isGapRow = taskLower.includes('board') || taskLower.includes('gap');
+          // Check if this is a gap row using config (not string matching)
+          const isGapRow = isGapTask(taskStr);
 
           const rosterPreset = (WORKER_SKILLS[workerName] || {});
           const rosterSkills = rosterPreset[mod] || rosterPreset.default || {};
@@ -1146,7 +1189,7 @@
         });
       }
 
-      headerHtml += `<th colspan="${modalKeys.length}">Mod.(w)</th>`;
+      headerHtml += '<th rowspan="2" class="modifier-col">Mod.</th>';
       headerHtml += '<th rowspan="2">Actions</th>';
       headerHtml += '</tr>';
 
@@ -1171,14 +1214,6 @@
           });
         });
       }
-
-      // Modifier sub-headers (one per modality)
-      modalKeys.forEach(mod => {
-        const modSettings = MODALITY_SETTINGS[mod] || {};
-        const label = (modSettings.label || mod).replace(/-/g, '');
-        const shortLabel = label.substring(0, 2).toUpperCase();
-        headerHtml += `<th class="sub-col">${shortLabel}</th>`;
-      });
 
       headerHtml += '</tr>';
 
@@ -1270,8 +1305,8 @@
       const visibleGroups = [];
 
       const modCount = MODALITIES.length;
-      // Calculate column count: Worker + Shift + Task + (Skills × Modalities) + (Modifiers × Modalities) + Actions
-      const colCount = 3 + (SKILLS.length * modCount) + modCount + 1;
+      // Calculate column count: Worker + Shift + Task + (Skills × Modalities) + 1 Modifier + Actions
+      const colCount = 3 + (SKILLS.length * modCount) + 1 + 1;
 
       if (!groups || groups.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 2rem; color: #666;">No data. Load from CSV first.</td></tr>`;
@@ -1321,24 +1356,29 @@
           const renderCell = (modKey, skill) => {
             const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
             const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-            const isGap = (shift.gaps || []).length > 0 || (shift.task || '').toLowerCase().includes('board');
+            const isGap = (shift.gaps || []).length > 0 || isGapTask(shift.task);
             const rawVal = isGap ? -1 : (modData.skills[skill] !== undefined ? modData.skills[skill] : -1);
             const val = normalizeSkillValueJS(rawVal);
+
+            // Get modality background color for visual "lanes"
+            const modSettings = MODALITY_SETTINGS[modKey] || {};
+            const modBgColor = modSettings.background_color || '#fff';
+            const cellBg = isAssigned ? modBgColor : '#fafafa';
             const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
 
             const displayVal = displaySkillValue(val);
             const skillClass = getSkillClass(val);
             const skillColor = getSkillColor(val);
             if (isEditMode) {
-              return `<td class="${cellClass}">
+              return `<td class="${cellClass}" style="background:${cellBg};">
                 <input type="text" class="grid-input" value="${displayVal}"
                   data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
                   data-skill="${skill}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
                   onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)"
-                  style="background:${skillColor}20; border-color:${skillColor};">
+                  style="background:${skillColor}20;">
               </td>`;
             } else {
-              return `<td class="${cellClass}"><span class="grid-badge skill-val ${skillClass}" style="border-color:${skillColor};">${displayVal}</span></td>`;
+              return `<td class="${cellClass}" style="background:${cellBg};"><span class="grid-badge skill-val ${skillClass}">${displayVal}</span></td>`;
             }
           };
 
@@ -1356,25 +1396,27 @@
             });
           }
 
-          modKeysToShow.forEach(modKey => {
-            const modData = shift.modalities[modKey] || { skills: {}, row_index: -1, modifier: 1.0 };
-            const isAssigned = modData.row_index !== undefined && modData.row_index >= 0;
-            const hasWeighted = Object.values(modData.skills).some(v => isWeightedSkill(v));
-            const cellClass = `grid-cell grid-modifier ${isAssigned ? '' : 'ghost'}`;
-            const modVal = (modData.modifier || 1.0);
-            const modClass = hasWeighted ? 'modifier-high' : '';
-            if (isEditMode) {
-              // Compact text input for modifier - validates on blur
-              tr.innerHTML += `<td class="${cellClass}">
-                <input type="text" class="grid-mod-input" value="${modVal}"
-                  data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
-                  data-gidx="${gIdx}" data-sidx="${shiftIdx}"
-                  onblur="validateAndSaveModifier(this)" onkeydown="handleModKeydown(event, this)">
-              </td>`;
-            } else {
-              tr.innerHTML += `<td class="${cellClass}"><span class="modifier-badge ${modClass}">${modVal.toFixed(2)}x</span></td>`;
-            }
+          // Single modifier column for entire shift (applies to all modalities)
+          const hasAnyAssigned = modKeysToShow.some(modKey => {
+            const modData = shift.modalities[modKey];
+            return modData && modData.row_index !== undefined && modData.row_index >= 0;
           });
+          const hasAnyWeighted = modKeysToShow.some(modKey => {
+            const modData = shift.modalities[modKey];
+            return modData && Object.values(modData.skills || {}).some(v => isWeightedSkill(v));
+          });
+          const modVal = shift.modifier || 1.0;
+          const modCellClass = `grid-cell grid-modifier ${hasAnyAssigned ? '' : 'ghost'}`;
+          const modClass = hasAnyWeighted ? 'modifier-high' : (modVal < 1 ? 'modifier-low' : '');
+          if (isEditMode) {
+            tr.innerHTML += `<td class="${modCellClass}">
+              <input type="text" class="grid-mod-input" value="${modVal}"
+                data-tab="${tab}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
+                onblur="validateAndSaveShiftModifier(this)" onkeydown="handleModKeydown(event, this)">
+            </td>`;
+          } else {
+            tr.innerHTML += `<td class="${modCellClass}"><span class="modifier-badge ${modClass}">${modVal.toFixed(2)}x</span></td>`;
+          }
 
           if (shiftIdx === 0) {
             tr.innerHTML += `

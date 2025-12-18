@@ -362,13 +362,13 @@
       return !isNaN(n) && n >= 1;
     }
 
-    // Check if any skill is active (for ALL filter - includes excluded -1)
+    // Check if any skill is active (excludes -1 and 0 - only shows actively assigned workers)
     function hasAnyActiveSkill(entry) {
       return skillColumns.some(s => {
         const val = entry[s];
         if (val === 'w' || val === 'W') return true;
         const n = Number(val);
-        return !isNaN(n) && (n >= 1 || n === -1);
+        return !isNaN(n) && n >= 1;  // Only include active (>=1), exclude -1 and 0
       });
     }
 
