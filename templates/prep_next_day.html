@@ -429,13 +429,14 @@
         css += `.skill-btn-${skill.toLowerCase()} { background: ${btnColor}; color: ${textColor}; border: none; }\n`;
       }
       // Skill VALUE colors - only highlight 1 (active) and w (weighted)
-      // 0 and -1 are neutral/subdued
+      // 0 and -1 are neutral/subdued - use config colors
       const activeColor = SKILL_VALUE_COLORS.active?.color || '#28a745';
       const weightedColor = SKILL_VALUE_COLORS.weighted?.color || '#17a2b8';
-      const neutralColor = '#999';  // Subdued gray for 0 and -1
+      const passiveColor = SKILL_VALUE_COLORS.passive?.color || '#999';
+      const excludedColor = SKILL_VALUE_COLORS.excluded?.color || '#999';
       css += `.skill-val-1 { color: ${activeColor}; font-weight: 700; }\n`;
-      css += `.skill-val-0 { color: ${neutralColor}; font-weight: 400; }\n`;
-      css += `.skill-val--1 { color: ${neutralColor}; font-weight: 400; }\n`;
+      css += `.skill-val-0 { color: ${passiveColor}; font-weight: 400; }\n`;
+      css += `.skill-val--1 { color: ${excludedColor}; font-weight: 400; }\n`;
       css += `.skill-val-w { color: ${weightedColor}; font-weight: 700; }\n`;
       css += `.modifier-high { background: ${weightedColor}; color: white; }\n`;
       css += `.agg-has-weighted { color: ${weightedColor}; font-weight: bold; }\n`;
@@ -583,13 +584,14 @@
       return '';
     }
 
-    // Get color for skill value - only 1 and w get colors, 0/-1 are neutral
+    // Get color for skill value - only 1 and w get strong colors, 0/-1 are neutral (from config)
     function getSkillColor(value) {
       const v = normalizeSkillValueJS(value);
       if (v === 1) return SKILL_VALUE_COLORS.active?.color || '#28a745';
       if (isWeightedSkill(v)) return SKILL_VALUE_COLORS.weighted?.color || '#17a2b8';
-      // 0 and -1 are neutral - no strong color
-      return '#ccc';
+      if (v === 0) return SKILL_VALUE_COLORS.passive?.color || '#ccc';
+      if (v === -1) return SKILL_VALUE_COLORS.excluded?.color || '#ccc';
+      return SKILL_VALUE_COLORS.passive?.color || '#ccc';
     }
 
     function shiftMatchesFilters(shift, filter) {
@@ -1545,10 +1547,22 @@
             const rawVal = isGap ? -1 : (modData.skills[skill] !== undefined ? modData.skills[skill] : -1);
             const val = normalizeSkillValueJS(rawVal);
 
-            // Get modality background color for visual "lanes"
-            const modSettings = MODALITY_SETTINGS[modKey] || {};
-            const modBgColor = modSettings.background_color || '#fff';
-            const cellBg = isAssigned ? modBgColor : '#fafafa';
+            // Background color based on display mode:
+            // - modality-first: use modality background color
+            // - skill-first: use skill background color (from button_color)
+            let cellBg = '#fff';
+            if (isAssigned) {
+              if (displayOrder === 'modality-first') {
+                const modSettings = MODALITY_SETTINGS[modKey] || {};
+                cellBg = modSettings.background_color || '#fff';
+              } else {
+                const skillSettings = SKILL_SETTINGS[skill] || {};
+                const skillBtnColor = skillSettings.button_color || '#6c757d';
+                cellBg = skillBtnColor + '15';  // 15% opacity for subtle background
+              }
+            } else {
+              cellBg = '#fafafa';
+            }
             const cellClass = `grid-cell ${isAssigned ? '' : 'ghost'}`;
 
             const displayVal = displaySkillValue(val);
