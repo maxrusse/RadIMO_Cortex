@@ -891,8 +891,12 @@
       const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
       const addEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
 
-      try {
-        for (const change of changes) {
+      // Collect errors instead of throwing on first failure
+      const errors = [];
+      let successCount = 0;
+
+      for (const change of changes) {
+        try {
           if (change.isNew) {
             // New modality addition - need to add via add-worker endpoint
             const group = entriesData[tab][change.groupIdx];
@@ -926,8 +930,10 @@
             });
 
             if (!response.ok) {
-              const result = await response.json();
-              console.warn(`Failed to add ${change.modality}: ${result.error}`);
+              const result = await response.json().catch(() => ({}));
+              errors.push(`Add ${change.modality}: ${result.error || 'Unknown error'}`);
+            } else {
+              successCount++;
             }
           } else {
             // Existing entry update
@@ -938,19 +944,29 @@
             });
 
             if (!response.ok) {
-              const result = await response.json();
-              throw new Error(result.error || 'Failed to update');
+              const result = await response.json().catch(() => ({}));
+              errors.push(`Update ${change.modality}: ${result.error || 'Unknown error'}`);
+            } else {
+              successCount++;
             }
           }
+        } catch (fetchError) {
+          errors.push(`Network error: ${fetchError.message}`);
         }
-
-        showMessage('success', `Saved ${changes.length} change${changes.length > 1 ? 's' : ''}`);
-        pendingChanges[tab] = {};
-        applyEditModeUI(tab);
-        await loadData();
-      } catch (error) {
-        showMessage('error', error.message);
       }
+
+      // Show appropriate message based on results
+      if (errors.length === 0) {
+        showMessage('success', `Saved ${successCount} change${successCount !== 1 ? 's' : ''}`);
+      } else if (successCount > 0) {
+        showMessage('error', `Saved ${successCount}, failed ${errors.length}: ${errors[0]}`);
+      } else {
+        showMessage('error', `All ${errors.length} changes failed: ${errors[0]}`);
+      }
+
+      pendingChanges[tab] = {};
+      applyEditModeUI(tab);
+      await loadData();
     }
 
     // Calculate aggregated proficiency class for a set of values
@@ -2332,7 +2348,7 @@ html += `</div>
     }
 
     // Add shift from modal (staged locally until Save)
-    function addShiftFromModal() {
+    async function addShiftFromModal() {
       const { tab, groupIdx } = currentEditEntry || {};
       const group = entriesData[tab]?.[groupIdx];
       if (!group) return;

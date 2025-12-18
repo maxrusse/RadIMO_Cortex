@@ -589,6 +589,36 @@ for mod in allowed_modalities:
     }
 
 
+def clear_staged_data(modality: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Clear staged data to free memory.
+
+    Args:
+        modality: If provided, clear only that modality. If None, clear all.
+
+    Returns:
+        Dict with cleared modalities and freed memory info.
+    """
+    cleared = []
+    modalities_to_clear = [modality] if modality else allowed_modalities
+
+    for mod in modalities_to_clear:
+        if mod in staged_modality_data:
+            old_df = staged_modality_data[mod].get('working_hours_df')
+            row_count = len(old_df) if old_df is not None else 0
+
+            staged_modality_data[mod]['working_hours_df'] = None
+            staged_modality_data[mod]['info_texts'] = []
+            staged_modality_data[mod]['total_work_hours'] = {}
+            staged_modality_data[mod]['worker_modifiers'] = {}
+            staged_modality_data[mod]['last_modified'] = None
+
+            if row_count > 0:
+                cleared.append({'modality': mod, 'rows_cleared': row_count})
+
+    return {'cleared': cleared, 'total_modalities': len(cleared)}
+
+
 @app.context_processor
 def inject_modality_settings():
     return {
@@ -1478,7 +1508,7 @@ def preload_next_workday(csv_path: str, config: dict) -> dict:
             'message': f'Fehler beim Preload: {str(e)}'
         }
 
-def validate_excel_structure(df: pd.DataFrame, required_columns) -> (bool, str):
+def validate_excel_structure(df: pd.DataFrame, required_columns: List[str]) -> Tuple[bool, str]:
     # Rename column "PP" to "Privat" if it exists
     if "PP" in df.columns:
         df.rename(columns={"PP": "Privat"}, inplace=True)
@@ -3559,6 +3589,7 @@ def delete_prep_worker():
     data = request.json
     modality = data.get('modality')
     row_index = data.get('row_index')
+    verify_ppl = data.get('verify_ppl')  # Extract verify_ppl to prevent NameError
 
     if modality not in staged_modality_data:
         return jsonify({'error': 'Invalid modality'}), 400
@@ -3661,6 +3692,7 @@ def delete_live_worker():
     data = request.json
     modality = data.get('modality')
     row_index = data.get('row_index')
+    verify_ppl = data.get('verify_ppl')  # Extract verify_ppl to prevent NameError
 
     if modality not in modality_data:
         return jsonify({'error': 'Invalid modality'}), 400
@@ -4061,6 +4093,29 @@ def reload_skill_roster():
         })
     except Exception as exc:
         selection_logger.error(f"Error reloading roster: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/clear-staged-data', methods=['POST'])
+@admin_required
+def clear_staged_data_endpoint():
+    """
+    Clear staged data to free memory.
+    Accepts optional 'modality' parameter to clear only specific modality.
+    """
+    data = request.json or {}
+    modality = data.get('modality')
+
+    try:
+        result = clear_staged_data(modality)
+        selection_logger.info(f"Cleared staged data: {result}")
+        return jsonify({
+            'success': True,
+            'message': f"Cleared {result['total_modalities']} modalities",
+            'details': result['cleared']
+        })
+    except Exception as exc:
+        selection_logger.error(f"Error clearing staged data: {exc}")
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
