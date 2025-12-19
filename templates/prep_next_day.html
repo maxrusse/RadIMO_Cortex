@@ -2156,11 +2156,11 @@ html += `</div>
       if (!taskConfig) return;
 
       const isGap = taskConfig.type === 'gap' || taskConfig.exclusion;
+      const { tab, groupIdx } = currentEditEntry || {};
 
       if (isGap) {
         // Gap selected - set all skills to -1 and use schedule times for target day
         const schedule = taskConfig.schedule || {};
-        const { tab } = currentEditEntry || {};
         const targetDay = getTargetWeekdayName(tab || currentTab);
         if (schedule[targetDay]) {
           const [startTime, endTime] = schedule[targetDay].split('-');
@@ -2207,7 +2207,6 @@ html += `</div>
         });
 
         // Apply worker roster exclusions (-1)
-        const { tab, groupIdx } = currentEditEntry || {};
         const group = entriesData[tab]?.[groupIdx];
         if (group) {
           const preset = WORKER_SKILLS[group.worker];
@@ -2272,12 +2271,12 @@ html += `</div>
       }
 
       const isGap = option.dataset.type === 'gap' || option.dataset.exclusion === 'true';
+      const { tab, groupIdx } = currentEditEntry || {};
 
       // Set times - use target day based on current tab (today vs tomorrow)
       const shiftName = option.dataset.shift || 'Fruehdienst';
       const shiftConfig = SHIFT_TIMES[shiftName] || {};
       const schedule = JSON.parse(option.dataset.schedule || '{}');
-      const { tab } = currentEditEntry || {};
       const targetDay = getTargetWeekdayName(tab || currentTab);
       if (isGap && schedule[targetDay]) {
         const [startTime, endTime] = schedule[targetDay].split('-');
@@ -2308,7 +2307,6 @@ html += `</div>
       });
 
       // Merge with worker roster skills (apply -1 exclusions)
-      const { tab, groupIdx } = currentEditEntry || {};
       const group = entriesData[tab]?.[groupIdx];
       if (group) {
         const preset = WORKER_SKILLS[group.worker];
