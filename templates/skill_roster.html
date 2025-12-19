@@ -86,6 +86,7 @@
       <span style="color: #dc3545;">-1 = excluded</span>
     </div>
     <div style="display: flex; gap: 0.5rem;">
+      <button class="btn btn-primary" onclick="importNewWorkers()">Import new workers</button>
       <button class="btn btn-secondary" onclick="loadRoster()">Reload</button>
       <button class="btn btn-success" onclick="saveRoster()">Save</button>
     </div>
@@ -345,6 +346,28 @@
       document.getElementById('workerDetailContent').style.display = 'none';
       markDirty();
       showStatus('Worker deleted (save to keep)', 'success');
+    }
+
+    async function importNewWorkers() {
+      try {
+        const response = await fetch('/api/admin/skill_roster/import_new', { method: 'POST' });
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          await loadRoster();
+          const count = result.added_count || 0;
+          const list = (result.added_workers || []).join(', ');
+          const suffix = list ? `: ${list}` : '';
+          showStatus(`Imported ${count} new worker(s)` + suffix, 'success');
+        } else {
+          showStatus('Import failed: ' + (result.error || 'Unknown error'), 'error');
+        }
+      } catch (error) {
+        showStatus('Error: ' + error.message, 'error');
+      }
     }
 
     async function saveRoster() {
