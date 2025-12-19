@@ -2482,6 +2482,12 @@ def _df_to_api_response(df: pd.DataFrame) -> list:
         else:
             worker_data['tasks'] = []
 
+        # Add counts_for_hours (whether hours count for load balancing)
+        if 'counts_for_hours' in df.columns:
+            worker_data['counts_for_hours'] = bool(row.get('counts_for_hours', True))
+        else:
+            worker_data['counts_for_hours'] = True  # Default for legacy data
+
         data.append(worker_data)
 
     return data

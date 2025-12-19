@@ -1210,6 +1210,14 @@
           const rosterPreset = (WORKER_SKILLS[workerName] || {});
           const rosterSkills = rosterPreset[mod] || rosterPreset.default || {};
 
+          // Get counts_for_hours from API response, or derive from task config
+          const taskConfig = TASK_ROLES.find(t => t.name === taskStr);
+          let countsForHours = row.counts_for_hours;
+          if (countsForHours === undefined) {
+            // Derive from task config if not in API response
+            countsForHours = taskConfig ? taskConfig.counts_for_hours : true;
+          }
+
           const entry = {
             worker: workerName,
             modality: mod,
@@ -1217,6 +1225,7 @@
             start_time: startTime,
             end_time: endTime,
             modifier: row.Modifier !== undefined ? row.Modifier : 1.0,
+            counts_for_hours: countsForHours !== false,  // Default true
             gaps: gaps,
             skills: SKILLS.reduce((acc, skill) => {
               if (isGapRow) { acc[skill] = -1; return acc; }
@@ -1253,6 +1262,7 @@
               start_time: entry.start_time,
               end_time: entry.end_time,
               modifier: entry.modifier,
+              counts_for_hours: entry.counts_for_hours,
               task: entry.task,
               gaps: gaps,
               modalities: {},
@@ -1996,6 +2006,14 @@ shifts.forEach((shift, shiftIdx) => {
         </select>
       </div>
 
+      <div style="min-width: 100px;">
+        <label style="font-size: 0.75rem; color: #666; display: block;">Hrs Count</label>
+        <label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem; cursor: pointer;" title="If checked, hours from this entry count towards load balancing">
+          <input type="checkbox" id="edit-shift-${shiftIdx}-counts-hours" ${shift.counts_for_hours !== false ? 'checked' : ''}>
+          <span style="font-size: 0.8rem;">${shift.counts_for_hours !== false ? '✓ Yes' : '✗ No'}</span>
+        </label>
+      </div>
+
       <div style="flex: 1; min-width: 240px;">
         <label style="font-size: 0.75rem; color: #666; display: block;">Timeline (including gaps)</label>
         ${timelineHtml}
@@ -2084,6 +2102,13 @@ html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #d4edda;
         <option value="1.25">1.25x</option>
         <option value="1.5">1.5x</option>
       </select>
+    </div>
+    <div style="min-width: 100px;">
+      <label style="font-size: 0.75rem; color: #666; display: block;">Hrs Count</label>
+      <label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem; cursor: pointer;" title="If checked, hours count towards load balancing">
+        <input type="checkbox" id="modal-add-counts-hours" checked>
+        <span style="font-size: 0.8rem;">✓ Yes</span>
+      </label>
     </div>
   </div>
   <div style="margin-bottom:0.35rem; display:flex; justify-content: space-between; align-items:center;">
@@ -2353,6 +2378,8 @@ html += `</div>
       const startTime = document.getElementById('modal-add-start').value;
       const endTime = document.getElementById('modal-add-end').value;
       const modifier = parseFloat(document.getElementById('modal-add-modifier').value) || 1.0;
+      const countsHoursEl = document.getElementById('modal-add-counts-hours');
+      const countsForHours = countsHoursEl ? countsHoursEl.checked : true;
       const isGap = isGapTask(taskName);
 
       const endpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
@@ -2375,6 +2402,7 @@ html += `</div>
                 start_time: startTime,
                 end_time: endTime,
                 Modifier: modifier,
+                counts_for_hours: countsForHours,
                 tasks: taskName,
                 ...skills
               }
@@ -2646,6 +2674,10 @@ html += `</div>
           const shiftEnd = shiftEndEl ? shiftEndEl.value : shift.end_time;
           const shiftModifier = shiftModifierEl ? parseFloat(shiftModifierEl.value) || 1.0 : shift.modifier || 1.0;
 
+          // Get counts_for_hours checkbox value
+          const countsHoursEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
+          const countsForHours = countsHoursEl ? countsHoursEl.checked : (shift.counts_for_hours !== false);
+
           for (const [modKey, modData] of Object.entries(shift.modalities)) {
             const rowIndexEl = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-rowindex`);
             const rowIndex = rowIndexEl ? parseInt(rowIndexEl.value) : modData.row_index;
@@ -2666,6 +2698,7 @@ html += `</div>
               start_time: shiftStart,
               end_time: shiftEnd,
               Modifier: shiftModifier,
+              counts_for_hours: countsForHours,
               tasks: shiftTask,
               ...skillUpdates
             };
@@ -2733,6 +2766,7 @@ html += `</div>
         start_time: startTime,
         end_time: endTime,
         modifier: defaultTask.modifier || 1.0,
+        counts_for_hours: defaultTask.counts_for_hours !== false,  // Default true unless task says false
         skills: defaultSkills
       });
     }
@@ -2757,9 +2791,13 @@ html += `</div>
           const task = addWorkerModalState.tasks[idx];
           const isGap = taskConfig.type === 'gap' || taskConfig.exclusion;
 
+          // Update counts_for_hours from task config
+          task.counts_for_hours = taskConfig.counts_for_hours !== false;
+
           if (isGap) {
             // Gap selected - set all skills to -1 and use schedule times for target day
             task.modifier = 1.0;
+            task.counts_for_hours = false;  // Gaps typically don't count for hours
 
             // Get schedule-based times for the target day (based on modal's tab)
             const schedule = taskConfig.schedule || {};
@@ -2909,6 +2947,14 @@ html += `</div>
                 <option value="1.5" ${task.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
               </select>
             </div>
+
+            <div style="min-width: 100px;">
+              <label style="font-size: 0.75rem; color: #666; display: block;">Hrs Count</label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem; cursor: pointer;" title="If checked, hours count towards load balancing">
+                <input type="checkbox" onchange="updateAddWorkerTask(${idx}, 'counts_for_hours', this.checked)" ${task.counts_for_hours !== false ? 'checked' : ''}>
+                <span style="font-size: 0.8rem;">${task.counts_for_hours !== false ? '✓ Yes' : '✗ No'}</span>
+              </label>
+            </div>
           </div>
 
           <div>
@@ -2971,6 +3017,7 @@ html += `</div>
                 start_time: task.start_time,
                 end_time: task.end_time,
                 Modifier: task.modifier,
+                counts_for_hours: task.counts_for_hours !== false,
                 tasks: task.task,
                 ...task.skills
               }
