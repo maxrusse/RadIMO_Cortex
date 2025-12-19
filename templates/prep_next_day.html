@@ -543,6 +543,25 @@
       return TASK_ROLES.filter(t => t.type === 'gap' || t.exclusion);
     }
 
+    // Helper: Get the target weekday name (German) based on current tab
+    // For "today" tab: use current day
+    // For "tomorrow" tab: use next workday (skip weekends)
+    function getTargetWeekdayName(tab) {
+      const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+      const now = new Date();
+      if (tab === 'today') {
+        return days[now.getDay()];
+      }
+      // Tomorrow tab: calculate next workday
+      let targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + 1);
+      // Skip Saturday and Sunday
+      while (targetDate.getDay() === 0 || targetDate.getDay() === 6) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      return days[targetDate.getDay()];
+    }
+
     // Helper: Check if a task name is a gap (using config, not string matching)
     function isGapTask(taskName) {
       if (!taskName) return false;
@@ -1081,7 +1100,7 @@
           return;
         }
 
-        const result = buildEntriesByWorker(rawData[tab]);
+        const result = buildEntriesByWorker(rawData[tab], tab);
         entriesData[tab] = result.entries;
         workerCounts[tab] = result.counts;
         dataLoaded[tab] = true;
@@ -1110,9 +1129,10 @@
 
     // Build grouped entries list: worker -> shifts (time-based) -> modality×skills matrix
     // Merges split shifts back into connected work periods with gaps shown inline
-    function buildEntriesByWorker(data) {
+    function buildEntriesByWorker(data, tab = 'today') {
       const counts = {};
       const grouped = {};
+      const targetDay = getTargetWeekdayName(tab);
 
       function mergeUniqueGaps(list) {
         const seen = new Set();
@@ -1171,10 +1191,9 @@
           if ((!startTime || !endTime) && roleConfig) {
             if (isGapRow) {
               const schedule = roleConfig.schedule || {};
-              const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-              const today = days[new Date().getDay()];
-              if (schedule[today]) {
-                [startTime, endTime] = schedule[today].split('-');
+              // Use targetDay (computed based on tab) instead of current day
+              if (schedule[targetDay]) {
+                [startTime, endTime] = schedule[targetDay].split('-');
               }
             } else {
               const shiftName = roleConfig.shift || 'Fruehdienst';
@@ -2115,12 +2134,12 @@ html += `</div>
       const isGap = taskConfig.type === 'gap' || taskConfig.exclusion;
 
       if (isGap) {
-        // Gap selected - set all skills to -1 and use schedule times
+        // Gap selected - set all skills to -1 and use schedule times for target day
         const schedule = taskConfig.schedule || {};
-        const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-        const today = days[new Date().getDay()];
-        if (schedule[today]) {
-          const [startTime, endTime] = schedule[today].split('-');
+        const { tab } = currentEditEntry || {};
+        const targetDay = getTargetWeekdayName(tab || currentTab);
+        if (schedule[targetDay]) {
+          const [startTime, endTime] = schedule[targetDay].split('-');
           const startEl = document.getElementById(`edit-shift-${shiftIdx}-start`);
           const endEl = document.getElementById(`edit-shift-${shiftIdx}-end`);
           if (startEl) startEl.value = startTime;
@@ -2230,14 +2249,14 @@ html += `</div>
 
       const isGap = option.dataset.type === 'gap' || option.dataset.exclusion === 'true';
 
-      // Set times
+      // Set times - use target day based on current tab (today vs tomorrow)
       const shiftName = option.dataset.shift || 'Fruehdienst';
       const shiftConfig = SHIFT_TIMES[shiftName] || {};
       const schedule = JSON.parse(option.dataset.schedule || '{}');
-      const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-      const today = days[new Date().getDay()];
-      if (isGap && schedule[today]) {
-        const [startTime, endTime] = schedule[today].split('-');
+      const { tab } = currentEditEntry || {};
+      const targetDay = getTargetWeekdayName(tab || currentTab);
+      if (isGap && schedule[targetDay]) {
+        const [startTime, endTime] = schedule[targetDay].split('-');
         document.getElementById('modal-add-start').value = startTime;
         document.getElementById('modal-add-end').value = endTime;
       } else {
@@ -2405,10 +2424,11 @@ html += `</div>
       const option = select.options[select.selectedIndex];
       if (option.value !== 'custom' && option.dataset.schedule) {
         const schedule = JSON.parse(option.dataset.schedule);
-        const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-        const today = days[new Date().getDay()];
-        if (schedule[today]) {
-          const [start, end] = schedule[today].split('-');
+        // Use target day based on current tab (today vs tomorrow)
+        const { tab } = currentEditEntry || {};
+        const targetDay = getTargetWeekdayName(tab || currentTab);
+        if (schedule[targetDay]) {
+          const [start, end] = schedule[targetDay].split('-');
           startInput.value = start;
           endInput.value = end;
         }
@@ -2738,15 +2758,14 @@ html += `</div>
           const isGap = taskConfig.type === 'gap' || taskConfig.exclusion;
 
           if (isGap) {
-            // Gap selected - set all skills to -1 and use schedule times
+            // Gap selected - set all skills to -1 and use schedule times for target day
             task.modifier = 1.0;
 
-            // Get schedule-based times for today
+            // Get schedule-based times for the target day (based on modal's tab)
             const schedule = taskConfig.schedule || {};
-            const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-            const today = days[new Date().getDay()];
-            if (schedule[today]) {
-              const [startTime, endTime] = schedule[today].split('-');
+            const targetDay = getTargetWeekdayName(addWorkerModalState.tab || currentTab);
+            if (schedule[targetDay]) {
+              const [startTime, endTime] = schedule[targetDay].split('-');
               task.start_time = startTime;
               task.end_time = endTime;
             } else {
