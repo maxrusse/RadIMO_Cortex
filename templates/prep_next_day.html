@@ -2150,16 +2150,6 @@ html += `</div>
         const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
         if (modifierEl && taskConfig.modifier) modifierEl.value = taskConfig.modifier.toString();
 
-        // Enable modalities specified by the task
-        const enabledModalities = new Set((taskConfig.modalities || []).map(m => m.toLowerCase()));
-        MODALITIES.forEach(mod => {
-          const modKey = mod.toLowerCase();
-          const checkbox = document.getElementById(`edit-shift-${shiftIdx}-mod-${modKey}-enabled`);
-          if (checkbox && enabledModalities.size > 0) {
-            checkbox.checked = enabledModalities.has(modKey);
-          }
-        });
-
         // Set skills from task config
         const taskSkills = taskConfig.base_skills || {};
         MODALITIES.forEach(mod => {
@@ -2639,7 +2629,10 @@ html += `</div>
           for (const [modKey, modData] of Object.entries(shift.modalities)) {
             const rowIndexEl = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-rowindex`);
             const rowIndex = rowIndexEl ? parseInt(rowIndexEl.value) : modData.row_index;
-            const enabled = document.getElementById(`edit-shift-${shiftIdx}-mod-${modKey}-enabled`)?.checked;
+
+            // Only update existing entries (rowIndex >= 0)
+            // Modal no longer has modality enable/disable checkboxes
+            if (rowIndex < 0) continue;
 
             const skillUpdates = {};
             SKILLS.forEach(skill => {
@@ -2649,53 +2642,21 @@ html += `</div>
               }
             });
 
-            if (enabled) {
-              if (rowIndex >= 0) {
-                const updates = {
-                  start_time: shiftStart,
-                  end_time: shiftEnd,
-                  Modifier: shiftModifier,
-                  tasks: shiftTask,
-                  ...skillUpdates
-                };
-                const response = await fetch(updateEndpoint, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ modality: modKey, row_index: rowIndex, updates })
-                });
-                if (!response.ok) {
-                  const result = await response.json();
-                  throw new Error(result.error || `Failed to update ${modKey.toUpperCase()} entry`);
-                }
-              } else {
-                // create new modality entry
-                const response = await fetch(addEndpoint, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    modality: modKey,
-                    worker_data: {
-                      PPL: group.worker,
-                      start_time: shiftStart,
-                      end_time: shiftEnd,
-                      Modifier: shiftModifier,
-                      tasks: shiftTask,
-                      ...skillUpdates
-                    }
-                  })
-                });
-                if (!response.ok) {
-                  const result = await response.json().catch(() => ({}));
-                  throw new Error(result.error || `Failed to add ${modKey.toUpperCase()} entry`);
-                }
-              }
-            } else if (rowIndex >= 0) {
-              // delete existing modality entry if unchecked
-              await fetch(deleteEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ modality: modKey, row_index: rowIndex })
-              });
+            const updates = {
+              start_time: shiftStart,
+              end_time: shiftEnd,
+              Modifier: shiftModifier,
+              tasks: shiftTask,
+              ...skillUpdates
+            };
+            const response = await fetch(updateEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ modality: modKey, row_index: rowIndex, updates })
+            });
+            if (!response.ok) {
+              const result = await response.json();
+              throw new Error(result.error || `Failed to update ${modKey.toUpperCase()} entry`);
             }
           }
         }
