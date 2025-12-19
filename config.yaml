@@ -407,9 +407,6 @@ medweb_mapping:
       exclusion: true
       schedule:
         Montag: "15:30-17:00"
-      prep_time:
-        before: "30m"  # Optional: exclude 15:00-15:30 as prep
-        after: "15m"   # Optional: exclude 17:00-17:15 as cleanup
 
     - match: "Board"
       type: "gap"

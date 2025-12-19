@@ -1012,29 +1012,6 @@ def get_weekday_name_german(target_date: date) -> str:
     ]
     return weekday_names[target_date.weekday()]
 
-def parse_duration(duration_str: str) -> timedelta:
-    """
-    Parse duration string to timedelta.
-
-    Examples:
-        "1h30m" → timedelta(hours=1, minutes=30)
-        "2h" → timedelta(hours=2)
-        "30m" → timedelta(minutes=30)
-    """
-    hours = 0
-    minutes = 0
-
-    # Match hours
-    h_match = re.search(r'(\d+)h', duration_str)
-    if h_match:
-        hours = int(h_match.group(1))
-
-    # Match minutes
-    m_match = re.search(r'(\d+)m', duration_str)
-    if m_match:
-        minutes = int(m_match.group(1))
-
-    return timedelta(hours=hours, minutes=minutes)
 
 def apply_exclusions_to_shifts(
     work_shifts: List[dict],
@@ -1238,23 +1215,6 @@ def build_working_hours_from_medweb(
                     f"Could not parse exclusion time range '{time_range_str}' for {activity_desc}: {e}"
                 )
                 continue
-
-            # Apply prep_time if configured
-            prep_time = rule.get('prep_time', {})
-            if prep_time:
-                # Extend exclusion start backwards (prep before)
-                if 'before' in prep_time:
-                    prep_before = parse_duration(prep_time['before'])
-                    excl_start_dt = datetime.combine(target_date.date(), excl_start_time)
-                    excl_start_dt -= prep_before
-                    excl_start_time = excl_start_dt.time()
-
-                # Extend exclusion end forwards (cleanup after)
-                if 'after' in prep_time:
-                    prep_after = parse_duration(prep_time['after'])
-                    excl_end_dt = datetime.combine(target_date.date(), excl_end_time)
-                    excl_end_dt += prep_after
-                    excl_end_time = excl_end_dt.time()
 
             # Store exclusion for this worker
             if canonical_id not in exclusions_per_worker:
@@ -2521,6 +2481,12 @@ def _df_to_api_response(df: pd.DataFrame) -> list:
             worker_data['tasks'] = [t.strip() for t in tasks_val.split(',') if t.strip()]
         else:
             worker_data['tasks'] = []
+
+        # Add counts_for_hours (whether hours count for load balancing)
+        if 'counts_for_hours' in df.columns:
+            worker_data['counts_for_hours'] = bool(row.get('counts_for_hours', True))
+        else:
+            worker_data['counts_for_hours'] = True  # Default for legacy data
 
         data.append(worker_data)
 
