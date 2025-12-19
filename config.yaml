@@ -399,6 +399,7 @@ medweb_mapping:
     # ===========================================
     # GAPS/TASKS - Time exclusions (shows -1 everywhere)
     # Worker unavailable during these times (boards, meetings, teaching)
+    # Gaps block only the scheduled window; no pre/post buffers are used.
     # Schedule is day-specific (Montag, Dienstag, Mittwoch, Donnerstag, Freitag)
     # ===========================================
 
