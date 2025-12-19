@@ -17,7 +17,7 @@ max_requests_jitter = 0
 
 # Logging configuration
 logfile = "/xxxx/gunicorn.log"
-loglevel = "warning"
+loglevel = "info"
 # Setup logging
 logger = logging.getLogger("gunicorn.error")
 logger.setLevel(logging.INFO)
