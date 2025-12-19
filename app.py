@@ -178,6 +178,26 @@ def save_worker_skill_json(roster_data: Dict[str, Any]) -> bool:
         return False
 
 
+def build_valid_skills_map() -> Dict[str, List[str]]:
+    """Return modality -> skills map honoring valid_skills overrides."""
+    valid_skills_map: Dict[str, List[str]] = {}
+    for mod, settings in MODALITY_SETTINGS.items():
+        if 'valid_skills' in settings:
+            valid_skills_map[mod] = settings['valid_skills']
+        else:
+            valid_skills_map[mod] = SKILL_COLUMNS
+    return valid_skills_map
+
+
+def build_disabled_worker_entry(valid_skills_map: Dict[str, List[str]]) -> Dict[str, Any]:
+    """Create a roster entry with all valid skill/modality combos set to -1."""
+    entry: Dict[str, Any] = {'default': {}}
+    for mod in allowed_modalities:
+        valid_skills = valid_skills_map.get(mod, SKILL_COLUMNS)
+        entry[mod] = {skill: -1 for skill in valid_skills}
+    return entry
+
+
 def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> int:
     """
     Auto-populate skill roster with workers from loaded CSV data.
@@ -192,28 +212,24 @@ def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> int:
     # Load current roster
     roster = load_worker_skill_json()
     added_count = 0
+    valid_skills_map = build_valid_skills_map()
 
     for modality, df in modality_dfs.items():
         if df is None or df.empty:
             continue
 
         for _, row in df.iterrows():
-            worker_id = row.get('canonical_id', row.get('PPL', ''))
+            raw_worker_id = row.get('canonical_id', row.get('PPL', ''))
+            worker_id = str(raw_worker_id).strip() if pd.notna(raw_worker_id) else ''
             if not worker_id or worker_id in roster:
                 continue  # Skip if no ID or already exists
 
-            # Create new roster entry with skills from CSV
-            default_skills = {}
-            for skill in SKILL_COLUMNS:
-                if skill in row:
-                    default_skills[skill] = int(row[skill])
-
-            roster[worker_id] = {
-                'default': default_skills,
-                # Modality-specific overrides can be added manually later
-            }
+            roster[worker_id] = build_disabled_worker_entry(valid_skills_map)
             added_count += 1
-            selection_logger.info(f"Auto-added worker {worker_id} to skill roster with skills: {default_skills}")
+            selection_logger.info(
+                "Auto-added worker %s to skill roster with all skills disabled",
+                worker_id,
+            )
 
     # Save updated roster
     if added_count > 0:
@@ -340,6 +356,11 @@ def _build_app_config() -> Dict[str, Any]:
         )
     }
 
+    # Auto-import toggle for worker skill roster
+    config['skill_roster_auto_import'] = bool(
+        raw_config.get('skill_roster_auto_import', True)
+    )
+
     return config
 
 
@@ -347,6 +368,7 @@ APP_CONFIG = _build_app_config()
 MODALITY_SETTINGS = APP_CONFIG['modalities']
 SKILL_SETTINGS = APP_CONFIG['skills']
 SKILL_DASHBOARD_SETTINGS = APP_CONFIG.get('skill_dashboard', {})
+SKILL_ROSTER_AUTO_IMPORT = APP_CONFIG.get('skill_roster_auto_import', True)
 allowed_modalities = list(MODALITY_SETTINGS.keys())
 allowed_modalities_map = {m.lower(): m for m in allowed_modalities}
 allowed_modalities_lower = set(allowed_modalities_map.keys())
@@ -587,6 +609,18 @@ for mod in allowed_modalities:
         'staged_file_path': os.path.join(app.config['UPLOAD_FOLDER'], "backups", f"Cortex_{mod.upper()}_staged.xlsx"),
         'last_modified': None
     }
+
+
+def _get_latest_modality_dfs() -> Dict[str, pd.DataFrame]:
+    """Return the most recently available DataFrame per modality (staged wins)."""
+    latest: Dict[str, pd.DataFrame] = {}
+    for mod in allowed_modalities:
+        staged_df = staged_modality_data.get(mod, {}).get('working_hours_df')
+        live_df = modality_data.get(mod, {}).get('working_hours_df')
+        df = staged_df if staged_df is not None and not staged_df.empty else live_df
+        if df is not None and not df.empty:
+            latest[mod] = df
+    return latest
 
 
 def clear_staged_data(modality: Optional[str] = None) -> Dict[str, Any]:
@@ -866,16 +900,21 @@ def get_canonical_worker_id(worker_name: str) -> str:
         >>> get_canonical_worker_id("JD")
         "JD"
     """
-    if worker_name in global_worker_data['worker_ids']:
-        return global_worker_data['worker_ids'][worker_name]
-    
-    canonical_id = worker_name
-    abk_match = worker_name.strip().split('(')
+    worker_name = '' if worker_name is None else str(worker_name)
+    worker_key = worker_name.strip()
+
+    if worker_key in global_worker_data['worker_ids']:
+        return global_worker_data['worker_ids'][worker_key]
+
+    canonical_id = worker_key
+    abk_match = worker_key.split('(')
     if len(abk_match) > 1 and ')' in abk_match[1]:
         abbreviation = abk_match[1].split(')')[0].strip()
-        canonical_id = abbreviation  # Use abbreviation as canonical ID
-    
-    global_worker_data['worker_ids'][worker_name] = canonical_id
+        if abbreviation:
+            canonical_id = abbreviation  # Use abbreviation as canonical ID
+
+    canonical_id = canonical_id or worker_key
+    global_worker_data['worker_ids'][worker_key] = canonical_id
     return canonical_id
 
 def get_all_workers_by_canonical_id():
@@ -1693,6 +1732,9 @@ def initialize_data(file_path: str, modality: str):
                 d['info_texts'] = pd.read_excel(excel_file, sheet_name='Tabelle2')['Info'].tolist()
             else:
                 d['info_texts'] = []
+
+            if SKILL_ROSTER_AUTO_IMPORT:
+                auto_populate_skill_roster({modality: df})
 
         except Exception as e:
             error_message = f"Fehler beim Laden der Excel-Datei für Modality '{modality}': {str(e)}"
@@ -3531,8 +3573,10 @@ def load_today_from_master():
 
             save_state()
 
-        # Auto-populate skill roster with workers from CSV
-        workers_added = auto_populate_skill_roster(modality_dfs)
+        # Auto-populate skill roster with workers from CSV (optional)
+        workers_added = 0
+        if SKILL_ROSTER_AUTO_IMPORT:
+            workers_added = auto_populate_skill_roster(modality_dfs)
 
         selection_logger.info(
             f"Loaded today ({target_date.strftime('%d.%m.%Y')}) from master CSV. "
@@ -4195,6 +4239,47 @@ def save_skill_roster():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+@app.route('/api/admin/skill_roster/import_new', methods=['POST'])
+@admin_required
+def import_new_workers_into_skill_roster():
+    """Add workers found in loaded modality data that are missing from the roster."""
+    global worker_skill_json_roster
+    try:
+        latest_dfs = _get_latest_modality_dfs()
+        if not latest_dfs:
+            return jsonify({
+                'success': False,
+                'error': 'No modality data available. Upload or stage data first.'
+            }), 400
+
+        roster = load_worker_skill_json()
+        valid_skills_map = build_valid_skills_map()
+        new_workers: set[str] = set()
+
+        for df in latest_dfs.values():
+            for _, row in df.iterrows():
+                raw_worker_id = row.get('canonical_id', row.get('PPL', ''))
+                worker_id = str(raw_worker_id).strip() if pd.notna(raw_worker_id) else ''
+                if not worker_id or worker_id in roster:
+                    continue
+
+                roster[worker_id] = build_disabled_worker_entry(valid_skills_map)
+                new_workers.add(worker_id)
+
+        if new_workers:
+            save_worker_skill_json(roster)
+            worker_skill_json_roster = roster
+
+        return jsonify({
+            'success': True,
+            'added_count': len(new_workers),
+            'added_workers': sorted(new_workers),
+        })
+    except Exception as exc:
+        selection_logger.error(f"Error importing new workers: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 @app.route('/api/admin/skill_roster/reload', methods=['POST'])
 @admin_required
 def reload_skill_roster():
@@ -4240,12 +4325,7 @@ def clear_staged_data_endpoint():
 def skill_roster_page():
     """Admin page for managing worker skill roster (planning mode)."""
     # Build valid_skills map: modality -> list of valid skills (or all skills if not specified)
-    valid_skills_map = {}
-    for mod, settings in MODALITY_SETTINGS.items():
-        if 'valid_skills' in settings:
-            valid_skills_map[mod] = settings['valid_skills']
-        else:
-            valid_skills_map[mod] = SKILL_COLUMNS  # All skills valid
+    valid_skills_map = build_valid_skills_map()
 
     return render_template(
         'skill_roster.html',
