@@ -473,7 +473,7 @@
       let workerCounts = { today: {}, tomorrow: {} };  // Count entries per worker for duplicate detection
       let currentEditEntry = null;
       let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have been loaded
-      let editMode = { today: true, tomorrow: true };  // Inline edit mode defaults to ON
+      let editMode = { today: false, tomorrow: false };  // Inline edit mode defaults to OFF - user decides which edit mode to use
       let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
       let tableFilters = { today: { modality: '', skill: '', hideZero: false }, tomorrow: { modality: '', skill: '', hideZero: false } };
       let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
@@ -2004,10 +2004,7 @@ shifts.forEach((shift, shiftIdx) => {
 
     html += `<div class="modality-card" style="border-color:${navColor}; background:${bgColor};">
       <header>
-        <label title="Toggle this modality">
-          <input type="checkbox" id="edit-shift-${shiftIdx}-mod-${modKey}-enabled" ${isSelected ? 'checked' : ''}>
-          <span style="color:${navColor};">${mod.toUpperCase()}</span>
-        </label>
+        <span style="color:${navColor}; font-weight: 600;">${mod.toUpperCase()}</span>
         <button class="btn btn-small btn-secondary" type="button" onclick="applyWorkerSkillPresetForShiftModality(${groupIdx}, ${shiftIdx}, '${modKey}')">Roster - ${mod.toUpperCase()}</button>
       </header>
       <input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowindex" value="${rowIndex}">
@@ -2072,7 +2069,7 @@ html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #d4edda;
   </div>
   <div style="margin-bottom:0.35rem; display:flex; justify-content: space-between; align-items:center;">
     <label style="font-size:0.8rem; font-weight:600;">Modalities & skills</label>
-    <span style="font-size:0.75rem; color:#555;">Select one or more modalities and set skills per modality</span>
+    <span style="font-size:0.75rem; color:#555;">Set skills per modality (all modalities active)</span>
   </div>
   <div class="modality-grid" id="modal-add-modality-grid">`;
 MODALITIES.forEach(mod => {
@@ -2081,10 +2078,7 @@ MODALITIES.forEach(mod => {
   const bgColor = getModalityBgColor(modKey) + '30';
   html += `<div class="modality-card" style="border-color:${navColor}; background:${bgColor};">
     <header>
-      <label title="Toggle this modality">
-        <input type="checkbox" id="modal-add-mod-${modKey}-enabled" ${mod === MODALITIES[0] ? 'checked' : ''}>
-        <span style="color:${navColor};">${mod.toUpperCase()}</span>
-      </label>
+      <span style="color:${navColor}; font-weight: 600;">${mod.toUpperCase()}</span>
     </header>
     <div class="skills-grid">`;
   SKILLS.forEach(skill => {
@@ -2267,16 +2261,6 @@ html += `</div>
       const modifier = option.dataset.modifier || '1.0';
       document.getElementById('modal-add-modifier').value = modifier;
 
-      // Determine which modalities to activate from task config (if provided)
-      const enabledModalities = new Set((JSON.parse(option.dataset.modalities || '[]') || []).map(m => m.toLowerCase()));
-      MODALITIES.forEach(mod => {
-        const modKey = mod.toLowerCase();
-        const checkbox = document.getElementById(`modal-add-mod-${modKey}-enabled`);
-        if (checkbox) {
-          checkbox.checked = enabledModalities.size === 0 ? checkbox.checked : enabledModalities.has(modKey);
-        }
-      });
-
       const taskSkills = JSON.parse(option.dataset.skills || '{}');
 
       // Apply skills to each modality grid
@@ -2316,12 +2300,6 @@ html += `</div>
       const taskSelect = document.getElementById('modal-add-task');
       if (!taskSelect) return;
 
-      // Ensure at least one modality is preselected
-      MODALITIES.forEach((mod, idx) => {
-        const cb = document.getElementById(`modal-add-mod-${mod.toLowerCase()}-enabled`);
-        if (cb && idx === 0) cb.checked = true;
-      });
-
       if (!taskSelect.value && taskSelect.options.length > 1) {
         taskSelect.selectedIndex = 1;
       }
@@ -2360,15 +2338,8 @@ html += `</div>
         return;
       }
 
-      const selectedModalities = MODALITIES.map(m => m.toLowerCase()).filter(modKey => {
-        const cb = document.getElementById(`modal-add-mod-${modKey}-enabled`);
-        return cb ? cb.checked : false;
-      });
-
-      if (selectedModalities.length === 0) {
-        showMessage('error', 'Select at least one modality');
-        return;
-      }
+      // All modalities are always active
+      const selectedModalities = MODALITIES.map(m => m.toLowerCase());
 
       const startTime = document.getElementById('modal-add-start').value;
       const endTime = document.getElementById('modal-add-end').value;
@@ -2408,8 +2379,9 @@ html += `</div>
         }
 
         showMessage('success', `Added new shift for ${group.worker}`);
-        closeModal();
         await loadData();
+        // Re-render modal to show updated shifts instead of closing
+        renderEditModalContent();
       } catch (error) {
         showMessage('error', error.message);
       }
