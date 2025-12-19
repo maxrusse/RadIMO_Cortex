@@ -170,6 +170,7 @@
       left: 0;
       z-index: 5;
       min-height: 36px;
+      transition: opacity 0.15s ease-in-out;
     }
     .worker-timeline {
       position: relative;
@@ -192,6 +193,7 @@
         transparent 100%
       );
       border-bottom: 1px solid #eee;
+      transition: opacity 0.15s ease-in-out;
     }
 
     /* Shift bars */
@@ -415,36 +417,71 @@
       return div.innerHTML;
     }
 
-    // Merge entries with same time range, combining skills across modalities
-    function mergeEntriesByTime(entries) {
-      const timeMap = new Map();
+    function parseGapList(rawGaps) {
+      if (!rawGaps) return [];
+      if (Array.isArray(rawGaps)) return rawGaps;
+      try {
+        const parsed = JSON.parse(rawGaps);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
 
-      entries.forEach(entry => {
-        const timeKey = `${entry.start_time}-${entry.end_time}`;
-        if (!timeMap.has(timeKey)) {
-          timeMap.set(timeKey, {
-            start_time: entry.start_time,
-            end_time: entry.end_time,
-            TIME: entry.TIME,
-            modalities: new Set(),
-            skillValues: {} // skill -> max value across modalities
-          });
-        }
-        const merged = timeMap.get(timeKey);
+    // Merge entries across modalities and time, combining skills and modality info
+    function mergeEntriesByTime(entries) {
+      if (!entries || entries.length === 0) return [];
+
+      const sorted = [...entries].sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time));
+
+      const merged = {
+        start_time: sorted[0].start_time,
+        end_time: sorted[0].end_time,
+        TIME: sorted[0].TIME,
+        modalities: new Set(),
+        skillValues: {},
+        gaps: []
+      };
+
+      let lastEndMinutes = timeToMinutes(sorted[0].end_time);
+      let mergedEndMinutes = lastEndMinutes;
+      let lastEndLabel = sorted[0].end_time;
+
+      sorted.forEach((entry, idx) => {
         if (entry._modality) merged.modalities.add(entry._modality.toUpperCase());
 
-        // Merge skills - take highest active value for each skill
+        // Merge skills - mark active if any modality has it active
         skillColumns.forEach(s => {
-          const val = entry[s];
-          const isActive = isSkillActive(val);
-          if (isActive) {
-            // Store the skill as active if any modality has it active
+          if (isSkillActive(entry[s])) {
             merged.skillValues[s] = 1;
           }
         });
+
+        // Preserve explicit gap metadata from backend
+        parseGapList(entry.gaps).forEach(gap => merged.gaps.push(gap));
+
+        const startMin = timeToMinutes(entry.start_time);
+        const endMin = timeToMinutes(entry.end_time);
+
+        // Record inferred gaps between sequential segments for tooltip context
+        if (idx > 0 && startMin > lastEndMinutes) {
+          merged.gaps.push({ start: lastEndLabel, end: entry.start_time, activity: 'Gap between shifts' });
+        }
+
+        if (endMin > mergedEndMinutes) {
+          mergedEndMinutes = endMin;
+          merged.end_time = entry.end_time;
+        }
+
+        if (endMin > lastEndMinutes) {
+          lastEndMinutes = endMin;
+          lastEndLabel = entry.end_time;
+        }
       });
 
-      return Array.from(timeMap.values());
+      merged.TIME = `${merged.start_time}-${merged.end_time}`;
+
+      return [merged];
     }
 
     // Build the timeline
@@ -541,6 +578,7 @@
 
           let activeSkills;
           let tooltipMods = '';
+          let gapTooltip = '';
 
           if (isAllView && entry.skillValues) {
             // Merged entry - get skills from skillValues
@@ -559,6 +597,19 @@
             }
           }
 
+          const gaps = parseGapList(entry.gaps);
+          if (gaps.length) {
+            const gapList = gaps
+              .map(g => {
+                const start = g.start || '?';
+                const end = g.end || '?';
+                const activity = g.activity ? ` (${g.activity})` : '';
+                return `${start}-${end}${activity}`;
+              })
+              .join(', ');
+            gapTooltip = `Gaps: ${gapList}\n`;
+          }
+
           const bar = document.createElement('div');
           bar.className = 'shift-bar';
           bar.style.left = `${left}%`;
@@ -567,7 +618,7 @@
           bar.dataset.skills = activeSkills.join(',');
 
           // Tooltip
-          bar.title = `${worker}\n${tooltipMods}Zeit: ${entry.TIME}\nSkills: ${activeSkills.join(', ')}`;
+          bar.title = `${worker}\n${tooltipMods}${gapTooltip}Zeit: ${entry.TIME}\nSkills: ${activeSkills.join(', ')}`;
 
           timelineCell.appendChild(bar);
         });
@@ -623,7 +674,7 @@
       window.location.href = newUrl.toString();
     }
 
-    // Filter by skill - simple show/hide based on skill presence
+    // Filter by skill - hide shift bars (and rows) that don't match
     function filterBySkill(skillSlug) {
       const grid = document.getElementById('timeline-grid');
       const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn[data-skill]');
@@ -636,16 +687,32 @@
       // Update filter state
       grid.dataset.filter = skillSlug;
 
-      // Filter rows - simply show/hide based on skill (no opacity changes)
+      // Filter rows/bars - hide rows with no matching bars to keep filter behavior consistent
       const rows = grid.querySelectorAll('.worker-row');
       rows.forEach(row => {
+        const bars = Array.from(row.querySelectorAll('.shift-bar'));
+
+        // Show all bars when filter is cleared
         if (skillSlug === 'all') {
+          bars.forEach(bar => bar.style.display = '');
           row.style.display = '';
-        } else {
-          const workerSkills = (row.dataset.skills || '').split(',').filter(s => s);
-          const hasSkill = workerSkills.some(ws => ws === skillSlug);
-          row.style.display = hasSkill ? '' : 'none';
+          return;
         }
+
+        const matchingBars = bars.filter(bar => {
+          const barSkills = (bar.dataset.skills || '').split(',').filter(s => s);
+          return barSkills.includes(skillSlug);
+        });
+
+        // Show matching bars, hide the rest
+        bars.forEach(bar => {
+          const barSkills = (bar.dataset.skills || '').split(',').filter(s => s);
+          bar.style.display = barSkills.includes(skillSlug) ? '' : 'none';
+        });
+
+        // If a worker has no matching bars (across multiple shifts/gaps), hide their row
+        const hasAnyMatch = matchingBars.length > 0;
+        row.style.display = hasAnyMatch ? '' : 'none';
       });
 
       // Update URL without reloading page
