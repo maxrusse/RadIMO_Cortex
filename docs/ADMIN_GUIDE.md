@@ -11,7 +11,8 @@ RadIMO provides two admin interfaces for different operational needs:
 | Page | URL | Effect | Use Case |
 |------|-----|--------|----------|
 | **Skill Matrix** | `/skill_roster` | Staged | Long-term planning, rotations |
-| **Schedule Edit** | `/prep-next-day` | Schedule editing | Daily schedule preparation |
+| **Schedule Edit (Today)** | `/prep-next-day` | Immediate | Same-day urgent adjustments |
+| **Schedule Edit (Tomorrow)** | `/prep-next-day` | Next-day only | Daily schedule preparation |
 
 All admin pages require login with the admin password from `config.yaml`.
 
@@ -26,10 +27,12 @@ All admin pages require login with the admin password from `config.yaml`.
 │  ├─ Review before apply                                     │
 │  └─ Activate when ready                                     │
 ├─────────────────────────────────────────────────────────────┤
-│  SCHEDULE EDIT                  Schedule Edit               │
-│  ├─ Prepare and edit schedules                              │
-│  ├─ Preview and adjust                                      │
-│  └─ Add/remove workers, edit times and skills               │
+│  SCHEDULE EDIT                  /prep-next-day              │
+│  ├─ TODAY TAB (green):    Immediate live changes            │
+│  │  └─ Edit current schedule, counters preserved            │
+│  ├─ TOMORROW TAB (yellow): Next-day preparation             │
+│  │  └─ Stage changes for auto-preload (7:30 AM)             │
+│  └─ Both modes: Add/remove workers, edit times and skills   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -76,24 +79,42 @@ All admin pages require login with the admin password from `config.yaml`.
 
 ---
 
-## 2. Prep Next Day (`/prep-next-day`)
+## 2. Schedule Edit (`/prep-next-day`)
 
-**Purpose:** Prepare and preview tomorrow's worker schedule.
+**Purpose:** Edit schedules with two modes - immediate changes to today's schedule, or prepare tomorrow's schedule.
 
-**Key behavior:** Changes affect tomorrow's date only - no impact on today.
+**Key behavior:** Dual-tab interface with different effects:
+- **Change Today** tab: Immediate effect on live schedule (counters preserved)
+- **Prep Tomorrow** tab: Stage changes for next workday (no immediate effect)
 
 ### When to Use
 
+**Change Today Tab:**
+- Urgent same-day schedule adjustments
+- Add/remove workers from today's active schedule
+- Fix shift times or skills during the workday
+- **WARNING:** Changes are immediate - counters are NOT reset
+
+**Prep Tomorrow Tab:**
 - Daily schedule preparation
 - Correcting mapping edge cases
 - Adjusting times before auto-preload
 - Testing schedule changes safely
 
-### Two Editing Modes
+### Interface Components
 
-#### Simple Mode (Default)
+Both tabs share the same editing interface with modality-specific tables:
 
-**For:** Quick inline edits
+#### Load from CSV
+
+Each tab has a "Load from CSV" button:
+- **"Load Today"** (Change Today tab): Rebuilds today's schedule from master CSV
+- **"Load Tomorrow"** (Prep Tomorrow tab): Loads next-day schedule from master CSV
+- Useful for resetting manual changes or reapplying CSV after upload
+
+#### Quick Edit Mode (Default)
+
+**For:** Fast inline edits
 
 - Click any cell to edit
 - Edited cells highlight until saved
@@ -103,11 +124,18 @@ All admin pages require login with the admin password from `config.yaml`.
 
 **For:** Structural changes
 
-- Toggle with "Advanced" button
+- Toggle with "Quick Edit" button
 - Add new worker rows
 - Delete worker rows
-- Bulk skill operations (set all workers to skill value)
-- All Simple Mode features available
+- Bulk skill operations
+- All Quick Edit features available
+
+#### Filtering Controls
+
+Both tabs include smart filters:
+- **Modality filter**: Show only specific modality (CT/MR/XRAY/Mammo)
+- **Skill filter**: Show only workers with specific skill active
+- **Hide 0/-1 checkbox**: Hide workers with passive/excluded values for cleaner view
 
 ### Editable Fields
 
@@ -126,22 +154,28 @@ All admin pages require login with the admin password from `config.yaml`.
 - 🔴 **Red (-1)** = Excluded
 - 🔵 **Blue (w)** = Weighted (visual marker)
 
-### Example: Fix Wrong Shift Time
+### Example Workflows
 
-**Scenario:** Worker "MS" has wrong start time for tomorrow.
+#### Fix Wrong Shift Time (Same Day)
+
+**Scenario:** Worker "MS" has wrong start time TODAY.
 
 1. Go to `/prep-next-day`
-2. Select modality tab (CT/MR/XRAY)
-3. Find "MS" in table
-4. Click start_time cell, change to correct time
-5. Click "Save All Changes"
+2. Click **"Change Today"** tab (green header)
+3. Select modality tab (CT/MR/XRAY)
+4. Find "MS" in table
+5. Click start_time cell, change to correct time
+6. Click "Save Changes" → **Immediate effect**
 
-### Activation
+#### Prepare Tomorrow's Schedule
 
-Changes are applied when:
-- Auto-preload runs at 7:30 AM
-- Manual "Activate" button clicked
-- Today becomes tomorrow (next day logic)
+**Scenario:** Plan tomorrow's coverage in advance.
+
+1. Go to `/prep-next-day`
+2. Click **"Prep Tomorrow"** tab (yellow header)
+3. Click "Load Tomorrow" to load auto-generated schedule
+4. Make adjustments as needed
+5. Click "Save Changes" → Applied at next auto-preload (7:30 AM)
 
 ---
 
@@ -178,19 +212,29 @@ Central hub for system management.
 
 1. **Morning:** Check auto-preload succeeded (view `/timetable`)
 2. **During day:** Use assignment interface (`/` or `/by-skill`)
-3. **End of day:** Review assignments, plan tomorrow via `/prep-next-day`
+3. **Same-day adjustments:** Use `/prep-next-day` → **"Change Today"** tab (immediate effect, counters preserved)
+4. **End of day:** Review assignments, plan tomorrow via `/prep-next-day` → **"Prep Tomorrow"** tab
 
 ### Planning Rotations
 
 1. Update `config.yaml` or `/skill_roster` with new skills
 2. Save to staging
-3. Test with `/prep-next-day` preview
+3. Test with `/prep-next-day` → "Prep Tomorrow" tab preview
 4. Activate on rotation start day
 
 ### Same-Day Changes
 
-1. Use "Force Refresh Today" only for complete schedule rebuilds (WARNING: destroys all assignment history)
-2. Document significant changes for tracking
+**Option 1: Incremental Changes (Recommended)**
+- Use `/prep-next-day` → **"Change Today"** tab
+- Preserves all assignment counters and history
+- Immediate effect on schedule
+- Use for: worker additions, time adjustments, skill corrections
+
+**Option 2: Full Schedule Rebuild (Use with Caution)**
+- Use Admin Panel → "Force Refresh Today"
+- **WARNING:** Destroys ALL counters and assignment history
+- Only use when schedule structure fundamentally changes
+- Document reason and time of refresh
 
 ### Skill Management
 
@@ -198,7 +242,8 @@ Central hub for system management.
 |-------------|----------|
 | Permanent skill change | `config.yaml` → `worker_skill_roster` |
 | Temporary/rotation change | `/skill_roster` staging |
-| Schedule editing | `/prep-next-day` |
+| Same-day schedule edit | `/prep-next-day` → "Change Today" tab |
+| Tomorrow schedule prep | `/prep-next-day` → "Prep Tomorrow" tab |
 
 ---
 
@@ -216,7 +261,7 @@ Central hub for system management.
 1. Check medweb CSV has correct date entry
 2. Verify `medweb_mapping` rules match activity
 3. Check `worker_skill_roster` for exclusions (-1)
-4. Review `/prep-next-day` for manual deletions
+4. Review `/prep-next-day` → check both "Change Today" and "Prep Tomorrow" tabs for manual deletions
 
 ### Skill changes not taking effect
 
