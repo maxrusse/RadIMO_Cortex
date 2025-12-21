@@ -1,131 +1,113 @@
 ============================================================
-Verfahrensverzeichnis – RadIMO (V18)
+Verfahrensverzeichnis – RadIMO Cortex (V20)
 ============================================================
 
 1. Bezeichnung und Beschreibung
 ------------------------------------------------------------
 Verfahrensname / Projekt:
-  RadIMO – Koordinationssystem für Schichtzuweisungen
-  in der Radiologie (Version V18)
+  RadIMO Cortex – Intelligent Radiology Orchestration
+  (Version V20)
 
 Beschreibung:
-  System zur automatisierten Schichtplanung von Radiologie-
-  Mitarbeitenden auf Basis von medweb CSV-Exportdaten.
-  Bereitstellung über ein Web-Frontend mit Echtzeit-
-  Zuweisungslogik. Automatische Datenaktualisierung täglich
-  um 07:30 Uhr. Änderungen, manuelle Uploads und Löschungen
-  werden durch das System verarbeitet, dabei entstehen
-  tagesaktuelle Backups. Zeitbasierte Ausschlüsse (Boards,
-  Besprechungen, Fortbildung) werden automatisch aus
-  konfigurierten Regeln angewendet.
+  Plattform zur intelligenten Orchestrierung von Radiologie-
+  Teams. Das System automatisiert die Zuweisung von 
+  Mitarbeitenden zu Modalitäten (CT, MR, XRAY, Mammo) und 
+  subspezialisierten Skills (Notfall, Privat, Herz, MSK, 
+  etc.) unter Berücksichtigung von Arbeitslast, 
+  Schichtzeiten und individuellen Qualifikationen. 
+  Echtzeit-Load-Balancing und eine mehrstufige Fallback-
+  Logik gewährleisten eine faire und effiziente 
+  Arbeitsverteilung.
 
 2. Verzeichnis der IT-Komponenten
 ------------------------------------------------------------
 Projektverzeichnis:
-/nfs/norasys/notebooks/russe/RadIMO_Cortex
+  c:\Users\Max\code\RadIMO_Cortex (Entwicklung/Lokal)
+  /nfs/norasys/notebooks/russe/RadIMO_Cortex (Standard-Produktion)
 
 Wichtige Dateien und Verzeichnisse:
-  - app.py                → Hauptlogik, API und Scheduler
-  - gunicorn_config.py    → Serverkonfiguration
-  - config.yaml           → Admin-Zugangsdaten, medweb CSV
-                             Mapping-Regeln, Zeitausschlüsse,
-                             Skill-Roster
-  - templates/            → HTML-UI (index.html, edit.html, etc.)
-  - static/               → Icons, JS, CSS, EULA.txt,
-                             verfahrensverzeichniss.txt
-  - uploads/              → CSV-Uploads & Backup
-      └── backups/        → Tagesaktuelle Sicherungen
-  - logs/                 → Server-Logs (Gunicorn, selection.log)
-  - docs/                 → Technische Dokumentation
-      ├── WORKFLOW.md               → Betriebsabläufe
-      ├── SYSTEM_ANALYSIS.md        → Systemarchitektur
-      ├── FRONTEND_ARCHITECTURE.md  → UI-Struktur
-      └── TESTING_GUIDE.md          → Testszenarien
+  - app.py                → Haupteinstiegspunkt (Flask)
+  - routes.py             → API-Endpunkte und Web-Routen
+  - data_manager.py       → Zustandsverwaltung und Datenfluss
+  - balancer.py           → Load-Balancing und Zuweisungslogik
+  - config.py             → Konfigurations-Loader
+  - config.yaml           → Zentrale Systemkonfiguration
+  - worker_skill_roster.json → Permanentes Mitarbeiter-Skill-Matrix
+  - templates/            → HTML5-UI (Admin-optimiertes Frontend)
+  - static/               → CSS, JS, Assets, Verfahrensverzeichnis
+  - uploads/              → Medweb CSV-Masterdaten & Backups
+  - logs/                 → System- und Zuweisungs-Logs
+  - docs/                 → Dokumentation (ADMIN_GUIDE, API, CONFIG)
 
 3. Datenverarbeitung und Backup-Strategie
 ------------------------------------------------------------
 Datenquelle:
-  - Medweb CSV-Export mit Personal- und Aktivitätsdaten
-    Format: Datum, Nachmittag/Vormittag, Benutzername, Kürzel,
-            Personenname, Zeit von, Zeit bis, Stunden,
-            Beschreibung der Aktivität, Organisationseinheit
-  - Config-basierte Zuordnung von Aktivitäten zu Modalitäten
-    (CT, MR, XRAY) und Skills (Normal, Notfall, Herz, Msk, etc.)
+  - Medweb CSV-Export (Master CSV) mit Schicht- und Aktivitätsdaten.
+  - Das System parst diese Daten täglich automatisiert (07:30 Uhr).
 
 Verarbeitung:
-  - Parsing der CSV-Daten mit Datumsfilterung
-  - Anwendung von Mapping-Regeln (config.yaml)
-  - Zeitbasierte Ausschlüsse (Boards, Besprechungen, etc.)
-    → Schichten werden automatisch gesplittet
-  - Worker-spezifische Skill-Overrides aus Roster
-  - Echtzeit-Zuweisungslogik mit Load-Balancing
-  - Fallback-Strategien (skill_priority, modality_priority,
-    pool_priority)
-  - Interaktive Bearbeitung über Weboberfläche
+  - Extraktion von Arbeitszeiten und Aktivitäten aus CSV.
+  - Mapping auf Modalitäten und Skills via Regex-Regeln.
+  - Berücksichtigung von GAPs (Besprechungen, Boards) durch 
+    automatisches Schicht-Splitting.
+  - Dynamische Gewichtung (Modifiers) je nach Erfahrungsgrad.
+  - Skill-basierte Filterung und Load-Balancing zur Vermeidung 
+    von Überlastung einzelner Teammitglieder.
 
 Automatisierung:
-  - APScheduler führt täglich um 07:30 Uhr automatische
-    Datenaktualisierung durch (Preload für nächsten Werktag)
-  - Manuelle Force-Reload-Funktion für sofortige Updates
-  - Automatischer Reset bei Datumsüberschreitung
+  - APScheduler für tägliches Preloading und Reset.
+  - Echtzeit-Synchronisation bei manuellen Korrekturen über 
+    das Admin-Interface (/prep-next-day).
 
 Backup-Strategie:
-  - Backup bei jedem Upload, Edit oder Löschvorgang
-  - Speichern der CSV-Daten und berechneten Schichten
-  - Backups gelten nur tagesaktuell – bis zum nächsten Werktag
-  - Wiederherstellungsfunktion für Fehlerbehebung
+  - Automatisierte Backups bei jeder kritischen Statusänderung.
+  - Aufbewahrung im Verzeichnis uploads/backups/.
+  - Integriertes Wiederherstellungssystem für Live-Zustände.
 
 4. Datenarten und personenbezogene Daten
 ------------------------------------------------------------
 Verarbeitete Daten:
-  - Personenname (z.B., "Charlotte Dr Zander")
-  - Benutzername / Kürzel (z.B., "ZANDERCH", "CZ")
-  - Arbeitszeitdaten (Datum, Von-Zeit, Bis-Zeit, Stunden)
-  - Aktivitätsbeschreibungen (z.B., "CT", "Kopf-Hals-Board")
-  - Organisationseinheit (z.B., "NM", "RAD")
-  - Berechnete Zuweisungsdaten (Zählerstände, Ratios)
+  - Name des Mitarbeitenden
+  - Benutzerkürzel (Kürzel)
+  - Arbeitszeitdaten (Beginn, Ende, Dauer)
+  - Tätigkeitsschwerpunkte und Qualifikationen (Skills)
+  - Zugehörige Modalitäten (Arbeitsplatz)
+  - Arbeitslast-Metriken (Zuweisungszähler, gewichtete Ratios)
 
 Besondere Kategorien:
-  - Keine Gesundheitsdaten der Mitarbeitenden
-  - Keine biometrischen oder genetischen Daten
-  - Ausschließlich dienstliche Schichtplanungsdaten
+  - Keine Gesundheitsdaten, keine biometrischen Daten.
+  - Ausschließlich dienstbezogene Planungsdaten.
 
 Empfänger:
-  - Autorisierte Nutzer des RadIMO-Systems (Schichtkoordination)
-  - Zugriff beschränkt auf lokales Netzwerk
+  - Autorisierte Nutzer (Chefärzte, Oberärzte, Koordinatoren).
+  - Zugriff auf Daten beschränkt auf das interne Kliniknetzwerk.
 
 5. Sicherheitsmaßnahmen und Zugriff
 ------------------------------------------------------------
 Technisch:
-  - Zugriffsschutz über Passwort (config.yaml)
-  - Flask-Session-Handling mit Secret-Key
-  - Thread-Locking bei kritischen Datei- und Speicherzugriffen
-  - Logging aller Anfragen, Dateiaktionen und Zuweisungen
-  - Sandbox-Modus für unauthorisierte Zugriffe (Read-Only)
-  - Input-Validierung bei CSV-Upload und API-Anfragen
+  - Admin-Zugang passwortgeschützt (über config.yaml).
+  - Session-Management mit kryptografischem Key.
+  - Zugriff nur über LAN/VPN möglich (kein öffentliches Routing).
+  - Umfangreiches Logging (Audit-Trail) aller Zuweisungs-Aktionen.
+  - Thread-sichere Datenhaltung im RAM mit persistenter Sicherung.
 
 Organisatorisch:
-  - Admin-Zugriff nur mit Passwort
-  - Trennung von Admin- und Viewer-Modus
-  - Backup-Logik verhindert Datenverlust bei Parallelzugriffen
-  - Zugriff nur über internes Netzwerk (kein Internet-Zugang)
-  - Serverumgebung: Gunicorn mit Unix-Socket oder Port-Binding
+  - Trennung zwischen öffentlicher Ansicht und Admin-Editoren.
+  - Regelmäßige Bereinigung veralteter Tagesdaten.
+  - Dokumentation der Admin-Prozesse (ADMIN_GUIDE.md).
 
 6. Rechtsgrundlage & Löschfristen
 ------------------------------------------------------------
 Rechtsgrundlage:
-  - Interne betriebliche Anforderung zur Schichtkoordination
-  - DSGVO Art. 6 Abs. 1 lit. b (Erfüllung vertraglicher
-    Verpflichtungen zur Dienstplanung)
-  - DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an
-    effizienter Personalkoordination)
+  - DSGVO Art. 6 Abs. 1 lit. b (Dienstplanung zur Vertragserfüllung).
+  - DSGVO Art. 6 Abs. 1 lit. f (Berechtigtes Interesse an 
+    effizienter Ressourcensteuerung).
 
 Löschfristen:
-  - CSV-Uploads täglich zurückgesetzt (07:30 Uhr Auto-Preload)
-  - Backups tagesaktuell gültig (bis nächster Werktag)
-  - Session-Daten: Ende der Browser-Session
-  - Log-Dateien: Nach internen Richtlinien (empfohlen: 30 Tage)
-  - Langfristige Archivierung nach internen Richtlinien
+  - Live-Daten: Täglicher Reset (07:30 Uhr).
+  - Kurzzeit-Backups: Rolling-Cycle (tagesabhängig).
+  - System-Logs: 30 Tage Aufbewahrung empfohlen.
+  - Master-CSV: Bis zum Import der neuen Monatsdatei.
 
 7. Verantwortlichkeiten
 ------------------------------------------------------------
@@ -134,96 +116,64 @@ Verantwortlich:
   Institut für Diagnostische und Interventionelle Radiologie
 
 Ansprechpartner:
-  - IT-Admin / Systemverantwortlicher
-  - Datenschutzbeauftragter (bei DSGVO-Fragen)
-  - Radiologie-Leitung (bei fachlichen Fragen)
+  - IT-Systemadministration Cortex
+  - Beauftragter für Datensicherheit und Datenschutz
 
 8. Versionshistorie
 ------------------------------------------------------------
-Aktuelle Version:
-  V18 (Produktivstand: RadIMO_Cortex)
+V20 (2025-12):
+  - Umbenennung in RadIMO Cortex (Intelligent Orchestration).
+  - Modularisierung des Backends (routes, balancer, data_manager).
+  - Einführung der worker_skill_roster.json für Skill-Persistenz.
+  - Erweitertes Load-Balancing (weighted ratios, worker modifiers).
+  - Interaktives GAP-Handling und Schicht-Splitting.
+  - Neues Admin-Interface (/skill_roster, /prep-next-day).
+  - Überarbeitung der Dokumentationsstruktur (Markdown-Docs).
 
-Wesentliche Änderungen gegenüber V16/V17:
-  V18 (2025-01):
-    - Migration von Excel-Upload zu medweb CSV-Integration
-    - Config-basiertes Activity-Mapping (config.yaml)
-    - Zeitbasierte Ausschlüsse mit Schicht-Splitting
-      (Boards, Besprechungen, Fortbildung)
-    - Automatischer Preload um 07:30 Uhr (APScheduler)
-    - Worker-spezifisches Skill-Roster mit Overrides
-    - Next-Day Prep-Page mit Simple/Advanced Mode
-    - Verbesserte Dokumentation (docs/)
-
-  V17:
-    - Übergangsversion mit gemischtem Excel/CSV-Support
-
-  V16:
-    - Basis-System mit Excel-Upload
-    - Manuelle Dateiverwaltung
-    - Grundlegende Load-Balancing-Strategien
+V18 (2025-01):
+  - Migration zu medweb CSV-Integration.
+  - Basis-Mappingregeln in config.yaml.
 
 9. Technische Details zur Datenverarbeitung
 ------------------------------------------------------------
 Medweb CSV Integration:
-  - Einlesen der CSV mit pandas (UTF-8 encoding)
-  - Datumsfilterung auf Zieldatum
-  - Mapping von Aktivitäten auf Modalitäten/Skills via Regex
-  - Zwei-Phasen-Algorithmus:
-    1. PASS 1: Sammeln von Arbeitsdiensten und Zeitausschlüssen
-    2. PASS 2: Anwendung der Ausschlüsse auf Schichten
+  - Einlesen der CSV mit pandas (UTF-8 encoding).
+  - Automatisches Mapping von Aktivitäten auf Cortex-Modalitäten 
+    und Skills via reguläre Ausdrücke (Regex).
+  - Zwei-Phasen-Parsing:
+    1. Sammeln aller Schichten und statischen Zeitfenster (Gaps).
+    2. Berechnung der effektiven Arbeitsfenster durch Subtraktion 
+       der Gaps (Split-Shift-Logik).
 
-Zeitausschluss-System:
-  - Wochentagsbasierte Zeitfenster (Montag-Sonntag)
-  - Automatische Prep-Time-Berechnung (vorher/nachher)
-  - Schicht-Splitting bei Überlappung
-  - Mindestdauer: 0.1h (6 Minuten) pro Segment
-  - Beispiel: 07:00-21:00 → 07:00-15:00 + 17:15-21:00
-              (bei Board 15:00-17:00 mit 30m Prep)
-
-Zuweisungslogik:
-  - Drei Fallback-Strategien konfigurierbar:
-    • skill_priority: Alle Skills einer Modalität vor Wechsel
-    • modality_priority: Skill über alle Modalitäten
-    • pool_priority: Globale Pool-Optimierung
-  - Load-Balancing basiert auf weighted_count / hours_worked
-  - Imbalance-Detection mit konfigurierbarem Threshold
-  - Strict-Mode für garantierte Skill/Modalität-Übereinstimmung
+Zuweisungslogik (Cortex Balancer):
+  - Lastverteilung basierend auf dem Verhältnis von gewichteten 
+    Zuweisungen (weighted assignments) zu geleisteten 
+    Arbeitsstunden (hours worked).
+  - Zwei-Stufen-Fallback (Exklusion -> Skill-basiert).
+  - Modale Fallback-Kette: Suche über benachbarte Modalitäten 
+    (z.B. X-ray -> CT -> MR) bei Ressourcenknappheit.
+  - Berücksichtigung individueller Modifikatoren (Worker Modifiers) 
+    für Trainees oder Experten.
 
 10. Datenschutz-Folgenabschätzung
 ------------------------------------------------------------
 Risikobewertung:
-  - Geringes Risiko: Nur dienstliche Schichtdaten
-  - Kein Profiling oder automatisierte Entscheidungen mit
-    rechtlicher Wirkung
-  - Zugriff beschränkt auf autorisiertes Personal
-  - Keine Übermittlung an Drittländer
-  - Keine Cloud-Speicherung (nur lokales Netzwerk)
-
-Maßnahmen zur Risikominimierung:
-  - Zugriffskontrolle (Passwort)
-  - Verschlüsselte Session-Verwaltung
-  - Tägliche Datenlöschung (Auto-Reset)
-  - Logging für Nachvollziehbarkeit
-  - Regelmäßige Backups zur Datensicherheit
+  - Minimales Risiko für Betroffene (nur Planungsdaten).
+  - Keine automatisierten Einzelfallentscheidungen im Sinne 
+    von Art. 22 DSGVO (Algorithmus macht Vorschläge, 
+    Endkontrolle durch Menschen).
 
 11. Betroffenenrechte
 ------------------------------------------------------------
-Mitarbeitende haben folgende Rechte bezüglich ihrer Daten:
+Betroffene haben das Recht auf Auskunft, Berichtigung, 
+Löschung und Einschränkung der Verarbeitung ihrer Daten 
+gemäß DSGVO Art. 15-21.
 
-  - Auskunftsrecht (Art. 15 DSGVO)
-  - Recht auf Berichtigung (Art. 16 DSGVO)
-  - Recht auf Löschung (Art. 17 DSGVO)
-  - Recht auf Einschränkung (Art. 18 DSGVO)
-  - Recht auf Datenübertragbarkeit (Art. 20 DSGVO)
-  - Widerspruchsrecht (Art. 21 DSGVO)
-
-Kontakt:
-  Anfragen zu Betroffenenrechten sind zu richten an:
-  - Datenschutzbeauftragten der Einrichtung
-  - Systemverantwortlicher: Maximilian Russe
+Kontakt für Datenschutzanfragen:
+  Dr. M. Russe / Systemverantwortlicher.
 
 ============================================================
-Stand: 2025-11-20
-Version: V18
-Nächste Überprüfung: 2026-01-01
+Stand: 2025-12-21
+Version: V20
+Nächste Überprüfung: 2026-06-01
 ============================================================

@@ -11,18 +11,37 @@ RadIMO uses a single `config.yaml` file for all configuration. Changes require a
 ```yaml
 # Main sections
 admin_password: "..."           # Admin login
-modalities: {...}               # CT, MR, XRAY, Mammo definitions + visibility filters
+skill_roster_auto_import: true # Auto-add new workers to roster JSON
+modalities: {...}               # CT, MR, XRAY, Mammo definitions
 skills: {...}                   # Skill definitions, weights, UI ordering
-skill_modality_overrides: {...} # Custom weight overrides
-skill_dashboard: {...}          # Skill selection UI guardrails
-skill_value_colors: {...}       # How 1/0/-1/w appear in the prep table
-ui_colors: {...}                # Flash + tab colors
-balancer: {...}                 # Load balancing + hours counting
-modality_fallbacks: {...}       # Cross-modality overflow
-medweb_mapping: {...}           # CSV activity parsing (shifts + gaps)
-shift_times: {...}              # Shift time definitions
-worker_skill_roster: {...}      # Per-worker skill overrides
+...
 ```
+
+---
+
+## Global Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `admin_password` | string | `change_pw_for_live` | Password for all admin routes |
+| `skill_roster_auto_import` | boolean | `true` | When loading CSV, auto-add missing workers to the Skill Matrix JSON |
+
+---
+
+## Scheduler Settings
+
+Configure timings for automated background tasks.
+
+```yaml
+scheduler:
+  daily_reset_time: "07:30"  # Time when Staked -> Live happens automatically
+  auto_preload_time: 14      # Hour (0-23) when tomorrow's CSV is auto-loaded into staging
+```
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `daily_reset_time` | string | `07:30` | Time format (HH:MM). Shifts the "Live" data to the new date. |
+| `auto_preload_time` | integer | `14` | 24h format hour. Triggers automatic fetching of the next workday from the Master CSV. |
 
 ---
 
@@ -138,6 +157,7 @@ skills:
     weight: 1.0
     optional: true
     special: true
+    always_visible: true  # If true, button stays even if no worker available
     display_order: 5
     slug: abdomen
     form_key: abdomen

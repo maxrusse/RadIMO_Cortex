@@ -298,27 +298,28 @@
 
   <!-- Workflow Overview -->
   <div class="workflow-box">
-    <h3>Workflow</h3>
+    <h3>System-Workflow</h3>
     <div class="workflow-steps">
       <div class="step">
         <div class="step-num">1</div>
-        <div class="step-title">Upload Master CSV</div>
-        <div class="step-desc">Einmalig pro Monat (enthält alle Tage)</div>
+        <div class="step-title">Master CSV</div>
+        <div class="step-desc">Einmalig/Monatlich: Gesamten Dienstplan als CSV hochladen.</div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <div class="step-title">Load Today</div>
-        <div class="step-desc">Lädt heutiges Datum aus Master</div>
+        <div class="step-title">Reset Today</div>
+        <div class="step-desc">"Load Today" setzt den heutigen Plan sicher auf Master-Stand zurück.</div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <div class="step-title">Auto 7:30</div>
-        <div class="step-desc">Staged → Live automatisch</div>
+        <div class="step-title">Prep Tomorrow</div>
+        <div class="step-desc">Vorbereitung für morgen (Staging). Auto-Preload um {{ config.scheduler.auto_preload_time
+          }}:00 Uhr.</div>
       </div>
       <div class="step">
         <div class="step-num">4</div>
-        <div class="step-title">Edit</div>
-        <div class="step-desc">Schedule Edit</div>
+        <div class="step-title">Auto-Live</div>
+        <div class="step-desc">Staged → Live erfolgt automatisch um {{ config.scheduler.daily_reset_time }} Uhr.</div>
       </div>
     </div>
   </div>

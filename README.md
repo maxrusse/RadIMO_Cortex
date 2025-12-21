@@ -16,10 +16,10 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 - Dynamic shift handling with work-hour-adjusted balancing
 - Two UI modes: by modality or by skill
 - Two-level fallback for high availability
-- Config-driven medweb CSV integration with automated daily preload
-- Admin system: Skill Matrix (staged changes), Schedule Edit (today + tomorrow tabs)
-- Worker skill roster admin portal with JSON-based staged/active workflow
-- Time exclusion system for boards, meetings, and teaching activities
+- Master CSV integration for monthly schedule management
+- Admin system: Skill Matrix (direct save), Schedule Edit (Today + Prep Tomorrow)
+- Worker skill roster admin portal with simplified JSON management
+- GAP handling (split shifts) for meetings and boards
 - Overnight shift handling across midnight boundaries
 - Smart skill filtering on Schedule Edit and Timetable views
 
@@ -47,18 +47,19 @@ flask --app app run --debug  # Start application
 **Admin Pages (Password Protected):**
 | Page | URL | Description |
 |------|-----|-------------|
-| Admin Panel | `/upload` | Upload medweb CSV, system management |
-| Skill Matrix | `/skill_roster` | Plan skill changes (STAGED mode) |
-| Schedule Edit | `/prep-next-day` | Edit today's schedule + prepare tomorrow |
+| Admin Panel | `/upload` | Master CSV management, stats, system health |
+| Skill Matrix | `/skill_roster` | Edit worker skills (Direct Save) |
+| Schedule Edit | `/prep-next-day` | Edit Today (Live) or Prep Tomorrow (Staged) |
 
 ---
 
 ## Core Workflow
 
-```
-medweb.csv (monthly schedule)
+Master CSV (monthly schedule)
     ↓
-Upload via /upload (manual) or auto-preload at 7:30 AM
+Upload via /upload (Master CSV)
+    ↓
+Load Today (Live) or Preload Tomorrow (Staged)
     ↓
 Config-driven parsing (medweb_mapping rules)
     ↓
@@ -67,7 +68,6 @@ Apply worker_skill_roster overrides
 Build working_hours_df per modality
     ↓
 Real-time assignment with load balancing
-```
 
 ---
 
@@ -95,16 +95,16 @@ Assignments are weighted by:
 - **Skill×Modality overrides**: Custom weights for specific combinations
 
 ### Admin Pages
-1. **Skill Matrix** (`/skill_roster`) - Plan skill changes, staged before activation
-2. **Schedule Edit** (`/prep-next-day`) - Edit today's schedule + prepare tomorrow (tabbed)
+1. **Skill Matrix** (`/skill_roster`) - Edit worker skills across modalities (saves directly)
+2. **Schedule Edit** (`/prep-next-day`) - Modify Today (Live) or prepare Tomorrow (Staged)
 
 ### Navigation & UI Features
 
 **Cortex Layout** - Unified navigation across all pages:
 - **Dashboard** (`/`) - Main workload view (toggle Modality/Skill views)
-- **Timetable** (`/timetable`) - Visual timeline of shifts and schedules
-- **Skill Matrix** (`/skill_roster`) - Manage worker skills (staged changes)
-- **Schedule Edit** (`/prep-next-day`) - Today tab + Tomorrow tab
+- **Timetable** (`/timetable`) - Visual timeline of shifts and gaps
+- **Skill Matrix** (`/skill_roster`) - Manage worker skills (direct save)
+- **Schedule Edit** (`/prep-next-day`) - Live Edit (Today) + Prep Tomorrow (Staged)
 - **Admin** (`/upload`) - System configuration and CSV uploads
 
 ---
@@ -113,16 +113,19 @@ Assignments are weighted by:
 
 ```
 RadIMO_Cortex/
-├── app.py                      # Main Flask application
+├── app.py                      # Main entry point (Flask app)
+├── routes.py                   # Route and API definitions
+├── data_manager.py             # Data handling and state management
+├── balancer.py                 # Load balancing logic
+├── config.py                   # Config loader and normalization
 ├── config.yaml                 # Configuration (mapping, skills, weights)
-├── worker_skill_roster.json    # Worker skill roster (admin portal)
+├── worker_skill_roster.json    # Worker skill roster
 ├── ops_check.py                # Pre-deployment checks
-├── requirements.txt            # Python dependencies
-├── templates/                  # HTML templates
+├── templates/                  # HTML templates (Admin pages aligned to Prep)
 ├── static/                     # CSS, JS, assets
-├── uploads/                    # Medweb CSV storage
+├── uploads/                    # Master CSV and backups storage
 └── docs/                       # Documentation
-    ├── WORKFLOW.md             # CSV workflow guide
+    ├── WORKFLOW.md             # Master CSV workflow guide
     ├── CONFIGURATION.md        # Config reference
     ├── API.md                  # API endpoints
     └── ADMIN_GUIDE.md          # Admin pages guide
@@ -163,7 +166,7 @@ Validates: config file, admin password, upload folder, modalities, skills, medwe
 
 ## Version
 
-**RadIMO v17** - Current production version
+**RadIMO Cortex v20** - Current production version
 
 For more information, see [EULA.txt](static/EULA.txt) or contact **Dr. M. Russe**.
 

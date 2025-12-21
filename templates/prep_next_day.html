@@ -714,6 +714,29 @@
       font-size: 0.7rem;
     }
 
+    /* Highlight manual entries */
+    .row-manual {
+      background-color: #fff8e1 !important;
+      /* Subtle yellow */
+    }
+
+    .gap-linked-icon {
+      color: #004892;
+      margin-right: 0.3rem;
+      font-size: 0.8rem;
+      cursor: help;
+    }
+
+    .prep-status-badge {
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      margin-left: 0.5rem;
+      font-weight: 600;
+    }
+
     /* Message */
     .message {
       padding: 1rem;
@@ -962,6 +985,9 @@
     <div class="tomorrow-banner">
       <h2>STAGING MODE - Prep for Tomorrow</h2>
       <p>Changes are saved to STAGED area for tomorrow. <strong>Counter reset happens on CSV import.</strong></p>
+      <div style="margin-top: 0.5rem;">
+        <span id="last-prepped-info" class="prep-status-badge">Prüfe Status...</span>
+      </div>
     </div>
 
     <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
@@ -1774,8 +1800,10 @@
         }
 
         const contentType = response.headers.get('content-type');
+        let respData;
         if (contentType && contentType.includes('application/json')) {
-          rawData[tab] = await response.json();
+          respData = await response.json();
+          rawData[tab] = respData.modalities || respData;
         } else {
           console.error(`${tab} API returned non-JSON`);
           rawData[tab] = {};
@@ -1783,10 +1811,18 @@
           return;
         }
 
-        const result = buildEntriesByWorker(rawData[tab], tab);
+        const result = buildEntriesByWorker(respData.modalities || respData, tab);
         entriesData[tab] = result.entries;
         workerCounts[tab] = result.counts;
         dataLoaded[tab] = true;
+
+        if (tab === 'tomorrow' && respData.last_prepped_at) {
+          const infoEl = document.getElementById('last-prepped-info');
+          if (infoEl) infoEl.innerHTML = `Vorbereitet am: <strong>${respData.last_prepped_at}</strong>`;
+        } else if (tab === 'tomorrow') {
+          const infoEl = document.getElementById('last-prepped-info');
+          if (infoEl) infoEl.textContent = 'Noch nicht vorbereitet';
+        }
 
         renderTable(tab);
       } catch (error) {
@@ -1908,6 +1944,8 @@
             end_time: endTime,
             modifier: row.Modifier !== undefined ? row.Modifier : 1.0,
             counts_for_hours: countsForHours !== false,  // Default true
+            is_manual: Boolean(row.is_manual),
+            gap_id: row.gap_id || null,
             gaps: gaps,
             skills: SKILLS.reduce((acc, skill) => {
               if (isGapRow) { acc[skill] = -1; return acc; }
@@ -1949,7 +1987,9 @@
               gaps: gaps,
               modalities: {},
               timeSegments: [{ start: entry.start_time, end: entry.end_time }],
-              originalShifts: [entry]
+              originalShifts: [entry],
+              is_manual: entry.is_manual,
+              gap_id: entry.gap_id
             };
           }
 
@@ -2033,7 +2073,9 @@
               ...shift,
               timeSegments: [{ start: shift.start_time, end: shift.end_time }],
               originalShifts: [shift],
-              gaps: mergeUniqueGaps(shift.gaps || [])
+              gaps: mergeUniqueGaps(shift.gaps || []),
+              is_manual: shift.is_manual,
+              gap_id: shift.gap_id
             };
           } else if (currentMerged.task === shift.task && hasGapBetween) {
             // Same task with gap between - merge into one work period
@@ -2041,6 +2083,8 @@
             currentMerged.originalShifts.push(shift);
             currentMerged.end_time = shift.end_time;
             currentMerged.gaps = mergeUniqueGaps([...(currentMerged.gaps || []), ...(shift.gaps || [])]);
+            currentMerged.is_manual = shift.is_manual || currentMerged.is_manual;
+            currentMerged.gap_id = shift.gap_id || currentMerged.gap_id;
             // Merge modalities (prefer non-placeholder)
             Object.entries(shift.modalities).forEach(([modKey, modData]) => {
               if (!currentMerged.modalities[modKey] || currentMerged.modalities[modKey].placeholder) {
@@ -2054,7 +2098,9 @@
               ...shift,
               timeSegments: [{ start: shift.start_time, end: shift.end_time }],
               originalShifts: [shift],
-              gaps: mergeUniqueGaps(shift.gaps || [])
+              gaps: mergeUniqueGaps(shift.gaps || []),
+              is_manual: shift.is_manual,
+              gap_id: shift.gap_id
             };
           }
         });
@@ -2309,9 +2355,17 @@
           const tr = document.createElement('tr');
           const modKeysToShow = MODALITIES.map(m => m.toLowerCase());
 
+          if (shift.is_manual) {
+            tr.classList.add('row-manual');
+          }
+
           if (shiftIdx === 0) {
             tr.classList.add('worker-group-first');
-            tr.innerHTML += `<td rowspan="${totalRows}" style="vertical-align: middle;"><span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${escapedWorker}</span>${duplicateBadge}</td>`;
+            let workerHtml = `<span class="worker-name ${isDuplicate ? 'duplicate' : ''}">${escapedWorker}</span>${duplicateBadge}`;
+            if (shift.gap_id) {
+              workerHtml = `<span class="gap-linked-icon" title="Linked Split-Shift (ID: ${shift.gap_id})">🔗</span>` + workerHtml;
+            }
+            tr.innerHTML += `<td rowspan="${totalRows}" style="vertical-align: middle;">${workerHtml}</td>`;
           }
 
           const isGapRow = isGapTask(shift.task);

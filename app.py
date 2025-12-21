@@ -42,8 +42,9 @@ scheduler = BackgroundScheduler()
 def before_request_hook():
     check_and_perform_daily_reset()
 
-# Schedule auto-preload at 14:00 daily
-scheduler.add_job(auto_preload_job, 'cron', hour=14, minute=0)
+# Schedule auto-preload daily from Master CSV
+preload_hour = APP_CONFIG.get('scheduler', {}).get('auto_preload_time', 14)
+scheduler.add_job(auto_preload_job, 'cron', hour=preload_hour, minute=0)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 

@@ -6,9 +6,9 @@ Haftungsausschluss: Trotz sorgfältiger inhaltlicher Kontrolle übernehmen wir k
   
 EULA:
 
-RadIMO End User License Agreement (EULA) – Version 1.1
+RadIMO Cortex End User License Agreement (EULA) – Version 2.0
 
-Diese Lizenzvereinbarung („Vereinbarung“) regelt die Nutzung der Software-Anwendung „RadIMO – Radiology: Innovation, Management & Orchestration“ (im Folgenden „RadIMO“ oder „Tool“ genannt). Die Software wird von einem verantwortlichen Entwickler („Lizenzgeber“) bereitgestellt. Durch die Nutzung oder Installation von RadIMO akzeptiert der Anwender („Lizenznehmer“) sämtliche Bedingungen dieser Vereinbarung.
+Diese Lizenzvereinbarung („Vereinbarung“) regelt die Nutzung der Software-Anwendung „RadIMO Cortex – Intelligent Radiology Orchestration“ (im Folgenden „RadIMO Cortex“ oder „Tool“ genannt). Die Software wird von einem verantwortlichen Entwickler („Lizenzgeber“) bereitgestellt. Durch die Nutzung oder Installation von RadIMO Cortex akzeptiert der Anwender („Lizenznehmer“) sämtliche Bedingungen dieser Vereinbarung.
 
 1. Lizenzgewährung
 1.1 Kostenlose, widerrufliche Nutzung
@@ -29,7 +29,7 @@ Die kostenfreie Nutzung kann jederzeit und ohne Vorankündigung durch den Lizenz
 
 4. Haftungsausschluss und Betriebsbedingungen
 4.1 Keine Gewährleistung (Tool „as is“)
-RadIMO wird im Ist-Zustand („as is“) ohne jegliche Garantien, insbesondere zur Sicherheit, Fehlerfreiheit oder Eignung für einen spezifischen Zweck zur Verfügung gestellt. RadIMO ist eine nicht abgesicherte Flask-Anwendung und darf nicht in kritischer Infrastruktur oder in sensiblen Produktionsumgebungen verwendet werden.
+RadIMO Cortex wird im Ist-Zustand („as is“) ohne jegliche Garantien, insbesondere zur Sicherheit, Fehlerfreiheit oder Eignung für einen spezifischen Zweck zur Verfügung gestellt. RadIMO Cortex ist eine nicht abgesicherte Flask-Anwendung und darf nicht in kritischer Infrastruktur oder in sensiblen Produktionsumgebungen verwendet werden.
 
 4.2 Haftungsausschluss
 Der Lizenzgeber übernimmt keinerlei Verantwortung für Schäden oder Folgeschäden, die sich direkt oder indirekt aus der Nutzung oder Nichtverfügbarkeit des Tools ergeben.
@@ -39,7 +39,7 @@ Hosting, Bereitstellung, Wartung und Betrieb der Software auf Servern sind ausdr
 
 5. Gewährleistung und Haftungsbeschränkung
 5.1 Gewährleistungsausschluss
-Es werden ausdrücklich keinerlei Garantien oder Gewährleistungen bezüglich der Funktionsfähigkeit oder Mängelfreiheit von RadIMO gegeben.
+Es werden ausdrücklich keinerlei Garantien oder Gewährleistungen bezüglich der Funktionsfähigkeit oder Mängelfreiheit von RadIMO Cortex gegeben.
 
 5.2 Haftungsbeschränkung
 Die Haftung des Lizenzgebers für jegliche direkte oder indirekte Schäden, insbesondere Datenverluste, Betriebsunterbrechungen oder Folgeschäden, ist ausgeschlossen.

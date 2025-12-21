@@ -84,7 +84,9 @@ for mod in allowed_modalities:
         'worker_modifiers': {},
         'last_uploaded_filename': f"Cortex_{mod.upper()}_staged.xlsx",
         'staged_file_path': os.path.join(UPLOAD_FOLDER, "backups", f"Cortex_{mod.upper()}_staged.xlsx"),
-        'last_modified': None
+        'last_modified': None,
+        'last_prepped_at': None,
+        'last_prepped_by': None
     }
 
 # JSON worker skill roster (loaded dynamically)
@@ -361,6 +363,7 @@ def backup_dataframe(modality: str, use_staged: bool = False):
 
             if use_staged:
                 d['last_modified'] = get_local_berlin_now()
+                d['last_prepped_at'] = d['last_modified'].strftime('%d.%m.%Y %H:%M')
         except Exception as e:
             mode_label = "staged" if use_staged else "live"
             selection_logger.info(f"Error backing up {mode_label} DataFrame for modality {modality}: {e}")
@@ -580,6 +583,9 @@ def _update_schedule_row(modality: str, row_index: int, updates: dict, use_stage
                 df.at[row_index, 'gaps'] = value
             elif col == 'counts_for_hours':
                 df.at[row_index, 'counts_for_hours'] = bool(value)
+        
+        if use_staged and 'is_manual' in df.columns:
+            df.at[row_index, 'is_manual'] = True
 
         # Recalculate shift_duration if times changed
         if 'start_time' in updates or 'end_time' in updates:
@@ -641,6 +647,12 @@ def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) 
         else:
             data_dict['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
+        if use_staged:
+            if 'is_manual' not in data_dict['working_hours_df'].columns:
+                data_dict['working_hours_df']['is_manual'] = False
+            new_row_idx = len(data_dict['working_hours_df']) - 1
+            data_dict['working_hours_df'].at[new_row_idx, 'is_manual'] = True
+
         backup_dataframe(modality, use_staged=use_staged)
         new_idx = len(data_dict['working_hours_df']) - 1
         return True, new_idx, None
@@ -664,11 +676,18 @@ def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool
 
     try:
         worker_name = df.loc[row_index_int, 'PPL']
+        gap_id = df.loc[row_index_int, 'gap_id'] if 'gap_id' in df.columns else None
 
         if verify_ppl and str(worker_name) != str(verify_ppl):
             return False, None, 'Row mismatch: Schedule has changed. Please reload.'
 
-        data_dict['working_hours_df'] = df.drop(index=row_index_int).reset_index(drop=True)
+        if gap_id and pd.notnull(gap_id):
+            # Delete all rows sharing the same gap_id
+            data_dict['working_hours_df'] = df[df['gap_id'] != gap_id].reset_index(drop=True)
+            selection_logger.info(f"Deleted linked gap rows for ID {gap_id}")
+        else:
+            data_dict['working_hours_df'] = df.drop(index=row_index_int).reset_index(drop=True)
+            
         backup_dataframe(modality, use_staged=use_staged)
         return True, worker_name, None
 
@@ -679,8 +698,13 @@ def _add_gap_to_schedule(modality: str, row_index: int, gap_type: str, gap_start
     data_dict = _get_schedule_data_dict(modality, use_staged)
     df = data_dict['working_hours_df']
 
-    if df is not None and 'gaps' not in df.columns:
-        df['gaps'] = None
+    if df is not None:
+        if 'gaps' not in df.columns:
+            df['gaps'] = None
+        if 'gap_id' not in df.columns:
+            df['gap_id'] = None
+        if use_staged and 'is_manual' not in df.columns:
+            df['is_manual'] = False
 
     if not _validate_row_index(df, row_index):
         return False, None, 'Invalid row index'
@@ -740,9 +764,14 @@ def _add_gap_to_schedule(modality: str, row_index: int, gap_type: str, gap_start
         log_prefix = "STAGED: " if use_staged else ""
 
         if gap_start_dt <= shift_start_dt and gap_end_dt >= shift_end_dt:
-            data_dict['working_hours_df'] = df.drop(index=row_index).reset_index(drop=True)
+            # Case 1: Gap covers entire shift
+            if gap_id and 'gap_id' in df.columns:
+                 data_dict['working_hours_df'] = df[df['gap_id'] != gap_id].reset_index(drop=True)
+            else:
+                 data_dict['working_hours_df'] = df.drop(index=row_index).reset_index(drop=True)
+            
             backup_dataframe(modality, use_staged=use_staged)
-            selection_logger.info(f"{log_prefix}Gap ({gap_type}) covers entire shift for {worker_name} - row deleted")
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) covers entire shift for {worker_name} - row(s) deleted")
             return True, 'deleted', None
 
         elif gap_start_dt <= shift_start_dt < gap_end_dt < shift_end_dt:
@@ -766,10 +795,16 @@ def _add_gap_to_schedule(modality: str, row_index: int, gap_type: str, gap_start
             return True, 'end_adjusted', None
 
         else:
+            # Case 4: Gap in middle - SPLIT into two rows
+            new_gap_id = f"gap_{worker_name}_{datetime.now().strftime('%H%M%S')}"
+            
             df.at[row_index, 'end_time'] = gap_start_time
             df.at[row_index, 'TIME'] = f"{shift_start.strftime(TIME_FORMAT)}-{gap_start_time.strftime(TIME_FORMAT)}"
             new_end_dt = datetime.combine(base_date, gap_start_time)
             df.at[row_index, 'shift_duration'] = (new_end_dt - shift_start_dt).seconds / 3600
+            df.at[row_index, 'gap_id'] = new_gap_id
+            if use_staged:
+                df.at[row_index, 'is_manual'] = True
 
             new_row = row.to_dict()
             new_row['start_time'] = gap_end_time
@@ -777,13 +812,17 @@ def _add_gap_to_schedule(modality: str, row_index: int, gap_type: str, gap_start
             new_row['TIME'] = f"{gap_end_time.strftime(TIME_FORMAT)}-{shift_end.strftime(TIME_FORMAT)}"
             new_start_dt = datetime.combine(base_date, gap_end_time)
             new_row['shift_duration'] = (shift_end_dt - new_start_dt).seconds / 3600
+            new_row['gap_id'] = new_gap_id
+            if use_staged:
+                new_row['is_manual'] = True
+
             serialized_gaps = json.dumps(merge_gap(parse_gap_list(row.get('gaps')), gap_entry))
             df.at[row_index, 'gaps'] = serialized_gaps
             new_row['gaps'] = serialized_gaps
 
             data_dict['working_hours_df'] = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             backup_dataframe(modality, use_staged=use_staged)
-            selection_logger.info(f"{log_prefix}Gap ({gap_type}) in middle for {worker_name}: split into two shifts")
+            selection_logger.info(f"{log_prefix}Gap ({gap_type}) in middle for {worker_name}: split into two shifts with ID {new_gap_id}")
             return True, 'split', None
 
     except ValueError as e:
@@ -796,7 +835,14 @@ def check_and_perform_daily_reset():
     now = get_local_berlin_now()
     today = now.date()
     
-    if global_worker_data['last_reset_date'] != today and now.time() >= time(7, 30):
+    reset_time_str = APP_CONFIG.get('scheduler', {}).get('daily_reset_time', '07:30')
+    try:
+        reset_hour, reset_min = map(int, reset_time_str.split(':'))
+        reset_time = time(reset_hour, reset_min)
+    except Exception:
+        reset_time = time(7, 30)
+
+    if global_worker_data['last_reset_date'] != today and now.time() >= reset_time:
         should_reset_global = any(
             os.path.exists(modality_data[mod]['scheduled_file_path']) 
             for mod in allowed_modalities

@@ -148,6 +148,12 @@ def _build_app_config() -> Dict[str, Any]:
         )
     }
 
+    # Scheduler settings
+    config['scheduler'] = raw_config.get('scheduler', {
+        'daily_reset_time': '07:30',
+        'auto_preload_time': 14
+    })
+
     # Auto-import toggle for worker skill roster
     config['skill_roster_auto_import'] = bool(
         raw_config.get('skill_roster_auto_import', True)

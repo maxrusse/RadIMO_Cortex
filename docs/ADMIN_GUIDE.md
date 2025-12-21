@@ -10,9 +10,9 @@ RadIMO provides two admin interfaces for different operational needs:
 
 | Page | URL | Effect | Use Case |
 |------|-----|--------|----------|
-| **Skill Matrix** | `/skill_roster` | Staged | Long-term planning, rotations |
-| **Schedule Edit (Today)** | `/prep-next-day` | Immediate | Same-day urgent adjustments |
-| **Schedule Edit (Tomorrow)** | `/prep-next-day` | Next-day only | Daily schedule preparation |
+| **Skill Matrix** | `/skill_roster` | Direct | Permanent skill management |
+| **Schedule Edit (Today)** | `/prep-next-day` | Live | Same-day adjustments (Live Edit) |
+| **Schedule Edit (Tomorrow)** | `/prep-next-day` | Staged | Daily schedule preparation |
 
 All admin pages require login with the admin password from `config.yaml`.
 
@@ -20,115 +20,75 @@ All admin pages require login with the admin password from `config.yaml`.
 
 ## Workflow Separation
 
-```
 ┌─────────────────────────────────────────────────────────────┐
-│  PLANNING (Future)              Skill Matrix                │
-│  ├─ Staged changes              (Planning Mode)             │
-│  ├─ Review before apply                                     │
-│  └─ Activate when ready                                     │
+│  SKILL MATRIX (Permanent)        /skill_roster              │
+│  ├─ Multi-modality grid                                     │
+│  ├─ Edit skill values (-1, 0, 1)                            │
+│  └─ Save directly to roster JSON                            │
 ├─────────────────────────────────────────────────────────────┤
 │  SCHEDULE EDIT                  /prep-next-day              │
-│  ├─ TODAY TAB (green):    Immediate live changes            │
-│  │  └─ Edit current schedule, counters preserved            │
-│  ├─ TOMORROW TAB (yellow): Next-day preparation             │
-│  │  └─ Stage changes for auto-preload (7:30 AM)             │
-│  └─ Both modes: Add/remove workers, edit times and skills   │
+│  ├─ EDIT TODAY:           Immediate live changes            │
+│  │  └─ Adjust times, add/remove workers, split shifts       │
+│  ├─ PREP TOMORROW:        Stage for next workday            │
+│  │  └─ Prepare tomorrow's setup from Master CSV             │
+│  └─ Both modes: Interactive GAP handling (Split Shift)      │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
-## 1. Skill Matrix (`/skill_roster`)
+**Purpose:** Manage permanent worker skills across CT, MR, X-ray, and Mammo.
 
-**Purpose:** Plan worker skill changes for rotations and long-term scheduling.
-
-**Key behavior:** Changes are STAGED - no immediate effect on assignments.
-
-### When to Use
-
-- Weekly rotation planning
-- Training certifications
-- Scheduled skill changes
-- Long-term worker configuration
+**Key behavior:** Changes save directly to `worker_skill_roster.json` and take effect on next reload/assignment.
 
 ### How It Works
 
-1. Navigate to `/skill_roster`
-2. Find worker in table by abbreviation
-3. Edit skill values:
-   - **1** = Active (primary + fallback)
-   - **0** = Passive (fallback only)
-   - **-1** = Excluded (never)
-4. Click **"Save to Staging"** → saves to `worker_skill_overrides_staged.json`
-5. When ready: Click **"Activate Changes"** → copies staged → active
+1. Navigate to `/skill_roster` (or "Skill Matrix" in nav)
+2. Select worker from the side list
+3. Edit skill values in the grid:
+   - **1** = Active (Assigned) - 🟢 Green
+   - **0** = Passive (Helper/Fallback) - 🟡 Yellow
+   - **-1** = Excluded (Never) - 🔴 Red
+4. Click **"Save"** to persist changes.
+5. Use **"Import new workers"** to pull workers from current schedules who are missing from the roster.
 
-### Example: Add MSK Rotation
-
-**Scenario:** Worker "AM" starts MSK rotation next week.
-
-1. Go to `/skill_roster`
-2. Find "AM" in the table
-3. Change MSK from `0` → `1`
-4. Click "Save to Staging" → no immediate effect
-5. On rotation start day: Click "Activate Changes" → now active
-
-### Files
-
-- **Staged:** `worker_skill_overrides_staged.json`
-- **Active:** `worker_skill_overrides.json`
+### Example: MSK Rotation
+To make "AM" an MSK specialist:
+1. Select "AM"
+2. Change MSK column in MR/CT to `1`
+3. Click "Save"
 
 ---
 
-## 2. Schedule Edit (`/prep-next-day`)
+**Purpose:** Edit schedules with two modes - "Edit Today" for immediate live changes, or "Prep Tomorrow" for planning.
 
-**Purpose:** Edit schedules with two modes - immediate changes to today's schedule, or prepare tomorrow's schedule.
-
-**Key behavior:** Dual-tab interface with different effects:
-- **Change Today** tab: Immediate effect on live schedule (counters preserved)
-- **Prep Tomorrow** tab: Stage changes for next workday (no immediate effect)
+**Key behavior:** Premium interface with modality tabs (CT/MR/XRAY/MAMMO).
+- **Edit Today**: Immediate effect on live assignment pool.
+- **Prep Tomorrow**: Stages changes for the next workday's auto-preload.
 
 ### When to Use
 
-**Change Today Tab:**
-- Urgent same-day schedule adjustments
-- Add/remove workers from today's active schedule
-- Fix shift times or skills during the workday
-- **WARNING:** Changes are immediate - counters are NOT reset
+**Edit Today:**
+- Worker call-ins or sick leave adjustments.
+- Urgent time shifts for today's workers.
+- Add/Remove workers from the current live rotation.
 
-**Prep Tomorrow Tab:**
-- Daily schedule preparation
-- Correcting mapping edge cases
-- Adjusting times before auto-preload
-- Testing schedule changes safely
+**Prep Tomorrow:**
+- Daily preparation based on the Master CSV.
+- Adjusting Tomorrow's schedule before it goes live.
 
 ### Interface Components
 
 Both tabs share the same editing interface with modality-specific tables:
 
-#### Load from CSV
+#### Data Loading
+Each mode allows rebuilding from the master data:
+- **"Load Today"**: Rebuilds today's live schedule from `master_medweb.csv`.
+- **"Preload Tomorrow"**: Rebuilds tomorrow's staged schedule from `master_medweb.csv`.
 
-Each tab has a "Load from CSV" button:
-- **"Load Today"** (Change Today tab): Rebuilds today's schedule from master CSV
-- **"Load Tomorrow"** (Prep Tomorrow tab): Loads next-day schedule from master CSV
-- Useful for resetting manual changes or reapplying CSV after upload
-
-#### Quick Edit Mode (Default)
-
-**For:** Fast inline edits
-
-- Click any cell to edit
-- Edited cells highlight until saved
-- Edit: worker names, times, skills, modifiers
-
-#### Advanced Mode
-
-**For:** Structural changes
-
-- Toggle with "Quick Edit" button
-- Add new worker rows
-- Delete worker rows
-- Bulk skill operations
-- All Quick Edit features available
+#### Interactive Grid
+- **Inline Edit**: Click any cell (Start, End, Skill, Modifier) to edit.
+- **GAP Handling**: Use the "Add Gap" button to split a shift (e.g., for a 1-hour board meeting).
+- **Advanced Mode**: Toggle to Add/Delete worker rows.
 
 #### Filtering Controls
 
@@ -181,28 +141,21 @@ Both tabs include smart filters:
 
 ## Admin Panel (`/upload`)
 
-Central hub for system management.
+Central hub for Master CSV management and system health.
 
 ### Available Actions
 
 | Action | Description |
 |--------|-------------|
-| **Medweb CSV Upload** | Upload schedule for specific date |
-| **Preload Next Workday** | Manual trigger of auto-preload |
-| **Force Refresh Today** | Full same-day rebuild (WARNING: destroys all counters and assignment history) |
+| **Master CSV Upload** | Upload monthly medweb export (powers everything) |
+| **Load Today** | Rebuild today's live schedule from Master (Resets counters) |
+| **Preload Tomorrow** | Prepare tomorrow's staged schedule from Master |
 
-### CSV Upload Flow
+### Workflow Strategy
 
-1. Click "Medweb CSV Upload"
-2. Select CSV file
-3. Choose target date
-4. Upload → System parses and builds schedule
-
-### Auto-Preload
-
-- Runs daily at **07:30 CET**
-- Uses last uploaded CSV as master
-- Applies next workday logic (Friday → Monday)
+1. **Upload Master CSV**: Once per month or whenever the master schedule changes.
+2. **Daily Reset**: Automated at 07:30 CET, or manual via "Load Today".
+3. **Daily Prep**: Use "Schedule Edit" -> "Prep Tomorrow" in the evening for the next day.
 
 ---
 

@@ -180,6 +180,11 @@ ui_colors:
   warning: '#ffc107'
   info: '#17a2b8'
 
+# Background job and daily reset timings
+scheduler:
+  daily_reset_time: "07:30"   # Time to move staged tomorrow -> live today
+  auto_preload_time: 14       # Hour (0-23) to preload next workday from Master CSV
+
 balancer:
   enabled: true
   min_assignments_per_skill: 5

@@ -116,6 +116,11 @@ def _df_to_api_response(df: pd.DataFrame) -> list:
         else:
             worker_data['counts_for_hours'] = True
 
+        if 'is_manual' in df.columns:
+            worker_data['is_manual'] = bool(row.get('is_manual', False))
+        if 'gap_id' in df.columns:
+            worker_data['gap_id'] = row.get('gap_id')
+
         data.append(worker_data)
 
     return data
@@ -427,75 +432,8 @@ def preload_from_master():
 @admin_required
 def upload_file():
     if request.method == 'POST':
-        if 'file' not in request.files:
-            return jsonify({"error": "Keine Datei ausgewählt"}), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "Keine Datei ausgewählt"}), 400
-        if not file.filename.lower().endswith('.csv'):
-            return jsonify({"error": "Ungültiger Dateityp. Bitte eine CSV-Datei hochladen."}), 400
-
-        target_date_str = request.form.get('target_date')
-        if not target_date_str:
-            return jsonify({"error": "Bitte Zieldatum angeben"}), 400
-
-        try:
-            target_date = datetime.strptime(target_date_str, '%Y-%m-%d')
-        except Exception:
-            return jsonify({"error": "Ungültiges Datumsformat"}), 400
-
-        csv_path = os.path.join('uploads', 'medweb_temp.csv')
-        try:
-            file.save(csv_path)
-
-            modality_dfs = build_working_hours_from_medweb(
-                csv_path,
-                target_date,
-                APP_CONFIG
-            )
-
-            if not modality_dfs:
-                return jsonify({"error": f"Keine Cortex-Daten für {target_date.strftime('%Y-%m-%d')} gefunden"}), 400
-
-            with lock:
-                global_worker_data['weighted_counts'] = {}
-
-                for modality, df in modality_dfs.items():
-                    d = modality_data[modality]
-                    d['draw_counts'] = {}
-                    d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
-                    d['WeightedCounts'] = {}
-                    global_worker_data['assignments_per_mod'][modality] = {}
-                    d['working_hours_df'] = df
-
-                    for worker in df['PPL'].unique():
-                        d['draw_counts'][worker] = 0
-                        d['WeightedCounts'][worker] = 0.0
-                        for skill in SKILL_COLUMNS:
-                            if skill not in d['skill_counts']:
-                                d['skill_counts'][skill] = {}
-                            d['skill_counts'][skill][worker] = 0
-
-                    d['info_texts'] = []
-                    d['last_uploaded_filename'] = f"medweb_{target_date.strftime('%Y%m%d')}.csv"
-
-                save_state()
-
-            shutil.copy2(csv_path, MASTER_CSV_PATH)
-            selection_logger.info(f"Master CSV updated: {MASTER_CSV_PATH}")
-            os.remove(csv_path)
-
-            return jsonify({
-                "success": True,
-                "message": f"Medweb CSV erfolgreich geladen für {target_date.strftime('%Y-%m-%d')}",
-                "modalities_loaded": list(modality_dfs.keys()),
-                "total_workers": sum(len(df) for df in modality_dfs.values())
-            })
-
-        except Exception as e:
-            if os.path.exists(csv_path):
-                os.remove(csv_path)
-            return jsonify({"error": f"Fehler beim Verarbeiten der CSV: {str(e)}"}), 500
+        # DEPRECATED: Standard CSV management now uses /upload-master-csv and /load-today-from-master
+        return jsonify({"error": "Dieser Endpunkt ist veraltet. Bitte nutzen Sie 'Master CSV Upload' oder 'Load Today'."}), 400
 
     modality = resolve_modality_from_request()
     d = modality_data[modality]
@@ -562,6 +500,18 @@ def run_operational_checks(context: str = 'unknown', force: bool = False) -> dic
         results.append({'name': 'Config File', 'status': 'OK', 'detail': 'config.yaml is readable and valid YAML'})
     except Exception as e:
         results.append({'name': 'Config File', 'status': 'ERROR', 'detail': f'Failed to load config.yaml: {str(e)}'})
+
+    try:
+        scheduler_conf = app.APP_CONFIG.get('scheduler', {})
+        reset_time = scheduler_conf.get('daily_reset_time', '07:30')
+        preload_hour = scheduler_conf.get('auto_preload_time', 14)
+
+        if not isinstance(preload_hour, int) or not (0 <= preload_hour <= 23):
+            results.append({'name': 'Scheduler', 'status': 'ERROR', 'detail': f'Invalid auto_preload_time: {preload_hour} (must be 0-23)'})
+        else:
+            results.append({'name': 'Scheduler', 'status': 'OK', 'detail': f'Resets at {reset_time}, auto-preloads at {preload_hour}:00'})
+    except Exception as e:
+        results.append({'name': 'Scheduler', 'status': 'ERROR', 'detail': f'Failed to check scheduler config: {str(e)}'})
 
     try:
         admin_pw = get_admin_password()
@@ -792,7 +742,10 @@ def get_prep_data():
         df = staged_modality_data[modality].get('working_hours_df')
         result[modality] = _df_to_api_response(df)
 
-    return jsonify(result)
+    return jsonify({
+        'modalities': result,
+        'last_prepped_at': staged_modality_data[allowed_modalities[0]].get('last_prepped_at')
+    })
 
 @routes.route('/api/prep-next-day/update-row', methods=['POST'])
 @admin_required
