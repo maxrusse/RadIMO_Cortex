@@ -48,7 +48,7 @@ flask --app app run --debug  # Start application
 | Page | URL | Description |
 |------|-----|-------------|
 | Admin Panel | `/upload` | Master CSV management, stats, system health |
-| Skill Matrix | `/skill_roster` | Edit worker skills (Direct Save) |
+| Skill Matrix | `/skill-roster` | Edit worker skills (Direct Save) |
 | Schedule Edit | `/prep-next-day` | Edit Today (Live) or Prep Tomorrow (Staged) |
 
 ---
@@ -95,7 +95,7 @@ Assignments are weighted by:
 - **Skill×Modality overrides**: Custom weights for specific combinations
 
 ### Admin Pages
-1. **Skill Matrix** (`/skill_roster`) - Edit worker skills across modalities (saves directly)
+1. **Skill Matrix** (`/skill-roster`) - Edit worker skills across modalities (saves directly)
 2. **Schedule Edit** (`/prep-next-day`) - Modify Today (Live) or prepare Tomorrow (Staged)
 
 ### Navigation & UI Features
@@ -103,7 +103,7 @@ Assignments are weighted by:
 **Cortex Layout** - Unified navigation across all pages:
 - **Dashboard** (`/`) - Main workload view (toggle Modality/Skill views)
 - **Timetable** (`/timetable`) - Visual timeline of shifts and gaps
-- **Skill Matrix** (`/skill_roster`) - Manage worker skills (direct save)
+- **Skill Matrix** (`/skill-roster`) - Manage worker skills (direct save)
 - **Schedule Edit** (`/prep-next-day`) - Live Edit (Today) + Prep Tomorrow (Staged)
 - **Admin** (`/upload`) - System configuration and CSV uploads
 
@@ -120,7 +120,11 @@ RadIMO_Cortex/
 ├── config.py                   # Config loader and normalization
 ├── config.yaml                 # Configuration (mapping, skills, weights)
 ├── worker_skill_roster.json    # Worker skill roster
+├── utils.py                    # Utility functions and logging
+├── requirements.txt            # Python dependencies
 ├── ops_check.py                # Pre-deployment checks
+├── gunicorn_config.py          # Gunicorn server configuration
+├── prepare_config.py           # Helper to bootstrap medweb mapping
 ├── templates/                  # HTML templates (Admin pages aligned to Prep)
 ├── static/                     # CSS, JS, assets
 ├── uploads/                    # Master CSV and backups storage
