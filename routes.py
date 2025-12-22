@@ -35,6 +35,7 @@ from config import (
     normalize_modality,
     normalize_skill
 )
+import usage_logger
 from utils import (
     get_local_berlin_now,
     get_next_workday,
@@ -1001,6 +1002,12 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
 
                 canonical_id = update_global_assignment(person, actual_skill, actual_modality)
 
+                # Record skill-modality usage for analytics
+                usage_logger.record_skill_modality_usage(actual_skill, actual_modality)
+
+                # Check if it's time for scheduled export (7:30 AM)
+                usage_logger.check_and_export_at_scheduled_time()
+
                 return jsonify({
                     "selected_person": person,
                     "canonical_id": canonical_id,
@@ -1028,3 +1035,114 @@ def assign_worker_strict_api(modality, role):
     if modality not in modality_data:
         return jsonify({"error": "Invalid modality"}), 400
     return _assign_worker(modality, role, allow_fallback=False)
+
+# Usage Statistics API Endpoints
+
+@routes.route('/api/usage-stats/current', methods=['GET'])
+@requires_auth
+def get_current_usage_stats():
+    """Get current daily usage statistics for skill-modality combinations."""
+    stats = usage_logger.get_current_usage_stats()
+
+    # Convert to list format for easier consumption
+    stats_list = [
+        {
+            'skill': skill,
+            'modality': modality,
+            'count': count
+        }
+        for (skill, modality), count in sorted(stats.items())
+    ]
+
+    return jsonify({
+        'date': datetime.now().strftime('%Y-%m-%d'),
+        'total_combinations': len(stats_list),
+        'total_usages': sum(s['count'] for s in stats_list),
+        'stats': stats_list
+    })
+
+@routes.route('/api/usage-stats/export', methods=['POST'])
+@requires_auth
+def export_usage_stats():
+    """Manually trigger export of current usage statistics to CSV (wide format)."""
+    try:
+        csv_path = usage_logger.export_current_usage()
+        if csv_path:
+            return jsonify({
+                'success': True,
+                'message': 'Usage statistics exported successfully (appended to CSV)',
+                'file_path': str(csv_path),
+                'date': datetime.now().strftime('%Y-%m-%d'),
+                'note': 'Data appended as new row in wide format CSV'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No usage data to export'
+            })
+    except Exception as e:
+        selection_logger.error(f"Error exporting usage stats: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@routes.route('/api/usage-stats/reset', methods=['POST'])
+@requires_auth
+def reset_usage_stats():
+    """Reset current usage statistics (use with caution)."""
+    try:
+        usage_logger.reset_daily_usage()
+        return jsonify({
+            'success': True,
+            'message': 'Usage statistics reset successfully'
+        })
+    except Exception as e:
+        selection_logger.error(f"Error resetting usage stats: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@routes.route('/api/usage-stats/file', methods=['GET'])
+@requires_auth
+def get_usage_stats_file_info():
+    """Get information about the usage statistics CSV file."""
+    try:
+        csv_path = usage_logger.USAGE_STATS_FILE
+
+        if not csv_path.exists():
+            return jsonify({
+                'success': True,
+                'exists': False,
+                'message': 'No usage statistics file exists yet'
+            })
+
+        # Read dates from the CSV
+        import csv
+        dates = []
+        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if 'date' in row:
+                    dates.append(row['date'])
+
+        return jsonify({
+            'success': True,
+            'exists': True,
+            'filename': csv_path.name,
+            'path': str(csv_path),
+            'size_bytes': csv_path.stat().st_size,
+            'total_days': len(dates),
+            'dates': dates,
+            'date_range': {
+                'first': dates[0] if dates else None,
+                'last': dates[-1] if dates else None
+            }
+        })
+    except Exception as e:
+        selection_logger.error(f"Error getting usage stats file info: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
