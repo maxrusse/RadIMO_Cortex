@@ -532,7 +532,7 @@
           if (data.error) {
             throw new Error(data.error);
           }
-          showResult(data['Assigned Person'] || '', skill);
+          showResult(data.selected_person || '', skill);
         })
         .catch(e => {
           console.error("API error:", e);

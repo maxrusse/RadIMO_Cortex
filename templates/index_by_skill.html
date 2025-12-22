@@ -396,7 +396,7 @@
           if (data.error) {
             throw new Error(data.error);
           }
-          showResult(data['Assigned Person'] || '', modality);
+          showResult(data.selected_person || '', modality);
         })
         .catch(e => {
           console.error("API error:", e);

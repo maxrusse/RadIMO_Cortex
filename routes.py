@@ -1006,7 +1006,6 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
 
                 return jsonify({
                     "selected_person": person,
-                    "Assigned Person": person,  # Backward compatibility for templates
                     "canonical_id": canonical_id,
                     "source_modality": actual_modality,
                     "skill_used": actual_skill
