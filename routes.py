@@ -534,7 +534,7 @@ def run_operational_checks(context: str = 'unknown', force: bool = False) -> dic
         results.append({'name': 'Config File', 'status': 'ERROR', 'detail': f'Failed to load config.yaml: {str(e)}'})
 
     try:
-        scheduler_conf = app.APP_CONFIG.get('scheduler', {})
+        scheduler_conf = APP_CONFIG.get('scheduler', {})
         reset_time = scheduler_conf.get('daily_reset_time', '07:30')
         preload_hour = scheduler_conf.get('auto_preload_time', 14)
 
