@@ -168,12 +168,14 @@ def build_valid_skills_map() -> Dict[str, List[str]]:
 
 def build_disabled_worker_entry() -> Dict[str, Any]:
     """
-    Create a new worker entry with all skills disabled (-1).
+    Create a new worker entry with all skills disabled (-1) per modality.
 
-    New simplified format: skills are directly at top level, no modality separation.
-    Example: {'Notfall': -1, 'Privat': -1, 'MSK': -1, ...}
+    Format: {'default': {skills}, 'ct': {skills}, 'mr': {skills}, ...}
     """
-    return {skill: -1 for skill in SKILL_COLUMNS}
+    entry: Dict[str, Any] = {'default': {skill: -1 for skill in SKILL_COLUMNS}}
+    for mod in allowed_modalities:
+        entry[mod] = {skill: -1 for skill in SKILL_COLUMNS}
+    return entry
 
 
 def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> int:
@@ -212,20 +214,19 @@ def get_merged_worker_roster(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge YAML config roster with JSON roster.
 
-    JSON roster has priority. Both old format (with 'default' key) and new format
-    (direct skills) are supported.
+    JSON roster has priority and completely overrides YAML entries for the same worker.
+    Format: {worker_id: {'default': {skills}, 'ct': {overrides}, ...}}
     """
     # Start with YAML config
     yaml_roster = config.get('worker_roster', {})
     merged = copy.deepcopy(yaml_roster)
 
-    # Merge with JSON roster (JSON has priority)
     # Ensure JSON is loaded
     if not worker_skill_json_roster:
         load_worker_skill_json()
 
+    # JSON roster completely overrides YAML for each worker
     for worker_id, worker_data in worker_skill_json_roster.items():
-        # JSON roster completely overrides YAML for this worker
         merged[worker_id] = copy.deepcopy(worker_data)
 
     return merged
@@ -911,27 +912,52 @@ def match_mapping_rule(activity_desc: str, rules: list) -> Optional[dict]:
             return rule
     return None
 
-def get_worker_skills_from_roster(canonical_id: str, worker_roster: dict) -> dict:
+def get_worker_skills_from_roster(canonical_id: str, modality: str, worker_roster: dict) -> dict:
     """
-    Load worker skills from roster - skills define what a person CAN DO.
+    Get worker skills from roster for a specific modality.
 
-    Skills are independent of modality - they represent the worker's capabilities.
-    Returns a dict with all skills (1=active, 0=passive/fallback, -1=excluded, 'w'=weighted).
+    Merges: default skills + modality-specific overrides
+    Returns: {skill: value} dict
     """
     if canonical_id not in worker_roster:
-        # If worker not in roster, all skills = 0 (passive/fallback only)
+        # Worker not in roster → all skills passive (0)
         return {skill: 0 for skill in SKILL_COLUMNS}
 
     worker_data = worker_roster[canonical_id]
+    final_skills = {skill: 0 for skill in SKILL_COLUMNS}
 
-    # Support both old format (with 'default' key) and new format (direct skills)
+    # Apply default skills
     if 'default' in worker_data:
-        # Old format: {'default': {skills}, 'ct': {overrides}, ...}
-        # Use only 'default', ignore modality-specific overrides
-        return worker_data['default'].copy()
-    else:
-        # New format: {skills directly}
-        return worker_data.copy()
+        for skill, value in worker_data['default'].items():
+            if skill in final_skills:
+                final_skills[skill] = value
+
+    # Apply modality-specific overrides
+    if modality in worker_data:
+        for skill, value in worker_data[modality].items():
+            if skill in final_skills:
+                final_skills[skill] = value
+
+    return final_skills
+
+
+def apply_rule_override(roster_skills: dict, rule_base_skills: dict) -> dict:
+    """
+    Apply CSV rule base_skills override to roster skills.
+
+    If rule has base_skills → use those (exclusive post)
+    But roster can still exclude with -1
+
+    Returns: final skills
+    """
+    final_skills = rule_base_skills.copy()
+
+    # Roster -1 (excluded) always wins
+    for skill, roster_val in roster_skills.items():
+        if roster_val == -1:
+            final_skills[skill] = -1
+
+    return final_skills
 
 def compute_time_ranges(row: pd.Series, rule: dict, target_date: datetime, config: dict) -> List[Tuple[time, time]]:
     shift_name = rule.get('shift', 'Fruehdienst')
@@ -1147,19 +1173,20 @@ def build_working_hours_from_medweb(
         if not target_modalities:
             continue
 
-        # Get baseline skills from worker_skill_roster
-        roster_skills = get_worker_skills_from_roster(canonical_id, worker_roster)
-
-        # If rule defines base_skills → OVERRIDE roster (for exclusive posts)
-        # Otherwise use roster skills (normal shifts)
-        if 'base_skills' in rule and rule['base_skills']:
-            final_skills = rule['base_skills'].copy()
-        else:
-            final_skills = roster_skills
-
         time_ranges = compute_time_ranges(row, rule, target_date, config)
 
         for modality in target_modalities:
+            # Get worker skills from roster (default + modality-specific)
+            roster_skills = get_worker_skills_from_roster(canonical_id, modality, worker_roster)
+
+            # If rule defines base_skills → override roster (exclusive post)
+            # But roster -1 (excluded) still wins
+            if 'base_skills' in rule and rule['base_skills']:
+                final_skills = apply_rule_override(roster_skills, rule['base_skills'])
+            else:
+                # No override → use roster skills directly
+                final_skills = roster_skills
+
             for start_time, end_time in time_ranges:
                 start_dt = datetime.combine(target_date.date(), start_time)
                 end_dt = datetime.combine(target_date.date(), end_time)

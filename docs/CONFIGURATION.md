@@ -464,60 +464,70 @@ Overnight shifts (e.g., `22:00-06:00`) are automatically handled by rolling end 
 
 ## Worker Skill Matrix
 
-Defines what each person **CAN DO** - their fundamental capabilities independent of daily assignments.
+Defines Skill×Modality combinations for each worker - what skills they can perform in which modalities.
 
-**Important:** Skills in the roster represent worker abilities. The CSV defines WHERE and WHEN they work, not WHAT they can do.
+**Important:** Roster defines baseline capabilities per modality. CSV rules can override for exclusive posts.
 
 ```yaml
 worker_skill_roster:
-  # MSK specialist
+  # MSK specialist - can do MSK in all modalities
   AA:
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 1      # MSK specialist - can do MSK in any modality
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 1      # MSK specialist
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 0
+      Uro: 0
 
-  # Chest specialist
+  # Chest specialist with CT-specific override
   AN:
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 0
-    Abdomen: 0
-    Chest: 1    # Chest specialist
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 0
+      Abdomen: 0
+      Chest: 1    # Chest specialist
+      Cardvask: 0
+      Uro: 0
+    ct:
+      Notfall: 0  # Only fallback for CT Notfall (modality-specific)
 
   # Cardiac specialist, excluded from MSK/Chest
   DEMO1:
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: -1       # NEVER for MSK
-    Abdomen: 0
-    Chest: -1     # NEVER for Chest
-    Cardvask: 1   # Cardiac specialist
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: -1       # NEVER for MSK
+      Abdomen: 0
+      Chest: -1     # NEVER for Chest
+      Cardvask: 1   # Cardiac specialist
+      Uro: 0
 
   # Junior MSK worker
   MSK_ANFAENGER:
-    Notfall: 0
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: w         # Weighted/assisted - still learning
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 0
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: w         # Weighted/assisted - still learning
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 0
+      Uro: 0
 ```
+
+**Structure:**
+- `default`: Base skills for all modalities
+- `ct`, `mr`, `xray`, `mammo`: Modality-specific overrides (optional)
 
 **Value legend:**
 - `1` = **Active** - primary + fallback
@@ -525,12 +535,16 @@ worker_skill_roster:
 - `-1` = **Excluded** - never assign this skill
 - `w` = **Weighted** - assisted/learning (combine with `modifier` in CSV)
 
-**Logic flow:**
-1. **Skill Roster** → defines worker capabilities (what they CAN do)
-2. **CSV Upload** → defines daily assignment (WHERE they work, WHEN)
-3. **System** → combines both: assigns work based on skills + location
+**Precedence (for each worker×modality):**
+1. Roster `default` skills (baseline)
+2. Roster modality-specific override (e.g., `ct: {Notfall: 0}`)
+3. CSV rule `base_skills` (exclusive post - e.g., "Gyn Team" → only Gyn today)
+4. Roster `-1` (excluded) always wins
 
-**Note:** Modality-specific skill overrides are no longer supported. Skills represent fundamental worker capabilities that apply across all modalities.
+**Example:**
+- Dr. Müller roster: `default: {MSK: 1, Gyn: 1, Notfall: 1}`
+- CSV assigns "Gyn Team" with `base_skills: {Gyn: 1, others: 0}`
+- Result: Only Gyn active today (exclusive post)
 
 ---
 
@@ -614,15 +628,16 @@ shift_times:
 
 worker_skill_roster:
   DEMO:
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: -1        # Excluded from MSK
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 1    # Cardiac specialist
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: -1        # Excluded from MSK
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 1    # Cardiac specialist
+      Uro: 0
 ```
 
 ---

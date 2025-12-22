@@ -452,78 +452,87 @@ shift_times:
     default: "13:00-21:00"
     friday: "13:00-19:00"
 
-# Worker skill roster - defines what each person CAN DO (their capabilities)
-# These skills apply regardless of which modality they work in on a given day
+# Worker skill roster - defines what each person CAN DO per modality
+# Skills are defined per modality (Skill×Modality combinations)
 # -1 = excluded (never use), 0 = passive (fallback only), 1 = active (primary + fallback), w = weighted/assisted
+# CSV rules can override with base_skills for exclusive posts
 worker_skill_roster:
   # Example: MSK specialist
   AA:  # Any Arzt
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 1      # MSK specialist
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 1      # MSK specialist
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 0
+      Uro: 0
 
-  # Example: Chest specialist
+  # Example: Chest specialist with CT-specific override
   AN:  # Any Newarzt
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 0
-    Abdomen: 0
-    Chest: 1    # Chest specialist
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 0
+      Abdomen: 0
+      Chest: 1    # Chest specialist
+      Cardvask: 0
+      Uro: 0
+    ct:
+      Notfall: 0  # Only fallback for CT Notfall
 
   # Example: Cardiac specialist
   DEMO1:
-    Notfall: 1
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 0
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 1   # Cardiac specialist
-    Uro: 0
+    default:
+      Notfall: 1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 0
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 1   # Cardiac specialist
+      Uro: 0
 
   # Example: Private patients only (PP role)
   DEMO2:
-    Notfall: 0     # Only fallback
-    Privat: 1      # Primary for private patients
-    Gyn: 0
-    Päd: 0
-    MSK: -1        # Never for MSK
-    Abdomen: 0
-    Chest: -1      # Never for Chest
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 0     # Only fallback
+      Privat: 1      # Primary for private patients
+      Gyn: 0
+      Päd: 0
+      MSK: -1        # Never for MSK
+      Abdomen: 0
+      Chest: -1      # Never for Chest
+      Cardvask: 0
+      Uro: 0
 
   # Example: First month assistant (no Notfall)
   DEMO3:
-    Notfall: 0     # Not allowed for emergencies yet
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: 0
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 0     # Not allowed for emergencies yet
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: 0
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 0
+      Uro: 0
 
-  # MSK junior template with weighted proficiency and reduced modifier expectation
+  # MSK junior template with weighted proficiency
   MSK_ANFAENGER:
-    Notfall: 0
-    Privat: 0
-    Gyn: 0
-    Päd: 0
-    MSK: w      # weighted / assisted
-    Abdomen: 0
-    Chest: 0
-    Cardvask: 0
-    Uro: 0
+    default:
+      Notfall: 0
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: w      # weighted / assisted
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 0
+      Uro: 0
