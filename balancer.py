@@ -1,5 +1,5 @@
 # Standard library imports
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Any, Tuple
 
 # Third-party imports
@@ -124,6 +124,22 @@ def _filter_active_rows(df: Optional[pd.DataFrame], current_dt: datetime) -> Opt
         if skill in active_df.columns:
             active_df[skill] = active_df[skill].apply(skill_value_to_numeric)
     return active_df
+
+def _filter_near_shift_end(df: pd.DataFrame, current_dt: datetime, buffer_minutes: int) -> pd.DataFrame:
+    """
+    Filter out workers who are within buffer_minutes of their shift end.
+    Used to prevent overflow assignments near end of shift.
+    """
+    if df is None or df.empty or buffer_minutes <= 0:
+        return df
+
+    def is_not_near_shift_end(row):
+        start_dt, end_dt = compute_shift_window(row['start_time'], row['end_time'], current_dt)
+        minutes_until_end = (end_dt - current_dt).total_seconds() / 60
+        return minutes_until_end > buffer_minutes
+
+    mask = df.apply(is_not_near_shift_end, axis=1)
+    return df[mask].copy()
 
 def _get_effective_assignment_load(
     worker: str,
@@ -259,17 +275,22 @@ def _get_worker_exclusion_based(
             seen_modalities.add(mod)
             unique_modality_search.append(mod)
 
+    # Get shift-end buffer config (0 = disabled)
+    shift_end_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_end_minutes', 0)
+
     selection_logger.info(
-        "Exclusion-based routing for skill %s: filter %s>=0, exclude %s=1, modalities=%s",
+        "Exclusion-based routing for skill %s: filter %s>=0, exclude %s=1, modalities=%s, shift_end_buffer=%d",
         primary_skill,
         primary_skill,
         exclude_skills if exclude_skills else 'none',
         unique_modality_search,
+        shift_end_buffer,
     )
 
     candidate_pool_excluded = []
 
     for target_modality in unique_modality_search:
+        is_overflow = (target_modality != modality)
         d = modality_data[target_modality]
         if d['working_hours_df'] is None:
             continue
@@ -277,6 +298,16 @@ def _get_worker_exclusion_based(
         active_df = _filter_active_rows(d['working_hours_df'], current_dt)
         if active_df is None or active_df.empty:
             continue
+
+        # For overflow modalities, filter out workers near shift end
+        if is_overflow and shift_end_buffer > 0:
+            active_df = _filter_near_shift_end(active_df, current_dt, shift_end_buffer)
+            if active_df.empty:
+                selection_logger.debug(
+                    "Overflow modality %s: all workers filtered out (near shift end)",
+                    target_modality
+                )
+                continue
 
         if primary_skill not in active_df.columns:
             continue
@@ -346,6 +377,7 @@ def _get_worker_exclusion_based(
     candidate_pool_fallback = []
 
     for target_modality in unique_modality_search:
+        is_overflow = (target_modality != modality)
         d = modality_data[target_modality]
         if d['working_hours_df'] is None:
             continue
@@ -353,6 +385,16 @@ def _get_worker_exclusion_based(
         active_df = _filter_active_rows(d['working_hours_df'], current_dt)
         if active_df is None or active_df.empty:
             continue
+
+        # For overflow modalities, filter out workers near shift end
+        if is_overflow and shift_end_buffer > 0:
+            active_df = _filter_near_shift_end(active_df, current_dt, shift_end_buffer)
+            if active_df.empty:
+                selection_logger.debug(
+                    "Fallback overflow modality %s: all workers filtered out (near shift end)",
+                    target_modality
+                )
+                continue
 
         if primary_skill not in active_df.columns:
             continue

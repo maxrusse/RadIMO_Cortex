@@ -41,6 +41,7 @@ DEFAULT_BALANCER = {
     'min_assignments_per_skill': 5,
     'imbalance_threshold_pct': 30,
     'allow_fallback_on_imbalance': True,
+    'disable_overflow_at_shift_end_minutes': 0,  # 0 = disabled
 }
 
 # -----------------------------------------------------------

@@ -191,6 +191,7 @@ balancer:
   imbalance_threshold_pct: 30
   allow_fallback_on_imbalance: true
   modifier_applies_to_active_only: true  # If true, Modifier only applies when skill=1 (active), not skill=0 (fallback)
+  disable_overflow_at_shift_end_minutes: 30  # Don't assign overflow work in last X minutes of shift (0 = disabled)
 
   # Hours counting for load balancing
   # Controls which entries count towards a worker's total hours in workload calculations
