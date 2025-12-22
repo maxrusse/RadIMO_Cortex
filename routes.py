@@ -60,7 +60,7 @@ from data_manager import (
     _add_worker_to_schedule,
     _delete_worker_from_schedule,
     _add_gap_to_schedule,
-    preload_next_workday as data_preload_next_workday,
+    preload_next_workday,
     _calculate_total_work_hours
 )
 from balancer import (

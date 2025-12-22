@@ -42,6 +42,43 @@
       background: var(--modality-bg, var(--body-bg));
     }
 
+    /* Filter bars */
+    .skill-filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      flex-wrap: wrap;
+    }
+
+    .skill-filter-bar label {
+      font-weight: 600;
+      margin-right: 0.5rem;
+      color: var(--text-dark, #333);
+    }
+
+    .filter-btn {
+      padding: 0.4rem 1rem;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      background: white;
+      color: #333;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .filter-btn:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+
     .filter-btn.active {
       background: #004892;
       color: white;
@@ -203,6 +240,45 @@
       gap: 1rem;
       margin-top: 0.5rem;
       flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .legend-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    /* Back button */
+    .back-button {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #004892;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      margin-top: 1rem;
+      transition: background 0.2s;
+    }
+
+    .back-button:hover {
+      background: #003670;
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #666;
+      font-size: 1.1rem;
     }
 
     .premium-header {
@@ -406,12 +482,26 @@
     function parseGapList(rawGaps) {
       if (!rawGaps) return [];
       if (Array.isArray(rawGaps)) return rawGaps;
-      try {
-        const parsed = JSON.parse(rawGaps);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (e) {
-        return [];
+
+      // Handle string values
+      if (typeof rawGaps === 'string') {
+        // Try to parse as JSON
+        try {
+          const parsed = JSON.parse(rawGaps);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          // If not valid JSON, return empty array (don't treat as error)
+          console.warn('Could not parse gaps as JSON:', rawGaps);
+          return [];
+        }
       }
+
+      // Handle objects (in case it's already an object)
+      if (typeof rawGaps === 'object') {
+        return Array.isArray(rawGaps) ? rawGaps : [];
+      }
+
+      return [];
     }
 
     // Merge entries across modalities and time, combining skills and modality info
@@ -480,12 +570,28 @@
       try {
         data = JSON.parse('{{ debug_data|safe }}');
       } catch (e) {
-        grid.innerHTML = '<div class="empty-state">Error loading timeline data</div>';
+        console.error('Error parsing timeline data:', e);
+        grid.innerHTML = '<div class="empty-state">Error loading timeline data: ' + e.message + '</div>';
         return;
       }
 
-      // Filter out empty entries and entries without active skills
-      data = data.filter(e => e.TIME !== '00:00-00:00' && hasAnyActiveSkill(e));
+      // Validate data structure
+      if (!Array.isArray(data)) {
+        console.error('Timeline data is not an array:', data);
+        grid.innerHTML = '<div class="empty-state">Error: Invalid timeline data format</div>';
+        return;
+      }
+
+      // Filter out empty entries and entries without active skills or invalid time data
+      data = data.filter(e => {
+        if (!e) return false;
+        if (e.TIME === '00:00-00:00') return false;
+        if (!e.start_time || !e.end_time) {
+          console.warn('Entry missing time data:', e);
+          return false;
+        }
+        return hasAnyActiveSkill(e);
+      });
 
       if (!data.length) {
         grid.innerHTML = '<div class="empty-state">No active schedule entries found</div>';
