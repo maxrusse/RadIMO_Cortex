@@ -488,6 +488,7 @@ def upload_file():
         combined_workers=combined_workers,
         modality_stats=modality_stats,
         operational_checks=checks,
+        scheduler_config=APP_CONFIG.get('scheduler', {}),
     )
 
 def run_operational_checks(context: str = 'unknown', force: bool = False) -> dict:
