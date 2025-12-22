@@ -1690,9 +1690,15 @@
               Modifier: change.updates.Modifier || 1.0,
               tasks: shift.task || ''
             };
-            // Add all skills (use -1 as default for unspecified)
+            // Get original skill values from the placeholder modality
+            const originalSkills = shift.modalities[change.modality]?.skills || {};
+            // Add all skills (preserve original values for unchanged skills)
             SKILLS.forEach(skill => {
-              workerData[skill] = change.updates[skill] !== undefined ? change.updates[skill] : -1;
+              if (change.updates[skill] !== undefined) {
+                workerData[skill] = change.updates[skill];
+              } else {
+                workerData[skill] = originalSkills[skill] !== undefined ? originalSkills[skill] : -1;
+              }
             });
 
             const response = await fetch(addEndpoint, {
