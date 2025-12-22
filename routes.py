@@ -734,7 +734,7 @@ def prep_next_day():
             'modality': rule.get('modality'),
             'modalities': rule.get('modalities', []),
             'shift': rule.get('shift', 'Fruehdienst'),
-            'base_skills': rule.get('base_skills', {}),
+            'skill_overrides': rule.get('skill_overrides', {}),
             'modifier': rule.get('modifier', 1.0),
             'schedule': rule.get('schedule', {}),
             'counts_for_hours': counts_for_hours,

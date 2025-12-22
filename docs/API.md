@@ -374,15 +374,22 @@ Get staged worker skill roster.
   "success": true,
   "roster": {
     "AM": {
-      "default": {"Normal": 1, "Notfall": 1, "Herz": 1, ...},
-      "ct": {"Notfall": 0}
+      "Normal_ct": 1,
+      "Normal_mr": 1,
+      "Normal_xray": 1,
+      "Notfall_ct": 0,
+      "Notfall_mr": 1,
+      "Notfall_xray": 1,
+      "Herz_ct": 1,
+      "Herz_mr": 1
     }
   },
   "skills": ["Normal", "Notfall", "Privat", "Herz", "Msk", "Chest"],
-  "modalities": ["ct", "mr", "xray"],
-  "is_staged": true
+  "modalities": ["ct", "mr", "xray"]
 }
 ```
+
+**Note:** Roster uses flat Skill×Modality combinations. Each key is `"skill_modality"` (e.g., `"Notfall_ct"`). Both `"skill_modality"` and `"modality_skill"` formats are accepted.
 
 ---
 
@@ -400,17 +407,23 @@ Save roster changes to staging.
 {
   "roster": {
     "AM": {
-      "default": {"Normal": 1, "Notfall": 1, "Herz": 1}
+      "Normal_ct": 1,
+      "Normal_mr": 1,
+      "Notfall_ct": 0,
+      "Notfall_mr": 1,
+      "Herz_ct": 1,
+      "Herz_mr": 1
     }
   }
 }
 ```
 
+**Note:** Use flat Skill×Modality combinations. Each key is `"skill_modality"` format.
+
 **Response:**
 ```json
 {
-  "success": true,
-  "message": "Roster changes staged (15 workers) - Use \"Activate\" to apply"
+  "success": true
 }
 ```
 

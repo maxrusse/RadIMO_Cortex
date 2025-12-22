@@ -464,57 +464,93 @@ Overnight shifts (e.g., `22:00-06:00`) are automatically handled by rolling end 
 
 ## Worker Skill Matrix
 
-Per-worker skill overrides. Takes precedence over `medweb_mapping.base_skills`.
+Defines Skill×Modality combinations for each worker as a **flat structure**.
+
+**Format:** `"skill_modality": value` (e.g., `"MSK_ct": 1`)
+
+Both `"skill_modality"` and `"modality_skill"` formats are accepted and normalized automatically.
 
 ```yaml
 worker_skill_roster:
-  # MSK specialist
+  # MSK specialist - can do MSK in CT, MR, X-ray
   AA:
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 1      # MSK specialist
-      Abdomen: 0
-      Chest: 0
-      Cardvask: 0
-      Uro: 0
+    "MSK_ct": 1           # Can do MSK in CT
+    "MSK_mr": 1           # Can do MSK in MR
+    "MSK_xray": 1         # Can do MSK in X-ray
+    "MSK_mammo": 0        # Only fallback for Mammo
+    "Notfall_ct": 1
+    "Notfall_mr": 1
+    "Notfall_xray": 1
+    "Notfall_mammo": 0
+    "Privat_ct": 0
+    "Privat_mr": 0
+    # ... (all Skill×Modality combinations) ...
 
-  # Chest specialist with CT-specific override
+  # Chest specialist with CT Notfall as fallback only
   AN:
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 0
-      Abdomen: 0
-      Chest: 1    # Chest specialist
-      Cardvask: 0
-      Uro: 0
-    ct:
-      Notfall: 0  # Only fallback for CT Notfall
+    "Chest_ct": 1         # Chest specialist in CT
+    "Chest_mr": 1
+    "Chest_xray": 1
+    "Chest_mammo": 0
+    "Notfall_ct": 0       # Only fallback for CT Notfall
+    "Notfall_mr": 1       # Active for MR Notfall
+    "Notfall_xray": 1
+    # ... (all other combinations) ...
 
-  # Cardiac specialist, excluded from MSK/Chest
+  # Cardiac specialist - hard exclude from MSK/Chest
   DEMO1:
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: -1       # NEVER for MSK
-      Abdomen: 0
-      Chest: -1     # NEVER for Chest
-      Cardvask: 1   # Cardiac specialist
-      Uro: 0
+    "Cardvask_ct": 1
+    "Cardvask_mr": 1
+    "Notfall_ct": 1
+    "Notfall_mr": 1
+    "MSK_ct": -1          # Hard exclude - cannot be overridden
+    "MSK_mr": -1
+    "MSK_xray": -1
+    "Chest_ct": -1        # Hard exclude
+    "Chest_mr": -1
+    # ... (all other combinations) ...
+
+  # MSK junior with weighted proficiency
+  MSK_ANFAENGER:
+    "MSK_ct": w           # Weighted/assisted - still learning
+    "MSK_xray": w
+    "MSK_mr": 0
+    # ... (all other combinations) ...
 ```
 
-**Precedence:** `worker_skill_roster` > `medweb_mapping.base_skills` > defaults.
+**Value legend:**
+- `1` = **Active** - primary + fallback
+- `0` = **Passive** - fallback only
+- `-1` = **Hard exclude** - cannot be overridden by CSV rules
+- `w` = **Weighted** - assisted/learning (combine with `modifier` in CSV)
 
-**Modality-specific:** Add modality key (e.g., `ct:`) under a worker to override for that modality only.
+**CSV Rules Override:**
 
-**Value legend:** `1` = primary, `0` = fallback, `-1` = never, `w` = weighted/assisted.
+CSV rules can use `skill_overrides` to override **specific** combinations:
+
+```yaml
+medweb_mapping:
+  rules:
+    - match: "MSK Team"
+      type: "shift"
+      modalities: ["ct", "mr", "xray"]
+      skill_overrides:
+        "MSK_ct": 1           # Override only this combination
+        "MSK_mr": 1
+        "MSK_xray": 1
+        # Other combinations remain from roster
+```
+
+**Precedence:**
+1. **Roster combinations** - baseline for all Skill×Modality pairs
+2. **CSV rule skill_overrides** - overrides only specified combinations
+3. **Roster -1 (hard exclude)** - always wins, cannot be overridden
+
+**Example:**
+- Dr. Müller roster: `{"MSK_ct": 1, "MSK_mr": 1, "Gyn_ct": 0, "Gyn_mr": 0, ...}`
+- CSV assigns "Gyn Team" with `skill_overrides: {"Gyn_ct": 1, "Gyn_mr": 1}`
+- Result: Gyn combinations → 1, MSK combinations remain → 1 (both active)
+- If roster had `"MSK_ct": -1`, it would stay -1 (hard exclude wins)
 
 ---
 
@@ -600,8 +636,14 @@ worker_skill_roster:
   DEMO:
     default:
       Notfall: 1
-      Cardvask: 1
-      MSK: -1
+      Privat: 0
+      Gyn: 0
+      Päd: 0
+      MSK: -1        # Excluded from MSK
+      Abdomen: 0
+      Chest: 0
+      Cardvask: 1    # Cardiac specialist
+      Uro: 0
 ```
 
 ---

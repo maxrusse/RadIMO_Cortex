@@ -263,153 +263,167 @@ vendor_mappings:
     # SHIFTS/ROLES - Actual work assignments
     # ===========================================
 
-    # CT activities
+    # CT activities - skills come from worker_skill_roster
     - match: "CT Spätdienst"
       type: "shift"
       modality: "ct"
       shift: "Spaetdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "CT Assistent"
       type: "shift"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Cortex: CT Privatpatienten"
       type: "shift"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 1, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # MR activities
+    # MR activities - skills come from worker_skill_roster
     - match: "MRT Spätdienst"
       type: "shift"
       modality: "mr"
       shift: "Spaetdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MR Assistent 1. Monat"
       type: "shift"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MR Assistent"
       type: "shift"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Cortex: MRT-OA"
       type: "shift"
       modality: "mr"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 1, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # X-ray activities (Chir = conventional X-ray)
+    # X-ray activities - skills come from worker_skill_roster
     - match: "Chir Assistent"
       type: "shift"
       modality: "xray"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "OA / FA Chir"
       type: "shift"
       modality: "xray"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 1, Privat: 1, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
-    # Mammo activities
+    # Mammo activities - skills come from worker_skill_roster
     - match: "Mammo Assistent"
       type: "shift"
       modality: "mammo"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 1, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Mammo OA"
       type: "shift"
       modality: "mammo"
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 1, Gyn: 1, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # ===========================================
     # TEAMS - Sub-specialty work (multi-modality)
+    # skill_overrides override specific Skill_Modality combinations from worker_skill_roster
+    # Use this to restrict someone to specific work TODAY, even if they can do more
+    # Only specified combinations are overridden; others remain from roster
+    # Roster -1 (hard exclude) always wins
     # ===========================================
 
     - match: "MSK Assistent"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "MSK_ct": 1
+        "MSK_mr": 1
+        "MSK_xray": 1
 
     - match: "MSK Team"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "MSK_ct": 1
+        "MSK_mr": 1
+        "MSK_xray": 1
 
-    # Weighted entries: skill='w' marks assisted workers; Modifier controls workload factor
+    # Weighted entries: Modifier controls workload factor for beginners
     # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
-    # 'w' is just a visual marker in UI - Modifier controls the actual weight calculation
     - match: "MSK Anfänger"
       type: "shift"
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: w, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
       modifier: 0.5  # Freshman: assignments count double toward their load
+      skill_overrides:
+        "MSK_ct": w
+        "MSK_xray": w
 
     - match: "CT Anfänger"
       type: "shift"
       modality: "ct"
       shift: "Fruehdienst"
-      base_skills: {Notfall: w, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
       modifier: 0.5  # Freshman: assignments count double
+      skill_overrides:
+        "Notfall_ct": w
 
     - match: "Cardvask Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 1, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 1, Uro: 0}
+      skill_overrides:
+        "Cardvask_ct": 1
+        "Cardvask_mr": 1
 
     - match: "Chest Team"
       type: "shift"
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 1, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "Chest_ct": 1
+        "Chest_xray": 1
 
     - match: "Abdomen Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 1, Chest: 0, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "Abdomen_ct": 1
+        "Abdomen_mr": 1
 
     - match: "Uro Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 1}
+      skill_overrides:
+        "Uro_ct": 1
+        "Uro_mr": 1
 
     - match: "Gyn Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 1, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "Gyn_ct": 1
+        "Gyn_mr": 1
 
     - match: "Päd Team"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 1, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
+      skill_overrides:
+        "Päd_ct": 1
+        "Päd_mr": 1
+        "Päd_xray": 1
 
     # Cortex Aufklärung - shift (not a gap) but hours don't count for load balancing
+    # No skills needed for this administrative task
     - match: "Cortex Aufklärung"
       type: "shift"
       modality: "ct"
       shift: "Fruehdienst"
       label: "Aufklärung"
       counts_for_hours: false  # Don't count hours towards workload (task, not actual shift)
-      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # ===========================================
     # GAPS/TASKS - Time exclusions (shows -1 everywhere)
@@ -462,86 +476,163 @@ shift_times:
     default: "13:00-21:00"
     friday: "13:00-19:00"
 
-# Worker skill roster - per-worker overrides
-# Config takes precedence over medweb mapping
-# -1 = excluded (never use), 0 = passive (fallback only), 1 = active (primary + fallback)
+# Worker skill roster - Skill×Modality combinations (flat structure)
+# Format: "skill_modality": value (or "modality_skill" - both accepted)
+# Values: 1 = active, 0 = passive/fallback, -1 = hard exclude (cannot be overridden), w = weighted/assisted
+# CSV rules can override specific combinations with skill_overrides
 worker_skill_roster:
-  # Example: MSK specialist
-  AA:  # Any Arzt
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 1      # MSK specialist
-      Abdomen: 0
-      Chest: 0
-      Cardvask: 0
-      Uro: 0
+  # Example: MSK specialist across multiple modalities
+  AA:
+    "MSK_ct": 1
+    "MSK_mr": 1
+    "MSK_xray": 1
+    "MSK_mammo": 0
+    "Notfall_ct": 1
+    "Notfall_mr": 1
+    "Notfall_xray": 1
+    "Notfall_mammo": 0
+    "Privat_ct": 0
+    "Privat_mr": 0
+    "Privat_xray": 0
+    "Privat_mammo": 0
+    "Gyn_ct": 0
+    "Gyn_mr": 0
+    "Gyn_xray": 0
+    "Gyn_mammo": 0
+    "Päd_ct": 0
+    "Päd_mr": 0
+    "Päd_xray": 0
+    "Päd_mammo": 0
+    "Abdomen_ct": 0
+    "Abdomen_mr": 0
+    "Abdomen_xray": 0
+    "Abdomen_mammo": 0
+    "Chest_ct": 0
+    "Chest_mr": 0
+    "Chest_xray": 0
+    "Chest_mammo": 0
+    "Cardvask_ct": 0
+    "Cardvask_mr": 0
+    "Cardvask_xray": 0
+    "Cardvask_mammo": 0
+    "Uro_ct": 0
+    "Uro_mr": 0
+    "Uro_xray": 0
+    "Uro_mammo": 0
 
-  # Example: Chest specialist with CT Notfall only as fallback
-  AN:  # Any Newarzt
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 0
-      Abdomen: 0
-      Chest: 1    # Chest specialist
-      Cardvask: 0
-      Uro: 0
-    ct:
-      Notfall: 0  # Only fallback for CT Notfall
+  # Example: Chest specialist with CT Notfall as fallback only
+  AN:
+    "Chest_ct": 1
+    "Chest_mr": 1
+    "Chest_xray": 1
+    "Chest_mammo": 0
+    "Notfall_ct": 0      # Fallback only for CT
+    "Notfall_mr": 1
+    "Notfall_xray": 1
+    "Notfall_mammo": 0
+    "Privat_ct": 0
+    "Privat_mr": 0
+    "Privat_xray": 0
+    "Privat_mammo": 0
+    "MSK_ct": 0
+    "MSK_mr": 0
+    "MSK_xray": 0
+    "MSK_mammo": 0
+    "Gyn_ct": 0
+    "Gyn_mr": 0
+    "Gyn_xray": 0
+    "Gyn_mammo": 0
+    "Päd_ct": 0
+    "Päd_mr": 0
+    "Päd_xray": 0
+    "Päd_mammo": 0
+    "Abdomen_ct": 0
+    "Abdomen_mr": 0
+    "Abdomen_xray": 0
+    "Abdomen_mammo": 0
+    "Cardvask_ct": 0
+    "Cardvask_mr": 0
+    "Cardvask_xray": 0
+    "Cardvask_mammo": 0
+    "Uro_ct": 0
+    "Uro_mr": 0
+    "Uro_xray": 0
+    "Uro_mammo": 0
 
-  # Example: Cardiac specialist
+  # Example: Cardiac specialist, excluded from MSK/Chest (hard exclude with -1)
   DEMO1:
-    default:
-      Notfall: 1
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 0
-      Abdomen: 0
-      Chest: 0
-      Cardvask: 1   # Cardiac specialist
-      Uro: 0
+    "Cardvask_ct": 1
+    "Cardvask_mr": 1
+    "Cardvask_xray": 0
+    "Cardvask_mammo": 0
+    "Notfall_ct": 1
+    "Notfall_mr": 1
+    "Notfall_xray": 1
+    "Notfall_mammo": 0
+    "MSK_ct": -1         # Hard exclude - cannot be overridden
+    "MSK_mr": -1
+    "MSK_xray": -1
+    "MSK_mammo": -1
+    "Chest_ct": -1       # Hard exclude
+    "Chest_mr": -1
+    "Chest_xray": -1
+    "Chest_mammo": -1
+    "Privat_ct": 0
+    "Privat_mr": 0
+    "Privat_xray": 0
+    "Privat_mammo": 0
+    "Gyn_ct": 0
+    "Gyn_mr": 0
+    "Gyn_xray": 0
+    "Gyn_mammo": 0
+    "Päd_ct": 0
+    "Päd_mr": 0
+    "Päd_xray": 0
+    "Päd_mammo": 0
+    "Abdomen_ct": 0
+    "Abdomen_mr": 0
+    "Abdomen_xray": 0
+    "Abdomen_mammo": 0
+    "Uro_ct": 0
+    "Uro_mr": 0
+    "Uro_xray": 0
+    "Uro_mammo": 0
 
-  # Example: Private patients only (PP role)
-  DEMO2:
-    default:
-      Notfall: 0     # Only fallback
-      Privat: 1      # Primary for private patients
-      Gyn: 0
-      Päd: 0
-      MSK: -1        # Never for MSK
-      Abdomen: 0
-      Chest: -1      # Never for Chest
-      Cardvask: 0
-      Uro: 0
-
-  # Example: First month assistant (no Notfall)
-  DEMO3:
-    default:
-      Notfall: 0     # Not allowed for emergencies yet
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: 0
-      Abdomen: 0
-      Chest: 0
-      Cardvask: 0
-      Uro: 0
-
-  # MSK junior template with weighted proficiency and reduced modifier expectation
+  # Example: MSK junior with weighted proficiency
   MSK_ANFAENGER:
-    default:
-      Notfall: 0
-      Privat: 0
-      Gyn: 0
-      Päd: 0
-      MSK: w      # weighted / assisted
-      Abdomen: 0
-      Chest: 0
-      Cardvask: 0
-      Uro: 0
+    "MSK_ct": w          # Weighted/assisted - still learning
+    "MSK_mr": 0
+    "MSK_xray": w
+    "MSK_mammo": 0
+    "Notfall_ct": 0
+    "Notfall_mr": 0
+    "Notfall_xray": 0
+    "Notfall_mammo": 0
+    "Privat_ct": 0
+    "Privat_mr": 0
+    "Privat_xray": 0
+    "Privat_mammo": 0
+    "Gyn_ct": 0
+    "Gyn_mr": 0
+    "Gyn_xray": 0
+    "Gyn_mammo": 0
+    "Päd_ct": 0
+    "Päd_mr": 0
+    "Päd_xray": 0
+    "Päd_mammo": 0
+    "Abdomen_ct": 0
+    "Abdomen_mr": 0
+    "Abdomen_xray": 0
+    "Abdomen_mammo": 0
+    "Chest_ct": 0
+    "Chest_mr": 0
+    "Chest_xray": 0
+    "Chest_mammo": 0
+    "Cardvask_ct": 0
+    "Cardvask_mr": 0
+    "Cardvask_xray": 0
+    "Cardvask_mammo": 0
+    "Uro_ct": 0
+    "Uro_mr": 0
+    "Uro_xray": 0
+    "Uro_mammo": 0
