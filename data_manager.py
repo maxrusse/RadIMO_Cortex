@@ -1147,8 +1147,15 @@ def build_working_hours_from_medweb(
         if not target_modalities:
             continue
 
-        # Skills come from worker_skill_roster only (not from CSV rules)
-        worker_skills = get_worker_skills_from_roster(canonical_id, worker_roster)
+        # Get baseline skills from worker_skill_roster
+        roster_skills = get_worker_skills_from_roster(canonical_id, worker_roster)
+
+        # If rule defines base_skills → OVERRIDE roster (for exclusive posts)
+        # Otherwise use roster skills (normal shifts)
+        if 'base_skills' in rule and rule['base_skills']:
+            final_skills = rule['base_skills'].copy()
+        else:
+            final_skills = roster_skills
 
         time_ranges = compute_time_ranges(row, rule, target_date, config)
 
@@ -1179,7 +1186,7 @@ def build_working_hours_from_medweb(
                     'Modifier': rule_modifier,
                     'tasks': activity_desc,
                     'counts_for_hours': counts_for_hours,
-                    **worker_skills
+                    **final_skills
                 })
 
     # SECOND PASS

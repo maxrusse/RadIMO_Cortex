@@ -324,18 +324,21 @@ vendor_mappings:
 
     # ===========================================
     # TEAMS - Sub-specialty work (multi-modality)
-    # Skills come from worker_skill_roster
+    # base_skills OVERRIDE worker_skill_roster for exclusive posts
+    # Use this to restrict someone to specific work TODAY, even if they can do more
     # ===========================================
 
     - match: "MSK Assistent"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "MSK Team"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 1, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # Weighted entries: Modifier controls workload factor for beginners
     # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
@@ -344,42 +347,50 @@ vendor_mappings:
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"
       modifier: 0.5  # Freshman: assignments count double toward their load
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: w, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "CT Anfänger"
       type: "shift"
       modality: "ct"
       shift: "Fruehdienst"
       modifier: 0.5  # Freshman: assignments count double
+      base_skills: {Notfall: w, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Cardvask Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 1, Uro: 0}
 
     - match: "Chest Team"
       type: "shift"
       modalities: ["xray", "ct"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 1, Cardvask: 0, Uro: 0}
 
     - match: "Abdomen Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 1, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Uro Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 1}
 
     - match: "Gyn Team"
       type: "shift"
       modalities: ["ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 1, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     - match: "Päd Team"
       type: "shift"
       modalities: ["xray", "ct", "mr"]
       shift: "Fruehdienst"
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 1, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # Cortex Aufklärung - shift (not a gap) but hours don't count for load balancing
     - match: "Cortex Aufklärung"
@@ -388,6 +399,7 @@ vendor_mappings:
       shift: "Fruehdienst"
       label: "Aufklärung"
       counts_for_hours: false  # Don't count hours towards workload (task, not actual shift)
+      base_skills: {Notfall: 0, Privat: 0, Gyn: 0, Päd: 0, MSK: 0, Abdomen: 0, Chest: 0, Cardvask: 0, Uro: 0}
 
     # ===========================================
     # GAPS/TASKS - Time exclusions (shows -1 everywhere)
