@@ -1531,7 +1531,7 @@
       }
     }
 
-    // Validate and save modifier input on blur (per-modality - legacy)
+    // Validate and save modifier input on blur (per-modality)
     function validateAndSaveModifier(el) {
       let parsed = parseFloat(el.value);
 
@@ -3277,7 +3277,6 @@
     }
 
     function applyWorkerSkillPreset(workerName) {
-      // Legacy function - kept for compatibility
       const preset = WORKER_SKILLS[workerName];
       if (!preset) {
         showMessage('error', `No skill preset found for ${workerName}`);
@@ -3298,7 +3297,7 @@
       applySkillValues(sanitized);
     }
 
-    // Apply worker skill preset for a specific modality (legacy - kept for compatibility)
+    // Apply worker skill preset for a specific modality
     function applyWorkerSkillPresetForModality(workerName, modKey) {
       const preset = WORKER_SKILLS[workerName];
       if (!preset) {

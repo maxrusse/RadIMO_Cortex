@@ -201,7 +201,7 @@ def validate_excel_structure(df: pd.DataFrame, required_columns: List[str], skil
 WEIGHTED_SKILL_MARKER = 'w'
 
 def normalize_skill_value(value: Any) -> Any:
-    """Normalize skill values and convert legacy weighted marker ``2`` to ``'w'``."""
+    """Normalize skill values and convert old data format (``2`` -> ``'w'``)."""
     if value is None:
         return 0
 
@@ -221,6 +221,7 @@ def normalize_skill_value(value: Any) -> Any:
         except (TypeError, ValueError):
             return 0
 
+    # Convert old data format: 2 was used for weighted skills before 'w' was introduced
     if parsed == 2:
         return WEIGHTED_SKILL_MARKER
     return parsed
