@@ -1295,7 +1295,7 @@
         html += '<optgroup label="Shifts / Roles">';
         shifts.forEach(t => {
           const selected = t.name === selectedValue ? 'selected' : '';
-          const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.base_skills || {})}' data-modifier="${t.modifier || 1.0}"`;
+          const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${t.modifier || 1.0}"`;
           html += `<option value="${escapeHtml(t.name)}" ${dataAttrs} ${selected}>${escapeHtml(t.name)}</option>`;
         });
         html += '</optgroup>';
@@ -2987,7 +2987,7 @@
         if (modifierEl && taskConfig.modifier) modifierEl.value = taskConfig.modifier.toString();
 
         // Set skills from task config
-        const taskSkills = taskConfig.base_skills || {};
+        const taskSkills = taskConfig.skill_overrides || {};
         MODALITIES.forEach(mod => {
           const modKey = mod.toLowerCase();
           SKILLS.forEach(skill => {
@@ -3410,7 +3410,7 @@
         return;
       }
 
-      const taskSkills = task.base_skills || {};
+      const taskSkills = task.skill_overrides || {};
       const { tab, groupIdx } = currentEditEntry || {};
       const group = entriesData[tab]?.[groupIdx];
       if (!group) return;
@@ -3590,7 +3590,7 @@
       // Default skills from task
       const defaultSkills = {};
       SKILLS.forEach(skill => {
-        defaultSkills[skill] = defaultTask.base_skills ? (defaultTask.base_skills[skill] || 0) : 0;
+        defaultSkills[skill] = defaultTask.skill_overrides ? (defaultTask.skill_overrides[skill] || 0) : 0;
       });
 
       addWorkerModalState.tasks.push({
@@ -3663,7 +3663,7 @@
 
             // Update skills from task config
             SKILLS.forEach(skill => {
-              task.skills[skill] = taskConfig.base_skills ? (taskConfig.base_skills[skill] || 0) : 0;
+              task.skills[skill] = taskConfig.skill_overrides ? (taskConfig.skill_overrides[skill] || 0) : 0;
             });
 
             // Apply worker roster exclusions (-1) if worker is selected

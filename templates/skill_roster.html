@@ -473,11 +473,9 @@
             return;
           }
 
-          // Get value: check modality-specific first, then default
-          const modData = workerData[mod] || {};
-          const defaultData = workerData.default || {};
-          let value = modData[skill];
-          if (value === undefined) value = defaultData[skill];
+          // Get value from flat structure: "skill_modality" format
+          const key = `${skill}_${mod}`;
+          let value = workerData[key];
           if (value === undefined) value = 0;
 
           const input = document.createElement('input');
@@ -516,10 +514,9 @@
 
     function updateSkill(modality, skill, value) {
       if (!rosterData[selectedWorker]) return;
-      if (!rosterData[selectedWorker][modality]) {
-        rosterData[selectedWorker][modality] = {};
-      }
-      rosterData[selectedWorker][modality][skill] = value;
+      // Write to flat structure: "skill_modality" format
+      const key = `${skill}_${modality}`;
+      rosterData[selectedWorker][key] = value;
     }
 
     function addWorker() {
@@ -534,13 +531,13 @@
         return;
       }
 
-      // Create new worker with skills = 0 for all valid modality×skill combos
+      // Create new worker with flat Skill×Modality combinations (all set to 0)
       rosterData[workerId] = {};
-      modalities.forEach(mod => {
-        rosterData[workerId][mod] = {};
-        skills.forEach(skill => {
+      skills.forEach(skill => {
+        modalities.forEach(mod => {
           if (isValidCombination(mod, skill)) {
-            rosterData[workerId][mod][skill] = 0;
+            const key = `${skill}_${mod}`;
+            rosterData[workerId][key] = 0;
           }
         });
       });
