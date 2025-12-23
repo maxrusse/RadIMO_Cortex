@@ -811,20 +811,39 @@ def prep_next_day():
         else:
             counts_for_hours = hours_counting_config.get('shift_default', True)
 
+        # Extract modalities from skill_overrides if available (new structure)
+        skill_overrides = rule.get('skill_overrides', {})
+        derived_modalities = set()
+        for key in skill_overrides.keys():
+            if '_' in key:
+                parts = key.split('_', 1)
+                if len(parts) == 2:
+                    mod = parts[1].lower()
+                    if mod in allowed_modalities:
+                        derived_modalities.add(mod)
+
+        # Use derived modalities, falling back to legacy fields
+        if derived_modalities:
+            modalities_list = list(derived_modalities)
+        elif rule.get('modalities'):
+            modalities_list = rule.get('modalities', [])
+        elif rule.get('modality'):
+            modalities_list = [rule.get('modality')]
+        else:
+            modalities_list = []
+
         task_role = {
             'name': rule.get('match', ''),
             'type': rule_type,
             'exclusion': rule.get('exclusion', False),
-            'modality': rule.get('modality'),
-            'modalities': rule.get('modalities', []),
-            'shift': rule.get('shift', 'Fruehdienst'),
-            'skill_overrides': rule.get('skill_overrides', {}),
+            'modalities': modalities_list,
+            'times': rule.get('times', {}),           # NEW: day-specific times
+            'gaps': rule.get('gaps', {}),             # NEW: embedded gaps
+            'skill_overrides': skill_overrides,
             'modifier': rule.get('modifier', 1.0),
             'schedule': rule.get('schedule', {}),
             'counts_for_hours': counts_for_hours,
         }
-        if task_role['modality'] and not task_role['modalities']:
-            task_role['modalities'] = [task_role['modality']]
         task_roles.append(task_role)
 
     exclusion_rules = [r for r in task_roles if r.get('exclusion')]
