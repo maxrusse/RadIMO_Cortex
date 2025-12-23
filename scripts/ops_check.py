@@ -5,6 +5,10 @@ then runs the inline operational checks (config/admin password/uploads directory
 Use this script right after pulling the latest main branch to verify the deployment
 is ready for a test system before starting the server.
 """
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from pprint import pprint
 
 import app

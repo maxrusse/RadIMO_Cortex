@@ -35,8 +35,8 @@ from config import (
     normalize_modality,
     normalize_skill
 )
-import usage_logger
-from utils import (
+from lib import usage_logger
+from lib.utils import (
     get_local_berlin_now,
     get_next_workday,
     parse_time_range,

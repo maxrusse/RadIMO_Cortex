@@ -1,10 +1,14 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 from datetime import datetime
 from config import APP_CONFIG
 from data_manager import build_working_hours_from_medweb
 
 def verify_vendor_b():
-    csv_path = 'test_vendor_b.csv'
+    csv_path = 'test_data/test_vendor_b.csv'
     target_date = datetime(2025, 12, 10)
     
     # Manually inject vendor_b config since the rest of the app might still be biased towards 'medweb' name

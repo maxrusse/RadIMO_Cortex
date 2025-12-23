@@ -19,7 +19,7 @@ from data_manager import (
     attempt_initialize_data,
     lock
 )
-from utils import selection_logger
+from lib.utils import selection_logger
 
 # -----------------------------------------------------------
 # Flask App Initialization
