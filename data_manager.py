@@ -1036,6 +1036,41 @@ def apply_skill_overrides(roster_combinations: dict, rule_overrides: dict) -> di
     return final
 
 def compute_time_ranges(row: pd.Series, rule: dict, target_date: datetime, config: dict) -> List[Tuple[time, time]]:
+    """
+    Compute time ranges from rule's inline 'times' field.
+
+    New structure supports day-specific times:
+        times:
+            default: "07:00-15:00"
+            Montag: "08:00-16:00"
+            Freitag: "07:00-13:00"
+
+    Also supports legacy structure with 'shift' field for backward compatibility.
+    """
+    # New structure: inline 'times' field
+    times_config = rule.get('times', {})
+
+    if times_config:
+        # Get German weekday name for day-specific lookup
+        weekday_name = get_weekday_name_german(target_date)
+
+        # Check for day-specific time first, then 'friday' alias, then default
+        if weekday_name in times_config:
+            time_str = times_config[weekday_name]
+        elif weekday_name == 'Freitag' and 'friday' in times_config:
+            time_str = times_config['friday']
+        else:
+            time_str = times_config.get('default', '07:00-15:00')
+
+        try:
+            start_str, end_str = time_str.split('-')
+            start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
+            end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
+            return [(start_time, end_time)]
+        except Exception:
+            return [(time(7, 0), time(15, 0))]
+
+    # Legacy structure: 'shift' field lookup (backward compatibility)
     shift_name = rule.get('shift', 'Fruehdienst')
     shift_config = config.get('shift_times', {}).get(shift_name, {})
 
@@ -1056,6 +1091,65 @@ def compute_time_ranges(row: pd.Series, rule: dict, target_date: datetime, confi
         return [(start_time, end_time)]
     except Exception:
         return [(time(7, 0), time(15, 0))]
+
+
+def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
+    """
+    Extract unique modalities from skill_overrides keys.
+
+    Keys are in format "Skill_modality" (e.g., "MSK_ct", "Notfall_mr").
+    Returns list of unique modalities found.
+    """
+    modalities = set()
+    for key in skill_overrides.keys():
+        normalized = normalize_skill_mod_key(key)
+        if '_' in normalized:
+            parts = normalized.split('_', 1)
+            if len(parts) == 2:
+                mod = parts[1].lower()
+                if mod in allowed_modalities:
+                    modalities.add(mod)
+    return list(modalities)
+
+
+def parse_gap_schedule(schedule: dict, weekday_name: str) -> List[Tuple[time, time]]:
+    """
+    Parse gap schedule for a specific weekday.
+
+    Supports both single string and array formats:
+        schedule:
+            Montag: "10:00-11:00"            # Single time (legacy)
+            Dienstag:                         # Array format (new)
+                - "10:00-11:00"
+                - "14:00-15:00"
+
+    Returns list of (start_time, end_time) tuples.
+    """
+    if weekday_name not in schedule:
+        return []
+
+    day_schedule = schedule[weekday_name]
+    gaps = []
+
+    # Handle both single string and array formats
+    if isinstance(day_schedule, str):
+        time_ranges = [day_schedule]
+    elif isinstance(day_schedule, list):
+        time_ranges = day_schedule
+    else:
+        return []
+
+    for time_range_str in time_ranges:
+        try:
+            start_str, end_str = time_range_str.split('-')
+            start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
+            end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
+            gaps.append((start_time, end_time))
+        except Exception as e:
+            selection_logger.warning(f"Could not parse gap time range '{time_range_str}': {e}")
+            continue
+
+    return gaps
 
 def build_ppl_from_row(row: pd.Series, cols: Optional[dict] = None) -> str:
     name_col = cols.get('employee_name', 'Name des Mitarbeiters') if cols else 'Name des Mitarbeiters'
@@ -1273,6 +1367,17 @@ def build_working_hours_from_medweb(
     target_date: datetime,
     config: dict
 ) -> Dict[str, pd.DataFrame]:
+    """
+    Build working hours DataFrames from medweb CSV.
+
+    New unified structure:
+    - Shifts have 'times' (day-specific) and 'skill_overrides' (REQUIRED)
+    - Modalities are DERIVED from skill_overrides keys
+    - Shifts can have embedded 'gaps' for team-specific gaps
+    - Standalone gaps support arrays of times per day
+    - Day plan building: later shift ends prior, gaps always win
+    - Standalone gaps with no shift create "unavailable" entries
+    """
     try:
         try:
             medweb_df = pd.read_csv(csv_path, sep=',', encoding='utf-8')
@@ -1329,10 +1434,11 @@ def build_working_hours_from_medweb(
     weekday_name = get_weekday_name_german(target_date_obj)
 
     rows_per_modality = {mod: [] for mod in allowed_modalities}
-    exclusions_per_worker = {}
+    exclusions_per_worker: Dict[str, List[dict]] = {}
+    workers_with_shifts: set = set()
     unmatched_activities = []
 
-    # FIRST PASS
+    # FIRST PASS: Collect all shifts and gaps for each worker
     for _, row in day_df.iterrows():
         activity_desc = str(row.get(cols.get('activity', 'Beschreibung der Aktivität'), ''))
         rule = match_mapping_rule(activity_desc, mapping_rules)
@@ -1342,86 +1448,111 @@ def build_working_hours_from_medweb(
 
         ppl_str = build_ppl_from_row(row, cols=cols)
         canonical_id = get_canonical_worker_id(ppl_str)
+        rule_type = rule.get('type', 'shift')
 
-        if rule.get('exclusion', False):
+        # Handle GAP rules (standalone gaps)
+        if rule_type == 'gap' or rule.get('exclusion', False):
             schedule = rule.get('schedule', {})
-            if weekday_name not in schedule:
-                continue
+            gap_times = parse_gap_schedule(schedule, weekday_name)
 
-            time_range_str = schedule[weekday_name]
-            try:
-                start_str, end_str = time_range_str.split('-')
-                excl_start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
-                excl_end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
-            except Exception as e:
-                selection_logger.warning(f"Could not parse exclusion time range '{time_range_str}' for {activity_desc}: {e}")
+            if not gap_times:
                 continue
 
             if canonical_id not in exclusions_per_worker:
                 exclusions_per_worker[canonical_id] = []
 
-            exclusions_per_worker[canonical_id].append({
-                'start_time': excl_start_time,
-                'end_time': excl_end_time,
-                'activity': activity_desc
-            })
+            for gap_start, gap_end in gap_times:
+                exclusions_per_worker[canonical_id].append({
+                    'start_time': gap_start,
+                    'end_time': gap_end,
+                    'activity': activity_desc,
+                    'ppl_str': ppl_str
+                })
 
-            selection_logger.info(
-                f"Time exclusion for {ppl_str} ({weekday_name}): {excl_start_time.strftime(TIME_FORMAT)}-{excl_end_time.strftime(TIME_FORMAT)} ({activity_desc})"
-            )
+                selection_logger.info(
+                    f"Time exclusion for {ppl_str} ({weekday_name}): "
+                    f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({activity_desc})"
+                )
             continue
 
-        target_modalities = []
-        if 'modalities' in rule:
-            raw_modalities = rule['modalities']
-            if isinstance(raw_modalities, list):
-                target_modalities = [normalize_modality(m) for m in raw_modalities]
-            else:
-                target_modalities = [normalize_modality(raw_modalities)]
-        elif 'modality' in rule:
-            target_modalities = [normalize_modality(rule['modality'])]
+        # Handle SHIFT rules
+        if rule_type != 'shift':
+            continue
+
+        # Determine modalities: NEW structure uses skill_overrides, legacy uses modality/modalities
+        skill_overrides = rule.get('skill_overrides', {})
+
+        if skill_overrides:
+            # NEW structure: derive modalities from skill_overrides keys
+            target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
         else:
-            continue
+            # LEGACY structure: use modality/modalities fields
+            if 'modalities' in rule:
+                raw_modalities = rule['modalities']
+                if isinstance(raw_modalities, list):
+                    target_modalities = [normalize_modality(m) for m in raw_modalities]
+                else:
+                    target_modalities = [normalize_modality(raw_modalities)]
+            elif 'modality' in rule:
+                target_modalities = [normalize_modality(rule['modality'])]
+            else:
+                continue
 
         target_modalities = [m for m in target_modalities if m in allowed_modalities]
         if not target_modalities:
             continue
 
+        workers_with_shifts.add(canonical_id)
+
         # Get worker's Skill×Modality combinations from roster (all combinations)
         roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
 
-        # If rule defines skill_overrides → apply them (only specified combinations)
-        # Roster -1 (hard exclude) always wins
-        if 'skill_overrides' in rule and rule['skill_overrides']:
-            final_combinations = apply_skill_overrides(roster_combinations, rule['skill_overrides'])
+        # Apply skill_overrides (roster -1 always wins)
+        if skill_overrides:
+            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
         else:
-            # No overrides → use roster combinations directly
             final_combinations = roster_combinations
 
         time_ranges = compute_time_ranges(row, rule, target_date, config)
 
+        # Handle embedded gaps in shift rule (team-specific gaps)
+        embedded_gaps = rule.get('gaps', {})
+        embedded_gap_times = parse_gap_schedule(embedded_gaps, weekday_name)
+
+        if embedded_gap_times:
+            if canonical_id not in exclusions_per_worker:
+                exclusions_per_worker[canonical_id] = []
+
+            for gap_start, gap_end in embedded_gap_times:
+                exclusions_per_worker[canonical_id].append({
+                    'start_time': gap_start,
+                    'end_time': gap_end,
+                    'activity': f"{activity_desc} (gap)",
+                    'ppl_str': ppl_str
+                })
+                selection_logger.info(
+                    f"Embedded gap for {ppl_str} ({weekday_name}): "
+                    f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({activity_desc})"
+                )
+
         for modality in target_modalities:
             # Extract skills for THIS modality from combinations
-            # Convert {"MSK_ct": 1, "MSK_mr": 0, ...} → {"MSK": 1, "Gyn": 0, ...} for ct
             modality_skills = {}
             for skill in SKILL_COLUMNS:
                 combo_key = f"{skill}_{modality}"
                 modality_skills[skill] = final_combinations.get(combo_key, 0)
 
             for start_time, end_time in time_ranges:
-                start_dt = datetime.combine(target_date.date(), start_time)
-                end_dt = datetime.combine(target_date.date(), end_time)
+                start_dt = datetime.combine(target_date_obj, start_time)
+                end_dt = datetime.combine(target_date_obj, end_time)
                 if end_dt < start_dt:
-                    end_dt += pd.Timedelta(days=1)
-                duration_hours = (end_dt - start_dt).seconds / 3600
+                    end_dt += timedelta(days=1)
+                duration_hours = (end_dt - start_dt).total_seconds() / 3600
 
                 rule_modifier = rule.get('modifier', 1.0)
                 hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
-                rule_type = rule.get('type', 'shift')
                 if 'counts_for_hours' in rule:
                     counts_for_hours = rule['counts_for_hours']
-                elif rule_type == 'gap':
-                    counts_for_hours = hours_counting_config.get('gap_default', False)
                 else:
                     counts_for_hours = hours_counting_config.get('shift_default', True)
 
@@ -1437,7 +1568,52 @@ def build_working_hours_from_medweb(
                     **modality_skills
                 })
 
-    # SECOND PASS
+    # SECOND PASS: Create "unavailable" entries for workers with gaps but no shifts
+    for canonical_id, exclusions in exclusions_per_worker.items():
+        if canonical_id in workers_with_shifts:
+            continue  # Will be handled in gap application
+
+        # Worker has only gaps, no shifts → create "unavailable" entry
+        for excl in exclusions:
+            ppl_str = excl.get('ppl_str', f'Unknown ({canonical_id})')
+            gap_start = excl['start_time']
+            gap_end = excl['end_time']
+            activity = excl['activity']
+
+            start_dt = datetime.combine(target_date_obj, gap_start)
+            end_dt = datetime.combine(target_date_obj, gap_end)
+            if end_dt < start_dt:
+                end_dt += timedelta(days=1)
+            duration_hours = (end_dt - start_dt).total_seconds() / 3600
+
+            # Create an entry in all modalities (or just first one) with all skills = -1
+            unavailable_skills = {skill: -1 for skill in SKILL_COLUMNS}
+
+            # Add to first modality (could be all, but one is enough for visibility)
+            first_mod = allowed_modalities[0] if allowed_modalities else 'ct'
+            rows_per_modality[first_mod].append({
+                'PPL': ppl_str,
+                'canonical_id': canonical_id,
+                'start_time': gap_start,
+                'end_time': gap_end,
+                'shift_duration': duration_hours,
+                'Modifier': 1.0,
+                'tasks': f"[Unavailable] {activity}",
+                'counts_for_hours': False,
+                'gaps': json.dumps([{
+                    'start': gap_start.strftime(TIME_FORMAT),
+                    'end': gap_end.strftime(TIME_FORMAT),
+                    'activity': activity
+                }]),
+                **unavailable_skills
+            })
+
+            selection_logger.info(
+                f"Created unavailable entry for {ppl_str} ({weekday_name}): "
+                f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({activity})"
+            )
+
+    # THIRD PASS: Apply gaps to shifts (gaps always win)
     if exclusions_per_worker:
         selection_logger.info(f"Applying time exclusions for {len(exclusions_per_worker)} workers on {weekday_name}")
 
@@ -1445,7 +1621,7 @@ def build_working_hours_from_medweb(
             if not rows_per_modality[modality]:
                 continue
 
-            shifts_by_worker = {}
+            shifts_by_worker: Dict[str, List[dict]] = {}
             for shift in rows_per_modality[modality]:
                 worker_id = shift['canonical_id']
                 if worker_id not in shifts_by_worker:
@@ -1455,7 +1631,7 @@ def build_working_hours_from_medweb(
             new_shifts = []
             for worker_id, worker_shifts in shifts_by_worker.items():
                 worker_exclusions = exclusions_per_worker.get(worker_id, [])
-                if worker_exclusions:
+                if worker_exclusions and worker_id in workers_with_shifts:
                     worker_shifts = apply_exclusions_to_shifts(
                         worker_shifts,
                         worker_exclusions,
@@ -1478,8 +1654,7 @@ def build_working_hours_from_medweb(
     if unmatched_activities:
         selection_logger.debug(f"Unmatched activities: {set(unmatched_activities)}")
 
-    # Resolve overlapping shifts: later shift wins, crop prior shift end
-    target_date_obj = target_date.date() if hasattr(target_date, 'date') else target_date
+    # FOURTH PASS: Resolve overlapping shifts (later shift ends prior)
     for modality in rows_per_modality:
         if rows_per_modality[modality]:
             original_count = len(rows_per_modality[modality])

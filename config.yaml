@@ -240,19 +240,49 @@ balancer:
     Uro:
       exclude_skills: []
 
-# Medweb CSV Upload Configuration
-# Two types of entries:
-#   - type: "shift" (default) = Actual work assignments with modality, skills, times
-#   - type: "gap"   = Time exclusions (boards, meetings) - worker unavailable, shows -1 everywhere
+# =============================================================================
+# MEDWEB CSV MAPPING CONFIGURATION (NEW UNIFIED STRUCTURE)
+# =============================================================================
 #
-# Load balancing hours counting:
-#   Each rule can have "counts_for_hours: true/false" to control if this entry's
-#   hours count towards the worker's total workload for load balancing calculations.
-#   - Shifts default to counting (shift_default in balancer.hours_counting)
-#   - Gaps default to NOT counting (gap_default in balancer.hours_counting)
-#   - Use explicit "counts_for_hours: false" on a shift to exclude from hours calculation
-#   - Use explicit "counts_for_hours: true" on a gap to include in hours calculation
-# Vendor-specific CSV Upload Configurations
+# Each rule maps a CSV activity description to either a SHIFT or a GAP.
+#
+# SHIFT RULES:
+#   - match: "Activity Name"           # Substring to match in CSV activity
+#     type: "shift"
+#     times:                           # REQUIRED: Day-specific times
+#       default: "07:00-15:00"         # Default time (Mon-Thu unless overridden)
+#       Montag: "08:00-16:00"          # Optional: Monday override
+#       Freitag: "07:00-13:00"         # Optional: Friday override
+#     skill_overrides:                 # REQUIRED: Defines what skills & modalities
+#       Notfall_ct: 1                  # Skill_Modality: value (1, 0, -1, w)
+#       Notfall_mr: 1
+#       MSK_ct: 0                      # Modalities are DERIVED from keys
+#     gaps:                            # OPTIONAL: Embedded gaps for this shift
+#       Montag:
+#         - "10:00-11:00"              # Multiple gaps per day supported
+#         - "14:00-15:00"
+#     modifier: 1.0                    # OPTIONAL: Workload modifier (0.5-1.5)
+#     counts_for_hours: true           # OPTIONAL: Count in load balancing
+#
+# GAP RULES (Standalone):
+#   - match: "Board"                   # Substring to match
+#     type: "gap"
+#     schedule:                        # Day-specific times (arrays supported)
+#       Montag:
+#         - "10:00-11:00"
+#         - "14:00-15:00"
+#       Dienstag:
+#         - "15:00-17:00"
+#
+# HOW DAY PLANS ARE BUILT:
+#   1. Worker has multiple CSV entries → all matching rules are processed
+#   2. Multiple shifts → later shift ENDS prior shift (no overlap)
+#   3. Multiple gaps → all gaps are subtracted from shifts
+#   4. Gaps ALWAYS WIN over shifts
+#   5. Standalone gap with no shift → creates "unavailable" entry
+#
+# =============================================================================
+
 vendor_mappings:
   medweb:
     # Column name mappings for this vendor
@@ -263,225 +293,318 @@ vendor_mappings:
       employee_code: "Code des Mitarbeiters"
       day_part: "Tageszeit"  # Optional: VM/NM split heuristic
 
-    # Rules for mapping activities to modalities and skills
+    # Rules for mapping activities to shifts/gaps
     # Rules are evaluated in order; first match wins
     rules:
     # ===========================================
-    # SHIFTS/ROLES - Actual work assignments
+    # SHIFTS - Work assignments with times and skill_overrides
     # ===========================================
 
-    # CT activities - skills come from worker_skill_roster
+    # CT Shifts
     - match: "CT Spätdienst"
       type: "shift"
-      modality: "ct"
-      shift: "Spaetdienst"
+      times:
+        default: "13:00-21:00"
+        Freitag: "13:00-19:00"
+      skill_overrides:
+        Notfall_ct: 1
+        Privat_ct: 1
+        MSK_ct: 0
+        Abdomen_ct: 0
+        Chest_ct: 0
+        Cardvask_ct: 0
+        Uro_ct: 0
+        Gyn_ct: 0
+        Päd_ct: 0
 
     - match: "CT Assistent"
       type: "shift"
-      modality: "ct"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_ct: 1
+        Privat_ct: 1
+        MSK_ct: 0
+        Abdomen_ct: 0
+        Chest_ct: 0
+        Cardvask_ct: 0
+        Uro_ct: 0
+        Gyn_ct: 0
+        Päd_ct: 0
 
     - match: "Cortex: CT Privatpatienten"
       type: "shift"
-      modality: "ct"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Privat_ct: 1
+        Notfall_ct: 0
 
-    # MR activities - skills come from worker_skill_roster
+    # MR Shifts
     - match: "MRT Spätdienst"
       type: "shift"
-      modality: "mr"
-      shift: "Spaetdienst"
+      times:
+        default: "13:00-21:00"
+        Freitag: "13:00-19:00"
+      skill_overrides:
+        Notfall_mr: 1
+        Privat_mr: 1
+        MSK_mr: 0
+        Abdomen_mr: 0
+        Chest_mr: 0
+        Cardvask_mr: 0
+        Uro_mr: 0
+        Gyn_mr: 0
+        Päd_mr: 0
 
     - match: "MR Assistent 1. Monat"
       type: "shift"
-      modality: "mr"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      modifier: 0.5  # Beginner: counts double toward their load
+      skill_overrides:
+        Notfall_mr: w
+        Privat_mr: 0
 
     - match: "MR Assistent"
       type: "shift"
-      modality: "mr"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_mr: 1
+        Privat_mr: 1
+        MSK_mr: 0
+        Abdomen_mr: 0
+        Chest_mr: 0
+        Cardvask_mr: 0
+        Uro_mr: 0
+        Gyn_mr: 0
+        Päd_mr: 0
 
     - match: "Cortex: MRT-OA"
       type: "shift"
-      modality: "mr"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_mr: 1
+        Privat_mr: 1
+        MSK_mr: 1
+        Abdomen_mr: 1
+        Chest_mr: 1
+        Cardvask_mr: 1
+        Uro_mr: 1
+        Gyn_mr: 1
+        Päd_mr: 1
 
-    # X-ray activities - skills come from worker_skill_roster
+    # X-ray Shifts
     - match: "Chir Assistent"
       type: "shift"
-      modality: "xray"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_xray: 1
+        Privat_xray: 1
+        MSK_xray: 0
+        Chest_xray: 0
+        Päd_xray: 0
 
     - match: "OA / FA Chir"
       type: "shift"
-      modality: "xray"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_xray: 1
+        Privat_xray: 1
+        MSK_xray: 1
+        Chest_xray: 1
+        Päd_xray: 1
 
-    # Mammo activities - skills come from worker_skill_roster
+    # Mammo Shifts
     - match: "Mammo Assistent"
       type: "shift"
-      modality: "mammo"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_mammo: 1
+        Privat_mammo: 1
+        Gyn_mammo: 0
 
     - match: "Mammo OA"
       type: "shift"
-      modality: "mammo"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      skill_overrides:
+        Notfall_mammo: 1
+        Privat_mammo: 1
+        Gyn_mammo: 1
 
     # ===========================================
-    # TEAMS - Sub-specialty work (multi-modality)
-    # skill_overrides override specific Skill_Modality combinations from worker_skill_roster
-    # Use this to restrict someone to specific work TODAY, even if they can do more
-    # Only specified combinations are overridden; others remain from roster
-    # Roster -1 (hard exclude) always wins
+    # TEAM SHIFTS - Multi-modality with specific skills
     # ===========================================
 
     - match: "MSK Assistent"
       type: "shift"
-      modalities: ["xray", "ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "MSK_ct": 1
-        "MSK_mr": 1
-        "MSK_xray": 1
+        MSK_ct: 1
+        MSK_mr: 1
+        MSK_xray: 1
 
     - match: "MSK Team"
       type: "shift"
-      modalities: ["xray", "ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "MSK_ct": 1
-        "MSK_mr": 1
-        "MSK_xray": 1
+        MSK_ct: 1
+        MSK_mr: 1
+        MSK_xray: 1
+      # Example: Team-specific gaps (optional)
+      # gaps:
+      #   Montag:
+      #     - "14:00-15:00"  # Team meeting
 
-    # Weighted entries: Modifier controls workload factor for beginners
-    # Modifier range: 0.5, 0.75, 1.0, 1.25, 1.5 (lower = less capacity, counts more toward load)
     - match: "MSK Anfänger"
       type: "shift"
-      modalities: ["xray", "ct"]
-      shift: "Fruehdienst"
-      modifier: 0.5  # Freshman: assignments count double toward their load
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      modifier: 0.5  # Beginner: counts double toward their load
       skill_overrides:
-        "MSK_ct": w
-        "MSK_xray": w
+        MSK_ct: w
+        MSK_xray: w
 
     - match: "CT Anfänger"
       type: "shift"
-      modality: "ct"
-      shift: "Fruehdienst"
-      modifier: 0.5  # Freshman: assignments count double
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
+      modifier: 0.5  # Beginner: counts double toward their load
       skill_overrides:
-        "Notfall_ct": w
+        Notfall_ct: w
 
     - match: "Cardvask Team"
       type: "shift"
-      modalities: ["ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Cardvask_ct": 1
-        "Cardvask_mr": 1
+        Cardvask_ct: 1
+        Cardvask_mr: 1
 
     - match: "Chest Team"
       type: "shift"
-      modalities: ["xray", "ct"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Chest_ct": 1
-        "Chest_xray": 1
+        Chest_ct: 1
+        Chest_xray: 1
 
     - match: "Abdomen Team"
       type: "shift"
-      modalities: ["ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Abdomen_ct": 1
-        "Abdomen_mr": 1
+        Abdomen_ct: 1
+        Abdomen_mr: 1
 
     - match: "Uro Team"
       type: "shift"
-      modalities: ["ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Uro_ct": 1
-        "Uro_mr": 1
+        Uro_ct: 1
+        Uro_mr: 1
 
     - match: "Gyn Team"
       type: "shift"
-      modalities: ["ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Gyn_ct": 1
-        "Gyn_mr": 1
+        Gyn_ct: 1
+        Gyn_mr: 1
 
     - match: "Päd Team"
       type: "shift"
-      modalities: ["xray", "ct", "mr"]
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       skill_overrides:
-        "Päd_ct": 1
-        "Päd_mr": 1
-        "Päd_xray": 1
+        Päd_ct: 1
+        Päd_mr: 1
+        Päd_xray: 1
 
-    # Cortex Aufklärung - shift (not a gap) but hours don't count for load balancing
-    # No skills needed for this administrative task
+    # Cortex Aufklärung - shift but hours don't count for load balancing
     - match: "Cortex Aufklärung"
       type: "shift"
-      modality: "ct"
-      shift: "Fruehdienst"
+      times:
+        default: "07:00-15:00"
+        Freitag: "07:00-13:00"
       label: "Aufklärung"
-      counts_for_hours: false  # Don't count hours towards workload (task, not actual shift)
+      counts_for_hours: false  # Administrative task
+      skill_overrides:
+        Notfall_ct: 0  # Minimal skill, just to have a modality
 
     # ===========================================
-    # GAPS/TASKS - Time exclusions (shows -1 everywhere)
+    # STANDALONE GAPS - Time exclusions (shows -1 everywhere)
     # Worker unavailable during these times (boards, meetings, teaching)
-    # Gaps block only the scheduled window; no pre/post buffers are used.
-    # Schedule is day-specific (Montag, Dienstag, Mittwoch, Donnerstag, Freitag)
+    # Schedule supports multiple times per day (arrays)
     # ===========================================
 
     - match: "Kopf-Hals-Board"
       type: "gap"
-      exclusion: true
       schedule:
-        Montag: "15:30-17:00"
+        Montag:
+          - "15:30-17:00"
 
     - match: "Board"
       type: "gap"
-      exclusion: true
       schedule:
-        Dienstag: "15:00-17:00"
-        Mittwoch: "10:00-12:00"
-        Donnerstag: "14:00-16:00"
+        Dienstag:
+          - "15:00-17:00"
+        Mittwoch:
+          - "10:00-12:00"
+        Donnerstag:
+          - "14:00-16:00"
 
     - match: "Besprechung"
       type: "gap"
-      exclusion: true
       schedule:
-        Montag: "09:00-10:00"
-        Mittwoch: "14:00-15:00"
-        Freitag: "13:00-14:00"
+        Montag:
+          - "09:00-10:00"
+        Mittwoch:
+          - "14:00-15:00"
+        Freitag:
+          - "13:00-14:00"
 
     - match: "Fortbildung"
       type: "gap"
-      exclusion: true
       schedule:
-        Donnerstag: "13:00-15:00"
+        Donnerstag:
+          - "13:00-15:00"
 
     - match: "Aufklärung"
       type: "gap"
-      exclusion: true
       schedule:
-        Dienstag: "10:00-11:00"
-        Donnerstag: "10:00-11:00"
-
-# Shift time definitions
-shift_times:
-  Fruehdienst:
-    default: "07:00-15:00"
-    friday: "07:00-13:00"
-  Spaetdienst:
-    default: "13:00-21:00"
-    friday: "13:00-19:00"
+        Dienstag:
+          - "10:00-11:00"
+        Donnerstag:
+          - "10:00-11:00"
 
 # Worker skill roster - Skill×Modality combinations (flat structure)
 # Format: "skill_modality": value (or "modality_skill" - both accepted)
