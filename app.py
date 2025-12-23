@@ -25,7 +25,7 @@ from lib.utils import selection_logger
 # Flask App Initialization
 # -----------------------------------------------------------
 app = Flask(__name__)
-app.secret_key = 'super_secret_key_for_dev'  # Ideally move to config
+app.secret_key = APP_CONFIG['secret_key']
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
@@ -40,8 +40,7 @@ app.register_blueprint(routes)
 # -----------------------------------------------------------
 scheduler = BackgroundScheduler()
 
-# Daily reset check (runs on every request, but we also schedule it to be safe or just rely on request)
-# Original code had it in before_request.
+# Daily reset check runs on every request
 @app.before_request
 def before_request_hook():
     check_and_perform_daily_reset()

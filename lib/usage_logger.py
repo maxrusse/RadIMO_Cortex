@@ -14,6 +14,8 @@ from typing import Dict, Tuple, List, Set
 from collections import defaultdict
 import threading
 
+from config import SKILL_COLUMNS, allowed_modalities
+
 logger = logging.getLogger(__name__)
 
 # Directory for usage statistics CSV files
@@ -62,28 +64,12 @@ def _get_all_skill_modality_columns() -> List[str]:
     Returns:
         List of column names in format 'skill_modality' (e.g., 'Notfall_ct')
     """
-    try:
-        # Import here to avoid circular dependencies
-        from config import SKILL_COLUMNS, allowed_modalities
+    columns = []
+    for skill in SKILL_COLUMNS:
+        for modality in allowed_modalities:
+            columns.append(f"{skill}_{modality}")
 
-        columns = []
-        for skill in SKILL_COLUMNS:
-            for modality in allowed_modalities:
-                columns.append(f"{skill}_{modality}")
-
-        return columns
-    except ImportError:
-        # Fallback: extract from current usage data
-        logger.warning("Could not import config, using columns from current data")
-        skills = sorted(set(skill for skill, _ in _daily_usage.keys()))
-        modalities = sorted(set(modality for _, modality in _daily_usage.keys()))
-
-        columns = []
-        for skill in skills:
-            for modality in modalities:
-                columns.append(f"{skill}_{modality}")
-
-        return columns
+    return columns
 
 
 def _export_and_reset(export_date: date = None) -> None:

@@ -35,6 +35,7 @@ if not selection_logger.handlers:
 # -----------------------------------------------------------
 DEFAULT_ADMIN_PASSWORD = 'change_pw_for_live'
 DEFAULT_ACCESS_PASSWORD = 'change_easy_pw'  # Basic access password for non-admin pages
+DEFAULT_SECRET_KEY = 'super_secret_key_for_dev'  # Change this in production
 
 DEFAULT_BALANCER = {
     'enabled': True,
@@ -64,6 +65,7 @@ def _build_app_config() -> Dict[str, Any]:
         'admin_password': raw_config.get('admin_password', DEFAULT_ADMIN_PASSWORD),
         'access_password': raw_config.get('access_password', DEFAULT_ACCESS_PASSWORD),
         'access_protection_enabled': raw_config.get('access_protection_enabled', True),
+        'secret_key': raw_config.get('secret_key', DEFAULT_SECRET_KEY),
     }
 
     # Load modalities directly from config.yaml (no hardcoded defaults)
