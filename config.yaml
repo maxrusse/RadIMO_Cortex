@@ -561,59 +561,75 @@ vendor_mappings:
         Notfall_ct: 0  # Minimal skill, just to have a modality
 
     # ===========================================
-    # STANDALONE GAPS - Time exclusions (shows -1 everywhere)
-    # Worker unavailable during these times (boards, meetings, teaching)
-    # Schedule supports multiple times per day (arrays)
+    # GAPS - Time exclusions (worker unavailable)
+    # Uses same 'times' field as shifts, with 'skill_overrides: {all: -1}'
+    # Times supports multiple time blocks per day (arrays)
+    #
+    # skill_overrides shortcuts:
+    #   all: -1        → all skill_modality combos = -1
+    #   MSK: 1         → all MSK_* combos = 1 (MSK_ct, MSK_mr, etc.)
+    #   ct: 1          → all *_ct combos = 1 (Notfall_ct, MSK_ct, etc.)
     # ===========================================
 
     - match: "Kopf-Hals-Board"
       type: "gap"
-      schedule:
+      times:
         Montag:
           - "15:30-17:00"
+      skill_overrides:
+        all: -1
 
     - match: "Board"
       type: "gap"
-      schedule:
+      times:
         Dienstag:
           - "15:00-17:00"
         Mittwoch:
           - "10:00-12:00"
         Donnerstag:
           - "14:00-16:00"
+      skill_overrides:
+        all: -1
 
     - match: "Besprechung"
       type: "gap"
-      schedule:
+      times:
         Montag:
           - "09:00-10:00"
         Mittwoch:
           - "14:00-15:00"
         Freitag:
           - "13:00-14:00"
+      skill_overrides:
+        all: -1
 
     - match: "Fortbildung"
       type: "gap"
-      schedule:
+      times:
         Donnerstag:
           - "13:00-15:00"
+      skill_overrides:
+        all: -1
 
     - match: "Aufklärung"
       type: "gap"
-      schedule:
+      times:
         Dienstag:
           - "10:00-11:00"
         Donnerstag:
           - "10:00-11:00"
+      skill_overrides:
+        all: -1
 
     # ===========================================
     # GENERIC GAP - For manual entries on prep page
-    # This gap has no schedule, so it won't match from CSV automatically.
-    # Users can select it in the UI and set custom times.
+    # Empty times = won't auto-match from CSV, only manual selection
     # ===========================================
     - match: "[Gap]"
       type: "gap"
-      schedule: {}  # Empty - manual entry only, set times in UI
+      times: {}
+      skill_overrides:
+        all: -1
 
 # Worker skill roster - Skill×Modality combinations (flat structure)
 # Format: "skill_modality": value (or "modality_skill" - both accepted)

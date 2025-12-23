@@ -1006,32 +1006,80 @@ def get_worker_skill_mod_combinations(canonical_id: str, worker_roster: dict) ->
     return result
 
 
+def expand_skill_overrides(rule_overrides: dict) -> dict:
+    """
+    Expand skill_overrides shortcuts to full skill_modality combinations.
+
+    Supports:
+        - Full keys: "MSK_ct": 1 → {"MSK_ct": 1}
+        - all shortcut: "all": -1 → all skill_modality combos = -1
+        - Skill shortcut: "MSK": 1 → MSK_ct, MSK_mr, MSK_xray, MSK_mammo = 1
+        - Modality shortcut: "ct": 1 → Notfall_ct, MSK_ct, Privat_ct, etc. = 1
+
+    Args:
+        rule_overrides: Raw skill_overrides dict from config
+
+    Returns:
+        Expanded dict with full skill_modality keys
+    """
+    expanded = {}
+
+    for key, value in rule_overrides.items():
+        key_lower = key.lower()
+
+        # Check for "all" shortcut
+        if key_lower == 'all':
+            for skill in SKILL_COLUMNS:
+                for mod in allowed_modalities:
+                    expanded[f"{skill}_{mod}"] = value
+            continue
+
+        # Check if key is a skill shortcut (e.g., "MSK" → MSK_ct, MSK_mr, ...)
+        if key in SKILL_COLUMNS:
+            for mod in allowed_modalities:
+                expanded[f"{key}_{mod}"] = value
+            continue
+
+        # Check if key is a modality shortcut (e.g., "ct" → Notfall_ct, MSK_ct, ...)
+        if key_lower in allowed_modalities:
+            for skill in SKILL_COLUMNS:
+                expanded[f"{skill}_{key_lower}"] = value
+            continue
+
+        # Otherwise, it's a full skill_modality key - normalize it
+        normalized_key = normalize_skill_mod_key(key)
+        expanded[normalized_key] = value
+
+    return expanded
+
+
 def apply_skill_overrides(roster_combinations: dict, rule_overrides: dict) -> dict:
     """
     Apply CSV rule skill_overrides to roster Skill×Modality combinations.
 
-    Only specified combinations in rule_overrides are updated.
+    First expands shortcuts (all, skill-only, mod-only), then applies.
     Roster -1 (hard exclude) always wins and cannot be overridden.
 
     Args:
         roster_combinations: Worker's baseline skill×modality combinations
-        rule_overrides: CSV rule overrides (e.g., {"MSK_ct": 1, "MSK_mr": 1})
+        rule_overrides: CSV rule overrides (e.g., {"MSK_ct": 1, "all": -1})
 
     Returns:
         Final skill×modality combinations
     """
     final = roster_combinations.copy()
 
-    for key, override_value in rule_overrides.items():
-        normalized_key = normalize_skill_mod_key(key)
+    # Expand shortcuts first
+    expanded_overrides = expand_skill_overrides(rule_overrides)
 
-        if normalized_key in final:
+    for key, override_value in expanded_overrides.items():
+        if key in final:
             # Roster -1 (hard exclude) always wins
-            if final[normalized_key] == -1:
+            if final[key] == -1:
                 continue  # Keep -1, ignore override
 
             # Apply override
-            final[normalized_key] = override_value
+            final[key] = override_value
 
     return final
 
@@ -1039,50 +1087,28 @@ def compute_time_ranges(row: pd.Series, rule: dict, target_date: datetime, confi
     """
     Compute time ranges from rule's inline 'times' field.
 
-    New structure supports day-specific times:
+    Structure supports day-specific times:
         times:
             default: "07:00-15:00"
             Montag: "08:00-16:00"
             Freitag: "07:00-13:00"
-
-    Also supports legacy structure with 'shift' field for backward compatibility.
     """
-    # New structure: inline 'times' field
     times_config = rule.get('times', {})
 
-    if times_config:
-        # Get German weekday name for day-specific lookup
-        weekday_name = get_weekday_name_german(target_date)
-
-        # Check for day-specific time first, then 'friday' alias, then default
-        if weekday_name in times_config:
-            time_str = times_config[weekday_name]
-        elif weekday_name == 'Freitag' and 'friday' in times_config:
-            time_str = times_config['friday']
-        else:
-            time_str = times_config.get('default', '07:00-15:00')
-
-        try:
-            start_str, end_str = time_str.split('-')
-            start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
-            end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
-            return [(start_time, end_time)]
-        except Exception:
-            return [(time(7, 0), time(15, 0))]
-
-    # Legacy structure: 'shift' field lookup (backward compatibility)
-    shift_name = rule.get('shift', 'Fruehdienst')
-    shift_config = config.get('shift_times', {}).get(shift_name, {})
-
-    if not shift_config:
+    if not times_config:
+        # No times specified - use default
         return [(time(7, 0), time(15, 0))]
 
-    is_friday = target_date.weekday() == 4
+    # Get German weekday name for day-specific lookup
+    weekday_name = get_weekday_name_german(target_date)
 
-    if is_friday and 'friday' in shift_config:
-        time_str = shift_config['friday']
+    # Check for day-specific time first, then 'friday' alias, then default
+    if weekday_name in times_config:
+        time_str = times_config[weekday_name]
+    elif weekday_name == 'Freitag' and 'friday' in times_config:
+        time_str = times_config['friday']
     else:
-        time_str = shift_config.get('default', '07:00-15:00')
+        time_str = times_config.get('default', '07:00-15:00')
 
     try:
         start_str, end_str = time_str.split('-')
@@ -1112,30 +1138,39 @@ def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
     return list(modalities)
 
 
-def parse_gap_schedule(schedule: dict, weekday_name: str) -> List[Tuple[time, time]]:
+def parse_gap_times(times_config: dict, weekday_name: str) -> List[Tuple[time, time]]:
     """
-    Parse gap schedule for a specific weekday.
+    Parse gap times for a specific weekday.
 
+    Uses unified 'times' field (same as shifts).
     Supports both single string and array formats:
-        schedule:
-            Montag: "10:00-11:00"            # Single time (legacy)
-            Dienstag:                         # Array format (new)
+        times:
+            Montag: "10:00-11:00"              # Single time
+            Dienstag:                          # Array format
                 - "10:00-11:00"
                 - "14:00-15:00"
+            default: "09:00-10:00"             # Optional default
 
     Returns list of (start_time, end_time) tuples.
     """
-    if weekday_name not in schedule:
+    if not times_config:
         return []
 
-    day_schedule = schedule[weekday_name]
+    # Check for day-specific times first, then default
+    if weekday_name in times_config:
+        day_times = times_config[weekday_name]
+    elif 'default' in times_config:
+        day_times = times_config['default']
+    else:
+        return []
+
     gaps = []
 
     # Handle both single string and array formats
-    if isinstance(day_schedule, str):
-        time_ranges = [day_schedule]
-    elif isinstance(day_schedule, list):
-        time_ranges = day_schedule
+    if isinstance(day_times, str):
+        time_ranges = [day_times]
+    elif isinstance(day_times, list):
+        time_ranges = day_times
     else:
         return []
 
@@ -1451,9 +1486,10 @@ def build_working_hours_from_medweb(
         rule_type = rule.get('type', 'shift')
 
         # Handle GAP rules (standalone gaps)
-        if rule_type == 'gap' or rule.get('exclusion', False):
-            schedule = rule.get('schedule', {})
-            gap_times = parse_gap_schedule(schedule, weekday_name)
+        if rule_type == 'gap':
+            # Use 'times' field (unified structure)
+            times_config = rule.get('times', {})
+            gap_times = parse_gap_times(times_config, weekday_name)
 
             if not gap_times:
                 continue
@@ -1479,27 +1515,23 @@ def build_working_hours_from_medweb(
         if rule_type != 'shift':
             continue
 
-        # Determine modalities: NEW structure uses skill_overrides, legacy uses modality/modalities
+        # Get skill_overrides - REQUIRED for shifts
         skill_overrides = rule.get('skill_overrides', {})
 
-        if skill_overrides:
-            # NEW structure: derive modalities from skill_overrides keys
-            target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
-        else:
-            # LEGACY structure: use modality/modalities fields
-            if 'modalities' in rule:
-                raw_modalities = rule['modalities']
-                if isinstance(raw_modalities, list):
-                    target_modalities = [normalize_modality(m) for m in raw_modalities]
-                else:
-                    target_modalities = [normalize_modality(raw_modalities)]
-            elif 'modality' in rule:
-                target_modalities = [normalize_modality(rule['modality'])]
-            else:
-                continue
+        if not skill_overrides:
+            selection_logger.warning(
+                f"Shift rule '{rule.get('match', '')}' missing skill_overrides - skipping"
+            )
+            continue
 
+        # Derive modalities from skill_overrides keys (e.g., MSK_ct → ct)
+        target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
         target_modalities = [m for m in target_modalities if m in allowed_modalities]
+
         if not target_modalities:
+            selection_logger.warning(
+                f"Shift rule '{rule.get('match', '')}' has no valid modalities in skill_overrides - skipping"
+            )
             continue
 
         workers_with_shifts.add(canonical_id)
@@ -1507,17 +1539,14 @@ def build_working_hours_from_medweb(
         # Get worker's Skill×Modality combinations from roster (all combinations)
         roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
 
-        # Apply skill_overrides (roster -1 always wins)
-        if skill_overrides:
-            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
-        else:
-            final_combinations = roster_combinations
+        # Apply skill_overrides (roster -1 always wins, shortcuts are expanded)
+        final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
 
         time_ranges = compute_time_ranges(row, rule, target_date, config)
 
         # Handle embedded gaps in shift rule (team-specific gaps)
         embedded_gaps = rule.get('gaps', {})
-        embedded_gap_times = parse_gap_schedule(embedded_gaps, weekday_name)
+        embedded_gap_times = parse_gap_times(embedded_gaps, weekday_name)
 
         if embedded_gap_times:
             if canonical_id not in exclusions_per_worker:
