@@ -311,29 +311,44 @@ balancer:
     Uro: []
 ```
 
-### Exclusion-Based Routing
+### Specialist-First Assignment with Pooled Worker Overflow
 
-The system uses exclusion-based selection to distribute work fairly while respecting specialty boundaries:
+The system prioritizes specialists while using pooled workers (skill=0) as backup capacity within each modality:
 
-**Two-Level Fallback:**
+**Assignment Strategy:**
 
-1. **Level 1 (Exclusion-based):**
-   - Filter to workers with requested skill≥0 (excludes -1)
-   - Remove workers with excluded skills=1
-   - Calculate workload ratio for each candidate (weighted_count / hours_worked)
-   - Select worker with lowest ratio
+1. **Filter workers in requested modality:**
+   - Include workers with skill≥0 (excludes skill=-1)
+   - Apply shift start/end buffers (per-worker per-shift)
+   - Apply exclusion rules (e.g., notfall_ct team won't get mammo_gyn)
 
-2. **Level 2 (Skill-based fallback):**
-   - If Level 1 produces no candidates, ignore exclusions
-   - Filter to workers with requested skill≥0 (active or passive)
-   - Select worker with lowest ratio
+2. **Split into pools:**
+   - **Specialists:** skill=1 or 'w' (trained for this work)
+   - **Generalists:** skill=0 (trained in modality, can help when needed)
 
-Use exclusions to block specific specialists from receiving unrelated work (e.g., keep MSK team off Cardvask requests).
+3. **Minimum balancer (fair distribution among specialists):**
+   - Ensure all specialists get minimum weighted assignments before overflow
+   - Prevents strange effects at start of day
 
-**Example:** Keep Cardvask requests away from MSK specialists unless no one else is available.
+4. **Specialist-first selection with imbalance overflow:**
+   - Calculate workload ratio for each worker (weighted_count / hours_worked)
+   - Compare min_specialist_ratio vs min_generalist_ratio
+   - If imbalance ≥ threshold%: overflow to generalist with lowest ratio
+   - Otherwise: assign to specialist with lowest ratio
+
+5. **Fallback without exclusions:**
+   - If no workers available after exclusions, retry without exclusion filters
+   - Maintains specialist-first logic
+
+**Configuration:**
 ```yaml
-exclusion_rules:
-  Cardvask: [MSK]
+balancer:
+  min_assignments_per_skill: 3             # All specialists get 3 weighted assignments before overflow
+  imbalance_threshold_pct: 30              # Overflow when specialists 30%+ more loaded than generalists
+  disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first 15min of shift
+  disable_overflow_at_shift_end_minutes: 30    # Don't assign overflow in last 30min of shift
+  exclusion_rules:
+    Cardvask: [MSK]  # MSK specialists won't get Cardvask work unless no one else available
 ```
 
 ### Two-Phase Minimum Balancer
@@ -341,20 +356,6 @@ exclusion_rules:
 **Phase 1 (No-Overflow):** Until all ACTIVE workers (skill ≥ 1) reach minimum weighted assignments, restrict pool to underutilized workers.
 
 **Phase 2 (Normal Mode):** Once all active workers have minimum, allow normal weighted overflow.
-
----
-
-## Modality Fallbacks
-
-Configure cross-modality overflow when a modality has no available workers.
-
-```yaml
-modality_fallbacks:
-  xray: [[ct, mr]]   # XRAY can borrow from CT AND MR (parallel)
-  ct: [mr]           # CT can borrow from MR only
-  mr: []             # MR cannot borrow
-  mammo: []          # Mammo cannot borrow
-```
 
 ---
 
@@ -588,9 +589,10 @@ skill_dashboard:
 
 balancer:
   enabled: true
-  min_assignments_per_skill: 5
+  min_assignments_per_skill: 3
   imbalance_threshold_pct: 30
   allow_fallback_on_imbalance: true
+  disable_overflow_at_shift_start_minutes: 15
   disable_overflow_at_shift_end_minutes: 30
   hours_counting:
     shift_default: true
@@ -598,12 +600,6 @@ balancer:
   exclusion_rules:
     Cardvask: [MSK]
     Notfall: []
-
-modality_fallbacks:
-  xray: [[ct, mr]]
-  ct: [mr]
-  mr: []
-  mammo: []
 
 medweb_mapping:
   rules:

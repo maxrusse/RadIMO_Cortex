@@ -8,7 +8,6 @@ from typing import Dict, Any, List, Tuple, Optional
 from utils import (
     coerce_float,
     coerce_int,
-    normalize_modality_fallback_entries,
     selection_logger
 )
 
@@ -39,9 +38,10 @@ DEFAULT_ACCESS_PASSWORD = 'change_easy_pw'  # Basic access password for non-admi
 
 DEFAULT_BALANCER = {
     'enabled': True,
-    'min_assignments_per_skill': 5,
+    'min_assignments_per_skill': 3,
     'imbalance_threshold_pct': 30,
     'allow_fallback_on_imbalance': True,
+    'disable_overflow_at_shift_start_minutes': 0,  # 0 = disabled
     'disable_overflow_at_shift_end_minutes': 0,  # 0 = disabled
 }
 
@@ -114,17 +114,6 @@ def _build_app_config() -> Dict[str, Any]:
         for key, value in user_balancer.items():
             balancer_settings[key] = value
     config['balancer'] = balancer_settings
-
-    modality_fallbacks = raw_config.get('modality_fallbacks')
-    normalized_fallbacks: Dict[str, List[Any]] = {}
-    if isinstance(modality_fallbacks, dict):
-        for mod, fallback_list in modality_fallbacks.items():
-            normalized_fallbacks[mod.lower()] = normalize_modality_fallback_entries(
-                fallback_list,
-                mod,
-                list(merged_modalities.keys()),
-            )
-    config['modality_fallbacks'] = normalized_fallbacks
 
     # Include vendor_mappings
     vendor_configs = raw_config.get('vendor_mappings', {})
@@ -236,18 +225,8 @@ ROLE_MAP = {slug.lower(): name for name, slug in SKILL_SLUG_MAP.items()}
 
 BALANCER_SETTINGS = APP_CONFIG.get('balancer', DEFAULT_BALANCER)
 
-# Exclusion rules and fallback chain
+# Exclusion rules
 EXCLUSION_RULES = BALANCER_SETTINGS.get('exclusion_rules', {})
-
-RAW_MODALITY_FALLBACKS = APP_CONFIG.get('modality_fallbacks', {})
-MODALITY_FALLBACK_CHAIN = {}
-for mod in allowed_modalities:
-    configured = RAW_MODALITY_FALLBACKS.get(mod, RAW_MODALITY_FALLBACKS.get(mod.lower(), []))
-    MODALITY_FALLBACK_CHAIN[mod] = normalize_modality_fallback_entries(
-        configured,
-        mod,
-        allowed_modalities,
-    )
 
 # -----------------------------------------------------------
 # Helper function

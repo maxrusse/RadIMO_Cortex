@@ -141,6 +141,22 @@ def _filter_near_shift_end(df: pd.DataFrame, current_dt: datetime, buffer_minute
     mask = df.apply(is_not_near_shift_end, axis=1)
     return df[mask].copy()
 
+def _filter_near_shift_start(df: pd.DataFrame, current_dt: datetime, buffer_minutes: int) -> pd.DataFrame:
+    """
+    Filter out workers who are within buffer_minutes of their shift start.
+    Used to prevent overflow assignments at beginning of shift.
+    """
+    if df is None or df.empty or buffer_minutes <= 0:
+        return df
+
+    def is_not_near_shift_start(row):
+        start_dt, end_dt = compute_shift_window(row['start_time'], row['end_time'], current_dt)
+        minutes_since_start = (current_dt - start_dt).total_seconds() / 60
+        return minutes_since_start > buffer_minutes
+
+    mask = df.apply(is_not_near_shift_start, axis=1)
+    return df[mask].copy()
+
 def _get_effective_assignment_load(
     worker: str,
     column: str,
@@ -251,83 +267,75 @@ def _get_worker_exclusion_based(
     modality: str,
     allow_fallback: bool,
 ):
+    """
+    Specialist-first assignment with pooled worker overflow.
+
+    Strategy:
+    1. Filter workers in requested modality by skill>=0 (excludes skill=-1)
+    2. Apply exclusion rules (e.g., notfall_ct team won't get mammo_gyn)
+    3. Split into specialists (skill=1/'w') and generalists (skill=0)
+    4. Try specialists first, overflow to generalists only if all specialists overloaded
+    5. Fallback: if exclusions filter out everyone, retry without exclusions
+    """
     role_lower = role.lower()
     if role_lower not in ROLE_MAP:
         role_lower = 'normal'
     primary_skill = ROLE_MAP[role_lower]
 
-    # Get exclusion list directly (simplified config format)
+    # Get exclusion list and overflow settings
     exclude_skills = EXCLUSION_RULES.get(primary_skill, [])
-
-    modality_search = [modality] + MODALITY_FALLBACK_CHAIN.get(modality, [])
-
-    flat_modality_search = []
-    for entry in modality_search:
-        if isinstance(entry, list):
-            flat_modality_search.extend(entry)
-        else:
-            flat_modality_search.append(entry)
-
-    seen_modalities = set()
-    unique_modality_search = []
-    for mod in flat_modality_search:
-        if mod not in seen_modalities and mod in modality_data:
-            seen_modalities.add(mod)
-            unique_modality_search.append(mod)
-
-    # Get shift-end buffer config (0 = disabled)
+    imbalance_threshold_pct = BALANCER_SETTINGS.get('imbalance_threshold_pct', 30)
+    shift_start_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_start_minutes', 0)
     shift_end_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_end_minutes', 0)
 
     selection_logger.info(
-        "Exclusion-based routing for skill %s: filter %s>=0, exclude %s=1, modalities=%s, shift_end_buffer=%d",
+        "Specialist-first routing for skill %s in modality %s: exclude %s=1, imbalance_threshold=%d%%",
         primary_skill,
-        primary_skill,
+        modality,
         exclude_skills if exclude_skills else 'none',
-        unique_modality_search,
-        shift_end_buffer,
+        imbalance_threshold_pct,
     )
 
-    candidate_pool_excluded = []
+    # Helper function to try selection with given filters
+    def try_selection(apply_exclusions: bool):
+        if modality not in modality_data:
+            return None
 
-    for target_modality in unique_modality_search:
-        is_overflow = (target_modality != modality)
-        d = modality_data[target_modality]
+        d = modality_data[modality]
         if d['working_hours_df'] is None:
-            continue
+            return None
 
         active_df = _filter_active_rows(d['working_hours_df'], current_dt)
         if active_df is None or active_df.empty:
-            continue
-
-        # For overflow modalities, filter out workers near shift end
-        if is_overflow and shift_end_buffer > 0:
-            active_df = _filter_near_shift_end(active_df, current_dt, shift_end_buffer)
-            if active_df.empty:
-                selection_logger.debug(
-                    "Overflow modality %s: all workers filtered out (near shift end)",
-                    target_modality
-                )
-                continue
+            return None
 
         if primary_skill not in active_df.columns:
-            continue
+            return None
 
+        # Filter by skill >= 0 (excludes skill=-1)
         skill_filtered = active_df[active_df[primary_skill] >= 0]
         if skill_filtered.empty:
-            continue
+            return None
 
+        # Apply shift start/end buffers (per-worker per-shift)
+        if shift_start_buffer > 0:
+            skill_filtered = _filter_near_shift_start(skill_filtered, current_dt, shift_start_buffer)
+        if shift_end_buffer > 0:
+            skill_filtered = _filter_near_shift_end(skill_filtered, current_dt, shift_end_buffer)
+        if skill_filtered.empty:
+            return None
+
+        # Apply exclusion rules if requested
         filtered_workers = skill_filtered
-        for skill_to_exclude in exclude_skills:
-            if skill_to_exclude in filtered_workers.columns:
-                filtered_workers = filtered_workers[filtered_workers[skill_to_exclude] < 1]
+        if apply_exclusions:
+            for skill_to_exclude in exclude_skills:
+                if skill_to_exclude in filtered_workers.columns:
+                    filtered_workers = filtered_workers[filtered_workers[skill_to_exclude] < 1]
+            if filtered_workers.empty:
+                return None
 
-        if filtered_workers.empty:
-            continue
-
-        balanced_df = _apply_minimum_balancer(filtered_workers, primary_skill, target_modality)
-        result_df = balanced_df if not balanced_df.empty else filtered_workers
-
-        hours_map = calculate_work_hours_now(current_dt, target_modality)
+        # Calculate workload ratios
+        hours_map = calculate_work_hours_now(current_dt, modality)
 
         def weighted_ratio(person):
             canonical_id = get_canonical_worker_id(person)
@@ -335,114 +343,110 @@ def _get_worker_exclusion_based(
             w = get_global_weighted_count(canonical_id)
             return w / max(h, 0.5) if h > 0 else w
 
-        available_workers = result_df['PPL'].unique()
-        if len(available_workers) == 0:
-            continue
+        # Split into specialists (skill=1 or 'w') and generalists (skill=0)
+        specialists_df = filtered_workers[
+            (filtered_workers[primary_skill] == 1) | (filtered_workers[primary_skill] == 'w')
+        ]
+        generalists_df = filtered_workers[filtered_workers[primary_skill] == 0]
 
-        best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
-        candidate = result_df[result_df['PPL'] == best_person].iloc[0].copy()
-        candidate['__modality_source'] = target_modality
-        candidate['__selection_ratio'] = weighted_ratio(best_person)
+        # Strategy: Try specialists first, overflow to generalists if needed
+        if not specialists_df.empty:
+            # Apply minimum balancer to specialists
+            balanced_specialists = _apply_minimum_balancer(specialists_df, primary_skill, modality)
+            specialists_to_check = balanced_specialists if not balanced_specialists.empty else specialists_df
 
-        ratio = candidate.get('__selection_ratio', float('inf'))
-        candidate_pool_excluded.append((ratio, candidate, primary_skill, target_modality))
+            specialist_workers = specialists_to_check['PPL'].unique()
+            specialist_ratios = {p: weighted_ratio(p) for p in specialist_workers}
 
-    if candidate_pool_excluded:
-        ratio, candidate, used_skill, source_modality = min(candidate_pool_excluded, key=lambda item: item[0])
+            # Check if should overflow to generalists based on imbalance
+            overflow_triggered = False
+            if not generalists_df.empty and imbalance_threshold_pct > 0:
+                # Calculate min ratios for both pools
+                min_specialist_ratio = min(specialist_ratios.values())
 
-        selection_logger.info(
-            "Exclusion routing: Selected from pool of %d candidates (%s>=0, excluded %s=1): person=%s, modality=%s, ratio=%.4f",
-            len(candidate_pool_excluded),
-            primary_skill,
-            exclude_skills if exclude_skills else 'none',
-            candidate.get('PPL', 'unknown'),
-            source_modality,
-            ratio,
-        )
+                generalist_workers = generalists_df['PPL'].unique()
+                generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
+                min_generalist_ratio = min(generalist_ratios.values())
 
-        return candidate, used_skill, source_modality
+                # Check if specialists are imbalanced compared to generalists
+                if min_generalist_ratio < min_specialist_ratio and min_specialist_ratio > 0:
+                    imbalance_pct = ((min_specialist_ratio - min_generalist_ratio) / min_specialist_ratio) * 100
+                    if imbalance_pct >= imbalance_threshold_pct:
+                        overflow_triggered = True
+                        selection_logger.info(
+                            "Specialist overflow triggered: specialist_min=%.4f, generalist_min=%.4f, imbalance=%.1f%% >= %d%%",
+                            min_specialist_ratio,
+                            min_generalist_ratio,
+                            imbalance_pct,
+                            imbalance_threshold_pct,
+                        )
 
+            # If overflow not triggered, use specialist with lowest ratio
+            if not overflow_triggered:
+                best_specialist = min(specialist_workers, key=lambda p: specialist_ratios[p])
+                candidate = specialists_to_check[specialists_to_check['PPL'] == best_specialist].iloc[0].copy()
+                candidate['__modality_source'] = modality
+                candidate['__selection_ratio'] = specialist_ratios[best_specialist]
+
+                selection_logger.info(
+                    "Selected specialist: person=%s, skill=%s=%s, ratio=%.4f",
+                    candidate.get('PPL', 'unknown'),
+                    primary_skill,
+                    candidate.get(primary_skill, '?'),
+                    specialist_ratios[best_specialist],
+                )
+
+                return candidate, primary_skill, modality
+
+        # Use generalists if: (1) no specialists, OR (2) overflow triggered
+        if not generalists_df.empty:
+            balanced_generalists = _apply_minimum_balancer(generalists_df, primary_skill, modality)
+            generalists_to_check = balanced_generalists if not balanced_generalists.empty else generalists_df
+
+            generalist_workers = generalists_to_check['PPL'].unique()
+            generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
+
+            best_generalist = min(generalist_workers, key=lambda p: generalist_ratios[p])
+            candidate = generalists_to_check[generalists_to_check['PPL'] == best_generalist].iloc[0].copy()
+            candidate['__modality_source'] = modality
+            candidate['__selection_ratio'] = generalist_ratios[best_generalist]
+
+            selection_logger.info(
+                "Selected generalist (pooled): person=%s, skill=%s=0, ratio=%.4f",
+                candidate.get('PPL', 'unknown'),
+                primary_skill,
+                generalist_ratios[best_generalist],
+            )
+
+            return candidate, primary_skill, modality
+
+        return None
+
+    # Level 1: Try with exclusions
+    result = try_selection(apply_exclusions=True)
+    if result:
+        return result
+
+    # Level 2: Fallback without exclusions if enabled
     if not allow_fallback:
         selection_logger.info(
-            "No workers available with exclusions for skill %s, and fallback disabled",
+            "No workers available with exclusions for skill %s, fallback disabled",
             primary_skill,
         )
         return None
 
     selection_logger.info(
-        "No workers available with exclusions for skill %s, falling back to skill-based selection",
-        primary_skill,
+        "No workers with exclusions, retrying without exclusion filters",
     )
 
-    candidate_pool_fallback = []
-
-    for target_modality in unique_modality_search:
-        is_overflow = (target_modality != modality)
-        d = modality_data[target_modality]
-        if d['working_hours_df'] is None:
-            continue
-
-        active_df = _filter_active_rows(d['working_hours_df'], current_dt)
-        if active_df is None or active_df.empty:
-            continue
-
-        # For overflow modalities, filter out workers near shift end
-        if is_overflow and shift_end_buffer > 0:
-            active_df = _filter_near_shift_end(active_df, current_dt, shift_end_buffer)
-            if active_df.empty:
-                selection_logger.debug(
-                    "Fallback overflow modality %s: all workers filtered out (near shift end)",
-                    target_modality
-                )
-                continue
-
-        if primary_skill not in active_df.columns:
-            continue
-
-        skill_filtered = active_df[active_df[primary_skill] >= 0]
-        if skill_filtered.empty:
-            continue
-
-        balanced_df = _apply_minimum_balancer(skill_filtered, primary_skill, target_modality)
-        result_df = balanced_df if not balanced_df.empty else skill_filtered
-
-        hours_map = calculate_work_hours_now(current_dt, target_modality)
-
-        def weighted_ratio(person):
-            canonical_id = get_canonical_worker_id(person)
-            h = hours_map.get(canonical_id, 0)
-            w = get_global_weighted_count(canonical_id)
-            return w / max(h, 0.5) if h > 0 else w
-
-        available_workers = result_df['PPL'].unique()
-        if len(available_workers) == 0:
-            continue
-
-        best_person = sorted(available_workers, key=lambda p: weighted_ratio(p))[0]
-        candidate = result_df[result_df['PPL'] == best_person].iloc[0].copy()
-        candidate['__modality_source'] = target_modality
-        candidate['__selection_ratio'] = weighted_ratio(best_person)
-
-        ratio = candidate.get('__selection_ratio', float('inf'))
-        candidate_pool_fallback.append((ratio, candidate, primary_skill, target_modality))
-
-    if candidate_pool_fallback:
-        ratio, candidate, used_skill, source_modality = min(candidate_pool_fallback, key=lambda item: item[0])
-
-        selection_logger.info(
-            "Fallback routing: Selected from pool of %d candidates (skill %s>=0): person=%s, modality=%s, ratio=%.4f",
-            len(candidate_pool_fallback),
-            primary_skill,
-            candidate.get('PPL', 'unknown'),
-            source_modality,
-            ratio,
-        )
-
-        return candidate, used_skill, source_modality
+    result = try_selection(apply_exclusions=False)
+    if result:
+        return result
 
     selection_logger.info(
-        "No workers available for skill %s (tried exclusion-based and skill-based fallback)",
+        "No workers available for skill %s in modality %s",
         primary_skill,
+        modality,
     )
     return None
 

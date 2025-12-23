@@ -19,7 +19,6 @@ from config import (
     SKILL_SETTINGS,
     allowed_modalities,
     SKILL_COLUMNS,
-    normalize_modality_fallback_entries,
     allowed_modalities_map,
     default_modality,
     SKILL_ROSTER_AUTO_IMPORT,
