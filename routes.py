@@ -17,7 +17,6 @@ from flask import (
 )
 
 # Third-party imports
-import yaml
 import pandas as pd
 
 # Local imports
@@ -130,35 +129,18 @@ def resolve_modality_from_request() -> str:
     return normalize_modality(request.values.get('modality'))
 
 def get_admin_password():
-    try:
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        return config.get("admin_password", "")
-    except Exception as e:
-        selection_logger.info("Error loading config.yaml:", e)
-        return ""
+    """Get the admin password from config."""
+    return APP_CONFIG.get("admin_password", "")
 
 
 def get_access_password():
     """Get the basic access password from config."""
-    try:
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        return config.get("access_password", "change_easy_pw")
-    except Exception as e:
-        selection_logger.info("Error loading config.yaml:", e)
-        return "change_easy_pw"
+    return APP_CONFIG.get("access_password", "change_easy_pw")
 
 
 def is_access_protection_enabled():
     """Check if basic access protection is enabled."""
-    try:
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        return config.get("access_protection_enabled", True)
-    except Exception as e:
-        selection_logger.info("Error loading config.yaml:", e)
-        return True
+    return APP_CONFIG.get("access_protection_enabled", True)
 
 
 def access_required(f):
@@ -609,12 +591,11 @@ def run_operational_checks(context: str = 'unknown', force: bool = False) -> dic
     results = []
     now = get_local_berlin_now().isoformat()
 
-    try:
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        results.append({'name': 'Config File', 'status': 'OK', 'detail': 'config.yaml is readable and valid YAML'})
-    except Exception as e:
-        results.append({'name': 'Config File', 'status': 'ERROR', 'detail': f'Failed to load config.yaml: {str(e)}'})
+    # Check if APP_CONFIG is available and populated
+    if APP_CONFIG:
+        results.append({'name': 'Config File', 'status': 'OK', 'detail': 'APP_CONFIG is loaded and available'})
+    else:
+        results.append({'name': 'Config File', 'status': 'ERROR', 'detail': 'APP_CONFIG is not loaded or empty'})
 
     try:
         scheduler_conf = APP_CONFIG.get('scheduler', {})
