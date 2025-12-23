@@ -229,7 +229,7 @@ Use the usage data to:
 ## File Locations
 
 - **CSV File**: `logs/usage_stats/usage_stats.csv` (single file, wide format, one row per day)
-- **Module**: `usage_logger.py`
+- **Module**: `lib/usage_logger.py`
 - **Integration**: `routes.py` (lines 1006-1009, 1041-1147)
 
 ## Configuration

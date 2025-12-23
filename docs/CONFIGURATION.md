@@ -643,4 +643,4 @@ worker_skill_roster:
 1. **Adding new activity**: Add rule to `medweb_mapping.rules`, restart app
 2. **Adjusting worker skills**: Update `worker_skill_roster`, restart app
 3. **Fine-tuning balance**: Adjust `skill_modality_overrides` for specific combinations
-4. **Testing config**: Run `python ops_check.py` to validate
+4. **Testing config**: Run `python scripts/ops_check.py` to validate

@@ -31,7 +31,7 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 
 ```bash
 pip install -r requirements.txt
-python ops_check.py          # Check system readiness
+python scripts/ops_check.py  # Check system readiness
 flask --app app run --debug  # Start application
 ```
 
@@ -119,12 +119,17 @@ RadIMO_Cortex/
 ├── balancer.py                 # Load balancing logic
 ├── config.py                   # Config loader and normalization
 ├── config.yaml                 # Configuration (mapping, skills, weights)
-├── worker_skill_roster.json    # Worker skill roster
-├── utils.py                    # Utility functions and logging
+├── worker_skill_roster.json    # Worker skill roster (persistent)
 ├── requirements.txt            # Python dependencies
-├── ops_check.py                # Pre-deployment checks
 ├── gunicorn_config.py          # Gunicorn server configuration
-├── prepare_config.py           # Helper to bootstrap medweb mapping
+├── lib/                        # Library modules
+│   ├── utils.py                # Utility functions and logging
+│   └── usage_logger.py         # Usage tracking
+├── scripts/                    # Development and utility scripts
+│   ├── ops_check.py            # Pre-deployment checks
+│   ├── prepare_config.py       # Config generator from CSV
+│   └── code_aggregator.py      # Documentation export tool
+├── test_data/                  # Test CSV files and examples
 ├── templates/                  # HTML templates (Admin pages aligned to Prep)
 ├── static/                     # CSS, JS, assets
 ├── uploads/                    # Master CSV and backups storage
@@ -132,7 +137,8 @@ RadIMO_Cortex/
     ├── WORKFLOW.md             # Master CSV workflow guide
     ├── CONFIGURATION.md        # Config reference
     ├── API.md                  # API endpoints
-    └── ADMIN_GUIDE.md          # Admin pages guide
+    ├── ADMIN_GUIDE.md          # Admin pages guide
+    └── USAGE_LOGGING.md        # Usage logging documentation
 ```
 
 ---
@@ -153,7 +159,7 @@ RadIMO_Cortex/
 Run system health checks:
 
 ```bash
-python ops_check.py
+python scripts/ops_check.py
 ```
 
 Validates: config file, admin password, upload folder, modalities, skills, medweb mapping rules.
