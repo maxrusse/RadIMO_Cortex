@@ -490,7 +490,8 @@ def initialize_data(file_path: str, modality: str):
             for skill in SKILL_COLUMNS:
                 if skill not in df.columns:
                     df[skill] = 0
-                df[skill] = df[skill].fillna(0).astype(int)
+                # Use normalize_skill_value to preserve 'w' marker for weighted skills
+                df[skill] = df[skill].fillna(0).apply(normalize_skill_value)
 
             df['shift_duration'] = df.apply(
                 lambda row: calculate_shift_duration_hours(row['start_time'], row['end_time']),

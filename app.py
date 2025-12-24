@@ -56,7 +56,7 @@ atexit.register(lambda: scheduler.shutdown())
 # -----------------------------------------------------------
 def startup_initialization():
     load_state()
-    
+
     # Check for master CSV existence
     master_csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'master_medweb.csv')
     if os.path.exists(master_csv_path):
@@ -70,32 +70,34 @@ def startup_initialization():
         # Priority 1: Live Backup
         # Priority 2: Default file
         # Priority 3: Start empty
-        
+
         backup_dir = os.path.join(app.config['UPLOAD_FOLDER'], "backups")
         live_backup = os.path.join(backup_dir, f"Cortex_{mod.upper()}_live.xlsx")
-        
+
         loaded = False
-        
+
         if os.path.exists(live_backup):
             selection_logger.info(f"Attempting to load LIVE backup for {mod}: {live_backup}")
             if attempt_initialize_data(live_backup, mod, context='startup backup'):
                 loaded = True
-        
+
         if not loaded and os.path.exists(d['default_file_path']):
             selection_logger.info(f"Attempting to load DEFAULT file for {mod}: {d['default_file_path']}")
             if attempt_initialize_data(d['default_file_path'], mod, context='startup default'):
                 loaded = True
-                
+
         if not loaded:
             selection_logger.warning(f"Starting {mod} with EMPTY data (no valid backup or default file).")
+
+
+# Run startup initialization when module is loaded (works with Gunicorn)
+startup_initialization()
 
 
 # -----------------------------------------------------------
 # Main Entry Point
 # -----------------------------------------------------------
 if __name__ == '__main__':
-    startup_initialization()
-    
     # In production, use a proper WSGI server (gunicorn/waitress)
     # For development/local use:
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

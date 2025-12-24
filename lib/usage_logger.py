@@ -99,14 +99,12 @@ def _export_and_reset(export_date: date = None) -> None:
         row_data = {'date': export_date.strftime('%Y-%m-%d')}
 
         # Add all skill-modality counts (0 if not used)
-        for column in all_columns:
-            # Column format is 'skill_modality', we need to find the count
-            parts = column.rsplit('_', 1)  # Split from right to handle skills with underscores
-            if len(parts) == 2:
-                skill, modality = parts
+        # Iterate over skills and modalities directly to avoid parsing issues
+        # with skill names that contain underscores
+        for skill in SKILL_COLUMNS:
+            for modality in allowed_modalities:
+                column = f"{skill}_{modality}"
                 row_data[column] = _daily_usage.get((skill, modality), 0)
-            else:
-                row_data[column] = 0
 
         # Write to CSV
         with open(USAGE_STATS_FILE, 'a', newline='', encoding='utf-8') as f:
@@ -158,14 +156,12 @@ def export_current_usage() -> Path:
             row_data = {'date': _current_date.strftime('%Y-%m-%d')}
 
             # Add all skill-modality counts (0 if not used)
-            for column in all_columns:
-                # Column format is 'skill_modality', we need to find the count
-                parts = column.rsplit('_', 1)  # Split from right to handle skills with underscores
-                if len(parts) == 2:
-                    skill, modality = parts
+            # Iterate over skills and modalities directly to avoid parsing issues
+            # with skill names that contain underscores
+            for skill in SKILL_COLUMNS:
+                for modality in allowed_modalities:
+                    column = f"{skill}_{modality}"
                     row_data[column] = _daily_usage.get((skill, modality), 0)
-                else:
-                    row_data[column] = 0
 
             # Write to CSV
             with open(USAGE_STATS_FILE, 'a', newline='', encoding='utf-8') as f:

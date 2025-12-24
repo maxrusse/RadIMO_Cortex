@@ -90,7 +90,9 @@ def update_global_assignment(person: str, role: str, modality: str, is_weighted:
         global_worker_data['weighted_counts'].get(canonical_id, 0.0) + weight
 
     assignments = _get_or_create_assignments(modality, canonical_id)
-    assignments[role] += 1
+    # Only increment if role is a valid skill column (prevents KeyError)
+    if role in SKILL_COLUMNS:
+        assignments[role] = assignments.get(role, 0) + 1
     assignments['total'] += 1
 
     # Persist state after every assignment to prevent data loss on restart
