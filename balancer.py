@@ -20,7 +20,9 @@ from lib.utils import (
     get_local_berlin_now,
     compute_shift_window,
     is_now_in_shift,
-    skill_value_to_numeric
+    skill_value_to_numeric,
+    is_weighted_skill,
+    WEIGHTED_SKILL_MARKER
 )
 from data_manager import (
     get_canonical_worker_id,
@@ -56,13 +58,31 @@ def _get_or_create_assignments(modality: str, canonical_id: str) -> dict:
         assignments[canonical_id]['total'] = 0
     return assignments[canonical_id]
 
-def update_global_assignment(person: str, role: str, modality: str) -> str:
+def update_global_assignment(person: str, role: str, modality: str, is_weighted: bool = False) -> str:
+    """
+    Record a worker assignment and update global weighted counts.
+
+    Args:
+        person: Worker name (PPL field)
+        role: Skill/role assigned (e.g., 'Notfall', 'MSK')
+        modality: Modality assigned (e.g., 'ct', 'mr')
+        is_weighted: If True (skill='w'), apply worker's personal modifier.
+                     If False (skill=1 or 0), use modifier=1.0 (no adjustment).
+
+    Returns:
+        Canonical worker ID
+    """
     canonical_id = get_canonical_worker_id(person)
-    # Get the modifier (default 1.0). Values < 1 mean less work capacity (counts more toward load)
-    modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
-    modifier = coerce_float(modifier, 1.0)
-    modifier = modifier if modifier > 0 else 1.0
-    
+
+    # Only apply personal modifier for weighted ('w') assignments
+    # skill=1 (regular specialist) and skill=0 (generalist) use modifier=1.0
+    if is_weighted:
+        modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
+        modifier = coerce_float(modifier, 1.0)
+        modifier = modifier if modifier > 0 else 1.0
+    else:
+        modifier = 1.0
+
     weight = get_skill_modality_weight(role, modality) * (1.0 / modifier)
 
     # Update single global weighted count (consolidated across all modalities)
@@ -110,7 +130,11 @@ def calculate_work_hours_now(current_dt: datetime, modality: str) -> dict:
     return hours_by_canonical
 
 def _filter_active_rows(df: Optional[pd.DataFrame], current_dt: datetime) -> Optional[pd.DataFrame]:
-    """Return only rows active at ``current_dt`` (supports overnight shifts)."""
+    """Return only rows active at ``current_dt`` (supports overnight shifts).
+
+    Note: Skill values are NOT converted to numeric here to preserve 'w' marker.
+    Use skill_value_to_numeric() for comparisons, is_weighted_skill() to check for 'w'.
+    """
     if df is None or df.empty:
         return df
 
@@ -119,9 +143,6 @@ def _filter_active_rows(df: Optional[pd.DataFrame], current_dt: datetime) -> Opt
         axis=1
     )
     active_df = df[active_mask].copy()
-    for skill in SKILL_COLUMNS:
-        if skill in active_df.columns:
-            active_df[skill] = active_df[skill].apply(skill_value_to_numeric)
     return active_df
 
 def _filter_near_shift_end(df: pd.DataFrame, current_dt: datetime, buffer_minutes: int) -> pd.DataFrame:
@@ -243,10 +264,7 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
         if hours_worked <= 0:
             continue
 
-        if hours_worked > 0:
-            ratio = weighted_assignments / hours_worked
-        else:
-            ratio = weighted_assignments * 2
+        ratio = weighted_assignments / hours_worked
         worker_ratios.append(ratio)
 
     if len(worker_ratios) < 2:
@@ -311,8 +329,11 @@ def _get_worker_exclusion_based(
         if primary_skill not in active_df.columns:
             return None
 
-        # Filter by skill >= 0 (excludes skill=-1)
-        skill_filtered = active_df[active_df[primary_skill] >= 0]
+        # Filter by skill >= 0 (excludes skill=-1), handling 'w' as specialist
+        # 'w' is treated as skill=1 for filtering, but preserved for modifier logic
+        skill_filtered = active_df[
+            active_df[primary_skill].apply(lambda v: skill_value_to_numeric(v) >= 0)
+        ]
         if skill_filtered.empty:
             return None
 
@@ -329,7 +350,10 @@ def _get_worker_exclusion_based(
         if apply_exclusions:
             for skill_to_exclude in exclude_skills:
                 if skill_to_exclude in filtered_workers.columns:
-                    filtered_workers = filtered_workers[filtered_workers[skill_to_exclude] < 1]
+                    # Exclude workers where skill_to_exclude >= 1 (including 'w')
+                    filtered_workers = filtered_workers[
+                        filtered_workers[skill_to_exclude].apply(lambda v: skill_value_to_numeric(v) < 1)
+                    ]
             if filtered_workers.empty:
                 return None
 
@@ -340,13 +364,18 @@ def _get_worker_exclusion_based(
             canonical_id = get_canonical_worker_id(person)
             h = hours_map.get(canonical_id, 0)
             w = get_global_weighted_count(canonical_id)
-            return w / max(h, 0.5) if h > 0 else w
+            # Use floor of 0.5 hours to prevent division by very small values
+            # and to handle workers with zero hours consistently
+            return w / max(h, 0.5)
 
         # Split into specialists (skill=1 or 'w') and generalists (skill=0)
+        # 'w' workers use their personal modifier, skill=1 workers do not
         specialists_df = filtered_workers[
-            (filtered_workers[primary_skill] == 1) | (filtered_workers[primary_skill] == 'w')
+            filtered_workers[primary_skill].apply(lambda v: skill_value_to_numeric(v) == 1)
         ]
-        generalists_df = filtered_workers[filtered_workers[primary_skill] == 0]
+        generalists_df = filtered_workers[
+            filtered_workers[primary_skill].apply(lambda v: skill_value_to_numeric(v) == 0)
+        ]
 
         # Strategy: Try specialists first, overflow to generalists if needed
         if not specialists_df.empty:
@@ -386,12 +415,15 @@ def _get_worker_exclusion_based(
                 candidate = specialists_to_check[specialists_to_check['PPL'] == best_specialist].iloc[0].copy()
                 candidate['__modality_source'] = modality
                 candidate['__selection_ratio'] = specialist_ratios[best_specialist]
+                # Track if this is a weighted ('w') assignment - affects modifier usage
+                candidate['__is_weighted'] = is_weighted_skill(candidate.get(primary_skill))
 
                 selection_logger.info(
-                    "Selected specialist: person=%s, skill=%s=%s, ratio=%.4f",
+                    "Selected specialist: person=%s, skill=%s=%s, weighted=%s, ratio=%.4f",
                     candidate.get('PPL', 'unknown'),
                     primary_skill,
                     candidate.get(primary_skill, '?'),
+                    candidate['__is_weighted'],
                     specialist_ratios[best_specialist],
                 )
 
@@ -409,6 +441,8 @@ def _get_worker_exclusion_based(
             candidate = generalists_to_check[generalists_to_check['PPL'] == best_generalist].iloc[0].copy()
             candidate['__modality_source'] = modality
             candidate['__selection_ratio'] = generalist_ratios[best_generalist]
+            # Generalists (skill=0) never use weighted modifier
+            candidate['__is_weighted'] = False
 
             selection_logger.info(
                 "Selected generalist (pooled): person=%s, skill=%s=0, ratio=%.4f",

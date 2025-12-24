@@ -1080,7 +1080,9 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                         d['skill_counts'][actual_skill][person] = 0
                     d['skill_counts'][actual_skill][person] += 1
 
-                canonical_id = update_global_assignment(person, actual_skill, actual_modality)
+                # Check if this is a weighted ('w') assignment - only 'w' uses modifier
+                is_weighted = candidate.get('__is_weighted', False)
+                canonical_id = update_global_assignment(person, actual_skill, actual_modality, is_weighted)
 
                 # Record skill-modality usage for analytics
                 usage_logger.record_skill_modality_usage(actual_skill, actual_modality)
@@ -1092,7 +1094,8 @@ def _assign_worker(modality: str, role: str, allow_fallback: bool = True):
                     "selected_person": person,
                     "canonical_id": canonical_id,
                     "source_modality": actual_modality,
-                    "skill_used": actual_skill
+                    "skill_used": actual_skill,
+                    "is_weighted": is_weighted
                 })
             else:
                 selection_logger.warning("No available worker found")
