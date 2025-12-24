@@ -109,10 +109,10 @@ Both tabs include smart filters:
 
 ### Skill Value Colors
 
-- 🟢 **Green (1)** = Active
+- 🟢 **Green (1)** = Active specialist (Modifier NOT applied)
 - 🟡 **Yellow (0)** = Passive/Fallback
 - 🔴 **Red (-1)** = Excluded
-- 🔵 **Blue (w)** = Weighted (visual marker)
+- 🔵 **Blue (w)** = Weighted/learning (Modifier IS applied)
 
 ### Example Workflows
 

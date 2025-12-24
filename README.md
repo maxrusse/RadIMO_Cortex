@@ -82,8 +82,8 @@ Real-time assignment with load balancing
 ### Skill System
 | Value | Name | Behavior |
 |-------|------|----------|
-| **w** | Weighted | Visual marker for weighted entries (Modifier controls load) |
-| **1** | Active | Primary routing - actively performs this skill |
+| **w** | Weighted | Assisted/learning worker - uses personal Modifier for load calculation |
+| **1** | Active | Primary routing - actively performs this skill (Modifier NOT applied) |
 | **0** | Passive | Fallback only - can help if needed |
 | **-1** | Excluded | Never assigned - cannot do this skill |
 
@@ -91,7 +91,7 @@ Real-time assignment with load balancing
 Assignments are weighted by:
 - **Skill weight**: e.g., Notfall=1.1, Privat=1.2
 - **Modality factor**: e.g., MR=1.2, XRAY=0.33
-- **Worker modifier**: Individual multiplier
+- **Worker modifier**: Individual multiplier (only applied when skill='w')
 - **Skill×Modality overrides**: Custom weights for specific combinations
 
 ### Admin Pages
