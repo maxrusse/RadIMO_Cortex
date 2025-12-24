@@ -243,10 +243,7 @@ def _should_balance_via_fallback(filtered_df: pd.DataFrame, column: str, modalit
         if hours_worked <= 0:
             continue
 
-        if hours_worked > 0:
-            ratio = weighted_assignments / hours_worked
-        else:
-            ratio = weighted_assignments * 2
+        ratio = weighted_assignments / hours_worked
         worker_ratios.append(ratio)
 
     if len(worker_ratios) < 2:
@@ -340,12 +337,13 @@ def _get_worker_exclusion_based(
             canonical_id = get_canonical_worker_id(person)
             h = hours_map.get(canonical_id, 0)
             w = get_global_weighted_count(canonical_id)
-            return w / max(h, 0.5) if h > 0 else w
+            # Use floor of 0.5 hours to prevent division by very small values
+            # and to handle workers with zero hours consistently
+            return w / max(h, 0.5)
 
-        # Split into specialists (skill=1 or 'w') and generalists (skill=0)
-        specialists_df = filtered_workers[
-            (filtered_workers[primary_skill] == 1) | (filtered_workers[primary_skill] == 'w')
-        ]
+        # Split into specialists (skill=1, which includes converted 'w') and generalists (skill=0)
+        # Note: 'w' values are already converted to 1 by skill_value_to_numeric in _filter_active_rows
+        specialists_df = filtered_workers[filtered_workers[primary_skill] == 1]
         generalists_df = filtered_workers[filtered_workers[primary_skill] == 0]
 
         # Strategy: Try specialists first, overflow to generalists if needed
