@@ -6,8 +6,9 @@ This standalone script allows admins to:
 2. IMPORT: Generate YAML template entries from CSV to paste into config.yaml
 
 Modes:
+- auto:   Smart mode - export combi, import auto-detects format (default)
 - single: Export/import skill weights and modality factors separately
-- combi:  Export/import combined Skill×Modality values (default)
+- combi:  Export/import combined Skill×Modality values
 
 Usage:
     # Export in combi mode (default) - combined values
@@ -451,17 +452,18 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
+  auto    Smart mode - export combi, import auto-detects (default)
   single  Export/import skill weights and modality factors separately
-  combi   Export/import combined Skill×Modality values (default)
+  combi   Export/import combined Skill×Modality values
 
 Examples:
-    # Export combined values (combi mode)
+    # Export (auto mode = combi)
     python exam_values.py export -c config.yaml -o exam_values.csv
 
     # Export separate weights/factors (single mode)
     python exam_values.py export --mode single -c config.yaml -o weights.csv
 
-    # Import with smart detection (auto-detects format)
+    # Import (auto-detects CSV format, smart decomposition)
     python exam_values.py import -i exam_values.csv -c config.yaml -o template.yaml
 """
     )
@@ -475,9 +477,9 @@ Examples:
     )
     export_parser.add_argument(
         "--mode", "-m",
-        choices=["single", "combi"],
-        default="combi",
-        help="Export mode: single (weights+factors) or combi (combined values)"
+        choices=["auto", "single", "combi"],
+        default="auto",
+        help="Export mode: auto (smart), single (weights+factors), combi (combined)"
     )
     export_parser.add_argument(
         "--config", "-c",
@@ -519,7 +521,7 @@ Examples:
 
         if args.mode == "single":
             export_single_mode(config_path, output_path)
-        else:
+        else:  # auto or combi
             export_combi_mode(config_path, output_path)
 
     elif args.command == "import":
