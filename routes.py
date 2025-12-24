@@ -12,6 +12,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -326,6 +327,121 @@ def import_new_skill_roster_api():
         'success': True,
         'added_count': added_count
     })
+
+
+@routes.route('/api/admin/skill_roster/export', methods=['GET'])
+@admin_required
+def export_skill_roster_csv():
+    """Export skill roster to CSV file for download."""
+    from data_manager import export_roster_to_csv
+    success, message, file_path = export_roster_to_csv()
+
+    if not success:
+        return jsonify({'success': False, 'error': message}), 400
+
+    # Return file for download
+    return send_file(
+        file_path,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=os.path.basename(file_path)
+    )
+
+
+@routes.route('/api/admin/skill_roster/export/preview', methods=['GET'])
+@admin_required
+def export_skill_roster_preview():
+    """Get a preview of the roster data before export."""
+    from data_manager import prepare_roster_export_preview
+    preview = prepare_roster_export_preview()
+    return jsonify({'success': True, **preview})
+
+
+@routes.route('/api/admin/skill_roster/import', methods=['POST'])
+@admin_required
+def import_skill_roster_csv():
+    """Import skill roster from uploaded CSV file."""
+    from data_manager import import_roster_from_csv, validate_roster_csv
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    if not file.filename.endswith('.csv'):
+        return jsonify({'success': False, 'error': 'File must be a CSV'}), 400
+
+    # Save uploaded file temporarily
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        # Get merge mode from request
+        merge_mode = request.form.get('merge_mode', 'replace')
+        if merge_mode not in ('replace', 'merge', 'add_only'):
+            merge_mode = 'replace'
+
+        # Validate first if requested
+        validate_only = request.form.get('validate_only', 'false').lower() == 'true'
+        if validate_only:
+            is_valid, message, details = validate_roster_csv(tmp_path)
+            return jsonify({
+                'success': True,
+                'valid': is_valid,
+                'message': message,
+                'details': details
+            })
+
+        # Import the roster
+        success, message, stats = import_roster_from_csv(tmp_path, merge_mode)
+
+        return jsonify({
+            'success': success,
+            'message': message,
+            'stats': stats
+        })
+
+    finally:
+        # Clean up temp file
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@routes.route('/api/admin/skill_roster/validate', methods=['POST'])
+@admin_required
+def validate_skill_roster_csv():
+    """Validate a CSV file before import."""
+    from data_manager import validate_roster_csv
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    # Save uploaded file temporarily
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+
+    try:
+        is_valid, message, details = validate_roster_csv(tmp_path)
+        return jsonify({
+            'success': True,
+            'valid': is_valid,
+            'message': message,
+            'details': details
+        })
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
 
 @routes.route('/login', methods=['GET', 'POST'])
 def login():

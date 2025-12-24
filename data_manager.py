@@ -154,6 +154,348 @@ def save_worker_skill_json(roster_data: Dict[str, Any]) -> bool:
         return False
 
 
+# -----------------------------------------------------------
+# Weight Roster Import/Export (CSV)
+# -----------------------------------------------------------
+def export_roster_to_csv(output_path: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
+    """
+    Export worker skill roster from JSON to CSV format.
+
+    CSV format:
+        - First column: 'Worker' (worker name/ID)
+        - Remaining columns: skill_modality combinations (e.g., Notfall_ct, Privat_mr)
+        - Values: 1 (active), 0 (passive), -1 (excluded), w (weighted)
+
+    Args:
+        output_path: Optional path for the CSV file. If None, generates timestamped filename.
+
+    Returns:
+        Tuple of (success, message, file_path)
+    """
+    try:
+        roster = load_worker_skill_json()
+        if not roster:
+            return False, "Roster is empty - nothing to export", None
+
+        # Build column headers: skill_modality combinations
+        columns = ['Worker']
+        for mod in allowed_modalities:
+            for skill in SKILL_COLUMNS:
+                columns.append(f"{skill}_{mod}")
+
+        # Build rows
+        rows = []
+        for worker_name, worker_data in roster.items():
+            row = {'Worker': worker_name}
+
+            # Handle both hierarchical (mod -> skill -> value) and flat (skill_mod -> value) formats
+            if worker_data and isinstance(next(iter(worker_data.values()), None), dict):
+                # Hierarchical format: {mod: {skill: value, ...}, ...}
+                for mod in allowed_modalities:
+                    mod_skills = worker_data.get(mod, {})
+                    for skill in SKILL_COLUMNS:
+                        col_name = f"{skill}_{mod}"
+                        value = mod_skills.get(skill, 0)
+                        # Convert numeric 2 to 'w' for CSV readability
+                        if value == 2:
+                            value = 'w'
+                        row[col_name] = value
+            else:
+                # Flat format: {skill_mod: value, ...}
+                for mod in allowed_modalities:
+                    for skill in SKILL_COLUMNS:
+                        col_name = f"{skill}_{mod}"
+                        value = worker_data.get(col_name, 0)
+                        if value == 2:
+                            value = 'w'
+                        row[col_name] = value
+
+            rows.append(row)
+
+        df = pd.DataFrame(rows, columns=columns)
+
+        # Generate output path if not provided
+        if output_path is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            export_dir = os.path.join(UPLOAD_FOLDER, 'exports')
+            os.makedirs(export_dir, exist_ok=True)
+            output_path = os.path.join(export_dir, f'worker_skill_roster_{timestamp}.csv')
+
+        df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        selection_logger.info(f"Exported roster to CSV: {output_path} ({len(rows)} workers)")
+
+        return True, f"Exported {len(rows)} workers to CSV", output_path
+
+    except Exception as exc:
+        selection_logger.error(f"Failed to export roster to CSV: {exc}")
+        return False, f"Export failed: {str(exc)}", None
+
+
+def import_roster_from_csv(csv_path: str, merge_mode: str = 'replace') -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Import worker skill roster from CSV to JSON format.
+
+    CSV format expected:
+        - First column: 'Worker' (worker name/ID)
+        - Remaining columns: skill_modality combinations (e.g., Notfall_ct, Privat_mr)
+        - Values: 1, 0, -1, w (or 2)
+
+    Args:
+        csv_path: Path to the CSV file to import
+        merge_mode: How to handle existing data:
+            - 'replace': Completely replace existing roster
+            - 'merge': Update existing workers, add new ones
+            - 'add_only': Only add new workers, don't update existing
+
+    Returns:
+        Tuple of (success, message, stats_dict)
+    """
+    stats = {'added': 0, 'updated': 0, 'skipped': 0, 'errors': []}
+
+    try:
+        # Try different encodings
+        df = None
+        for encoding in ['utf-8-sig', 'utf-8', 'latin1', 'cp1252']:
+            try:
+                df = pd.read_csv(csv_path, encoding=encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if df is None:
+            return False, "Could not read CSV file with any encoding", stats
+
+        # Validate structure
+        if 'Worker' not in df.columns:
+            return False, "CSV must have 'Worker' column as first column", stats
+
+        # Load existing roster
+        existing_roster = load_worker_skill_json() if merge_mode != 'replace' else {}
+
+        new_roster = {} if merge_mode == 'replace' else existing_roster.copy()
+
+        for _, row in df.iterrows():
+            worker_name = str(row['Worker']).strip()
+            if not worker_name or worker_name == 'nan':
+                continue
+
+            # Check merge mode
+            if merge_mode == 'add_only' and worker_name in existing_roster:
+                stats['skipped'] += 1
+                continue
+
+            is_update = worker_name in existing_roster
+
+            # Build hierarchical structure: {mod: {skill: value, ...}, ...}
+            worker_data = {}
+            for mod in allowed_modalities:
+                worker_data[mod] = {}
+                for skill in SKILL_COLUMNS:
+                    col_name = f"{skill}_{mod}"
+                    if col_name in row.index:
+                        raw_value = row[col_name]
+                        try:
+                            value = _parse_roster_value(raw_value)
+                            worker_data[mod][skill] = value
+                        except ValueError as e:
+                            stats['errors'].append(f"{worker_name}.{col_name}: {e}")
+                            worker_data[mod][skill] = 0
+                    else:
+                        worker_data[mod][skill] = 0
+
+            new_roster[worker_name] = worker_data
+
+            if is_update:
+                stats['updated'] += 1
+            else:
+                stats['added'] += 1
+
+        # Save the new roster
+        if save_worker_skill_json(new_roster):
+            msg = f"Imported roster: {stats['added']} added, {stats['updated']} updated"
+            if stats['skipped']:
+                msg += f", {stats['skipped']} skipped"
+            if stats['errors']:
+                msg += f" ({len(stats['errors'])} value errors)"
+            selection_logger.info(msg)
+            return True, msg, stats
+        else:
+            return False, "Failed to save imported roster", stats
+
+    except Exception as exc:
+        selection_logger.error(f"Failed to import roster from CSV: {exc}")
+        return False, f"Import failed: {str(exc)}", stats
+
+
+def _parse_roster_value(raw_value) -> int:
+    """
+    Parse a roster cell value to its numeric representation.
+
+    Accepts:
+        - 1, 0, -1 (integers)
+        - '1', '0', '-1' (strings)
+        - 'w', 'W', '2' (weighted/assisted → stored as 2)
+        - Empty/NaN → 0
+
+    Returns:
+        Integer value (1, 0, -1, or 2)
+
+    Raises:
+        ValueError: If value cannot be parsed
+    """
+    if pd.isna(raw_value):
+        return 0
+
+    if isinstance(raw_value, (int, float)):
+        val = int(raw_value)
+        if val in (1, 0, -1, 2):
+            return val
+        raise ValueError(f"Invalid numeric value: {raw_value}")
+
+    str_val = str(raw_value).strip().lower()
+    if str_val in ('', 'nan', 'none'):
+        return 0
+    if str_val == 'w':
+        return 2
+    if str_val in ('1', '0', '-1', '2'):
+        return int(str_val)
+
+    raise ValueError(f"Invalid value: {raw_value}")
+
+
+def validate_roster_csv(csv_path: str) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Validate a roster CSV file before import.
+
+    Checks:
+        - File exists and is readable
+        - Has 'Worker' column
+        - Has valid skill_modality columns
+        - Values are valid (1, 0, -1, w)
+
+    Returns:
+        Tuple of (is_valid, message, validation_details)
+    """
+    details = {
+        'workers': 0,
+        'columns_found': [],
+        'columns_missing': [],
+        'invalid_values': [],
+        'warnings': []
+    }
+
+    try:
+        if not os.path.exists(csv_path):
+            return False, "File does not exist", details
+
+        # Try to read the file
+        df = None
+        for encoding in ['utf-8-sig', 'utf-8', 'latin1', 'cp1252']:
+            try:
+                df = pd.read_csv(csv_path, encoding=encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if df is None:
+            return False, "Could not read file with any encoding", details
+
+        # Check for Worker column
+        if 'Worker' not in df.columns:
+            return False, "Missing required 'Worker' column", details
+
+        details['workers'] = len(df)
+
+        # Check for skill_modality columns
+        expected_columns = set()
+        for mod in allowed_modalities:
+            for skill in SKILL_COLUMNS:
+                expected_columns.add(f"{skill}_{mod}")
+
+        found_columns = set(df.columns) - {'Worker'}
+        details['columns_found'] = list(found_columns & expected_columns)
+        details['columns_missing'] = list(expected_columns - found_columns)
+
+        # Check for extra/unknown columns
+        unknown_columns = found_columns - expected_columns
+        if unknown_columns:
+            details['warnings'].append(f"Unknown columns will be ignored: {list(unknown_columns)}")
+
+        # Validate values
+        for col in details['columns_found']:
+            for idx, val in df[col].items():
+                try:
+                    _parse_roster_value(val)
+                except ValueError:
+                    worker = df.at[idx, 'Worker']
+                    details['invalid_values'].append(f"{worker}.{col}: '{val}'")
+
+        # Determine overall validity
+        if details['columns_missing']:
+            details['warnings'].append(f"Missing columns will default to 0: {len(details['columns_missing'])} columns")
+
+        is_valid = len(details['invalid_values']) == 0
+        if is_valid:
+            msg = f"Valid CSV: {details['workers']} workers, {len(details['columns_found'])} columns"
+        else:
+            msg = f"Invalid values found: {len(details['invalid_values'])} errors"
+
+        return is_valid, msg, details
+
+    except Exception as exc:
+        return False, f"Validation failed: {str(exc)}", details
+
+
+def prepare_roster_export_preview() -> Dict[str, Any]:
+    """
+    Prepare a preview of the roster data for export.
+
+    Returns dict with:
+        - worker_count: Number of workers
+        - columns: List of column names
+        - sample_rows: First 5 rows as preview
+        - modalities: List of modalities
+        - skills: List of skills
+    """
+    roster = load_worker_skill_json()
+
+    columns = ['Worker']
+    for mod in allowed_modalities:
+        for skill in SKILL_COLUMNS:
+            columns.append(f"{skill}_{mod}")
+
+    sample_rows = []
+    for i, (worker_name, worker_data) in enumerate(roster.items()):
+        if i >= 5:
+            break
+
+        row = {'Worker': worker_name}
+        if worker_data and isinstance(next(iter(worker_data.values()), None), dict):
+            for mod in allowed_modalities:
+                mod_skills = worker_data.get(mod, {})
+                for skill in SKILL_COLUMNS:
+                    col_name = f"{skill}_{mod}"
+                    value = mod_skills.get(skill, 0)
+                    row[col_name] = 'w' if value == 2 else value
+        else:
+            for mod in allowed_modalities:
+                for skill in SKILL_COLUMNS:
+                    col_name = f"{skill}_{mod}"
+                    value = worker_data.get(col_name, 0)
+                    row[col_name] = 'w' if value == 2 else value
+
+        sample_rows.append(row)
+
+    return {
+        'worker_count': len(roster),
+        'columns': columns,
+        'column_count': len(columns),
+        'sample_rows': sample_rows,
+        'modalities': allowed_modalities,
+        'skills': SKILL_COLUMNS
+    }
+
+
 def build_valid_skills_map() -> Dict[str, List[str]]:
     """Build map of valid skills per modality (for filtering in UI)."""
     valid_skills_map: Dict[str, List[str]] = {}
