@@ -10,7 +10,7 @@ RadIMO provides two admin interfaces for different operational needs:
 
 | Page | URL | Effect | Use Case |
 |------|-----|--------|----------|
-| **Skill Matrix** | `/skill_roster` | Direct | Permanent skill management |
+| **Skill Matrix** | `/skill-roster` | Direct | Permanent skill management |
 | **Schedule Edit (Today)** | `/prep-next-day` | Live | Same-day adjustments (Live Edit) |
 | **Schedule Edit (Tomorrow)** | `/prep-next-day` | Staged | Daily schedule preparation |
 
@@ -21,7 +21,7 @@ All admin pages require login with the admin password from `config.yaml`.
 ## Workflow Separation
 
 ┌─────────────────────────────────────────────────────────────┐
-│  SKILL MATRIX (Permanent)        /skill_roster              │
+│  SKILL MATRIX (Permanent)        /skill-roster              │
 │  ├─ Multi-modality grid                                     │
 │  ├─ Edit skill values (-1, 0, 1)                            │
 │  └─ Save directly to roster JSON                            │
@@ -42,7 +42,7 @@ All admin pages require login with the admin password from `config.yaml`.
 
 ### How It Works
 
-1. Navigate to `/skill_roster` (or "Skill Matrix" in nav)
+1. Navigate to `/skill-roster` (or "Skill Matrix" in nav)
 2. Select worker from the side list
 3. Edit skill values in the grid:
    - **1** = Active (Assigned) - 🟢 Green
@@ -170,7 +170,7 @@ Central hub for Master CSV management and system health.
 
 ### Planning Rotations
 
-1. Update `config.yaml` or `/skill_roster` with new skills
+1. Update `config.yaml` or `/skill-roster` with new skills
 2. Save to staging
 3. Test with `/prep-next-day` → "Prep Tomorrow" tab preview
 4. Activate on rotation start day
@@ -219,9 +219,8 @@ Central hub for Master CSV management and system health.
 ### Skill changes not taking effect
 
 1. Verify changes were saved (not just edited)
-2. Check if using staged vs active
-3. Click "Activate Changes" if using `/skill_roster`
-4. Restart application if changed `config.yaml`
+2. Skill Matrix changes take effect on next reload/assignment
+3. Restart application if changed `config.yaml`
 
 ### Assignment not balanced
 

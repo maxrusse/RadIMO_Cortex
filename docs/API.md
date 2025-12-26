@@ -24,11 +24,11 @@ Assigns a worker with automatic fallback if no direct match available.
 | Name | Type | Description |
 |------|------|-------------|
 | modality | path | `ct`, `mr`, or `xray` |
-| skill | path | `normal`, `notfall`, `privat`, `herz`, `msk`, `chest` |
+| skill | path | `notfall`, `privat`, `gyn`, `paed`, `msk`, `abdomen`, `chest`, `cardvask`, `uro` |
 
 **Example:**
 ```bash
-curl http://localhost:5000/api/ct/herz
+curl http://localhost:5000/api/ct/cardvask
 ```
 
 **Response:**
@@ -37,8 +37,8 @@ curl http://localhost:5000/api/ct/herz
   "Assigned Person": "Dr. Anna Müller (AM)",
   "Draw Time": "14:23:45",
   "Modality": "ct",
-  "Requested Skill": "Herz",
-  "Used Skill": "Herz",
+  "Requested Skill": "Cardvask",
+  "Used Skill": "Cardvask",
   "Fallback Used": false
 }
 ```
@@ -49,10 +49,10 @@ curl http://localhost:5000/api/ct/herz
   "Assigned Person": "Dr. Max Schmidt (MS)",
   "Draw Time": "14:24:12",
   "Modality": "ct",
-  "Requested Skill": "Herz",
+  "Requested Skill": "Cardvask",
   "Used Skill": "Notfall",
   "Fallback Used": true,
-  "Fallback Reason": "No active Herz workers available"
+  "Fallback Reason": "No active Cardvask workers available"
 }
 ```
 
@@ -68,13 +68,13 @@ Assigns a worker without fallback. Returns error if no direct match.
 
 **Example:**
 ```bash
-curl http://localhost:5000/api/ct/herz/strict
+curl http://localhost:5000/api/ct/cardvask/strict
 ```
 
 **Error response (no match):**
 ```json
 {
-  "error": "No available worker for Herz in ct",
+  "error": "No available worker for Cardvask in ct",
   "Fallback Used": false
 }
 ```
@@ -100,10 +100,10 @@ curl http://localhost:5000/api/quick_reload?modality=ct
 ```json
 {
   "available_buttons": {
-    "normal": true,
     "notfall": true,
-    "herz": true,
-    "privat": false
+    "cardvask": true,
+    "privat": false,
+    "msk": true
   },
   "operational_checks": {
     "workers_loaded": true,
@@ -124,7 +124,7 @@ Get live statistics for skill-based view.
 
 **Example:**
 ```bash
-curl http://localhost:5000/api/quick_reload?skill=herz
+curl http://localhost:5000/api/quick_reload?skill=cardvask
 ```
 
 **Response:**
@@ -261,12 +261,12 @@ Get staged working_hours_df for all modalities.
       "Modifier": 1.0,
       "is_manual": false,
       "gap_id": "gap_AM_123456",
-      "Normal": 1,
       "Notfall": 1,
       "Privat": 0,
-      "Herz": 0,
-      "Msk": 0,
-      "Chest": 0
+      "MSK": 0,
+      "Cardvask": 0,
+      "Chest": 0,
+      "Uro": 0
     }
   ],
   "mr": [...],
@@ -326,12 +326,12 @@ Add new worker to staged data.
     "PPL": "Neuer Worker (NW)",
     "start_time": "07:00",
     "end_time": "15:00",
-    "Normal": 1,
     "Notfall": 1,
     "Privat": 0,
-    "Herz": 0,
-    "Msk": 0,
+    "MSK": 0,
+    "Cardvask": 0,
     "Chest": 0,
+    "Uro": 0,
     "Modifier": 1.0
   }
 }
@@ -374,17 +374,16 @@ Get staged worker skill roster.
   "success": true,
   "roster": {
     "AM": {
-      "Normal_ct": 1,
-      "Normal_mr": 1,
-      "Normal_xray": 1,
-      "Notfall_ct": 0,
+      "Notfall_ct": 1,
       "Notfall_mr": 1,
       "Notfall_xray": 1,
-      "Herz_ct": 1,
-      "Herz_mr": 1
+      "Privat_ct": 0,
+      "Privat_mr": 1,
+      "Cardvask_ct": 1,
+      "Cardvask_mr": 1
     }
   },
-  "skills": ["Normal", "Notfall", "Privat", "Herz", "Msk", "Chest"],
+  "skills": ["Notfall", "Privat", "Gyn", "Päd", "MSK", "Abdomen", "Chest", "Cardvask", "Uro"],
   "modalities": ["ct", "mr", "xray"]
 }
 ```
@@ -407,12 +406,12 @@ Save roster changes to staging.
 {
   "roster": {
     "AM": {
-      "Normal_ct": 1,
-      "Normal_mr": 1,
-      "Notfall_ct": 0,
+      "Notfall_ct": 1,
       "Notfall_mr": 1,
-      "Herz_ct": 1,
-      "Herz_mr": 1
+      "Privat_ct": 0,
+      "Privat_mr": 1,
+      "Cardvask_ct": 1,
+      "Cardvask_mr": 1
     }
   }
 }

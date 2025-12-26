@@ -8,7 +8,7 @@ Smart worker assignment platform for radiology teams with automatic load balanci
 
 ## What is RadIMO Cortex?
 
-RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY) and skills (Normal, Notfall, Privat, Herz, Msk, Chest). It automatically balances assignments to ensure fair distribution while respecting worker availability, shift timing, and skill levels.
+RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY, Mammo) and skills (Notfall, Privat, Gyn, Päd, MSK, Abdomen, Chest, Cardvask, Uro). It automatically balances assignments to ensure fair distribution while respecting worker availability, shift timing, and skill levels.
 
 **Key Capabilities:**
 - Real-time worker assignment with automatic load balancing
@@ -41,7 +41,7 @@ flask --app app run --debug  # Start application
 | Page | URL | Description |
 |------|-----|-------------|
 | Main Interface | `/` | Assignment by modality (CT/MR/XRAY) |
-| Skill View | `/by-skill` | Assignment by skill (Normal/Notfall/Herz/etc.) |
+| Skill View | `/by-skill` | Assignment by skill (Notfall/Cardvask/MSK/etc.) |
 | Timetable | `/timetable` | Visualize shifts and schedules |
 
 **Admin Pages (Password Protected):**
