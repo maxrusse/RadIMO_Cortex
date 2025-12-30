@@ -105,7 +105,7 @@ def calculate_work_hours_now(current_dt: datetime, modality: str) -> dict:
     df_copy = d['working_hours_df'].copy()
 
     if 'counts_for_hours' in df_copy.columns:
-        df_copy = df_copy[df_copy['counts_for_hours'] == True].copy()
+        df_copy = df_copy[df_copy['counts_for_hours'].fillna(True).astype(bool)].copy()
 
     if df_copy.empty:
         return {}

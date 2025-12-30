@@ -346,7 +346,7 @@ def _calculate_total_work_hours(df: pd.DataFrame) -> dict:
         return {}
 
     if 'counts_for_hours' in df.columns:
-        hours_df = df[df['counts_for_hours'] == True]
+        hours_df = df[df['counts_for_hours'].fillna(True).astype(bool)]
     else:
         hours_df = df
 
@@ -490,7 +490,7 @@ def initialize_data(file_path: str, modality: str):
             for skill in SKILL_COLUMNS:
                 if skill not in df.columns:
                     df[skill] = 0
-                df[skill] = df[skill].fillna(0).astype(int)
+                df[skill] = df[skill].apply(normalize_skill_value)
 
             df['shift_duration'] = df.apply(
                 lambda row: calculate_shift_duration_hours(row['start_time'], row['end_time']),
@@ -1701,16 +1701,6 @@ def build_working_hours_from_medweb(
 
     selection_logger.info(f"Loaded {sum(len(df) for df in result.values())} workers across {list(result.keys())}")
     return result
-
-def _get_latest_modality_dfs() -> Dict[str, pd.DataFrame]:
-    latest: Dict[str, pd.DataFrame] = {}
-    for mod in allowed_modalities:
-        staged_df = staged_modality_data.get(mod, {}).get('working_hours_df')
-        live_df = modality_data.get(mod, {}).get('working_hours_df')
-        df = staged_df if staged_df is not None and not staged_df.empty else live_df
-        if df is not None and not df.empty:
-            latest[mod] = df
-    return latest
 
 def clear_staged_data(modality: Optional[str] = None) -> Dict[str, Any]:
     cleared = []

@@ -52,6 +52,8 @@ from data_manager import (
     save_state,
     get_canonical_worker_id,
     load_worker_skill_json,
+    save_worker_skill_json,
+    build_valid_skills_map,
     build_working_hours_from_medweb,
     auto_populate_skill_roster,
     load_staged_dataframe,
@@ -291,14 +293,12 @@ def timetable():
 @routes.route('/skill-roster')
 @admin_required
 def skill_roster_page():
-    from data_manager import build_valid_skills_map
     valid_skills_map = build_valid_skills_map()
     return render_template('skill_roster.html', valid_skills_map=valid_skills_map)
 
 @routes.route('/api/admin/skill_roster', methods=['GET', 'POST'])
 @admin_required
 def skill_roster_api():
-    from data_manager import load_worker_skill_json, save_worker_skill_json
     if request.method == 'POST':
         data = request.json
         roster = data.get('roster')
@@ -318,7 +318,6 @@ def skill_roster_api():
 @routes.route('/api/admin/skill_roster/import_new', methods=['POST'])
 @admin_required
 def import_new_skill_roster_api():
-    from data_manager import auto_populate_skill_roster
     # Get current modality DFs
     current_dfs = {mod: modality_data[mod]['working_hours_df'] for mod in allowed_modalities}
     added_count = auto_populate_skill_roster(current_dfs)
@@ -1140,7 +1139,7 @@ def get_current_usage_stats():
     ]
 
     return jsonify({
-        'date': datetime.now().strftime('%Y-%m-%d'),
+        'date': get_local_berlin_now().strftime('%Y-%m-%d'),
         'total_combinations': len(stats_list),
         'total_usages': sum(s['count'] for s in stats_list),
         'stats': stats_list

@@ -187,7 +187,7 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
             'text_color': data.get('text_color', '#ffffff'),
             'optional': bool(data.get('optional', False)),
             'special': bool(data.get('special', False)),
-            'always_visible': bool(data.get('always_visible', False)),
+            'always_visible': bool(data.get('always_visible', True)),
         })
 
     return columns, slug_map, form_keys, templates, weights
