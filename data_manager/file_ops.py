@@ -205,7 +205,7 @@ def _build_dataframe_from_records(records: list[dict], modality: str, *, validat
     return df[[col for col in col_order if col in df.columns]]
 
 
-def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list) -> None:
+def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list, info_texts_by_skill: Optional[dict] = None) -> None:
     """Apply a DataFrame to live modality data structures."""
     from data_manager.worker_management import invalidate_work_hours_cache, auto_populate_skill_roster
 
@@ -224,6 +224,7 @@ def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list) -
             d['skill_counts'][skill] = {}
 
     d['info_texts'] = info_texts or []
+    d['info_texts_by_skill'] = info_texts_by_skill or {}
 
     if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
         auto_populate_skill_roster({modality: df})
@@ -233,6 +234,7 @@ def _set_staged_modality_data(
     modality: str,
     df: pd.DataFrame,
     info_texts: list,
+    info_texts_by_skill: Optional[dict] = None,
     *,
     last_modified: Optional[datetime] = None,
     last_prepped_at: Optional[str] = None,
@@ -244,6 +246,7 @@ def _set_staged_modality_data(
     d['working_hours_df'] = df
     d['total_work_hours'] = _calculate_total_work_hours(df)
     d['info_texts'] = info_texts or []
+    d['info_texts_by_skill'] = info_texts_by_skill or {}
     d['last_modified'] = last_modified
     if last_prepped_at is not None:
         d['last_prepped_at'] = last_prepped_at
@@ -258,12 +261,14 @@ def _build_unified_payload(use_staged: bool) -> dict:
     source = staged_modality_data if use_staged else modality_data
     working_hours = []
     info_texts = {}
+    info_texts_by_skill = {}
     metadata = {}
 
     for mod, d in source.items():
         df = d.get('working_hours_df')
         if df is None or df.empty:
             info_texts[mod] = d.get('info_texts', [])
+            info_texts_by_skill[mod] = d.get('info_texts_by_skill', {})
             metadata[mod] = {
                 'last_modified': None,
                 'last_prepped_at': d.get('last_prepped_at'),
@@ -289,6 +294,7 @@ def _build_unified_payload(use_staged: bool) -> dict:
 
         working_hours.extend(export_df.to_dict(orient='records'))
         info_texts[mod] = d.get('info_texts', [])
+        info_texts_by_skill[mod] = d.get('info_texts_by_skill', {})
         metadata[mod] = {
             'last_modified': d.get('last_modified').isoformat() if d.get('last_modified') else None,
             'last_prepped_at': d.get('last_prepped_at'),
@@ -299,6 +305,7 @@ def _build_unified_payload(use_staged: bool) -> dict:
     return {
         'working_hours': working_hours,
         'info_texts': info_texts,
+        'info_texts_by_skill': info_texts_by_skill,
         'metadata': metadata,
     }
 
@@ -327,6 +334,7 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
 
     records = data.get('working_hours', [])
     info_texts = data.get('info_texts', {})
+    info_texts_by_skill = data.get('info_texts_by_skill', {})
     metadata = data.get('metadata', {})
     df = pd.DataFrame(records)
 
@@ -367,13 +375,14 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
                 mod,
                 mod_df,
                 info_texts.get(mod, []),
+                info_texts_by_skill.get(mod, {}),
                 last_modified=parsed_modified,
                 last_prepped_at=mod_metadata.get('last_prepped_at'),
                 last_prepped_by=mod_metadata.get('last_prepped_by'),
                 target_date=target_date,
             )
         else:
-            _set_live_modality_data(mod, mod_df, info_texts.get(mod, []))
+            _set_live_modality_data(mod, mod_df, info_texts.get(mod, []), info_texts_by_skill.get(mod, {}))
 
     return True
 
@@ -391,6 +400,7 @@ def _load_unified_scheduled_into_staged(file_path: str) -> bool:
 
     records = data.get('working_hours', [])
     info_texts = data.get('info_texts', {})
+    info_texts_by_skill = data.get('info_texts_by_skill', {})
     metadata = data.get('metadata', {}) if isinstance(data, dict) else {}
     raw_target_date = metadata.get('target_date')
     target_date = None
@@ -425,6 +435,7 @@ def _load_unified_scheduled_into_staged(file_path: str) -> bool:
             mod,
             mod_df,
             info_texts.get(mod, []),
+            info_texts_by_skill.get(mod, {}),
             last_modified=last_modified,
             target_date=target_date,
         )
@@ -533,6 +544,7 @@ def initialize_data(file_path: str, modality: str) -> None:
                     d['skill_counts'][skill] = {}
 
             d['info_texts'] = data.get('info_texts', [])
+            d['info_texts_by_skill'] = data.get('info_texts_by_skill', {})
 
             if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
                 auto_populate_skill_roster({modality: df})  # Returns tuple, ignore here
@@ -557,6 +569,7 @@ def initialize_data_from_unified(file_path: str, *, context: str = '') -> bool:
 
     records = data.get('working_hours', [])
     info_texts = data.get('info_texts', {})
+    info_texts_by_skill = data.get('info_texts_by_skill', {})
 
     df = pd.DataFrame(records)
     if df.empty and not info_texts:
@@ -575,7 +588,7 @@ def initialize_data_from_unified(file_path: str, *, context: str = '') -> bool:
             except Exception as exc:
                 selection_logger.error("Failed to initialize modality %s from unified file (%s): %s", mod, context, exc)
                 continue
-            _set_live_modality_data(mod, mod_df, info_texts.get(mod, []))
+            _set_live_modality_data(mod, mod_df, info_texts.get(mod, []), info_texts_by_skill.get(mod, {}))
 
     return True
 
@@ -601,6 +614,7 @@ def write_unified_scheduled_file(modality_dfs: dict, *, target_date: Optional[da
     """Write unified scheduled file from modality DataFrames."""
     records = []
     info_texts = {}
+    info_texts_by_skill = {}
     for mod, df in modality_dfs.items():
         if df is None or df.empty:
             continue
@@ -617,10 +631,12 @@ def write_unified_scheduled_file(modality_dfs: dict, *, target_date: Optional[da
         export_df['modality'] = mod
         records.extend(export_df.to_dict(orient='records'))
         info_texts[mod] = []
+        info_texts_by_skill[mod] = {}
 
     payload = {
         'working_hours': records,
         'info_texts': info_texts,
+        'info_texts_by_skill': info_texts_by_skill,
         'metadata': {
             'target_date': target_date.isoformat() if target_date else None,
         },

@@ -131,6 +131,7 @@ class StateManager:
                 self._modality_data[mod] = {
                     'working_hours_df': None,
                     'info_texts': [],
+                    'info_texts_by_skill': {},
                     'total_work_hours': {},
                     'worker_modifiers': {},
                     'skill_counts': {skill: {} for skill in skill_columns},
@@ -150,6 +151,7 @@ class StateManager:
                 self._staged_modality_data[mod] = {
                     'working_hours_df': None,
                     'info_texts': [],
+                    'info_texts_by_skill': {},
                     'total_work_hours': {},
                     'worker_modifiers': {},
                     'last_modified': None,

@@ -166,6 +166,28 @@
       margin-top: 1rem;
     }
 
+    .info-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .edit-btn {
+      border: none;
+      background: var(--skill-nav, var(--primary-color));
+      color: #fff;
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .edit-btn:hover {
+      filter: brightness(1.1);
+    }
+
     .info-item {
       background: var(--info-item-bg);
       padding: 0.75rem;
@@ -178,6 +200,55 @@
     .info-item:last-child {
       margin-bottom: 0;
     }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      width: min(640px, 92vw);
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .modal-content textarea {
+      width: 100%;
+      min-height: 200px;
+      resize: vertical;
+      padding: 0.65rem;
+      border-radius: 6px;
+      border: 1px solid #d0d7de;
+      margin-top: 0.75rem;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn-cancel,
+    .btn-save {
+      border: none;
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      cursor: pointer;
+    }
+
+    .btn-cancel { background: #6c757d; color: #fff; }
+    .btn-save { background: #28a745; color: #fff; }
 
     /* Footer */
     .footer {
@@ -273,13 +344,36 @@
       <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
     </div>
     <div class="info-box">
-      <div class="info-texts">
+      <div class="info-header">
+        <h3>Hinweise</h3>
+        {% if is_admin %}
+        <button class="edit-btn" onclick="openEditModal()">Bearbeiten</button>
+        {% endif %}
+      </div>
+      <div class="info-texts" id="infoTextsContainer">
         {% for info in info_texts %}
         <div class="info-item">{{ info }}</div>
         {% endfor %}
+        {% if not info_texts %}
+        <div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>
+        {% endif %}
       </div>
     </div>
   </section>
+
+  {% if is_admin %}
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-content">
+      <h2>Hinweise bearbeiten</h2>
+      <p style="margin:0.25rem 0 0.5rem; color:#666; font-size:0.9rem;">Ein Eintrag pro Modalität für den aktuell gewählten Skill.</p>
+      <div id="infoEditorRows" style="display:grid; gap:0.6rem;"></div>
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeEditModal()">Abbrechen</button>
+        <button class="btn-save" onclick="saveInfoTexts()">Speichern</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Footer -->
   <div class="footer">
@@ -332,6 +426,11 @@
     const currentSkillSlug = currentSkillDef?.slug || (currentSkill || '').toLowerCase();
     const currentSkillLabel = currentSkillDef?.label || currentSkill;
     let lastModalityUsed = "";
+
+    {% if is_admin %}
+    const infoTextsByModality = JSON.parse('{{ info_texts_by_modality|tojson|safe }}');
+    let currentInfoModality = '{{ default_info_modality }}';
+    {% endif %}
 
     // Utility: Escape HTML to prevent XSS
     function escapeHtml(text) {
@@ -496,5 +595,80 @@
         }, 3000);
       }
     }
+
+    {% if is_admin %}
+    function renderInfoTexts(modality) {
+      const container = document.getElementById('infoTextsContainer');
+      const texts = infoTextsByModality[modality] || [];
+      if (texts.length > 0) {
+        container.innerHTML = texts.map(text => `<div class="info-item">${escapeHtml(text)}</div>`).join('');
+      } else {
+        container.innerHTML = '<div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>';
+      }
+    }
+
+    function setupAdminFunctions() {
+      const modal = document.getElementById('editModal');
+      const editorRows = document.getElementById('infoEditorRows');
+      const editableModalities = Object.keys(infoTextsByModality || {});
+
+      function buildEditorRows() {
+        editorRows.innerHTML = editableModalities.map(mod => {
+          const label = escapeHtml((modalities[mod] && modalities[mod].label) ? modalities[mod].label : mod.toUpperCase());
+          const value = escapeHtml((infoTextsByModality[mod] || []).join('\n'));
+          return `
+            <label style="font-weight:600;">${label}</label>
+            <textarea data-modality="${mod}" style="width:100%; min-height:110px;">${value}</textarea>
+          `;
+        }).join('');
+      }
+
+      window.openEditModal = function () {
+        buildEditorRows();
+        modal.classList.add('active');
+      };
+
+      window.closeEditModal = function () {
+        modal.classList.remove('active');
+      };
+
+      window.saveInfoTexts = async function () {
+        try {
+          const textareas = Array.from(editorRows.querySelectorAll('textarea[data-modality]'));
+          for (const textarea of textareas) {
+            const mod = textarea.dataset.modality;
+            const response = await fetch('/api/edit_info', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ modality: mod, skill: currentSkill, info_text: textarea.value })
+            });
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Save failed');
+            infoTextsByModality[mod] = data.info_texts || [];
+          }
+          renderInfoTexts(currentInfoModality);
+          closeEditModal();
+        } catch (error) {
+          alert('Fehler beim Speichern: ' + error.message);
+        }
+      };
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeEditModal();
+      });
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeEditModal();
+      });
+
+      renderInfoTexts(currentInfoModality);
+    }
+    {% endif %}
   </script>
+
+  {% if is_admin %}
+  <script>
+    setupAdminFunctions();
+  </script>
+  {% endif %}
 {% endblock %}
