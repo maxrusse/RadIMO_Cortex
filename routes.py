@@ -596,10 +596,13 @@ def index_by_skill() -> Any:
                 'text_color': task.get('text_color', '#ffffff'),
             })
 
-    info_texts = []
-    if allowed_modalities:
-        first_modality = allowed_modalities[0]
-        info_texts = modality_data[first_modality].get('info_texts', [])
+    default_info_modality = visible_modalities[0] if visible_modalities else (allowed_modalities[0] if allowed_modalities else '')
+    info_texts_by_modality = {}
+    for mod in allowed_modalities:
+        mod_data = modality_data[mod]
+        by_skill = mod_data.get('info_texts_by_skill') or {}
+        info_texts_by_modality[mod] = by_skill.get(skill, [])
+    info_texts = info_texts_by_modality.get(default_info_modality, [])
 
     return render_template(
         'index_by_skill.html',
@@ -607,6 +610,8 @@ def index_by_skill() -> Any:
         visible_modalities=visible_modalities,
         special_task_buttons=special_task_buttons,
         info_texts=info_texts,
+        info_texts_by_modality=info_texts_by_modality,
+        default_info_modality=default_info_modality,
         is_admin=has_admin_access()
     )
 
@@ -835,21 +840,31 @@ def edit_info() -> Any:
         if not modality or modality not in allowed_modalities:
             return jsonify({"success": False, "error": "Ungültige Modalität"}), 400
 
+        skill = data.get('skill')
+
         # Split info_text by newlines and filter out empty lines
         info_texts = [line.strip() for line in info_text.split('\n') if line.strip()]
 
-        # Update the modality data
-        modality_data[modality]['info_texts'] = info_texts
+        # Update either modality-wide or modality×skill scoped info texts
+        if skill:
+            skill = normalize_skill(skill)
+            if skill not in SKILL_COLUMNS:
+                return jsonify({"success": False, "error": "Ungültiger Skill"}), 400
+            by_skill = modality_data[modality].setdefault('info_texts_by_skill', {})
+            by_skill[skill] = info_texts
+            selection_logger.info(f"Info texts updated for {modality}/{skill} by admin")
+        else:
+            modality_data[modality]['info_texts'] = info_texts
+            selection_logger.info(f"Info texts updated for {modality} by admin")
 
         # Save the updated state and backup
         save_state()
         backup_dataframe(modality)
 
-        selection_logger.info(f"Info texts updated for {modality} by admin")
-
         return jsonify({
             "success": True,
             "info_texts": info_texts,
+            "skill": skill,
             "message": "Info-Texte erfolgreich gespeichert"
         })
     except Exception as e:
