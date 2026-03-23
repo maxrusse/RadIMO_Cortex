@@ -37,6 +37,15 @@ Thumbs.db
 uploads/
 !uploads/.gitkeep
 
+# Local override config files
+*.local.yaml
+*.local.json
+
 # Code aggregator exports
 *_export.txt
 aggregation_summary.txt
+
+# Local real-name MedWeb files
+Mappe1_formatted_updated_week_*.csv
+Mappe1_formatted_updated_week_*.csv.bak*
+test_data/demo/master_medweb_upload_demo_*.csv

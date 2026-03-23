@@ -14,15 +14,15 @@
 
 # Basic access protection for non-admin pages (optional)
 # Set to false to disable password protection entirely
-access_protection_enabled: false
+access_protection_enabled: true
 # access_password: Simple password for basic access protection (optional)
-access_password: change_easy_pw
+access_password: radimo
 
 # Basic access protection for admin pages (optional)
 # Set to false to disable password protection entirely
-admin_access_protection_enabled: false
+admin_access_protection_enabled: true
 # admin_password: Password for admin pages (config, data management)
-admin_password: change_pw_for_live
+admin_password: sbzpw
 
 # -----------------------------------------------------------------------------
 # TIMEZONE
@@ -62,15 +62,7 @@ modalities:
     nav_color: '#2f8c7a'
     hover_color: '#247060'
     background_color: '#e3f3ef'
-  mammo:
-    label: Mammo
-    nav_color: '#b45a7a'
-    hover_color: '#8f4761'
-    background_color: '#f7ecf1'
-    # Visibility filters (both optional, can combine):
-    # - valid_skills: positive filter - only show these skills
-    # - hidden_skills: negative filter - hide these skills
-    valid_skills: [gyn, privat]  # Only gyn and privat for mammography
+    hidden_skills: [gyn, aou, cvt, mhd]
 
 # =============================================================================
 # SKILLS
@@ -95,14 +87,14 @@ skills:
     button_color: '#dc3545'
     text_color: '#ffffff'
     special: false
-    display_order: 0
+    display_order: 4
     slug: notfall
   privat:
     label: Privat
     button_color: '#ffc107'
     text_color: '#333333'
     special: false
-    display_order: 1
+    display_order: 5
     slug: privat
   gyn:
     label: Gyn
@@ -111,48 +103,27 @@ skills:
     special: true             # Subspecialty team
     display_order: 2
     slug: gyn
-  paed:
-    label: Päd
-    button_color: '#5aa56a'
+  aou:
+    label: AOU
+    button_color: '#2b8fa1'
     text_color: '#ffffff'
-    special: true             # Subspecialty team
-    display_order: 3
-    slug: paed
-  msk-haut:
-    label: MSK/Haut
+    special: true             # Abdomen / Uro / Onko subspecialty
+    display_order: 0
+    slug: aou
+  cvt:
+    label: CVT
+    button_color: '#3d6aa8'
+    text_color: '#ffffff'
+    special: true             # Cardio / Vask / Thorax subspecialty
+    display_order: 1
+    slug: cvt
+  mhd:
+    label: MHD
     button_color: '#7a6bb0'
     text_color: '#ffffff'
     special: true             # Musculoskeletal & skin subspecialty
-    display_order: 4
-    slug: msk-haut
-  abd-onco:
-    label: Abd/Onco
-    button_color: '#2b8fa1'
-    text_color: '#ffffff'
-    special: true             # Abdominal imaging subspecialty
-    display_order: 5
-    slug: abd-onco
-  card-thor:
-    label: Card/Thor
-    button_color: '#3d6aa8'
-    text_color: '#ffffff'
-    special: true             # Cardio-thoracic subspecialty
-    display_order: 6
-    slug: card-thor
-  uro:
-    label: Uro
-    button_color: '#7a5a4a'
-    text_color: '#ffffff'
-    special: true             # urology subspecialty
-    display_order: 7
-    slug: uro
-  kopf-hals:
-    label: Kopf/Hals
-    button_color: '#6b7a8c'
-    text_color: '#ffffff'
-    special: true             # Head & neck subspecialty
-    display_order: 8
-    slug: kopf-hals
+    display_order: 3
+    slug: mhd
 
 # =============================================================================
 # SPECIAL TASKS
@@ -165,7 +136,7 @@ skills:
 #   label: Button label
 #   base_skill: Which skill to use for button styling and fallback routing
 #   target_skill_modalities: (optional) List of skill_modality pairs to search
-#                           e.g., [abd-onco_ct, abd-onco_mr] - routes to workers
+#                           e.g., [aou_ct, aou_mr] - routes to workers
 #                           who have any of these combinations active (skill=1/w)
 #   modalities_dashboards: List of modality dashboards to render on
 #   skill_dashboards: List of skill dashboards to render on
@@ -173,44 +144,171 @@ skills:
 #   display_order: Ordering (default 999)
 #
 special_tasks:
-  - name: Abdonko_ct-seg
+  - name: aou_ct-seg
     label: Organ Seg
-    base_skill: abd-onco
+    base_skill: aou
     target_skill_modalities:
-      - abd-onco_ct
-      - abd-onco_mr
+      - aou_ct
+      - aou_mr
     modalities_dashboards: []
-    skill_dashboards: [abd-onco]
+    skill_dashboards: [aou]
     allow_overflow: false
     display_order: 999
-
-  - name: MammoSono
-    label: Gyn Mammo&Sono
-    base_skill: gyn
+  - name: ct-herz
+    label: CT-Herz
+    base_skill: cvt
     target_skill_modalities:
-      - gyn_mammo
-    modalities_dashboards: [mammo]
-    skill_dashboards: [gyn]
+      - cvt_ct
+    modalities_dashboards: [ct]
+    skill_dashboards: []
     allow_overflow: false
-    display_order: 999
+    display_order: 120
+  - name: mr-herz
+    label: MR-Herz
+    base_skill: cvt
+    target_skill_modalities:
+      - cvt_mr
+    modalities_dashboards: [mr]
+    skill_dashboards: []
+    allow_overflow: false
+    display_order: 121
+  - name: xray-normal
+    label: Normal
+    base_skill: aou
+    target_skill_modalities:
+      - gyn_xray
+      - aou_xray
+      - cvt_xray
+      - mhd_xray
+    modalities_dashboards: [xray]
+    skill_dashboards: []
+    allow_overflow: true
+    display_order: 110
+    button_color: '#3f8f82'
+    text_color: '#ffffff'
+
+# =============================================================================
+# SYNTHETIC SHIFTS
+# =============================================================================
+# Recurring config-defined workers that are injected into the day plan even
+# without a matching Medweb row.
+# =============================================================================
+
+synthetic_shifts:
+  - worker_name: "Gynarzt (GYNDOC)"
+    label: "Gynarzt-shift"
+    weekdays: [workdays]
+    times:
+      default: "07:30-16:15"
+    skill_overrides:
+      gyn_ct: 1
+      gyn_mr: 1
+  - worker_name: "Notfallarzt (NDOC)"
+    label: "Notfallarzt-shift"
+    weekdays: [workdays]
+    times:
+      default: "07:30-16:15"
+    skill_overrides:
+      notfall_ct: 1
+      notfall_mr: 1
+      notfall_xray: 1
+
+# =============================================================================
+# WORKER ROSTER BASELINES
+# =============================================================================
+# Optional persistent baseline matrix for specific workers.
+# These synthetic summary workers are hard-excluded from everything except
+# their own call pools.
+# =============================================================================
+
+worker_roster:
+  GYNDOC:
+    full_name: "Gynarzt (GYNDOC)"
+    aou_ct: 0
+    aou_mr: -1
+    aou_xray: -1
+    cvt_ct: 0
+    cvt_mr: -1
+    cvt_xray: -1
+    gyn_ct: 1
+    gyn_mr: 1
+    gyn_xray: -1
+    mhd_ct: 0
+    mhd_mr: -1
+    mhd_xray: -1
+    notfall_ct: 0
+    notfall_mr: -1
+    notfall_xray: -1
+    privat_ct: 0
+    privat_mr: -1
+    privat_xray: -1
+  NDOC:
+    full_name: "Notfallarzt (NDOC)"
+    aou_ct: 0
+    aou_mr: -1
+    aou_xray: -1
+    cvt_ct: 0
+    cvt_mr: -1
+    cvt_xray: -1
+    gyn_ct: 0
+    gyn_mr: -1
+    gyn_xray: -1
+    mhd_ct: 0
+    mhd_mr: -1
+    mhd_xray: -1
+    notfall_ct: 1
+    notfall_mr: 1
+    notfall_xray: 1
+    privat_ct: 0
+    privat_mr: -1
+    privat_xray: -1
 
 # =============================================================================
 # NO OVERFLOW (STRICT MODE) COMBINATIONS
 # =============================================================================
 # List of Skill_Modality combinations where overflow to generalists is disabled.
-# For these combos, the normal button acts like the [*] strict button - only
+# For these combos, the normal button uses specialist-only routing - only
 # specialists (skill=1 or 'w') will be assigned, never generalists (skill=0).
-# Format: Skill_Modality (e.g., card-thor_ct, gyn_mr)
+# This does NOT switch to strict weights by itself; strict weights are only used
+# through the explicit /strict path (visible `*` button if enabled).
+# Format: Skill_Modality (e.g., cvt_ct, gyn_mr)
 # =============================================================================
 
 # Examples:
-#   - card-thor_ct    # Cardiac CT - specialists only
-#   - card-thor_mr    # Cardiac MR - specialists only
+#   - cvt_ct          # Cardiac CT - specialists only
+#   - cvt_mr          # Cardiac MR - specialists only
 no_overflow:
   - privat_ct
   - privat_mr
   - privat_xray
-  - privat_mammo
+
+# =============================================================================
+# STRICT BUTTON VISIBILITY
+# =============================================================================
+# Optional per-button UI control for the visible `*` strict button.
+# Hidden by default. Keys can target either:
+#   - regular buttons: skill_modality     (e.g., cvt_ct)
+#   - special tasks:  taskslug_modality   (e.g., ct-herz_ct)
+# Setting a key to true renders the visible `*` button, which calls /strict and
+# therefore uses both strict routing and strict weights.
+# =============================================================================
+
+strict_button_visibility:
+  cvt_ct: true
+  cvt_mr: true
+
+# =============================================================================
+# SPECIALIST FALLBACK ROUTES (NO GENERALIST OVERFLOW)
+# =============================================================================
+# Optional skill-group merge routing for specialist pools.
+# If a primary skill has no available specialist in a modality, the system
+# searches listed fallback specialist groups in the SAME modality.
+# This path is specialist-only (skill=1 or 'w'); skill=0 overflow is disabled.
+#
+# Format:
+#   primary_skill: [fallback_skill_1, fallback_skill_2, ...]
+# -----------------------------------------------------------------------------
+specialist_fallback_routes: {}
 
 # =============================================================================
 # SKILL VALUE DISPLAY COLORS
@@ -277,7 +375,8 @@ scheduler:
 
 balancer:
   enabled: true                              # Enable/disable load balancing
-  min_assignments_per_skill: 3               # Minimum workers per skill before rebalancing
+  min_assignments_per_skill: 3               # Minimum weighted assignments gate for specialists
+  warm_start_release_mode: either            # either|both: overflow unlock by time/min count policy
   imbalance_threshold_pct: 20                # Percentage threshold to trigger rebalancing
   disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first X minutes
   disable_overflow_at_shift_end_minutes: 30    # Don't assign overflow in last X minutes
@@ -305,15 +404,12 @@ balancer:
   #   skill: [skill1]              # Exclude workers with skill1=1
   #   skill: [skill1, skill2]      # Exclude workers with skill1=1 OR skill2=1
   exclude_skills:
-    notfall: [gyn, paed]      # gyn and paed can not get emergency work
+    notfall: [gyn]      # gyn can not get emergency work
     privat: []       # No exclusions - anyone can get private patients
     gyn: []
-    paed: []
-    msk-haut: []
-    abd-onco: []
-    card-thor: []
-    uro: []
-    kopf-hals: []
+    mhd: []
+    aou: []
+    cvt: []
 
 # =============================================================================
 # MEDWEB CSV MAPPING CONFIGURATION
@@ -403,18 +499,21 @@ vendor_mappings:
     - match: "OA / FA Chir"
       type: "shift"
       times:
-        default: "07:30-15:45"
+        default: "07:30-16:15"
       skill_overrides:
         all: -1
         privat_xray: 1
 
-    - match: "OA / FA Gyn"
+    - match: "Chir Assistent"
       type: "shift"
       times:
-        default: "07:30-15:45"
+        default: "07:30-16:15"
       skill_overrides:
         all: -1
-        privat_mammo: 1
+        gyn_xray: 1
+        aou_xray: 1
+        cvt_xray: 1
+        mhd_xray: 1
 
     # =========================================================================
     # NOTFALL SHIFTS (emergency coverage across modalities)
@@ -429,17 +528,15 @@ vendor_mappings:
         notfall_ct: 1
         notfall_mr: 1
         notfall_xray: 1
-        notfall_mammo: 1
 
-    - match: "UNZ Assistent"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        notfall_ct: 1
-        notfall_mr: 1
-        notfall_xray: 1
-        notfall_mammo: 1
+    # - match: "UNZ Assistent"
+    #   type: "shift"
+    #   times:
+    #     default: "07:30-11:00"
+    #   skill_overrides:
+    #     notfall_ct: 1
+    #     notfall_mr: 1
+    #     notfall_xray: 1
 
     # =========================================================================
     # SUBSPECIALTY SHIFTS (assistant level)
@@ -452,7 +549,6 @@ vendor_mappings:
       skill_overrides:
         gyn_ct: 1
         gyn_mr: 1
-        gyn_mammo: 1
 
     - match: "Gyn Assistent"
       type: "shift"
@@ -461,57 +557,60 @@ vendor_mappings:
       skill_overrides:
         gyn_ct: 1
         gyn_mr: 1
-        gyn_mammo: 1
 
-    - match: "Assistent Päd"
+    - match: "Assistent AOU"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        paed_ct: 1
-        paed_mr: 1
-        paed_xray: 1
+        aou_ct: 1
+        aou_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
-    - match: "Assistent KiKLi"
+    - match: "Assistent CVT"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        paed_ct: 1
-        paed_mr: 1
-        paed_xray: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
-    - match: "Assistent AbdOnco"
+    - match: "Assistent MHD"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        abd-onco_ct: 1
-        abd-onco_mr: 1
-
-    - match: "Assistent CardThor"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        card-thor_ct: 1
-        card-thor_mr: 1
-
-    - match: "Assistent Uro"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        uro_ct: 1
-        uro_mr: 1
-
-    - match: "Assistent KopfHals"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        kopf-hals_ct: 1
-        kopf-hals_mr: 1
+        mhd_ct: 1
+        mhd_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
     # =========================================================================
     # SUBSPECIALTY SHIFTS (FA/Fellow level)
@@ -525,7 +624,6 @@ vendor_mappings:
         notfall_ct: 1
         notfall_mr: 1
         notfall_xray: 1
-        notfall_mammo: 1
 
     - match: "FA/Fellow Gyn"
       type: "shift"
@@ -534,66 +632,60 @@ vendor_mappings:
       skill_overrides:
         gyn_ct: 1
         gyn_mr: 1
-        gyn_mammo: 1
 
-    - match: "FA/Fellow Päd"
+    - match: "FA/Fellow MHD"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        paed_ct: 1
-        paed_mr: 1
-        paed_xray: 1
+        mhd_ct: 1
+        mhd_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
-    - match: "FA/Fellow KiKLi"
+    - match: "FA/Fellow AOU"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        paed_ct: 1
-        paed_mr: 1
-        paed_xray: 1
+        aou_ct: 1
+        aou_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
-    - match: "FA/Fellow MskHaut"
+    - match: "FA/Fellow CVT"
       type: "shift"
       times:
         default: "07:30-15:45"
       skill_overrides:
-        msk-haut_ct: 1
-        msk-haut_mr: 1
-        msk-haut_xray: 1
-
-    - match: "FA/Fellow AbdOnco"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        abd-onco_ct: 1
-        abd-onco_mr: 1
-
-    - match: "FA/Fellow CardThor"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        card-thor_ct: 1
-        card-thor_mr: 1
-
-    - match: "FA/Fellow Uro"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        uro_ct: 1
-        uro_mr: 1
-
-    - match: "FA/Fellow KopfHals"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        kopf-hals_ct: 1
-        kopf-hals_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mhd_xray: -1
+        privat_xray: -1
 
     # =========================================================================
     # LATE SHIFTS
@@ -641,7 +733,7 @@ vendor_mappings:
     #
     # Shortcuts for skill_overrides:
     #   all: -1        → all skill_modality combos = -1
-    #   msk-haut: 1    → all msk-haut_* combos = 1
+    #   mhd: 1    → all mhd_* combos = 1
     #   ct: 1          → all *_ct combos = 1
     # =========================================================================
 
@@ -650,6 +742,14 @@ vendor_mappings:
       type: "gap"
       times:
         default: "07:30-15:45"
+      skill_overrides:
+        all: -1
+
+    - match: "Durchleuchtung"
+      label: "Durchleuchtung"
+      type: "gap"
+      times:
+        default: "07:30-10:00"
       skill_overrides:
         all: -1
 

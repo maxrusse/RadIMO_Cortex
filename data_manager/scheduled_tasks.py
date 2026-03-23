@@ -8,11 +8,13 @@ This module handles:
 """
 import os
 import shutil
+import json
 from datetime import datetime, time, date
 from typing import Any, Dict, Optional, Union
 
 from config import (
     APP_CONFIG,
+    FLOW_SNAPSHOT_LOGGER,
     allowed_modalities,
     SKILL_COLUMNS,
     UPLOAD_FOLDER,
@@ -38,6 +40,44 @@ def _parse_reset_time(reset_time_str: str) -> time:
     except ValueError:
         return time(7, 30)
     return time(reset_hour, reset_min)
+
+
+def _snapshot_flow_counters(day_closed: date) -> None:
+    """Write a daily flow snapshot before counters are reset."""
+    flow_cross_pool = global_worker_data.get('flow_cross_pool', {}) or {}
+    total_cross_pool = 0.0
+    normalized_flow: Dict[str, Dict[str, float]] = {}
+
+    for requested_key, targets in flow_cross_pool.items():
+        if not isinstance(targets, dict):
+            continue
+        normalized_targets: Dict[str, float] = {}
+        for assigned_key, count in targets.items():
+            try:
+                normalized_count = float(count)
+            except (TypeError, ValueError):
+                continue
+            if normalized_count <= 0:
+                continue
+            normalized_targets[str(assigned_key)] = round(normalized_count, 2)
+            total_cross_pool += normalized_count
+        if normalized_targets:
+            normalized_flow[str(requested_key)] = normalized_targets
+
+    snapshot_payload = {
+        'event': 'daily_flow_snapshot',
+        'window': 'since_daily_reset',
+        'snapshot_date': day_closed.isoformat(),
+        'created_at': get_local_now().isoformat(),
+        'last_reset_date': (
+            global_worker_data['last_reset_date'].isoformat()
+            if global_worker_data.get('last_reset_date')
+            else None
+        ),
+        'total_cross_pool': round(total_cross_pool, 2),
+        'flow_cross_pool': normalized_flow,
+    }
+    FLOW_SNAPSHOT_LOGGER.info(json.dumps(snapshot_payload, ensure_ascii=False, sort_keys=True))
 
 
 def check_and_perform_daily_reset() -> None:
@@ -83,12 +123,16 @@ def check_and_perform_daily_reset() -> None:
         # Invalidate all work hours caches at start of reset
         invalidate_work_hours_cache()
 
+        day_closed = global_worker_data.get('last_reset_date') or today
+        _snapshot_flow_counters(day_closed)
+
         # Mark reset date FIRST (atomic check-and-set pattern)
         # This prevents other threads from entering even if we fail midway
         global_worker_data['last_reset_date'] = today
 
         # Reset global weighted counts
         global_worker_data['weighted_counts'] = {}
+        global_worker_data['flow_cross_pool'] = {}
 
         # Reset per-modality tracking
         for mod, d in modality_data.items():

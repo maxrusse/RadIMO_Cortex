@@ -78,6 +78,9 @@
       min-height: 84px;
       position: relative;
       background: var(--btn-bg, var(--primary-color));
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .btn:disabled,
@@ -98,17 +101,17 @@
     }
 
     .special-btn {
-      min-height: 60px;
-      font-size: 1.8rem;
-      padding: 1rem;
+      min-height: 84px;
+      font-size: 2rem;
+      padding: 1.4rem 1rem;
     }
 
     .skill-main-btn {
-      flex: 0 0 65%;
+      flex: 1 1 auto;
     }
 
     .skill-strict-btn {
-      flex: 0 0 25%;
+      flex: 0 0 72px;
       min-height: 84px;
       font-size: 1.4rem;
       padding: 0.5rem;
@@ -307,6 +310,12 @@
       color: #666;
     }
 
+    .footer-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
     .last-assignment {
       font-size: 0.8rem;
       color: #666;
@@ -359,11 +368,15 @@
           class="btn assignment-btn skill-main-btn {% if skill.special %}special-btn{% endif %}">
           {{ skill.label }}
         </button>
-        <button type="button" class="btn assignment-btn skill-strict-btn"
-          onclick="getNextAssignment('{{ skill.slug }}', '{{ skill.label }}', true)" aria-label="Nur diese Gruppe (kein Fallback)"
-          title="Nur diese Gruppe">
+        {% if skill.name in regular_strict_button_skills %}
+        <button type="button"
+          class="btn assignment-btn skill-strict-btn"
+          onclick="getNextAssignment('{{ skill.slug }}', '{{ skill.label }}', true)"
+          aria-label="Strikte Zuweisung"
+          title="Strikte Zuweisung">
           *
         </button>
+        {% endif %}
       </div>
       {% endfor %}
       {% if special_tasks %}
@@ -376,11 +389,15 @@
             class="btn assignment-btn skill-main-btn special-btn">
             {{ task.label }}
           </button>
-          <button type="button" class="btn assignment-btn skill-strict-btn"
+          {% if task.show_strict_button %}
+          <button type="button"
+            class="btn assignment-btn skill-strict-btn"
             onclick="getNextAssignment('{{ task.slug }}', '{{ task.label }}', true)"
-            aria-label="Nur diese Gruppe (kein Fallback)" title="Nur diese Gruppe">
+            aria-label="Strikte Zuweisung"
+            title="Strikte Zuweisung">
             *
           </button>
+          {% endif %}
         </div>
         {% endfor %}
       {% endif %}
@@ -388,6 +405,9 @@
     <div id="result"></div>
     <div class="clipboard-note">
       <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
+    </div>
+    <div class="clipboard-note">
+      <span>AOU = Abdomen / Uro / Onko, MHD = Muskel-Skelett / Hals / Derma, CVT = Cardio / Vask / Thorax</span>
     </div>
     <div class="info-box">
       <div class="info-header">
@@ -425,7 +445,15 @@
   <!-- Footer -->
   <div class="footer">
     <div id="lastAssignment" class="last-assignment"></div>
-    <div>RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a>
+    <div class="footer-meta">RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a>
+      {% if show_probe_badges %}
+      <a href="{{ url_for('routes.status_page') }}"
+        class="probe-badge probe-badge--{{ health_badge_status }}"
+        title="Health: {{ health_badge_text }}">H</a>
+      <a href="{{ url_for('routes.status_page') }}"
+        class="probe-badge probe-badge--{{ ready_badge_status }}"
+        title="Ready: {{ ready_badge_text }}">R</a>
+      {% endif %}
     </div>
   </div>
 
@@ -478,14 +506,13 @@
     // Button visibility is now controlled by config only (valid_skills)
     // No dynamic hiding based on worker availability
 
-    function getNextAssignment(skillSlug, skillLabel, forcePrimary = false) {
+    function getNextAssignment(skillSlug, skillLabel, forceStrict = false) {
       if (requestInProgress) return;
       lastSkillUsed = skillLabel || skillSlug;
       setButtonsDisabled(true);
       const encodedSkill = encodeURIComponent(skillSlug);
-      const endpoint = forcePrimary
-        ? `/api/${currentModality}/${encodedSkill}/strict`
-        : `/api/${currentModality}/${encodedSkill}`;
+      const strictSuffix = forceStrict ? ('/' + 'strict') : '';
+      const endpoint = `/api/${currentModality}/${encodedSkill}${strictSuffix}`;
       fetch(endpoint)
         .then(response => {
           if (!response.ok) {

@@ -30,8 +30,8 @@ BUTTON_WEIGHTS_PATH = DATA_DIR / "button_weights.json"
 WORKER_ROSTER_PATH = DATA_DIR / "worker_skill_roster.json"
 
 DEMO_WEIGHTS_PATH = ROOT / "test_data" / "demo" / "button_weights_demo.json"
-SKILLS = ["notfall", "privat", "gyn", "paed", "msk-haut", "abd-onco", "card-thor", "uro", "kopf-hals"]
-MODALITIES = ["ct", "mr", "xray", "mammo"]
+SKILLS = ["notfall", "privat", "gyn", "mhd", "aou", "cvt"]
+MODALITIES = ["ct", "mr", "xray"]
 
 
 DEMO_ACTIVITY_PLAN: list[tuple[str, list[str]]] = [
@@ -41,14 +41,13 @@ DEMO_ACTIVITY_PLAN: list[tuple[str, list[str]]] = [
     ("OA MR", ["CP20", "TN31"]),
     ("SBZ: SBZ Privatpatienten", ["TY33"]),
     ("OA / FA Chir", ["ER14", "FH19"]),
-    ("OA / FA Gyn", ["JR06", "LC02"]),
+    ("Chir Assistent", ["XR41", "YK42"]),
     ("Assistent Gyn", ["MG17"]),
-    ("Assistent Päd", ["NP25"]),
-    ("Assistent AbdOnco", ["OB22"]),
-    ("Assistent CardThor", ["PK12"]),
-    ("Assistent Uro", ["QL10"]),
-    ("Assistent KopfHals", ["RM13"]),
-    ("FA/Fellow MskHaut", ["ST27"]),
+    ("Assistent AOU", ["OB22"]),
+    ("Assistent CVT", ["PK12"]),
+    ("Assistent AOU", ["QL10"]),
+    ("Assistent MHD", ["RM13"]),
+    ("FA/Fellow MHD", ["ST27"]),
     ("SBZ Spät Assistent", ["UV09"]),
     ("3. Dienst", ["WX07"]),
 ]
@@ -64,66 +63,73 @@ GAP_BY_WEEKDAY = {
     6: "SBZ Geräteassistenz",
 }
 
+
+def _next_workday(day: date) -> date:
+    candidate = day + timedelta(days=1)
+    while candidate.weekday() >= 5:
+        candidate += timedelta(days=1)
+    return candidate
+
 # Worker IDs are stable and map to realistic mixed skill distributions.
 DEMO_WORKERS: list[dict[str, Any]] = [
     {
         "id": "KM15",
         "name": "Dr. Kora Meier (KM15)",
-        "global_modifier": 1.0,
-        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1, "notfall_mammo": 1, "privat_ct": -1},
+        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1, "privat_ct": -1},
     },
     {
         "id": "HB16",
         "name": "Dr. Hannes Berg (HB16)",
-        "global_modifier": 0.95,
-        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1, "notfall_mammo": 1},
+        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1},
     },
     {
         "id": "LV08",
         "name": "Dr. Lara Vogt (LV08)",
-        "global_modifier": 1.05,
-        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1, "notfall_mammo": 1},
+        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1},
     },
     {
         "id": "MS11",
         "name": "Dr. Milo Stein (MS11)",
-        "global_modifier": 1.0,
-        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1, "notfall_mammo": 1},
+        "overrides": {"notfall_ct": 1, "notfall_mr": 1, "notfall_xray": 1},
     },
-    {"id": "AK18", "name": "Dr. Andrea Krause (AK18)", "global_modifier": 0.9, "overrides": {"privat_ct": 1}},
-    {"id": "CP20", "name": "Dr. Claudia Peters (CP20)", "global_modifier": 1.25, "overrides": {"privat_mr": 1}},
-    {"id": "TN31", "name": "Dr. Theo Noll (TN31)", "global_modifier": 1.1, "overrides": {"privat_mr": 1}},
-    {"id": "TY33", "name": "Dr. Tilda Young (TY33)", "global_modifier": 1.0, "overrides": {"privat_ct": 1, "privat_mr": 1}},
-    {"id": "ER14", "name": "Dr. Eva Richter (ER14)", "global_modifier": 1.0, "overrides": {"privat_xray": 1}},
-    {"id": "FH19", "name": "Dr. Felix Hartmann (FH19)", "global_modifier": 1.0, "overrides": {"privat_xray": 1, "msk-haut_xray": 1}},
-    {"id": "JR06", "name": "Dr. Julia Reimer (JR06)", "global_modifier": 1.0, "overrides": {"privat_mammo": 1, "gyn_mammo": 1}},
-    {"id": "LC02", "name": "Dr. Lina Cramer (LC02)", "global_modifier": 0.95, "overrides": {"privat_mammo": 1, "gyn_mammo": 1}},
+    {"id": "AK18", "name": "Dr. Andrea Krause (AK18)", "overrides": {"privat_ct": 1}},
+    {"id": "CP20", "name": "Dr. Claudia Peters (CP20)", "overrides": {"privat_mr": 1}},
+    {"id": "TN31", "name": "Dr. Theo Noll (TN31)", "overrides": {"privat_mr": 1}},
+    {"id": "TY33", "name": "Dr. Tilda Young (TY33)", "overrides": {"privat_ct": 1, "privat_mr": 1}},
+    {"id": "ER14", "name": "Dr. Eva Richter (ER14)", "overrides": {"privat_xray": 1}},
+    {"id": "FH19", "name": "Dr. Felix Hartmann (FH19)", "overrides": {"privat_xray": 1}},
+    {
+        "id": "XR41",
+        "name": "Dr. Xenia Reuter (XR41)",
+        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mhd_xray": 1, "notfall_xray": -1},
+    },
+    {
+        "id": "YK42",
+        "name": "Dr. Yann Kiefer (YK42)",
+        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mhd_xray": 1, "notfall_xray": -1},
+    },
     {
         "id": "MG17",
         "name": "Dr. Mara Grimm (MG17)",
-        "global_modifier": 1.0,
         "modifier": 0.7,
-        "overrides": {"gyn_ct": 1, "gyn_mr": 1, "gyn_mammo": "w", "notfall_ct": -1},
+        "overrides": {"gyn_ct": 1, "gyn_mr": 1, "gyn_xray": -1, "notfall_ct": -1},
     },
-    {"id": "NP25", "name": "Dr. Noah Pohl (NP25)", "global_modifier": 1.0, "overrides": {"paed_ct": 1, "paed_mr": 1, "paed_xray": 1}},
     {
         "id": "OB22",
         "name": "Dr. Olivia Brandt (OB22)",
-        "global_modifier": 1.0,
         "modifier": 0.6,
-        "overrides": {"abd-onco_ct": 1, "abd-onco_mr": "w"},
+        "overrides": {"aou_ct": 1, "aou_mr": "w"},
     },
-    {"id": "PK12", "name": "Dr. Paul Koch (PK12)", "global_modifier": 1.0, "overrides": {"card-thor_ct": 1, "card-thor_mr": 1}},
-    {"id": "QL10", "name": "Dr. Quentin Lang (QL10)", "global_modifier": 1.0, "overrides": {"uro_ct": 1, "uro_mr": 1}},
-    {"id": "RM13", "name": "Dr. Rina Maurer (RM13)", "global_modifier": 1.0, "overrides": {"kopf-hals_ct": 1, "kopf-hals_mr": 1}},
-    {"id": "ST27", "name": "Dr. Sven Thaler (ST27)", "global_modifier": 1.0, "overrides": {"msk-haut_ct": 1, "msk-haut_mr": 1, "msk-haut_xray": 1}},
-    {"id": "UV09", "name": "Dr. Ute Vogler (UV09)", "global_modifier": 1.15, "overrides": {"notfall_mr": 0, "notfall_xray": 0}},
-    {"id": "WX07", "name": "Dr. Willem Xander (WX07)", "global_modifier": 1.05, "overrides": {"notfall_xray": 1}},
+    {"id": "PK12", "name": "Dr. Paul Koch (PK12)", "overrides": {"cvt_ct": 1, "cvt_mr": 1}},
+    {"id": "QL10", "name": "Dr. Quentin Lang (QL10)", "overrides": {"aou_ct": 1, "aou_mr": 1}},
+    {"id": "RM13", "name": "Dr. Rina Maurer (RM13)", "overrides": {"mhd_ct": 1, "mhd_mr": 1}},
+    {"id": "ST27", "name": "Dr. Sven Thaler (ST27)", "overrides": {"mhd_ct": 1, "mhd_mr": 1, "mhd_xray": 1}},
+    {"id": "UV09", "name": "Dr. Ute Vogler (UV09)", "overrides": {"notfall_mr": 0, "notfall_xray": 0}},
+    {"id": "WX07", "name": "Dr. Willem Xander (WX07)", "overrides": {"notfall_xray": 1}},
     {
         "id": "GP40",
         "name": "Dr. Greta Pause (GP40)",
-        "global_modifier": 1.0,
-        "overrides": {"notfall_ct": -1, "notfall_mr": -1, "notfall_xray": -1, "notfall_mammo": -1},
+        "overrides": {"notfall_ct": -1, "notfall_mr": -1, "notfall_xray": -1},
     },
 ]
 
@@ -141,10 +147,9 @@ def _skill_modality_keys() -> list[str]:
     return [f"{skill}_{modality}" for skill in SKILLS for modality in MODALITIES]
 
 
-def _build_worker_entry(*, full_name: str, global_modifier: float, modifier: float | None, overrides: dict[str, Any]) -> dict[str, Any]:
+def _build_worker_entry(*, full_name: str, modifier: float | None, overrides: dict[str, Any]) -> dict[str, Any]:
     entry: dict[str, Any] = {key: 0 for key in _skill_modality_keys()}
     entry["full_name"] = full_name
-    entry["global_modifier"] = float(global_modifier)
     if modifier is not None:
         entry["modifier"] = float(modifier)
     for key, value in overrides.items():
@@ -201,7 +206,6 @@ def _write_demo_roster() -> int:
     for worker in DEMO_WORKERS:
         roster[worker["id"]] = _build_worker_entry(
             full_name=worker["name"],
-            global_modifier=worker.get("global_modifier", 1.0),
             modifier=worker.get("modifier"),
             overrides=worker.get("overrides", {}),
         )
@@ -252,7 +256,7 @@ def parse_args() -> argparse.Namespace:
         "--preload-date",
         type=str,
         default=None,
-        help="Preload date (YYYY-MM-DD) for staged next day. Default: target + 1 day.",
+        help="Preload date (YYYY-MM-DD) for staged next day. Default: next workday after target.",
     )
     parser.add_argument(
         "--no-load",
@@ -268,7 +272,7 @@ def main() -> int:
     preload = (
         date.fromisoformat(args.preload_date)
         if args.preload_date
-        else target + timedelta(days=1)
+        else _next_workday(target)
     )
     if preload <= target:
         raise ValueError("preload-date must be after target-date")

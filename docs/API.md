@@ -87,16 +87,17 @@ GET /api/{modality}/{skill}
 ```
 
 Assigns a worker with overflow enabled unless the skill/modality is configured in `no_overflow`.
+If `no_overflow` applies, routing becomes specialist-only but the request still uses normal weights.
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
 | modality | path | Modality slug from `config.yaml` (e.g., `ct`, `mr`, `xray`, `mammo`) |
-| skill | path | Skill slug from `config.yaml` (e.g., `notfall`, `card-thor`) |
+| skill | path | Skill slug from `config.yaml` (e.g., `notfall`, `cvt`) |
 
 **Example:**
 ```bash
-curl http://localhost:5000/api/ct/card-thor
+curl http://localhost:5000/api/ct/cvt
 ```
 
 **Response:**
@@ -105,7 +106,7 @@ curl http://localhost:5000/api/ct/card-thor
   "selected_person": "Dr. Anna Müller (AM)",
   "canonical_id": "AM",
   "source_modality": "ct",
-  "skill_used": "card-thor",
+  "skill_used": "cvt",
   "is_weighted": false
 }
 ```
@@ -126,6 +127,7 @@ GET /api/{modality}/{skill}/strict
 ```
 
 Assigns a worker without overflow. Returns an error if no specialist is available.
+This explicit strict path also uses strict weights.
 
 ---
 

@@ -1,121 +1,102 @@
 {
   "assignment_checks": [
     {
-      "allow_overflow": false,
       "label": "strict_privat_ct",
-      "modality": "ct",
       "role": "privat",
-      "selected_modality": "ct",
+      "modality": "ct",
+      "allow_overflow": false,
+      "time": "09:00",
       "selected_person": "Dr. Privat Specialist (PS01)",
       "selected_skill": "privat",
-      "time": "09:00"
+      "selected_modality": "ct"
     },
     {
-      "allow_overflow": true,
       "label": "overflow_gyn_ct",
-      "modality": "ct",
       "role": "gyn",
-      "selected_modality": "ct",
+      "modality": "ct",
+      "allow_overflow": true,
+      "time": "09:00",
       "selected_person": "Dr. Gyn Generalist (GG01)",
       "selected_skill": "gyn",
-      "time": "09:00"
+      "selected_modality": "ct"
     },
     {
-      "allow_overflow": false,
       "label": "strict_gyn_ct_no_specialist",
-      "modality": "ct",
       "role": "gyn",
-      "selected_modality": null,
+      "modality": "ct",
+      "allow_overflow": false,
+      "time": "09:00",
       "selected_person": null,
       "selected_skill": null,
-      "time": "09:00"
+      "selected_modality": null
     }
   ],
   "modalities": {
     "ct": {
-      "gap_segment_count": 0,
       "row_count": 2,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Gyn Generalist (GG01)",
-          "row_type": "shift_segment",
-          "skill_signature": "",
-          "start": "08:00",
-          "tasks": "Generalist Support Shift"
-        },
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Privat Specialist (PS01)",
-          "row_type": "shift_segment",
-          "skill_signature": "notfall:-1|privat:1|gyn:-1|paed:-1|msk-haut:-1|abd-onco:-1|card-thor:-1|uro:-1|kopf-hals:-1",
-          "start": "08:00",
-          "tasks": "Privat Specialist Shift"
-        }
-      ],
       "shift_segment_count": 2,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Gyn Generalist (GG01)",
         "Dr. Privat Specialist (PS01)"
-      ]
-    },
-    "mammo": {
-      "gap_segment_count": 0,
-      "row_count": 1,
+      ],
       "rows": [
         {
-          "counts_for_hours": true,
-          "end": "16:00",
           "ppl": "Dr. Gyn Generalist (GG01)",
           "row_type": "shift_segment",
-          "skill_signature": "",
           "start": "08:00",
-          "tasks": "Generalist Support Shift"
+          "end": "16:00",
+          "tasks": "Generalist Support Shift",
+          "counts_for_hours": true,
+          "skill_signature": ""
+        },
+        {
+          "ppl": "Dr. Privat Specialist (PS01)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "16:00",
+          "tasks": "Privat Specialist Shift",
+          "counts_for_hours": true,
+          "skill_signature": "aou:-1|cvt:-1|gyn:-1|mhd:-1|notfall:-1|privat:1"
         }
-      ],
-      "shift_segment_count": 1,
-      "workers": [
-        "Dr. Gyn Generalist (GG01)"
       ]
     },
     "mr": {
-      "gap_segment_count": 0,
       "row_count": 1,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Gyn Generalist (GG01)",
-          "row_type": "shift_segment",
-          "skill_signature": "",
-          "start": "08:00",
-          "tasks": "Generalist Support Shift"
-        }
-      ],
       "shift_segment_count": 1,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Gyn Generalist (GG01)"
+      ],
+      "rows": [
+        {
+          "ppl": "Dr. Gyn Generalist (GG01)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "16:00",
+          "tasks": "Generalist Support Shift",
+          "counts_for_hours": true,
+          "skill_signature": ""
+        }
       ]
     },
     "xray": {
-      "gap_segment_count": 0,
       "row_count": 1,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Gyn Generalist (GG01)",
-          "row_type": "shift_segment",
-          "skill_signature": "",
-          "start": "08:00",
-          "tasks": "Generalist Support Shift"
-        }
-      ],
       "shift_segment_count": 1,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Gyn Generalist (GG01)"
+      ],
+      "rows": [
+        {
+          "ppl": "Dr. Gyn Generalist (GG01)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "16:00",
+          "tasks": "Generalist Support Shift",
+          "counts_for_hours": true,
+          "skill_signature": ""
+        }
       ]
     }
   },

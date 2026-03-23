@@ -26,7 +26,6 @@ from lib.utils import (
 from data_manager import (
     get_canonical_worker_id,
     get_roster_modifier_raw,
-    get_global_modifier,
     global_worker_data,
     modality_data,
 )
@@ -104,8 +103,8 @@ def update_global_assignment(
         person: Worker name (PPL field)
         role: Skill/role assigned (e.g., 'Notfall', 'MSK')
         modality: Modality assigned (e.g., 'ct', 'mr')
-        is_weighted: If True (skill='w'), also apply worker's 'w' modifier.
-                     If False (skill=1 or 0), only apply global_modifier.
+        is_weighted: If True (skill='w'), also apply worker's 'w' modifier streams.
+                     If False (skill=1 or 0), only shift modifier applies.
         strict_mode: If True, apply strict button weight multiplier.
         work_amount: Optional multiplier for special-task work balance.
         weight_override: Optional fixed weight override for special tasks.
@@ -117,35 +116,30 @@ def update_global_assignment(
     """
     canonical_id = get_canonical_worker_id(person)
 
-    # Always apply global_modifier to ALL assignments (0, w, 1)
-    # Higher global_modifier = less work (e.g., 1.5 = ~33% less work)
-    global_modifier = get_global_modifier(canonical_id)
-    global_modifier = global_modifier if global_modifier > 0 else 1.0
+    # Shift modifier applies to ALL assignments (0, 1, w).
+    # Active-row value is preferred; pooled cache is fallback.
+    shift_modifier = coerce_float(shift_modifier_override, 1.0)
+    if shift_modifier == 1.0:
+        pooled_shift_modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
+        shift_modifier = coerce_float(pooled_shift_modifier, 1.0)
+    shift_modifier = shift_modifier if shift_modifier > 0 else 1.0
 
-    # For weighted ('w') assignments, also apply the 'w' modifier
-    # skill=1 (regular specialist) and skill=0 (generalist) only use global_modifier
+    # For weighted ('w') assignments, also apply W streams:
+    # roster_w_modifier × default_w_modifier.
     if is_weighted:
-        # Multiply all W streams for weighted assignments:
-        # shift_w_modifier × roster_w_modifier × default_w_modifier.
-        # Shift stream still prefers active row over pooled cache fallback.
-        shift_modifier = coerce_float(shift_modifier_override, 1.0)
-        if shift_modifier == 1.0:
-            pooled_shift_modifier = modality_data[modality]['worker_modifiers'].get(person, 1.0)
-            shift_modifier = coerce_float(pooled_shift_modifier, 1.0)
-
         roster_modifier_raw = get_roster_modifier_raw(canonical_id)
         roster_modifier = coerce_float(roster_modifier_raw, 1.0)
 
         default_w_modifier = BALANCER_SETTINGS.get('default_w_modifier', 1.0)
         default_w_modifier = coerce_float(default_w_modifier, 1.0)
 
-        w_modifier = shift_modifier * roster_modifier * default_w_modifier
+        w_modifier = roster_modifier * default_w_modifier
         w_modifier = w_modifier if w_modifier > 0 else 1.0
     else:
         w_modifier = 1.0
 
-    # Combined modifier: global_modifier applies to all, w_modifier only for 'w'
-    combined_modifier = global_modifier * w_modifier
+    # Combined modifier: shift applies to all, W stream only for weighted assignments.
+    combined_modifier = shift_modifier * w_modifier
     base_weight = (
         weight_override
         if weight_override is not None
@@ -376,6 +370,133 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
         return filtered_df
     return prioritized
 
+
+def _specialist_minimum_ready(specialists_df: pd.DataFrame, column: str, modality: str) -> bool:
+    """
+    Check whether all active specialists reached the minimum assignment threshold.
+
+    Returns True when:
+    - no specialists are active, or
+    - min_assignments_per_skill <= 0, or
+    - every active specialist has effective load >= min_assignments_per_skill.
+    """
+    min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 0)
+    if min_required <= 0 or specialists_df is None or specialists_df.empty:
+        return True
+
+    for worker in specialists_df['PPL'].dropna().unique():
+        if _get_effective_assignment_load(worker, column, modality) < min_required:
+            return False
+    return True
+
+
+def _specialist_start_window_ready(specialists_df: pd.DataFrame, current_dt: datetime) -> bool:
+    """
+    Check whether all active specialists are past the configured start buffer.
+
+    Uses disable_overflow_at_shift_start_minutes as the time gate input.
+    Returns True when no start buffer is configured.
+    """
+    start_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_start_minutes', 0)
+    if start_buffer <= 0 or specialists_df is None or specialists_df.empty:
+        return True
+
+    for _, row in specialists_df.iterrows():
+        start_dt, _ = compute_shift_window(row['start_time'], row['end_time'], current_dt)
+        minutes_since_start = (current_dt - start_dt).total_seconds() / 60
+        if minutes_since_start <= start_buffer:
+            return False
+    return True
+
+
+def _overflow_released_by_warm_start(
+    specialists_df: pd.DataFrame,
+    column: str,
+    modality: str,
+    current_dt: datetime,
+) -> bool:
+    """
+    Decide whether overflow is allowed under warm-start release policy.
+
+    warm_start_release_mode:
+      - 'either': release overflow when time gate OR min-count gate is ready
+      - 'both': release overflow only when both gates are ready
+    """
+    mode = str(BALANCER_SETTINGS.get('warm_start_release_mode', 'either')).strip().lower()
+    if mode not in {'either', 'both'}:
+        mode = 'either'
+
+    time_ready = _specialist_start_window_ready(specialists_df, current_dt)
+    minimum_ready = _specialist_minimum_ready(specialists_df, column, modality)
+
+    if mode == 'both':
+        released = time_ready and minimum_ready
+    else:
+        released = time_ready or minimum_ready
+
+    selection_logger.info(
+        "Warm-start overflow gate: mode=%s, time_ready=%s, min_ready=%s, released=%s",
+        mode,
+        time_ready,
+        minimum_ready,
+        released,
+    )
+    return released
+
+
+def _overflow_released_for_merged_specialists(
+    specialist_rows: list[dict],
+    primary_skill: str,
+    modality: str,
+    current_dt: datetime,
+) -> bool:
+    """
+    Warm-start overflow gate for merged specialist pools.
+
+    Evaluates:
+    - time gate: all merged specialists past shift-start buffer
+    - count gate: all merged specialists at/above min_assignments_per_skill
+    - mode gate: warm_start_release_mode (either|both)
+    """
+    mode = str(BALANCER_SETTINGS.get('warm_start_release_mode', 'either')).strip().lower()
+    if mode not in {'either', 'both'}:
+        mode = 'either'
+
+    start_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_start_minutes', 0)
+    min_required = BALANCER_SETTINGS.get('min_assignments_per_skill', 0)
+
+    if not specialist_rows:
+        return True
+
+    time_ready = True
+    if start_buffer > 0:
+        for row in specialist_rows:
+            start_dt, _ = compute_shift_window(row['start_time'], row['end_time'], current_dt)
+            minutes_since_start = (current_dt - start_dt).total_seconds() / 60
+            if minutes_since_start <= start_buffer:
+                time_ready = False
+                break
+
+    minimum_ready = True
+    if min_required > 0:
+        for row in specialist_rows:
+            worker = row.get('PPL')
+            if not worker:
+                continue
+            if _get_effective_assignment_load(worker, primary_skill, modality) < min_required:
+                minimum_ready = False
+                break
+
+    released = (time_ready and minimum_ready) if mode == 'both' else (time_ready or minimum_ready)
+    selection_logger.info(
+        "Merged warm-start gate: mode=%s, time_ready=%s, min_ready=%s, released=%s",
+        mode,
+        time_ready,
+        minimum_ready,
+        released,
+    )
+    return released
+
 def _get_worker_exclusion_based(
     current_dt: datetime,
     role: str,
@@ -400,7 +521,6 @@ def _get_worker_exclusion_based(
     # Get exclusion list and overflow settings
     exclude_skills = EXCLUDE_SKILLS.get(primary_skill, [])
     imbalance_threshold_pct = BALANCER_SETTINGS.get('imbalance_threshold_pct', 30)
-    shift_start_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_start_minutes', 0)
     shift_end_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_end_minutes', 0)
 
     selection_logger.info(
@@ -469,13 +589,12 @@ def _get_worker_exclusion_based(
             filtered_workers[primary_skill].apply(lambda v: skill_value_to_numeric(v) == 0)
         ]
 
-        # Apply shift start/end buffers ONLY to generalists (overflow pool)
-        # Specialists (1, w) handle their own work even at shift boundaries
-        # Keep original generalists_all for fallback if no specialists available
+        # Apply shift END buffer to generalists (overflow pool).
+        # Shift START behavior is handled by warm-start release policy
+        # (time/count, either/both).
+        # Keep original generalists_all for fallback if no specialists available.
         generalists_df = generalists_all
         if not generalists_df.empty:
-            if shift_start_buffer > 0:
-                generalists_df = _filter_near_shift_start(generalists_df, current_dt, shift_start_buffer)
             if shift_end_buffer > 0:
                 generalists_df = _filter_near_shift_end(generalists_df, current_dt, shift_end_buffer)
 
@@ -497,42 +616,49 @@ def _get_worker_exclusion_based(
                 # Check if should overflow to generalists based on imbalance
                 overflow_triggered = False
                 if allow_overflow and not generalists_df.empty and imbalance_threshold_pct > 0:
-                    # Calculate min ratios for both pools
-                    min_specialist_ratio = min(specialist_ratios.values())
+                    warm_start_released = _overflow_released_by_warm_start(
+                        specialists_df=specialists_to_check,
+                        column=primary_skill,
+                        modality=modality,
+                        current_dt=current_dt,
+                    )
+                    if warm_start_released:
+                        # Calculate min ratios for both pools
+                        min_specialist_ratio = min(specialist_ratios.values())
 
-                    generalist_workers = generalists_df['PPL'].unique()
-                    generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
-                    if generalist_ratios:
-                        min_generalist_ratio = min(generalist_ratios.values())
-                    else:
-                        min_generalist_ratio = None
-
-                    # Check if specialists are imbalanced compared to generalists
-                    if min_generalist_ratio is not None and min_generalist_ratio < min_specialist_ratio:
-                        specialist_avg = (
-                            sum(specialist_ratios.values()) / len(specialist_ratios)
-                            if specialist_ratios
-                            else 0
-                        )
-                        generalist_avg = (
-                            sum(generalist_ratios.values()) / len(generalist_ratios)
-                            if generalist_ratios
-                            else 0
-                        )
-                        imbalance_baseline = max(specialist_avg, generalist_avg)
-                        if imbalance_baseline <= 0:
-                            imbalance_pct = 0.0
+                        generalist_workers = generalists_df['PPL'].unique()
+                        generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
+                        if generalist_ratios:
+                            min_generalist_ratio = min(generalist_ratios.values())
                         else:
-                            imbalance_pct = ((min_specialist_ratio - min_generalist_ratio) / imbalance_baseline) * 100
-                        if imbalance_pct >= imbalance_threshold_pct:
-                            overflow_triggered = True
-                            selection_logger.info(
-                                "Specialist overflow triggered: specialist_min=%.4f, generalist_min=%.4f, imbalance=%.1f%% >= %d%%",
-                                min_specialist_ratio,
-                                min_generalist_ratio,
-                                imbalance_pct,
-                                imbalance_threshold_pct,
+                            min_generalist_ratio = None
+
+                        # Check if specialists are imbalanced compared to generalists
+                        if min_generalist_ratio is not None and min_generalist_ratio < min_specialist_ratio:
+                            specialist_avg = (
+                                sum(specialist_ratios.values()) / len(specialist_ratios)
+                                if specialist_ratios
+                                else 0
                             )
+                            generalist_avg = (
+                                sum(generalist_ratios.values()) / len(generalist_ratios)
+                                if generalist_ratios
+                                else 0
+                            )
+                            imbalance_baseline = max(specialist_avg, generalist_avg)
+                            if imbalance_baseline <= 0:
+                                imbalance_pct = 0.0
+                            else:
+                                imbalance_pct = ((min_specialist_ratio - min_generalist_ratio) / imbalance_baseline) * 100
+                            if imbalance_pct >= imbalance_threshold_pct:
+                                overflow_triggered = True
+                                selection_logger.info(
+                                    "Specialist overflow triggered: specialist_min=%.4f, generalist_min=%.4f, imbalance=%.1f%% >= %d%%",
+                                    min_specialist_ratio,
+                                    min_generalist_ratio,
+                                    imbalance_pct,
+                                    imbalance_threshold_pct,
+                                )
 
                 # If overflow not triggered, use specialist with lowest ratio
                 if not overflow_triggered:
@@ -638,6 +764,8 @@ def _get_worker_multi_target(
     current_dt: datetime,
     target_skill_modalities: list,
     allow_overflow: bool,
+    overflow_role: Optional[str] = None,
+    overflow_modality: Optional[str] = None,
 ):
     """
     Find worker across multiple skill_modality combinations.
@@ -649,7 +777,9 @@ def _get_worker_multi_target(
     Args:
         current_dt: Current datetime
         target_skill_modalities: List of (skill, modality) tuples to search
-        allow_overflow: Currently ignored - multi-target only uses specialists
+        allow_overflow: Whether overflow to primary-skill generalists is allowed
+        overflow_role: Primary role for overflow pool (skill=0 in overflow_modality)
+        overflow_modality: Modality for overflow pool
 
     Returns:
         Tuple of (candidate_row, skill_used, modality) or None
@@ -673,7 +803,7 @@ def _get_worker_multi_target(
             return 0.0 if weighted_count <= 0 else float('inf')
         return weighted_count / hours_worked
 
-    # Collect all candidates across all skill_modality combinations
+    # Collect all specialist candidates across all skill_modality combinations
     all_candidates = []
 
     for skill, modality in target_skill_modalities:
@@ -714,31 +844,132 @@ def _get_worker_multi_target(
                 'is_weighted': is_weighted_skill(row.get(skill)),
             })
 
-    if not all_candidates:
-        selection_logger.info(
-            "No specialists available for multi-target search: %s",
-            [f"{s}_{m}" for s, m in target_skill_modalities],
-        )
-        return None
+    # Build overflow pool (primary skill generalists in requested modality)
+    generalists_all = pd.DataFrame()
+    generalists_df = pd.DataFrame()
+    imbalance_threshold_pct = BALANCER_SETTINGS.get('imbalance_threshold_pct', 30)
+    shift_end_buffer = BALANCER_SETTINGS.get('disable_overflow_at_shift_end_minutes', 0)
+    if allow_overflow and overflow_role and overflow_modality in modality_data:
+        d = modality_data[overflow_modality]
+        if d['working_hours_df'] is not None:
+            active_df = _filter_active_rows(d['working_hours_df'], current_dt)
+            if active_df is not None and not active_df.empty and overflow_role in active_df.columns:
+                generalists_all = active_df[
+                    active_df[overflow_role].apply(lambda v: skill_value_to_numeric(v) == 0)
+                ]
+                generalists_df = generalists_all
+                if not generalists_df.empty and shift_end_buffer > 0:
+                    generalists_df = _filter_near_shift_end(generalists_df, current_dt, shift_end_buffer)
 
-    # Pick the candidate with the lowest workload ratio
-    best = min(all_candidates, key=lambda c: c['ratio'])
-    candidate = best['row'].copy()
-    candidate['__modality_source'] = best['modality']
-    candidate['__selection_ratio'] = best['ratio']
-    candidate['__is_weighted'] = best['is_weighted']
-    candidate['__skill_source'] = best['skill']
+    # If no specialists at all, optionally use overflow pool.
+    if not all_candidates:
+        if not allow_overflow:
+            selection_logger.info(
+                "No specialists available for multi-target search: %s",
+                [f"{s}_{m}" for s, m in target_skill_modalities],
+            )
+            return None
+
+        generalists_to_use = generalists_df
+        if generalists_to_use.empty and not generalists_all.empty:
+            generalists_to_use = generalists_all
+
+        if generalists_to_use.empty:
+            selection_logger.info(
+                "No specialists or overflow generalists available for multi-target search: %s",
+                [f"{s}_{m}" for s, m in target_skill_modalities],
+            )
+            return None
+
+        generalist_workers = generalists_to_use['PPL'].dropna().unique()
+        generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
+        if not generalist_ratios:
+            return None
+
+        best_generalist = min(generalist_workers, key=lambda p: generalist_ratios[p])
+        candidate = generalists_to_use[generalists_to_use['PPL'] == best_generalist].iloc[0].copy()
+        candidate['__modality_source'] = overflow_modality or default_modality
+        candidate['__selection_ratio'] = generalist_ratios[best_generalist]
+        candidate['__is_weighted'] = False
+        candidate['__skill_source'] = overflow_role or ''
+        selection_logger.info(
+            "Multi-target overflow selected generalist: person=%s, skill=%s=0, ratio=%.4f",
+            best_generalist,
+            overflow_role,
+            generalist_ratios[best_generalist],
+        )
+        return candidate, (overflow_role or ''), (overflow_modality or default_modality)
+
+    # Best specialist candidate from merged targets
+    best_specialist = min(all_candidates, key=lambda c: c['ratio'])
+    specialist_rows = []
+    seen_specialists = set()
+    for c in all_candidates:
+        person = c.get('person')
+        if person in seen_specialists:
+            continue
+        seen_specialists.add(person)
+        row_dict = c['row'].to_dict() if hasattr(c['row'], 'to_dict') else dict(c['row'])
+        specialist_rows.append(row_dict)
+
+    # Evaluate overflow after merged specialist fallback.
+    overflow_triggered = False
+    if allow_overflow and not generalists_df.empty and imbalance_threshold_pct > 0 and overflow_role and overflow_modality:
+        warm_start_released = _overflow_released_for_merged_specialists(
+            specialist_rows=specialist_rows,
+            primary_skill=overflow_role,
+            modality=overflow_modality,
+            current_dt=current_dt,
+        )
+        if warm_start_released:
+            specialist_min_ratio = best_specialist['ratio']
+            generalist_workers = generalists_df['PPL'].dropna().unique()
+            generalist_ratios = {p: weighted_ratio(p) for p in generalist_workers}
+            if generalist_ratios:
+                min_generalist_ratio = min(generalist_ratios.values())
+                if min_generalist_ratio < specialist_min_ratio:
+                    specialist_avg = sum(c['ratio'] for c in all_candidates) / len(all_candidates)
+                    generalist_avg = sum(generalist_ratios.values()) / len(generalist_ratios)
+                    imbalance_baseline = max(specialist_avg, generalist_avg)
+                    imbalance_pct = 0.0 if imbalance_baseline <= 0 else (
+                        (specialist_min_ratio - min_generalist_ratio) / imbalance_baseline
+                    ) * 100
+                    if imbalance_pct >= imbalance_threshold_pct:
+                        overflow_triggered = True
+                        best_generalist = min(generalist_workers, key=lambda p: generalist_ratios[p])
+                        candidate = generalists_df[generalists_df['PPL'] == best_generalist].iloc[0].copy()
+                        candidate['__modality_source'] = overflow_modality
+                        candidate['__selection_ratio'] = generalist_ratios[best_generalist]
+                        candidate['__is_weighted'] = False
+                        candidate['__skill_source'] = overflow_role
+                        selection_logger.info(
+                            "Multi-target overflow triggered: specialist_min=%.4f, generalist_min=%.4f, imbalance=%.1f%% >= %d%%, selected=%s",
+                            specialist_min_ratio,
+                            min_generalist_ratio,
+                            imbalance_pct,
+                            imbalance_threshold_pct,
+                            best_generalist,
+                        )
+                        return candidate, overflow_role, overflow_modality
+
+    # Default: use merged specialist candidate
+    candidate = best_specialist['row'].copy()
+    candidate['__modality_source'] = best_specialist['modality']
+    candidate['__selection_ratio'] = best_specialist['ratio']
+    candidate['__is_weighted'] = best_specialist['is_weighted']
+    candidate['__skill_source'] = best_specialist['skill']
 
     selection_logger.info(
-        "Multi-target selected: person=%s, skill=%s, modality=%s, weighted=%s, ratio=%.4f",
-        best['person'],
-        best['skill'],
-        best['modality'],
-        best['is_weighted'],
-        best['ratio'],
+        "Multi-target selected specialist: person=%s, skill=%s, modality=%s, weighted=%s, ratio=%.4f, overflow_triggered=%s",
+        best_specialist['person'],
+        best_specialist['skill'],
+        best_specialist['modality'],
+        best_specialist['is_weighted'],
+        best_specialist['ratio'],
+        overflow_triggered,
     )
 
-    return candidate, best['skill'], best['modality']
+    return candidate, best_specialist['skill'], best_specialist['modality']
 
 
 def get_next_available_worker(
@@ -761,5 +992,11 @@ def get_next_available_worker(
                                 the worker with the lowest workload ratio.
     """
     if target_skill_modalities:
-        return _get_worker_multi_target(current_dt, target_skill_modalities, allow_overflow)
+        return _get_worker_multi_target(
+            current_dt,
+            target_skill_modalities,
+            allow_overflow,
+            overflow_role=role,
+            overflow_modality=modality,
+        )
     return _get_worker_exclusion_based(current_dt, role, modality, allow_overflow)

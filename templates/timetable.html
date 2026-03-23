@@ -326,6 +326,19 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
+  <!-- Skill Filter Bar -->
+  <div class="skill-filter-bar" id="skillFilterBar">
+    <label>Skill:</label>
+    <button class="filter-btn {% if skill_filter == 'all' %}active{% endif %}" data-skill="all"
+      onclick="filterBySkill('all')">All</button>
+    {% for skill in skill_definitions %}
+    <button class="filter-btn {% if skill_filter == skill.slug %}active{% endif %}" data-skill="{{ skill.slug }}"
+      onclick="filterBySkill('{{ skill.slug }}')">
+      {{ skill.label }}
+    </button>
+    {% endfor %}
+  </div>
+
   <!-- Modality Filter Bar -->
   <div class="skill-filter-bar" id="modalityFilterBar">
     <label>Modality:</label>
@@ -336,19 +349,6 @@
       onclick="changeModality(event, '{{ mod }}')">
       {{ modality_labels[mod] }}
     </a>
-    {% endfor %}
-  </div>
-
-  <!-- Skill Filter Bar -->
-  <div class="skill-filter-bar" id="skillFilterBar">
-    <label>Filter by Skill:</label>
-    <button class="filter-btn {% if skill_filter == 'all' %}active{% endif %}" data-skill="all"
-      onclick="filterBySkill('all')">All</button>
-    {% for skill in skill_definitions %}
-    <button class="filter-btn {% if skill_filter == skill.slug %}active{% endif %}" data-skill="{{ skill.slug }}"
-      onclick="filterBySkill('{{ skill.slug }}')">
-      {{ skill.label }}
-    </button>
     {% endfor %}
   </div>
 

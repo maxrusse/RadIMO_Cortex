@@ -2,7 +2,7 @@
 
 ## Overview
 
-New customer requires a simplified weight model where **all skill weights are 1** (flat), but a **4-digit code per modality** applies an additional multiplier. Codes are stored in a **separate `config_code.yaml`** file. The code is selected via a popup after a user clicks on a skill-modality combination (e.g. CT > abd-onco).
+New customer requires a simplified weight model where **all skill weights are 1** (flat), but a **4-digit code per modality** applies an additional multiplier. Codes are stored in a **separate `config_code.yaml`** file. The code is selected via a popup after a user clicks on a skill-modality combination (e.g. CT > aou).
 
 ---
 
@@ -10,9 +10,9 @@ New customer requires a simplified weight model where **all skill weights are 1*
 
 | Aspect | Current System | New Customer Model |
 |---|---|---|
-| Skill weights | Per-skill (e.g. notfall=1.1, card-thor=1.2) | **All skills = 1.0** |
+| Skill weights | Per-skill (e.g. notfall=1.1, cvt=1.2) | **All skills = 1.0** |
 | Modality factors | Per-modality (ct=1.0, mr=1.2, xray=0.33, mammo=0.5) | **Stays as-is** |
-| Skill x Modality overrides | Explicit overrides (e.g. mr+card-thor=1.8) | **Removed / not used** |
+| Skill x Modality overrides | Explicit overrides (e.g. mr+cvt=1.8) | **Removed / not used** |
 | Worker modifiers (global, w) | Per-worker in roster (inverse: divide) | **Stays as-is** |
 | Modality code multiplier | Does not exist | **NEW -- per-modality code list in `config_code.yaml`** |
 | `config.yaml` | Full config | **Unchanged** (only add `weight_mode` flag) |
@@ -146,13 +146,13 @@ mammo:
 Understanding the exact flow that needs to be modified:
 
 ```
-User clicks skill button (e.g. "abd-onco" on CT page)
+User clicks skill button (e.g. "aou" on CT page)
   │
   ▼
-index.html: onclick="getNextAssignment('abd-onco', 'Abd-Onco')"
+index.html: onclick="getNextAssignment('aou', 'Abd-Onco')"
   │
   ▼
-JS: fetch(`/api/${currentModality}/${encodedSkill}`)        ← GET /api/ct/abd-onco
+JS: fetch(`/api/${currentModality}/${encodedSkill}`)        ← GET /api/ct/aou
   │
   ▼
 routes.py: assign_worker_api(modality, role)                ← line 1462
@@ -174,10 +174,10 @@ routes.py: _assign_worker(modality, role)                   ← line 1376
 ### New Flow (with code popup)
 
 ```
-User clicks skill button (e.g. "abd-onco" on CT page)
+User clicks skill button (e.g. "aou" on CT page)
   │
   ▼
-JS: getNextAssignment('abd-onco', 'Abd-Onco')
+JS: getNextAssignment('aou', 'Abd-Onco')
   │
   ▼                                                          ← NEW
 JS: if weight_mode == "modality_code":

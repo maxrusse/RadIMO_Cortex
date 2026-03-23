@@ -1285,9 +1285,9 @@
     </div>
 
     <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-      <strong>Load Today from CSV:</strong>
+      <strong>HARD RELOAD TODAY from CSV:</strong>
       <button class="btn btn-success" id="load-today-btn-today" onclick="loadFromCSV('today')" style="display: none;">
-        Load Today
+        HARD RELOAD TODAY
       </button>
       <span id="load-status-today" style="color: #666;"></span>
       <button class="btn btn-primary" onclick="openAddWorkerModal('today')" style="margin-left: auto;">+ Add
@@ -1314,24 +1314,24 @@
       </div>
 
       <div class="filter-bar">
+        <label>Skill:</label>
+        <button class="filter-btn active" data-skill="" onclick="filterBySkill('today', '')">All</button>
+        {% for skill in skills %}
+        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('today', '{{ skill }}')">{{ skill }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="filter-bar">
         <label>Modality:</label>
         <button class="filter-btn active" data-modality="" onclick="filterByModality('today', '')">All</button>
         {% for mod in modalities %}
         <button class="filter-btn" data-modality="{{ mod|lower }}" onclick="filterByModality('today', '{{ mod|lower }}')">{{ mod|upper }}</button>
         {% endfor %}
         <label class="filter-toggle" style="margin-left: auto;">
-          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')"> Hide 0/-1
+          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')" checked> Hide 0/-1
         </label>
         <button id="display-order-toggle-today" class="btn btn-secondary" onclick="toggleDisplayOrder()"
           title="Current: Modalities as groups, skills as sub-columns. Click to switch.">Mod → Skill</button>
-      </div>
-
-      <div class="filter-bar">
-        <label>Skill:</label>
-        <button class="filter-btn active" data-skill="" onclick="filterBySkill('today', '')">All</button>
-        {% for skill in skills %}
-        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('today', '{{ skill }}')">{{ skill }}</button>
-        {% endfor %}
       </div>
 
       <!-- Worker Table - One row per entry -->
@@ -1408,24 +1408,24 @@
       </div>
 
       <div class="filter-bar">
+        <label>Skill:</label>
+        <button class="filter-btn active" data-skill="" onclick="filterBySkill('tomorrow', '')">All</button>
+        {% for skill in skills %}
+        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('tomorrow', '{{ skill }}')">{{ skill }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="filter-bar">
         <label>Modality:</label>
         <button class="filter-btn active" data-modality="" onclick="filterByModality('tomorrow', '')">All</button>
         {% for mod in modalities %}
         <button class="filter-btn" data-modality="{{ mod|lower }}" onclick="filterByModality('tomorrow', '{{ mod|lower }}')">{{ mod|upper }}</button>
         {% endfor %}
         <label class="filter-toggle" style="margin-left: auto;">
-          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')"> Hide 0/-1
+          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')" checked> Hide 0/-1
         </label>
         <button id="display-order-toggle-tomorrow" class="btn btn-secondary" onclick="toggleDisplayOrder()"
           title="Current: Modalities as groups, skills as sub-columns. Click to switch.">Mod → Skill</button>
-      </div>
-
-      <div class="filter-bar">
-        <label>Skill:</label>
-        <button class="filter-btn active" data-skill="" onclick="filterBySkill('tomorrow', '')">All</button>
-        {% for skill in skills %}
-        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('tomorrow', '{{ skill }}')">{{ skill }}</button>
-        {% endfor %}
       </div>
 
       <!-- Worker Table - One row per entry -->

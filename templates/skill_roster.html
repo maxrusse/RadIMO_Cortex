@@ -62,7 +62,7 @@
 
     .main-layout {
       display: grid;
-      grid-template-columns: 220px 1fr;
+      grid-template-columns: minmax(380px, 420px) 1fr;
       gap: 1rem;
     }
 
@@ -74,6 +74,7 @@
     }
 
     .worker-list {
+      min-width: 0;
       max-height: 70vh;
       overflow-y: auto;
     }
@@ -333,14 +334,9 @@
           <button class="btn btn-secondary" style="background: #dc3545;" onclick="deleteWorker()">Delete</button>
         </div>
         <div class="modifier-row">
-          <label for="workerGlobalModifier">Global Modifier:</label>
-          <input type="number" id="workerGlobalModifier" class="modifier-input" step="0.1" min="0.1" max="3.0" value="1.0" onchange="updateGlobalModifier(this.value)">
-          <span class="modifier-help">(Applied to ALL assignments. 1.0 = normal, 1.5 = ~33% less work, 2.0 = ~50% less)</span>
-        </div>
-        <div class="modifier-row">
           <label for="workerModifier">W Modifier:</label>
           <input type="number" id="workerModifier" class="modifier-input" step="0.1" min="0.1" max="3.0" value="{{ default_w_modifier }}" onchange="updateModifier(this.value)">
-          <span class="modifier-help">(Additional modifier for 'w' assignments only. Default {{ default_w_modifier }})</span>
+          <span class="modifier-help">(Applied only to weighted 'w' assignments. Default {{ default_w_modifier }})</span>
         </div>
         <div style="overflow-x: auto;">
           <table class="matrix-table">
@@ -508,14 +504,13 @@
           let value = workerData[key];
           if (value === undefined) value = 0;
 
-          // Use select dropdown to support 'w' value
+          // Roster baseline supports passive, excluded, and weighted training.
           const select = document.createElement('select');
           select.className = 'skill-select skill-input';
 
           const options = [
-            { value: '1', label: '1' },
-            { value: '0', label: '0' },
             { value: 'w', label: 'w' },
+            { value: '0', label: '0' },
             { value: '-1', label: '-1' }
           ];
 
@@ -526,14 +521,19 @@
             select.appendChild(option);
           });
 
-          // Set current value (normalize to string for comparison)
           const strValue = String(value).toLowerCase();
-          select.value = strValue === 'w' ? 'w' : String(parseInt(value) || 0);
+          if (strValue === 'w') {
+            select.value = 'w';
+          } else if (strValue === '-1') {
+            select.value = '-1';
+          } else {
+            select.value = '0';
+          }
           applyValueColor(select, select.value);
 
           select.addEventListener('change', function () {
-            const val = this.value;
-            updateSkill(mod, skill, val === 'w' ? 'w' : parseInt(val));
+            const val = this.value === 'w' ? 'w' : parseInt(this.value, 10);
+            updateSkill(mod, skill, val);
             applyValueColor(this, val);
             markDirty();
           });
@@ -544,11 +544,6 @@
 
         tbody.appendChild(row);
       });
-
-      // Update global_modifier input (default 1.0)
-      const globalModifierInput = document.getElementById('workerGlobalModifier');
-      const globalModifier = workerData.global_modifier !== undefined ? workerData.global_modifier : 1.0;
-      globalModifierInput.value = globalModifier;
 
       // Update w modifier input
       const modifierInput = document.getElementById('workerModifier');
@@ -563,16 +558,6 @@
       else if (strVal === 'w') element.classList.add('value-w');
       else if (strVal === '0') element.classList.add('value-0');
       else if (strVal === '-1') element.classList.add('value--1');
-    }
-
-    function updateGlobalModifier(value) {
-      if (!rosterData[selectedWorker]) return;
-      let val = parseFloat(value);
-      if (isNaN(val) || val < 0.1) val = 0.1;
-      if (val > 3.0) val = 3.0;
-      rosterData[selectedWorker].global_modifier = val;
-      document.getElementById('workerGlobalModifier').value = val;
-      markDirty();
     }
 
     function updateModifier(value) {
@@ -617,7 +602,7 @@
       }
 
       // Create new worker with flat Skill×Modality combinations (all set to 0)
-      rosterData[workerId] = { modifier: defaultWModifier, global_modifier: 1.0 };
+      rosterData[workerId] = { modifier: defaultWModifier };
       if (fullName) {
         rosterData[workerId].full_name = fullName;
         workerNames[workerId] = fullName;  // Update display cache

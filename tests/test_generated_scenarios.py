@@ -33,7 +33,6 @@ def _build_row_signature(row: pd.Series) -> str:
             parts.append(f"{skill}:{normalized}")
     return "|".join(parts)
 
-
 def _normalize_modality_summary(df: pd.DataFrame | None) -> dict[str, Any]:
     if df is None or df.empty:
         return {
@@ -71,7 +70,6 @@ def _normalize_modality_summary(df: pd.DataFrame | None) -> dict[str, Any]:
         "workers": sorted(set(local_df["PPL"].astype(str).tolist())),
         "rows": rows,
     }
-
 
 def _prepare_balancer_state(modality_dfs: dict[str, pd.DataFrame]) -> None:
     for mod in allowed_modalities:

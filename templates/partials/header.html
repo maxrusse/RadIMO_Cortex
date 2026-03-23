@@ -10,20 +10,6 @@
       {% if is_access_protection_enabled and has_basic_access %}
       <a href="{{ url_for('routes.logout', modality=modality|default('ct')) }}" class="basic-auth-logout" title="Abmelden">×</a>
       {% endif %}
-      {% if show_probe_badges %}
-      <div class="probe-badges">
-        <a href="{{ url_for('routes.status_page') }}"
-          class="probe-badge probe-badge--{{ health_badge_status }}"
-          title="Health: {{ health_badge_text }}">
-          Health
-        </a>
-        <a href="{{ url_for('routes.status_page') }}"
-          class="probe-badge probe-badge--{{ ready_badge_status }}"
-          title="Ready: {{ ready_badge_text }}">
-          Ready
-        </a>
-      </div>
-      {% endif %}
       {% if header_links %}
       <nav class="app-nav">
         {% for link in header_links %}

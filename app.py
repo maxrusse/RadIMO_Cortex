@@ -81,4 +81,4 @@ startup_initialization()
 if __name__ == '__main__':
     # In production, use a proper WSGI server (gunicorn/waitress)
     # For development/local use:
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5040, debug=True, use_reloader=False)

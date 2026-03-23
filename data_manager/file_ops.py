@@ -84,7 +84,6 @@ def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.Da
         final_combinations = apply_skill_overrides(
             roster_combinations,
             overrides,
-            allow_roster_exclusion_override=True,
             ignore_zero_overrides=True,
             exclude_unprocessed_weighted=False,
         )

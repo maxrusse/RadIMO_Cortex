@@ -60,13 +60,13 @@ SCENES_TRAINING: list[dict[str, str]] = [
     },
     {
         "name": "04_by_skill_abd_onco_overview",
-        "path": "/by-skill?skill=abd-onco",
+        "path": "/by-skill?skill=aou",
         "wait_for": "#buttonGrid",
-        "purpose": "Skill-centric routing view for Abd/Onco.",
+        "purpose": "Skill-centric routing view for AOU.",
     },
     {
         "name": "05_by_skill_abd_onco_special_task",
-        "path": "/by-skill?skill=abd-onco",
+        "path": "/by-skill?skill=aou",
         "wait_for": "#buttonGrid",
         "action": "by_skill_special_task",
         "purpose": "Special task assignment (Organ Seg) from skill view.",

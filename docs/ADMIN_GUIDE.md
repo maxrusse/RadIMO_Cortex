@@ -25,7 +25,7 @@ Admin pages require login with the admin password from `config.yaml` when `admin
 ┌─────────────────────────────────────────────────────────────┐
 │  SKILL MATRIX (Permanent)        /skill-roster              │
 │  ├─ Multi-modality grid                                     │
-│  ├─ Edit skill values (-1, 0, 1, w) + global modifier       │
+│  ├─ Edit skill values (-1, 0, 1, w) + W modifier            │
 │  └─ Save directly to roster JSON                            │
 ├─────────────────────────────────────────────────────────────┤
 │  SCHEDULE EDIT                  /prep-today /prep-tomorrow  │
@@ -54,25 +54,28 @@ Admin pages require login with the admin password from `config.yaml` when `admin
 1. Navigate to `/skill-roster` (or "Skill Matrix" in nav)
 2. Select worker from the side list
 3. Edit skill values in the grid:
-   - **1** = Active (Assigned) - 🟢 Green
-   - **w** = Weighted (Training/Assisted) - 🔵 Blue
+   - **w** = Weighted/Training - 🔵 Blue
    - **0** = Passive (Helper/Fallback) - 🟡 Yellow
    - **-1** = Excluded (Never) - 🔴 Red
-4. Set **Global Modifier** for weighted workers:
+4. Set **W Modifier** for workers who may receive weighted (`w`) shift assignments:
    - `1.0` = normal workload (default)
    - `0.5` = 50% workload (trainee - gets half the assignments)
    - `0.75` = 75% workload (experienced but supervised)
 5. Click **"Save"** to persist changes.
 6. Use **"Import new workers"** to pull workers from current schedules who are missing from the roster.
 
-**Important:** Workers with `w` in the roster are only included in a shift if the CSV mapping explicitly assigns them (`skill_overrides: 1`). Otherwise they become `-1` (excluded). This prevents trainees from appearing on teams they're not assigned to.
+**Important:** The roster is now only a baseline eligibility matrix:
+- `w` = weighted/training baseline, only stays active when a shift assigns `1` or `w`
+- `0` = worker may help as a passive/generalist
+- `-1` = hard exclude
+- `1` and most active day-state still come from shift assignments or live/prep edits
 
 See [CONFIGURATION.md](CONFIGURATION.md#skill-value-hierarchy--overwrite-logic) for detailed overwrite rules.
 
-### Example: MSK/Haut Rotation
-To make "AM" an MSK/Haut specialist (key: `msk-haut`):
+### Example: Enable Passive Coverage
+To allow "AM" to help on MHD work without making the roster an active-role source:
 1. Select "AM"
-2. Change MSK/Haut column in MR/CT to `1`
+2. Change MHD column in MR/CT to `0`
 3. Click "Save"
 
 ---
@@ -125,14 +128,14 @@ Both modes include smart filters:
 | Start Time | HH:MM | "07:00" |
 | End Time | HH:MM | "15:00" |
 | Skills | -1, 0, 1, w | 1 (active) |
-| Modifier | 0.5-1.5 | 1.0 |
+| Shift Load Modifier | 0.3-1.5 | 1.0 |
 
 ### Skill Value Colors
 
-- 🟢 **Green (1)** = Active specialist (Modifier NOT applied)
+- 🟢 **Green (1)** = Active specialist (shift load modifier applied)
 - 🟡 **Yellow (0)** = Passive/Fallback
 - 🔴 **Red (-1)** = Excluded
-- 🔵 **Blue (w)** = Weighted/learning (Modifier IS applied)
+- 🔵 **Blue (w)** = Weighted/learning (shift modifier + W modifier applied)
 
 ### Example Workflows
 

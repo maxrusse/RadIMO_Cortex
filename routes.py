@@ -28,6 +28,7 @@ from config import (
     SPECIAL_TASKS,
     SPECIAL_TASKS_MAP,
     get_special_task_weight,
+    get_skill_modality_weight,
     modality_labels,
     MASTER_CSV_PATH,
     selection_logger,
@@ -35,6 +36,10 @@ from config import (
     normalize_modality,
     normalize_skill,
     is_no_overflow,
+    get_specialist_fallback_targets,
+    is_strict_button_visible,
+    is_special_task_strict_button_visible,
+    reload_runtime_config,
     load_button_weights,
     save_button_weights
 )
@@ -44,6 +49,7 @@ from lib.utils import (
     get_next_workday,
     get_weekday_name_german,
     format_time_value,
+    skill_value_to_numeric,
     skill_value_to_display,
     strip_builder_fields,
 )
@@ -60,6 +66,7 @@ from data_manager import (
     build_valid_skills_map,
     build_worker_name_mapping,
     auto_populate_skill_roster,
+    auto_populate_skill_roster_from_csv,
     load_staged_dataframe,
     backup_dataframe,
     update_schedule_row,
@@ -102,6 +109,33 @@ def _modality_has_active_skills(mod_data: dict) -> bool:
 def _validate_modality(modality: str, data_store: dict) -> Optional[Any]:
     if modality not in data_store:
         return jsonify({'error': 'Invalid modality'}), 400
+    return None
+
+
+def _maybe_reload_runtime_config(*, manual: bool) -> Optional[str]:
+    """
+    Best-effort hot reload for config-only changes.
+
+    Unsupported structural edits are ignored. Manual reload paths surface an
+    info message; automatic morning/lazy paths keep quiet and continue with the
+    current in-memory config.
+    """
+    outcome = reload_runtime_config()
+    if outcome.get('applied'):
+        return None
+
+    info_message = (
+        "Config changes requiring restart were ignored for this reload: "
+        f"{outcome.get('message', 'unknown reason')}"
+    )
+    if manual:
+        selection_logger.info(info_message)
+        return info_message
+
+    selection_logger.info(
+        "Automatic config reload skipped; keeping current runtime config: %s",
+        outcome.get('message', 'unknown reason'),
+    )
     return None
 
 
@@ -282,6 +316,206 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
     return data
 
 
+def _is_skill_visible_for_modality(skill_name: str, modality: str) -> bool:
+    mod_config = MODALITY_SETTINGS.get(modality, {})
+    mod_valid_skills = mod_config.get('valid_skills')
+    mod_hidden_skills = set(mod_config.get('hidden_skills', []))
+    if mod_valid_skills is not None and skill_name not in mod_valid_skills:
+        return False
+    if skill_name in mod_hidden_skills:
+        return False
+
+    skill_config = SKILL_SETTINGS.get(skill_name, {})
+    skill_valid_mods = skill_config.get('valid_modalities')
+    skill_hidden_mods = set(skill_config.get('hidden_modalities', []))
+    if skill_valid_mods is not None and modality not in skill_valid_mods:
+        return False
+    if modality in skill_hidden_mods:
+        return False
+    return True
+
+
+def _get_visible_skill_modality_keys() -> list[str]:
+    keys: list[str] = []
+    for skill_name in SKILL_COLUMNS:
+        for modality in allowed_modalities:
+            if _is_skill_visible_for_modality(skill_name, modality):
+                keys.append(f"{skill_name}_{modality}")
+    return keys
+
+
+def _resolve_flow_target_skill(candidate: dict[str, Any], assigned_skill: str) -> Optional[str]:
+    assigned_skill = normalize_skill(assigned_skill)
+    if assigned_skill in SKILL_COLUMNS:
+        assigned_value = skill_value_to_numeric(candidate.get(assigned_skill))
+        if assigned_value >= 1:
+            return assigned_skill
+
+    for skill_name in SKILL_COLUMNS:
+        if skill_value_to_numeric(candidate.get(skill_name)) == 1:
+            return skill_name
+
+    return None
+
+
+def _get_cross_pool_flow_weight(
+    requested_skill: str,
+    requested_modality: str,
+    *,
+    use_strict_weights: bool = False,
+    work_amount: float = 1.0,
+    weight_override: Optional[float] = None,
+) -> float:
+    base_weight = (
+        weight_override
+        if weight_override is not None
+        else get_skill_modality_weight(requested_skill, requested_modality, strict=use_strict_weights)
+    )
+    try:
+        return max(float(base_weight) * float(work_amount), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize_flow_skill_key(raw_skill: Any) -> Optional[str]:
+    skill = normalize_skill(raw_skill)
+    if skill in SKILL_COLUMNS:
+        return skill
+
+    raw_text = str(raw_skill or '').strip().lower()
+    if '_' in raw_text:
+        maybe_skill = normalize_skill(raw_text.rsplit('_', 1)[0])
+        if maybe_skill in SKILL_COLUMNS:
+            return maybe_skill
+    return None
+
+
+def _record_cross_pool_flow(
+    requested_skill: str,
+    target_skill: Optional[str],
+    amount: float,
+) -> bool:
+    requested_skill = normalize_skill(requested_skill)
+    target_skill = normalize_skill(target_skill) if target_skill else None
+
+    if requested_skill not in SKILL_COLUMNS or target_skill not in SKILL_COLUMNS:
+        selection_logger.warning(
+            "Skipping cross-pool flow tracking due to unknown skill: requested=%s target=%s",
+            requested_skill,
+            target_skill,
+        )
+        return False
+
+    try:
+        flow_amount = float(amount)
+    except (TypeError, ValueError):
+        return False
+
+    if flow_amount <= 0 or requested_skill == target_skill:
+        return False
+
+    flow_cross_pool = global_worker_data.setdefault('flow_cross_pool', {})
+    requested_bucket = flow_cross_pool.setdefault(requested_skill, {})
+    requested_bucket[target_skill] = float(requested_bucket.get(target_skill, 0.0)) + flow_amount
+    return True
+
+
+def _build_flow_balance_payload() -> dict[str, Any]:
+    visible_skills = list(SKILL_COLUMNS)
+    skill_labels = {
+        skill_name: SKILL_SETTINGS.get(skill_name, {}).get('label', skill_name)
+        for skill_name in visible_skills
+    }
+
+    raw_flow = global_worker_data.get('flow_cross_pool', {}) or {}
+    out_totals: dict[str, float] = {skill: 0.0 for skill in visible_skills}
+    in_totals: dict[str, float] = {skill: 0.0 for skill in visible_skills}
+    out_by_skill: dict[str, list[dict[str, Any]]] = {skill: [] for skill in visible_skills}
+    in_by_skill: dict[str, list[dict[str, Any]]] = {skill: [] for skill in visible_skills}
+    links: list[dict[str, Any]] = []
+    reverse_map: dict[str, dict[str, float]] = {}
+
+    normalized_flow: dict[str, dict[str, float]] = {}
+    for raw_requested, raw_targets in raw_flow.items():
+        if not isinstance(raw_targets, dict):
+            continue
+
+        requested_skill = _normalize_flow_skill_key(raw_requested)
+        if requested_skill not in skill_labels:
+            continue
+
+        requested_bucket = normalized_flow.setdefault(requested_skill, {})
+        for raw_target, raw_amount in raw_targets.items():
+            target_skill = _normalize_flow_skill_key(raw_target)
+            if target_skill not in skill_labels:
+                continue
+            try:
+                amount = float(raw_amount)
+            except (TypeError, ValueError):
+                continue
+            if amount <= 0:
+                continue
+            if requested_skill == target_skill:
+                continue
+            requested_bucket[target_skill] = requested_bucket.get(target_skill, 0.0) + amount
+
+    for requested_skill, target_map in normalized_flow.items():
+        for target_skill, amount in target_map.items():
+            out_totals[requested_skill] += amount
+            in_totals[target_skill] += amount
+            reverse_bucket = reverse_map.setdefault(target_skill, {})
+            reverse_bucket[requested_skill] = reverse_bucket.get(requested_skill, 0.0) + amount
+            links.append({
+                'from': requested_skill,
+                'to': target_skill,
+                'weight': round(amount, 2),
+            })
+
+    for requested_skill in visible_skills:
+        rows = [
+            {'to': target_skill, 'weight': round(amount, 2)}
+            for target_skill, amount in normalized_flow.get(requested_skill, {}).items()
+            if amount > 0
+        ]
+        rows.sort(key=lambda item: (-item['weight'], item['to']))
+        out_by_skill[requested_skill] = rows
+
+    for target_skill in visible_skills:
+        rows = [
+            {'from': source_skill, 'weight': round(amount, 2)}
+            for source_skill, amount in reverse_map.get(target_skill, {}).items()
+            if amount > 0
+        ]
+        rows.sort(key=lambda item: (-item['weight'], item['from']))
+        in_by_skill[target_skill] = rows
+
+    cross_pool_total = round(sum(out_totals.values()), 2)
+    return {
+        'success': True,
+        'skills': visible_skills,
+        'skill_labels': skill_labels,
+        'links': sorted(links, key=lambda item: (-item['weight'], item['from'], item['to'])),
+        'out_by_skill': out_by_skill,
+        'in_by_skill': in_by_skill,
+        'totals': {
+            skill: {
+                'out_total': round(out_totals[skill], 2),
+                'in_total': round(in_totals[skill], 2),
+            }
+            for skill in visible_skills
+        },
+        'grand_totals': {'cross_pool_total': cross_pool_total},
+        'meta': {
+            'window': 'since_daily_reset',
+            'last_reset_date': (
+                global_worker_data['last_reset_date'].isoformat()
+                if global_worker_data.get('last_reset_date')
+                else None
+            ),
+        },
+    }
+
+
 def _ensure_next_workday_preloaded() -> None:
     next_day = get_next_workday().date()
     with lock:
@@ -297,6 +531,9 @@ def _ensure_next_workday_preloaded() -> None:
     if not os.path.exists(MASTER_CSV_PATH):
         selection_logger.info(f"Lazy preload skipped: No master CSV at {MASTER_CSV_PATH}")
         return
+
+    with lock:
+        _maybe_reload_runtime_config(manual=False)
 
     selection_logger.info(f"Lazy preload triggered from {MASTER_CSV_PATH}")
     result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG)
@@ -521,9 +758,16 @@ def index() -> Any:
         visible_skills.append(skill_name)
 
     visible_special_tasks = [
-        task for task in SPECIAL_TASKS
+        {
+            **task,
+            'show_strict_button': is_special_task_strict_button_visible(task['slug'], modality),
+        }
+        for task in SPECIAL_TASKS
         if modality in task['modalities_dashboards']
-        and task['base_skill'] in visible_skills
+    ]
+    regular_strict_button_skills = [
+        skill_name for skill_name in visible_skills
+        if is_strict_button_visible(skill_name, modality)
     ]
 
     return render_template(
@@ -531,6 +775,7 @@ def index() -> Any:
         info_texts=d.get('info_texts', []),
         modality=modality,
         visible_skills=visible_skills,
+        regular_strict_button_skills=regular_strict_button_skills,
         special_tasks=visible_special_tasks,
         is_admin=has_admin_access()
     )
@@ -579,6 +824,7 @@ def index_by_skill() -> Any:
                     'slug': task['slug'],
                     'button_color': task.get('button_color', '#004892'),
                     'text_color': task.get('text_color', '#ffffff'),
+                    'show_strict_button': is_special_task_strict_button_visible(task['slug'], mod),
                 })
         else:
             # No modality_dashboards - use first target modality or first visible modality
@@ -594,6 +840,10 @@ def index_by_skill() -> Any:
                 'slug': task['slug'],
                 'button_color': task.get('button_color', '#004892'),
                 'text_color': task.get('text_color', '#ffffff'),
+                'show_strict_button': (
+                    is_special_task_strict_button_visible(task['slug'], default_mod)
+                    if default_mod else False
+                ),
             })
 
     default_info_modality = visible_modalities[0] if visible_modalities else (allowed_modalities[0] if allowed_modalities else '')
@@ -603,11 +853,16 @@ def index_by_skill() -> Any:
         by_skill = mod_data.get('info_texts_by_skill') or {}
         info_texts_by_modality[mod] = by_skill.get(skill, [])
     info_texts = info_texts_by_modality.get(default_info_modality, [])
+    regular_strict_button_modalities = [
+        mod for mod in visible_modalities
+        if is_strict_button_visible(skill, mod)
+    ]
 
     return render_template(
         'index_by_skill.html',
         skill=skill,
         visible_modalities=visible_modalities,
+        regular_strict_button_modalities=regular_strict_button_modalities,
         special_task_buttons=special_task_buttons,
         info_texts=info_texts,
         info_texts_by_modality=info_texts_by_modality,
@@ -711,9 +966,7 @@ def skill_roster_api() -> Any:
 @routes.route('/api/admin/skill_roster/import_new', methods=['POST'])
 @admin_required
 def import_new_skill_roster_api() -> Any:
-    # Get current modality DFs
-    current_dfs = {mod: modality_data[mod]['working_hours_df'] for mod in allowed_modalities}
-    added_count, added_workers = auto_populate_skill_roster(current_dfs)
+    added_count, added_workers = auto_populate_skill_roster_from_csv(MASTER_CSV_PATH, APP_CONFIG)
     return jsonify({
         'success': True,
         'added_count': added_count,
@@ -914,6 +1167,7 @@ def preload_from_master() -> Any:
     if not os.path.exists(MASTER_CSV_PATH):
         return jsonify({"error": "Keine Master-CSV vorhanden. Bitte zuerst hochladen."}), 400
 
+    reload_info = None
     payload = request.get_json(silent=True) or {}
     target_date = payload.get('target_date') or request.form.get('target_date')
     if target_date:
@@ -924,6 +1178,9 @@ def preload_from_master() -> Any:
         earliest_allowed = get_next_workday().date()
         if parsed_target_date < earliest_allowed:
             return jsonify({"error": f"Prep-Datum muss ab {earliest_allowed.isoformat()} liegen."}), 400
+
+    with lock:
+        reload_info = _maybe_reload_runtime_config(manual=True)
     result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=target_date)
 
     if result['success']:
@@ -937,6 +1194,11 @@ def preload_from_master() -> Any:
                     selection_logger.info("Staged data updated from unified scheduled file after preload")
             except Exception as e:
                 selection_logger.error(f"Error loading staged data from unified schedule after preload: {e}")
+
+        if reload_info:
+            result = dict(result)
+            result['info_message'] = reload_info
+            result['message'] = f"{result.get('message', '')} | {reload_info}"
 
         return jsonify(result)
     return jsonify(result), 400
@@ -1101,6 +1363,9 @@ def load_today_from_master() -> Any:
         return jsonify({"error": "Keine Master-CSV vorhanden. Bitte zuerst CSV hochladen."}), 400
 
     try:
+        with lock:
+            reload_info = _maybe_reload_runtime_config(manual=True)
+
         target_date = get_local_now()
 
         # Debug: Check CSV content before parsing
@@ -1164,12 +1429,17 @@ def load_today_from_master() -> Any:
                 # Persist cleared state
                 save_state()
 
+                message = f"Keine Mitarbeiter für {target_date.strftime('%d.%m.%Y')} gefunden - Schichten können leer sein"
+                if reload_info:
+                    message = f"{message} | {reload_info}"
+
                 return jsonify({
                     "success": True,
-                    "message": f"Keine Mitarbeiter für {target_date.strftime('%d.%m.%Y')} gefunden - Schichten können leer sein",
+                    "message": message,
                     "modalities_loaded": [],
                     "total_workers": 0,
                     "workers_added_to_roster": 0,
+                    "info_message": reload_info,
                     "info": {
                         "target_date": target_date.strftime('%d.%m.%Y'),
                         "dates_in_csv": available_dates[:10],
@@ -1199,15 +1469,20 @@ def load_today_from_master() -> Any:
         save_state()
 
         workers_added = 0
-        if SKILL_ROSTER_AUTO_IMPORT:
+        if APP_CONFIG.get('skill_roster_auto_import', True):
             workers_added, _ = auto_populate_skill_roster(modality_dfs)
+
+        message = f"Heute ({target_date.strftime('%d.%m.%Y')}) aus Master-CSV geladen"
+        if reload_info:
+            message = f"{message} | {reload_info}"
 
         return jsonify({
             "success": True,
-            "message": f"Heute ({target_date.strftime('%d.%m.%Y')}) aus Master-CSV geladen",
+            "message": message,
             "modalities_loaded": list(modality_dfs.keys()),
             "total_workers": sum(len(df) for df in modality_dfs.values()),
-            "workers_added_to_roster": workers_added
+            "workers_added_to_roster": workers_added,
+            "info_message": reload_info,
         })
 
     except Exception as e:
@@ -1567,13 +1842,20 @@ def update_staged_gap() -> Any:
     return _handle_update_gap(use_staged=True)
 
 
-def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any:
+def _assign_worker(
+    modality: str,
+    role: str,
+    allow_overflow: bool = True,
+    *,
+    use_strict_weights: bool = False,
+) -> Any:
     try:
         now = get_local_now()
 
         special_task = SPECIAL_TASKS_MAP.get(role.lower())
         task_work_amount = 1.0
         task_label = None
+        fallback_targets = None
         target_skill_modalities = None
         if special_task:
             role = special_task['base_skill']
@@ -1585,6 +1867,15 @@ def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any
 
         # Check if this skill×modality combo has overflow disabled
         canonical_skill = normalize_skill(role)
+        if not target_skill_modalities:
+            fallback_targets = get_specialist_fallback_targets(canonical_skill, modality)
+            if fallback_targets:
+                selection_logger.info(
+                    "Specialist fallback route active for %s_%s -> %s",
+                    canonical_skill,
+                    modality,
+                    [f"{s}_{m}" for s, m in fallback_targets],
+                )
         if allow_overflow and is_no_overflow(canonical_skill, modality):
             allow_overflow = False
             selection_logger.info(
@@ -1593,12 +1884,13 @@ def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any
                 modality,
             )
 
-        strict_mode = not allow_overflow
+        strict_routing = not allow_overflow
         selection_logger.info(
-            "Assignment request: modality=%s, role=%s, strict=%s, time=%s",
+            "Assignment request: modality=%s, role=%s, strict_routing=%s, strict_weights=%s, time=%s",
             modality,
             role,
-            strict_mode,
+            strict_routing,
+            use_strict_weights,
             now.strftime('%H:%M:%S'),
         )
 
@@ -1607,13 +1899,47 @@ def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any
         state_modified = False
 
         with lock:
-            result = get_next_available_worker(
-                now,
-                role=role,
-                modality=modality,
-                allow_overflow=allow_overflow,
-                target_skill_modalities=target_skill_modalities,
-            )
+            # 1) Special task explicit targets: use configured specialist pools directly.
+            if target_skill_modalities:
+                result = get_next_available_worker(
+                    now,
+                    role=role,
+                    modality=modality,
+                    allow_overflow=allow_overflow,
+                    target_skill_modalities=target_skill_modalities,
+                )
+            # 2) Skill fallback route:
+            #    - Try primary specialists first (1/w only)
+            #    - Only if primary is empty, try fallback specialist groups
+            elif fallback_targets:
+                result = get_next_available_worker(
+                    now,
+                    role=role,
+                    modality=modality,
+                    allow_overflow=False,
+                    target_skill_modalities=None,
+                )
+                if result is None:
+                    merged_targets = [(canonical_skill, modality)]
+                    for target in fallback_targets:
+                        if target not in merged_targets:
+                            merged_targets.append(target)
+                    result = get_next_available_worker(
+                        now,
+                        role=role,
+                        modality=modality,
+                        allow_overflow=allow_overflow,
+                        target_skill_modalities=merged_targets,
+                    )
+            else:
+                result = get_next_available_worker(
+                    now,
+                    role=role,
+                    modality=modality,
+                    allow_overflow=allow_overflow,
+                    target_skill_modalities=None,
+                )
+
             if result is not None:
                 candidate, used_column, source_modality = result
                 actual_modality = source_modality or modality
@@ -1646,14 +1972,15 @@ def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any
                         d['skill_counts'][actual_skill][person] = 0
                     d['skill_counts'][actual_skill][person] += 1
 
-                # Check if this is a weighted ('w') assignment - only 'w' uses modifier
+                # Check if this is a weighted ('w') assignment.
+                # Shift modifier is always applied; W stream only for weighted assignments.
                 is_weighted = candidate.get('__is_weighted', False)
                 weight_override = None
                 if special_task:
                     weight_override = get_special_task_weight(
                         special_task['slug'],
                         actual_modality,
-                        strict=strict_mode,
+                        strict=use_strict_weights,
                     )
                 candidate_shift_modifier = candidate.get('Modifier', 1.0)
                 canonical_id = update_global_assignment(
@@ -1661,10 +1988,23 @@ def _assign_worker(modality: str, role: str, allow_overflow: bool = True) -> Any
                     actual_skill,
                     actual_modality,
                     is_weighted,
-                    strict_mode=strict_mode,
+                    strict_mode=use_strict_weights,
                     work_amount=task_work_amount,
                     weight_override=weight_override,
                     shift_modifier_override=candidate_shift_modifier,
+                )
+                flow_target_skill = _resolve_flow_target_skill(candidate, actual_skill)
+                flow_weight = _get_cross_pool_flow_weight(
+                    canonical_skill,
+                    modality,
+                    use_strict_weights=use_strict_weights,
+                    work_amount=task_work_amount,
+                    weight_override=weight_override,
+                )
+                _record_cross_pool_flow(
+                    requested_skill=canonical_skill,
+                    target_skill=flow_target_skill,
+                    amount=flow_weight,
                 )
                 state_modified = True
 
@@ -1712,7 +2052,7 @@ def assign_worker_strict_api(modality: str, role: str) -> Any:
     error = _validate_modality(modality, modality_data)
     if error:
         return error
-    return _assign_worker(modality, role, allow_overflow=False)
+    return _assign_worker(modality, role, allow_overflow=False, use_strict_weights=True)
 
 # Usage Statistics API Endpoints
 
@@ -1827,6 +2167,22 @@ def get_usage_stats_file_info() -> Any:
 
 
 # =============================================================================
+# FLOW BALANCE MONITOR
+# =============================================================================
+
+@routes.route('/flow-balance')
+@admin_required
+def flow_balance_page() -> Any:
+    return redirect(url_for('routes.worker_load_monitor', mode='flow'))
+
+
+@routes.route('/api/flow-balance/data', methods=['GET'])
+@admin_required
+def get_flow_balance_data() -> Any:
+    return jsonify(_build_flow_balance_payload())
+
+
+# =============================================================================
 # WORKER LOAD MONITOR
 # =============================================================================
 
@@ -1834,7 +2190,12 @@ def get_usage_stats_file_info() -> Any:
 @admin_required
 def worker_load_monitor() -> Any:
     """Worker load monitoring page with simple/advanced views."""
-    load_monitor_config = APP_CONFIG.get('worker_load_monitor', {})
+    load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
+    initial_mode = (request.args.get('mode') or '').strip().lower()
+    if initial_mode not in {'simple', 'advanced', 'flow'}:
+        initial_mode = (load_monitor_config.get('default_view') or 'simple').strip().lower()
+    if initial_mode not in {'simple', 'advanced', 'flow'}:
+        initial_mode = 'simple'
 
     return render_template(
         'worker_load_monitor.html',
@@ -1843,6 +2204,7 @@ def worker_load_monitor() -> Any:
         modalities=list(MODALITY_SETTINGS.keys()),
         modality_settings=MODALITY_SETTINGS,
         load_monitor_config=load_monitor_config,
+        initial_mode=initial_mode,
         ui_colors=APP_CONFIG.get('ui_colors', {}),
         is_admin=True
     )

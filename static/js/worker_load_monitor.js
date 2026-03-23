@@ -10,11 +10,13 @@ const LOAD_MONITOR_CONFIG = CONFIG.load_monitor_config;
 const UI_COLORS = CONFIG.ui_colors;
 
 // State
-let currentMode = LOAD_MONITOR_CONFIG.default_view || 'simple';
+let currentMode = CONFIG.initial_mode || LOAD_MONITOR_CONFIG.default_view || 'simple';
 let colorMode = LOAD_MONITOR_CONFIG.color_thresholds?.mode || 'absolute';
 let workersData = [];
 let maxWeight = 0;
 let autoRefreshInterval = null;
+let flowDataLoaded = false;
+let flowData = null;
 let filters = { modality: '', skill: '', hideZero: false };
 let sortState = {
   global: { column: 'weight', direction: 'desc' },
@@ -80,12 +82,21 @@ function getLoadColorClass(weight) {
 // Mode switching
 function setMode(mode) {
   currentMode = mode;
-  document.body.classList.remove('mode-simple', 'mode-advanced');
+  document.body.classList.remove('mode-simple', 'mode-advanced', 'mode-flow');
   document.body.classList.add(`mode-${mode}`);
 
   document.querySelectorAll('.mode-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
+
+  if (mode === 'flow') {
+    if (!flowDataLoaded) {
+      loadFlowData();
+    } else {
+      renderFlowDataState(flowData);
+    }
+    return;
+  }
 
   renderAllTables();
 }
@@ -463,7 +474,11 @@ function renderAdvancedTable() {
 }
 
 function renderAllTables() {
-  if (currentMode === 'simple') {
+  if (currentMode === 'flow') {
+    if (flowDataLoaded) {
+      renderFlowDataState(flowData);
+    }
+  } else if (currentMode === 'simple') {
     renderGlobalTable();
     renderModalityTable();
     renderSkillTable();
@@ -478,7 +493,7 @@ function renderAllTables() {
   // Show/hide no data message
   const noDataMsg = document.getElementById('no-data-msg');
   if (noDataMsg) {
-    noDataMsg.style.display = workersData.length === 0 ? 'block' : 'none';
+    noDataMsg.style.display = currentMode !== 'flow' && workersData.length === 0 ? 'block' : 'none';
   }
 }
 
@@ -497,14 +512,21 @@ function updateSortIndicators(tableType) {
 function toggleAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
   if (checkbox?.checked) {
-    loadData();
-    autoRefreshInterval = setInterval(loadData, 30000); // 30 seconds
+    refreshCurrentMode();
+    autoRefreshInterval = setInterval(refreshCurrentMode, 30000);
   } else {
     if (autoRefreshInterval) {
       clearInterval(autoRefreshInterval);
       autoRefreshInterval = null;
     }
   }
+}
+
+function refreshCurrentMode() {
+  if (currentMode === 'flow') {
+    return loadFlowData();
+  }
+  return loadData();
 }
 
 // Load data from API
@@ -540,13 +562,289 @@ function loadData() {
 // Escape HTML
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
+}
+
+function formatFlowValue(value) {
+  const numeric = Number(value || 0);
+  return numeric.toFixed(numeric % 1 === 0 ? 0 : 1);
+}
+
+function renderFlowTableRows(rows, directionKey) {
+  if (!rows || rows.length === 0) {
+    return '<tr><td colspan="2" style="color:#889; font-style:italic;">No weighted movement</td></tr>';
+  }
+
+  return rows.map(function(row) {
+    const skillKey = String(row[directionKey] || '');
+    const target = escapeHtml(dataSkillLabel(skillKey));
+    const weight = formatFlowValue(row.weight || 0);
+    return `<tr><td>${target}</td><td class="count">${weight}</td></tr>`;
+  }).join('');
+}
+
+function getSkillColor(skillKey) {
+  return SKILL_SETTINGS[skillKey]?.button_color || '#5b7ea6';
+}
+
+function dataSkillLabel(skillKey) {
+  return SKILL_SETTINGS[skillKey]?.label || skillKey;
+}
+
+function escapeAttribute(text) {
+  return escapeHtml(text).replace(/"/g, '&quot;');
+}
+
+function getFlowLinks(data) {
+  return (data.links || []).filter(function(link) {
+    return Number(link.weight || 0) > 0 && link.from && link.to;
+  });
+}
+
+function renderFlowDiagram(data) {
+  const svg = document.getElementById('flow-diagram');
+  const emptyState = document.getElementById('flow-diagram-empty');
+  if (!svg || !emptyState) return;
+
+  const links = getFlowLinks(data);
+  if (!links.length) {
+    svg.innerHTML = '';
+    svg.setAttribute('height', '0');
+    emptyState.style.display = 'block';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  const activeSkills = (data.skills || []).filter(function(skill) {
+    const totals = data.totals?.[skill] || {};
+    return Number(totals.out_total || 0) > 0 || Number(totals.in_total || 0) > 0;
+  });
+
+  const width = 960;
+  const leftX = 120;
+  const rightX = 760;
+  const nodeWidth = 120;
+  const rowHeight = 28;
+  const rowGap = 10;
+  const groupGap = 20;
+  const topPadding = 42;
+  const bottomPadding = 24;
+
+  function layoutSide(skillList, totalKey) {
+    const skillOrder = SKILLS.filter(function(skill) { return skillList.includes(skill); });
+    skillList.forEach(function(skill) {
+      if (!skillOrder.includes(skill)) skillOrder.push(skill);
+    });
+    let cursorY = topPadding;
+    const positioned = [];
+
+    skillOrder.forEach(function(skill) {
+      const totals = data.totals?.[skill] || {};
+      const total = Number(totals[totalKey] || 0);
+      if (total <= 0) {
+        return;
+      }
+      positioned.push({
+        skill: skill,
+        y: cursorY,
+        centerY: cursorY + (rowHeight / 2),
+        total: total,
+        color: getSkillColor(skill),
+        label: dataSkillLabel(skill)
+      });
+      cursorY += rowHeight + rowGap;
+    });
+
+    return {
+      nodes: positioned,
+      height: cursorY - rowGap + bottomPadding
+    };
+  }
+
+  const leftLayout = layoutSide(activeSkills, 'out_total');
+  const rightLayout = layoutSide(activeSkills, 'in_total');
+  const height = Math.max(leftLayout.height, rightLayout.height, 220);
+
+  const leftPos = {};
+  leftLayout.nodes.forEach(function(node) { leftPos[node.skill] = node; });
+  const rightPos = {};
+  rightLayout.nodes.forEach(function(node) { rightPos[node.skill] = node; });
+
+  const maxWeight = Math.max.apply(null, links.map(function(link) { return Number(link.weight || 0); }));
+  const scaleWidth = function(weight) {
+    return 2 + ((weight / Math.max(maxWeight, 1)) * 14);
+  };
+
+  const linkSvg = links
+    .sort(function(a, b) { return Number(a.weight || 0) - Number(b.weight || 0); })
+    .map(function(link) {
+      const source = leftPos[link.from];
+      const target = rightPos[link.to];
+      if (!source || !target) return '';
+      const sourceX = leftX + nodeWidth;
+      const targetX = rightX;
+      const sourceY = source.centerY;
+      const targetY = target.centerY;
+      const controlOffset = Math.max((targetX - sourceX) * 0.35, 120);
+      const stroke = getSkillColor(source.skill);
+      const tooltip = `${source.label} -> ${target.label}: ${formatFlowValue(link.weight)}`;
+      return `
+        <path d="M ${sourceX} ${sourceY} C ${sourceX + controlOffset} ${sourceY}, ${targetX - controlOffset} ${targetY}, ${targetX} ${targetY}"
+          fill="none"
+          stroke="${stroke}"
+          stroke-width="${scaleWidth(Number(link.weight || 0))}"
+          stroke-linecap="round"
+          opacity="0.34">
+          <title>${escapeHtml(tooltip)}</title>
+        </path>
+      `;
+    }).join('');
+
+  function renderNodes(nodes, x, align) {
+    return nodes.map(function(node) {
+      const textX = align === 'left' ? x + 10 : x + nodeWidth - 10;
+      const anchor = align === 'left' ? 'start' : 'end';
+      const totalX = align === 'left' ? x + nodeWidth - 10 : x + 10;
+      const totalAnchor = align === 'left' ? 'end' : 'start';
+      return `
+        <g>
+          <rect x="${x}" y="${node.y}" width="${nodeWidth}" height="${rowHeight}" rx="7" fill="#ffffff" stroke="${node.color}" stroke-width="1.2"></rect>
+          <text x="${textX}" y="${node.y + 18}" font-size="11" font-weight="700" fill="#243447" text-anchor="${anchor}">${escapeHtml(node.label)}</text>
+          <text x="${totalX}" y="${node.y + 18}" font-size="11" font-weight="700" fill="${node.color}" text-anchor="${totalAnchor}">${formatFlowValue(node.total)}</text>
+          <title>${escapeHtml(node.label)}</title>
+        </g>
+      `;
+    }).join('');
+  }
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  svg.innerHTML = `
+    <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
+    <text x="${leftX}" y="22" font-size="13" font-weight="700" fill="#004892">Requested Skill</text>
+    <text x="${rightX + nodeWidth}" y="22" font-size="13" font-weight="700" text-anchor="end" fill="#004892">Absorbing Main Skill</text>
+    ${linkSvg}
+    ${renderNodes(leftLayout.nodes, leftX, 'left')}
+    ${renderNodes(rightLayout.nodes, rightX, 'right')}
+  `;
+}
+
+function renderFlowRows(data) {
+  const container = document.getElementById('flow-rows');
+  const noDataMsg = document.getElementById('flow-no-data-msg');
+  if (!container || !noDataMsg) return;
+
+  const skills = data.skills || [];
+  if (!skills.length) {
+    container.innerHTML = '';
+    noDataMsg.style.display = 'block';
+    return;
+  }
+
+  const activeSkills = skills.filter(function(skill) {
+    const totals = data.totals?.[skill] || {};
+    return Number(totals.out_total || 0) > 0 || Number(totals.in_total || 0) > 0;
+  });
+  if (!activeSkills.length) {
+    container.innerHTML = '';
+    noDataMsg.style.display = 'block';
+    return;
+  }
+
+  noDataMsg.style.display = 'none';
+  container.innerHTML = activeSkills.map(function(skill) {
+    const outRows = (data.out_by_skill && data.out_by_skill[skill]) || [];
+    const inRows = (data.in_by_skill && data.in_by_skill[skill]) || [];
+    const totals = (data.totals && data.totals[skill]) || { out_total: 0, in_total: 0 };
+    const label = (data.skill_labels && data.skill_labels[skill]) || skill;
+    const hasActivity = totals.out_total > 0 || totals.in_total > 0;
+
+    return `
+      <details class="flow-row" data-skill="${escapeHtml(skill)}" ${hasActivity ? 'open' : ''}>
+        <summary>
+          <span>${escapeHtml(label)}</span>
+          <span class="summary-badges">
+            <span class="badge-pill">OUT ${formatFlowValue(totals.out_total)}</span>
+            <span class="badge-pill">IN ${formatFlowValue(totals.in_total)}</span>
+          </span>
+        </summary>
+        <div class="flow-row-body">
+          <div class="flow-table-wrap">
+            <h4>Overflow Out</h4>
+            <table class="flow-table">
+              <thead><tr><th>To Main Skill</th><th>Weight</th></tr></thead>
+              <tbody>${renderFlowTableRows(outRows, 'to')}</tbody>
+            </table>
+          </div>
+          <div class="flow-table-wrap">
+            <h4>Overflow In</h4>
+            <table class="flow-table">
+              <thead><tr><th>From Requested Skill</th><th>Weight</th></tr></thead>
+              <tbody>${renderFlowTableRows(inRows, 'from')}</tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    `;
+  }).join('');
+}
+
+function updateFlowMeta(data) {
+  const windowEl = document.getElementById('meta-window');
+  const resetEl = document.getElementById('meta-reset-date');
+  const totalEl = document.getElementById('meta-total');
+  const lastUpdate = document.getElementById('last-update');
+
+  if (windowEl) {
+    windowEl.textContent = data.meta && data.meta.window ? data.meta.window : '-';
+  }
+  if (resetEl) {
+    resetEl.textContent = data.meta && data.meta.last_reset_date ? data.meta.last_reset_date : '-';
+  }
+  if (totalEl) {
+    totalEl.textContent = formatFlowValue(data.grand_totals?.cross_pool_total || 0);
+  }
+  if (lastUpdate) {
+    lastUpdate.textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+  }
+}
+
+function renderFlowDataState(data) {
+  if (!data) {
+    return;
+  }
+
+  updateFlowMeta(data);
+  renderFlowDiagram(data);
+  renderFlowRows(data);
+}
+
+function loadFlowData() {
+  return fetch('/api/flow-balance/data')
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error(`Flow data request failed (${response.status})`);
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      flowData = data;
+      flowDataLoaded = true;
+      renderFlowDataState(data);
+    })
+    .catch(function(error) {
+      console.error('Failed to load flow data:', error);
+    });
 }
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
   setColorMode(colorMode);
   setMode(currentMode);
-  loadData();
+  if (currentMode !== 'flow') {
+    refreshCurrentMode();
+  }
 });

@@ -2,79 +2,60 @@
   "assignment_checks": [],
   "modalities": {
     "ct": {
-      "gap_segment_count": 0,
       "row_count": 1,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Base CT (BM01)",
-          "row_type": "shift_segment",
-          "skill_signature": "notfall:1",
-          "start": "08:00",
-          "tasks": "Baseline CT Notfall"
-        }
-      ],
       "shift_segment_count": 1,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Base CT (BM01)"
-      ]
-    },
-    "mammo": {
-      "gap_segment_count": 0,
-      "row_count": 1,
+      ],
       "rows": [
         {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Base MM (BM04)",
+          "ppl": "Dr. Base CT (BM01)",
           "row_type": "shift_segment",
-          "skill_signature": "gyn:1",
           "start": "08:00",
-          "tasks": "Baseline Mammo Gyn"
+          "end": "16:00",
+          "tasks": "Baseline CT Notfall",
+          "counts_for_hours": true,
+          "skill_signature": "notfall:1"
         }
-      ],
-      "shift_segment_count": 1,
-      "workers": [
-        "Dr. Base MM (BM04)"
       ]
     },
     "mr": {
-      "gap_segment_count": 0,
       "row_count": 1,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Base MR (BM02)",
-          "row_type": "shift_segment",
-          "skill_signature": "privat:1",
-          "start": "08:00",
-          "tasks": "Baseline MR Privat"
-        }
-      ],
       "shift_segment_count": 1,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Base MR (BM02)"
+      ],
+      "rows": [
+        {
+          "ppl": "Dr. Base MR (BM02)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "16:00",
+          "tasks": "Baseline MR Privat",
+          "counts_for_hours": true,
+          "skill_signature": "privat:1"
+        }
       ]
     },
     "xray": {
-      "gap_segment_count": 0,
       "row_count": 1,
-      "rows": [
-        {
-          "counts_for_hours": true,
-          "end": "16:00",
-          "ppl": "Dr. Base XR (BM03)",
-          "row_type": "shift_segment",
-          "skill_signature": "paed:1",
-          "start": "08:00",
-          "tasks": "Baseline XRAY Paed"
-        }
-      ],
       "shift_segment_count": 1,
+      "gap_segment_count": 0,
       "workers": [
         "Dr. Base XR (BM03)"
+      ],
+      "rows": [
+        {
+          "ppl": "Dr. Base XR (BM03)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "16:00",
+          "tasks": "Baseline XRAY MHD",
+          "counts_for_hours": true,
+          "skill_signature": "mhd:1"
+        }
       ]
     }
   },

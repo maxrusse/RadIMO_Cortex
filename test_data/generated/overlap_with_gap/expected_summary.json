@@ -2,62 +2,55 @@
   "assignment_checks": [],
   "modalities": {
     "ct": {
-      "gap_segment_count": 1,
       "row_count": 3,
-      "rows": [
-        {
-          "counts_for_hours": false,
-          "end": "10:00",
-          "ppl": "Dr. Gap Worker (GW01)",
-          "row_type": "gap_segment",
-          "skill_signature": "notfall:-1|privat:-1|gyn:-1|paed:-1|msk-haut:-1|abd-onco:-1|card-thor:-1|uro:-1|kopf-hals:-1",
-          "start": "09:30",
-          "tasks": "Board Gap"
-        },
-        {
-          "counts_for_hours": true,
-          "end": "09:30",
-          "ppl": "Dr. Gap Worker (GW01)",
-          "row_type": "shift_segment",
-          "skill_signature": "notfall:1",
-          "start": "08:00",
-          "tasks": "Overlap Shift A"
-        },
-        {
-          "counts_for_hours": true,
-          "end": "14:00",
-          "ppl": "Dr. Gap Worker (GW01)",
-          "row_type": "shift_segment",
-          "skill_signature": "notfall:1",
-          "start": "10:00",
-          "tasks": "Overlap Shift B"
-        }
-      ],
       "shift_segment_count": 2,
+      "gap_segment_count": 1,
       "workers": [
         "Dr. Gap Worker (GW01)"
+      ],
+      "rows": [
+        {
+          "ppl": "Dr. Gap Worker (GW01)",
+          "row_type": "gap_segment",
+          "start": "09:30",
+          "end": "10:00",
+          "tasks": "Board Gap",
+          "counts_for_hours": false,
+          "skill_signature": "aou:-1|cvt:-1|gyn:-1|mhd:-1|notfall:-1|privat:-1"
+        },
+        {
+          "ppl": "Dr. Gap Worker (GW01)",
+          "row_type": "shift_segment",
+          "start": "08:00",
+          "end": "09:30",
+          "tasks": "Overlap Shift A",
+          "counts_for_hours": true,
+          "skill_signature": "notfall:1"
+        },
+        {
+          "ppl": "Dr. Gap Worker (GW01)",
+          "row_type": "shift_segment",
+          "start": "10:00",
+          "end": "14:00",
+          "tasks": "Overlap Shift B",
+          "counts_for_hours": true,
+          "skill_signature": "notfall:1"
+        }
       ]
     },
-    "mammo": {
-      "gap_segment_count": 0,
-      "row_count": 0,
-      "rows": [],
-      "shift_segment_count": 0,
-      "workers": []
-    },
     "mr": {
-      "gap_segment_count": 0,
       "row_count": 0,
-      "rows": [],
       "shift_segment_count": 0,
-      "workers": []
+      "gap_segment_count": 0,
+      "workers": [],
+      "rows": []
     },
     "xray": {
-      "gap_segment_count": 0,
       "row_count": 0,
-      "rows": [],
       "shift_segment_count": 0,
-      "workers": []
+      "gap_segment_count": 0,
+      "workers": [],
+      "rows": []
     }
   },
   "scenario": "overlap_with_gap",

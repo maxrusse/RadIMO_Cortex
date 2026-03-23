@@ -27,6 +27,7 @@ from data_manager.worker_management import (
     get_worker_skill_mod_combinations,
     apply_skill_overrides,
     extract_modalities_from_skill_overrides,
+    ensure_workers_in_skill_roster,
 )
 from data_manager.schedule_crud import build_day_plan_rows
 
@@ -41,6 +42,10 @@ GERMAN_TO_ENGLISH_WEEKDAYS = {
     "Samstag": "saturday",
     "Sonntag": "sunday",
 }
+ENGLISH_TO_GERMAN_WEEKDAYS = {
+    english: german for german, english in GERMAN_TO_ENGLISH_WEEKDAYS.items()
+}
+DEFAULT_SYNTHETIC_WORKDAYS = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"}
 
 
 def _default_shift_ranges() -> List[Tuple[time, time]]:
@@ -191,6 +196,87 @@ def build_ppl_from_row(row: pd.Series, cols: Optional[dict] = None) -> str:
     return f"{name} ({code})"
 
 
+def _coerce_bool_like(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'true', '1', 'yes', 'y'}:
+            return True
+        if normalized in {'false', '0', 'no', 'n'}:
+            return False
+    return bool(value)
+
+
+def _normalize_synthetic_weekdays(raw_value: Any) -> set[str]:
+    if raw_value is None:
+        return set(DEFAULT_SYNTHETIC_WORKDAYS)
+    if isinstance(raw_value, str):
+        raw_items = [raw_value]
+    elif isinstance(raw_value, list):
+        raw_items = raw_value
+    else:
+        return set()
+
+    result: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, str):
+            continue
+        token = item.strip()
+        if not token:
+            continue
+        lowered = token.lower()
+        if lowered in {'all', 'daily', 'everyday'}:
+            return set(GERMAN_TO_ENGLISH_WEEKDAYS.keys())
+        if lowered in {'workday', 'workdays', 'weekday', 'weekdays'}:
+            result.update(DEFAULT_SYNTHETIC_WORKDAYS)
+            continue
+        if token in GERMAN_TO_ENGLISH_WEEKDAYS:
+            result.add(token)
+            continue
+        german = ENGLISH_TO_GERMAN_WEEKDAYS.get(lowered)
+        if german:
+            result.add(german)
+    return result
+
+
+def _compute_synthetic_time_ranges(
+    entry: dict,
+    weekday_name: str,
+) -> List[Tuple[time, time]]:
+    times_config = entry.get('times', {})
+    if not isinstance(times_config, dict) or not times_config:
+        return _default_shift_ranges()
+
+    day_times = _select_day_times(times_config, weekday_name)
+    if day_times is None:
+        return _default_shift_ranges()
+
+    time_ranges = _normalize_time_ranges_input(day_times)
+    if time_ranges is None:
+        return _default_shift_ranges()
+
+    parsed = _parse_time_ranges(time_ranges, log_label="synthetic shift")
+    return parsed or _default_shift_ranges()
+
+
+def _get_synthetic_worker_names(config: dict) -> List[str]:
+    raw_entries = config.get('synthetic_shifts', [])
+    if not isinstance(raw_entries, list):
+        return []
+
+    worker_names: List[str] = []
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        worker_name = str(entry.get('worker_name') or entry.get('name') or '').strip()
+        if worker_name and worker_name not in worker_names:
+            worker_names.append(worker_name)
+    return worker_names
+
+
 def build_working_hours_from_medweb(
     csv_path: str,
     target_date: datetime,
@@ -250,14 +336,19 @@ def build_working_hours_from_medweb(
     parsed_dates = medweb_df['Datum_parsed'].dropna().unique().tolist()
     selection_logger.debug(f"CSV dates parsed: {parsed_dates}, target: {target_date_obj}, type: {type(target_date_obj)}")
 
-    day_df = medweb_df[medweb_df['Datum_parsed'] == target_date_obj]
-
-    if day_df.empty:
-        selection_logger.warning(f"No rows found for date {target_date_obj}. Available: {parsed_dates}")
-        return {}
-
     mapping_rules = vendor_mapping.get('rules', [])
+    synthetic_worker_names = _get_synthetic_worker_names(config)
+    if synthetic_worker_names:
+        ensure_workers_in_skill_roster(synthetic_worker_names)
     worker_roster = get_merged_worker_roster(config)
+
+    day_df = medweb_df[medweb_df['Datum_parsed'] == target_date_obj]
+    if day_df.empty:
+        selection_logger.warning(
+            "No Medweb rows found for date %s. Available: %s. Continuing with synthetic shifts only.",
+            target_date_obj,
+            parsed_dates,
+        )
 
     selection_logger.debug(f"Found {len(day_df)} rows for target date, {len(mapping_rules)} mapping rules")
 
@@ -269,7 +360,7 @@ def build_working_hours_from_medweb(
     workers_with_shifts_by_modality: Dict[str, set] = {mod: set() for mod in allowed_modalities}
     unmatched_activities = []
 
-    # FIRST PASS: Collect all shifts and gaps for each worker
+    # FIRST PASS: Collect all Medweb-derived shifts and gaps for each worker
     for _, row in day_df.iterrows():
         activity_desc = str(row.get(cols.get('activity', 'Beschreibung der Aktivität'), ''))
         rule = match_mapping_rule(activity_desc, mapping_rules)
@@ -418,6 +509,110 @@ def build_working_hours_from_medweb(
                     **modality_skills
                 })
                 workers_with_shifts_by_modality[modality].add(canonical_id)
+
+    # Synthetic recurring shifts are injected after Medweb parsing so they use the
+    # same shift/gap normalization and roster precedence as CSV-derived rows.
+    raw_synthetic_shifts = config.get('synthetic_shifts', [])
+    if isinstance(raw_synthetic_shifts, list):
+        for entry in raw_synthetic_shifts:
+            if not isinstance(entry, dict):
+                continue
+
+            worker_name = str(entry.get('worker_name') or entry.get('name') or '').strip()
+            if not worker_name:
+                selection_logger.warning("Synthetic shift missing worker_name/name - skipping")
+                continue
+
+            allowed_weekdays = _normalize_synthetic_weekdays(entry.get('weekdays'))
+            if entry.get('weekdays') is not None and not allowed_weekdays:
+                selection_logger.warning(
+                    "Synthetic shift '%s' has invalid weekdays configuration - skipping",
+                    worker_name,
+                )
+                continue
+            if allowed_weekdays and weekday_name not in allowed_weekdays:
+                continue
+
+            skill_overrides = entry.get('skill_overrides', {})
+            if not isinstance(skill_overrides, dict) or not skill_overrides:
+                selection_logger.warning(
+                    "Synthetic shift '%s' missing skill_overrides - skipping",
+                    worker_name,
+                )
+                continue
+
+            target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
+            target_modalities = [m for m in target_modalities if m in allowed_modalities]
+            if not target_modalities:
+                selection_logger.warning(
+                    "Synthetic shift '%s' has no valid modalities in skill_overrides - skipping",
+                    worker_name,
+                )
+                continue
+
+            canonical_id = get_canonical_worker_id(worker_name)
+            roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
+            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
+
+            time_ranges = _compute_synthetic_time_ranges(entry, weekday_name)
+            task_label = str(entry.get('label') or entry.get('task') or worker_name)
+
+            try:
+                rule_modifier = float(entry.get('modifier', 1.0))
+            except (TypeError, ValueError):
+                rule_modifier = 1.0
+
+            hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
+            counts_for_hours = _coerce_bool_like(
+                entry.get('counts_for_hours'),
+                hours_counting_config.get('shift_default', True),
+            )
+
+            workers_with_shifts.add(canonical_id)
+
+            embedded_gaps = entry.get('gaps', {})
+            embedded_gap_times = parse_gap_times(embedded_gaps, weekday_name)
+            if embedded_gap_times:
+                if canonical_id not in exclusions_per_worker:
+                    exclusions_per_worker[canonical_id] = []
+                gap_counts_for_hours = _coerce_bool_like(
+                    entry.get('gap_counts_for_hours'),
+                    config.get('balancer', {}).get('hours_counting', {}).get('gap_default', False),
+                )
+                for gap_start, gap_end in embedded_gap_times:
+                    exclusions_per_worker[canonical_id].append({
+                        'start_time': gap_start,
+                        'end_time': gap_end,
+                        'activity': f"{task_label} (gap)",
+                        'counts_for_hours': gap_counts_for_hours,
+                        'ppl_str': worker_name,
+                    })
+
+            for modality in target_modalities:
+                modality_skills = {}
+                for skill in SKILL_COLUMNS:
+                    combo_key = f"{skill}_{modality}"
+                    modality_skills[skill] = final_combinations.get(combo_key, 0)
+
+                for start_time, end_time in time_ranges:
+                    start_dt = datetime.combine(target_date_obj, start_time)
+                    end_dt = datetime.combine(target_date_obj, end_time)
+                    if end_dt <= start_dt:
+                        continue
+                    duration_hours = (end_dt - start_dt).total_seconds() / 3600
+                    rows_per_modality[modality].append({
+                        'PPL': worker_name,
+                        'canonical_id': canonical_id,
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'shift_duration': duration_hours,
+                        'Modifier': rule_modifier,
+                        'tasks': task_label,
+                        'counts_for_hours': counts_for_hours,
+                        'row_type': 'shift',
+                        **modality_skills,
+                    })
+                    workers_with_shifts_by_modality[modality].add(canonical_id)
 
     # SECOND PASS: Create "unavailable" entries for workers with gaps but no shifts
     for canonical_id, exclusions in exclusions_per_worker.items():

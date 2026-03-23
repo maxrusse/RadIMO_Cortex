@@ -35,6 +35,80 @@
       font-size: 1rem;
     }
 
+    .flow-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+
+    .flow-meta-box {
+      background: #f6f8fa;
+      border: 1px solid #e2e6ea;
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+    }
+
+    .flow-meta-label {
+      display: block;
+      color: #666;
+      font-size: 0.76rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .flow-meta-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .flow-diagram-card {
+      border: 1px solid #d8e3ef;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #fafdff 0%, #f3f8fc 100%);
+      padding: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .flow-diagram-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .flow-diagram-header h4 {
+      margin: 0;
+      color: #004892;
+      font-size: 0.95rem;
+    }
+
+    .flow-diagram-caption {
+      font-size: 0.78rem;
+      color: #5f6c77;
+    }
+
+    .flow-diagram-wrap {
+      overflow-x: auto;
+      border-radius: 6px;
+      border: 1px solid #e3ebf3;
+      background: #fff;
+    }
+
+    .flow-diagram {
+      display: block;
+      min-width: 760px;
+    }
+
+    .flow-diagram-empty {
+      padding: 1rem;
+      text-align: center;
+      color: #667;
+      font-style: italic;
+    }
+
     /* Mode Toggle */
     .mode-toggle {
       display: flex;
@@ -333,8 +407,91 @@
       color: #666;
     }
 
+    .flow-row {
+      border: 1px solid #dbe1e8;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .flow-row summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 0.55rem 0.75rem;
+      background: #eef4fb;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .flow-row summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .flow-row-body {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.65rem;
+      padding: 0.7rem;
+      background: #fcfdff;
+    }
+
+    .flow-table-wrap h4 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    .flow-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      background: #fff;
+    }
+
+    .flow-table th,
+    .flow-table td {
+      border: 1px solid #e4e8ed;
+      padding: 0.35rem 0.45rem;
+      text-align: left;
+    }
+
+    .flow-table th {
+      background: #004892;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .flow-table td.count {
+      width: 70px;
+      text-align: right;
+      font-weight: 600;
+    }
+
+    .summary-badges {
+      display: inline-flex;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      color: #3f4b57;
+    }
+
+    .badge-pill {
+      background: #dfe9f6;
+      border: 1px solid #c5d8f0;
+      border-radius: 999px;
+      padding: 0.05rem 0.5rem;
+      white-space: nowrap;
+    }
+
     /* Hide sections based on mode */
     .advanced-only {
+      display: none;
+    }
+
+    .flow-only {
       display: none;
     }
 
@@ -342,7 +499,17 @@
       display: block;
     }
 
+    body.mode-flow .flow-only {
+      display: block;
+    }
+
     body.mode-advanced .simple-only {
+      display: none;
+    }
+
+    body.mode-flow .simple-only,
+    body.mode-flow .advanced-only,
+    body.mode-flow .color-toggle {
       display: none;
     }
 
@@ -379,6 +546,7 @@
   "skill_settings": {{ skill_settings | tojson }},
   "modality_settings": {{ modality_settings | tojson }},
   "load_monitor_config": {{ load_monitor_config | tojson }},
+  "initial_mode": {{ initial_mode | tojson }},
   "ui_colors": {{ ui_colors | tojson }}
 }
 </script>
@@ -387,8 +555,9 @@
   <!-- Controls Bar -->
   <div class="controls-bar">
     <div class="mode-toggle">
-      <button class="mode-btn active" data-mode="simple" onclick="setMode('simple')">Simple</button>
+      <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
       <button class="mode-btn" data-mode="advanced" onclick="setMode('advanced')">Advanced</button>
+      <button class="mode-btn" data-mode="flow" onclick="setMode('flow')">Flow</button>
     </div>
 
     <div class="color-toggle">
@@ -400,25 +569,25 @@
     <div class="auto-refresh">
       <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
       <label for="auto-refresh">Auto-refresh</label>
-      <button class="refresh-btn" onclick="loadData()">Refresh</button>
+      <button class="refresh-btn" type="button" onclick="refreshCurrentMode()">Refresh</button>
       <span class="last-update" id="last-update"></span>
     </div>
   </div>
 
   <!-- Filter Bar (Advanced Mode Only) -->
   <div class="filter-bar advanced-only" id="filter-bar">
-    <label>Modality:</label>
-    <button class="filter-btn active" data-modality="" onclick="filterByModality('')">All</button>
-    {% for mod in modalities %}
-    <button class="filter-btn" data-modality="{{ mod }}" onclick="filterByModality('{{ mod }}')">{{ modality_settings[mod].label }}</button>
-    {% endfor %}
-
-    <div class="filter-separator"></div>
-
     <label>Skill:</label>
     <button class="filter-btn active" data-skill="" onclick="filterBySkill('')">All</button>
     {% for skill in skills %}
     <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('{{ skill }}')">{{ skill_settings[skill].label }}</button>
+    {% endfor %}
+
+    <div class="filter-separator"></div>
+
+    <label>Modality:</label>
+    <button class="filter-btn active" data-modality="" onclick="filterByModality('')">All</button>
+    {% for mod in modalities %}
+    <button class="filter-btn" data-modality="{{ mod }}" onclick="filterByModality('{{ mod }}')">{{ modality_settings[mod].label }}</button>
     {% endfor %}
 
     <div class="filter-separator"></div>
@@ -496,6 +665,45 @@
         <thead id="thead-advanced"></thead>
         <tbody id="tbody-advanced"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="flow-only">
+    <div class="section-divider">
+      <h3>Weighted Skill Overflow Tracking</h3>
+    </div>
+
+    <div class="flow-meta-grid">
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Window</span>
+        <span class="flow-meta-value" id="meta-window">-</span>
+      </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Last Reset Date</span>
+        <span class="flow-meta-value" id="meta-reset-date">-</span>
+      </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Weighted Movement Total</span>
+        <span class="flow-meta-value" id="meta-total">0</span>
+      </div>
+    </div>
+
+    <div class="flow-diagram-card">
+      <div class="flow-diagram-header">
+        <h4>Migration Flow</h4>
+        <span class="flow-diagram-caption">requested skill to absorbing main skill, weighted by requested skill-modality</span>
+      </div>
+      <div class="flow-diagram-wrap">
+        <svg id="flow-diagram" class="flow-diagram" role="img" aria-label="Weighted skill overflow migration flow diagram"></svg>
+      </div>
+      <div id="flow-diagram-empty" class="flow-diagram-empty" style="display: none;">
+        No weighted cross-skill movement to visualize yet.
+      </div>
+    </div>
+
+    <div id="flow-rows"></div>
+    <div id="flow-no-data-msg" class="no-data" style="display: none;">
+      No flow data available yet.
     </div>
   </div>
 

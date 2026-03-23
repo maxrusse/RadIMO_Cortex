@@ -62,7 +62,6 @@ def _build_roster_entry(
     default_value: Any = 0,
     overrides: dict[str, Any] | None = None,
     modifier: float = 1.0,
-    global_modifier: float = 1.0,
 ) -> dict[str, Any]:
     entry = {
         f"{skill}_{mod}": default_value
@@ -74,7 +73,6 @@ def _build_roster_entry(
             entry[key] = value
     entry["full_name"] = full_name
     entry["modifier"] = modifier
-    entry["global_modifier"] = global_modifier
     return entry
 
 
@@ -344,26 +342,25 @@ def _scenario_definitions() -> dict[str, dict[str, Any]]:
                     "type": "shift",
                     "label": "Weighted Abd Shift",
                     "times": {"default": "08:00-16:00"},
-                    "skill_overrides": {_skill_mod("abd-onco", "ct"): 1},
+                    "skill_overrides": {_skill_mod("aou", "ct"): 1},
                 },
                 {
                     "match": "Regular Abd Shift",
                     "type": "shift",
                     "label": "Regular Abd Shift",
                     "times": {"default": "08:00-16:00"},
-                    "skill_overrides": {_skill_mod("abd-onco", "ct"): 1},
+                    "skill_overrides": {_skill_mod("aou", "ct"): 1},
                 },
             ],
             "roster": {
                 "WW01": _build_roster_entry(
                     "Dr. Weighted Worker (WW01)",
-                    overrides={_skill_mod("abd-onco", "ct"): "w"},
+                    overrides={_skill_mod("aou", "ct"): "w"},
                     modifier=0.7,
-                    global_modifier=1.2,
                 ),
                 "RW01": _build_roster_entry(
                     "Dr. Regular Worker (RW01)",
-                    overrides={_skill_mod("abd-onco", "ct"): 1},
+                    overrides={_skill_mod("aou", "ct"): 1},
                 ),
             },
             "assignment_checks": [],

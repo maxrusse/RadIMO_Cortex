@@ -54,24 +54,36 @@
     }
 
     .basic-auth-logout {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--basic-auth-logout-border, rgba(0, 0, 0, 0.15));
       background: var(--basic-auth-logout-bg, rgba(0, 0, 0, 0.1));
       color: var(--app-header-text, #333);
       text-decoration: none;
-      font-size: 1.25rem;
-      font-weight: bold;
+      font-size: 1rem;
+      font-weight: 700;
       line-height: 1;
-      transition: background 0.2s, color 0.2s;
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
     }
 
     .basic-auth-logout:hover {
       background: var(--basic-auth-logout-hover-bg, rgba(220, 53, 69, 0.15));
       color: var(--basic-auth-logout-hover-color, #dc3545);
+      border-color: var(--basic-auth-logout-hover-border, rgba(220, 53, 69, 0.45));
+      transform: translateY(-1px);
+    }
+
+    .basic-auth-logout:active {
+      transform: translateY(0);
+    }
+
+    .basic-auth-logout:focus-visible {
+      outline: 2px solid var(--basic-auth-logout-focus, rgba(0, 72, 146, 0.35));
+      outline-offset: 1px;
     }
 
     .probe-badges {
@@ -82,38 +94,35 @@
     }
 
     .probe-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 56px;
-      padding: 0.22rem 0.45rem;
-      border-radius: 999px;
+      display: inline;
+      min-width: 0;
+      padding: 0;
+      border-radius: 0;
       text-decoration: none;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      border: 1px solid transparent;
-      line-height: 1.1;
-      color: #fff;
+      font: inherit;
+      line-height: inherit;
+      letter-spacing: normal;
+      color: #555;
+    }
+
+    .probe-badge--compact {
+      font: inherit;
     }
 
     .probe-badge--ok {
-      background: #2e8b57;
-      border-color: #256f46;
+      color: #2e8b57;
     }
 
     .probe-badge--error {
-      background: #b33a3a;
-      border-color: #932e2e;
+      color: #c62828;
     }
 
     .probe-badge--unknown {
-      background: #6c757d;
-      border-color: #5a6268;
+      color: #b58900;
     }
 
     .probe-badge:hover {
-      filter: brightness(0.95);
+      text-decoration: underline;
     }
 
     .nav-link {

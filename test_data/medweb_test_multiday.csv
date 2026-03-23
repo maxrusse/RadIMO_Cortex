@@ -1,61 +1,111 @@
-"Datum","Tageszeit","Personalnummer","Code des Mitarbeiters","Name des Mitarbeiters","Code der Aktivität","Art der Aktivität","Standort","Gruppe","Zeit ändern","Beschreibung der Aktivität","Quelle"
-"06.01.2026","VM","1001","AB01","Dr. Anna Bergmann (AB)","DIAGqxq8fff9f000001","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1002","TH02","Dr. Tobias Hartmann (TH)","DIAGqxq8fff9f000002","Sonstiges","","Weiterbildungsassistent","09.12.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1003","CE03","Dr. Clara Engel (CE)","PRIVqxq8fff9f000003","Sonstiges","","Oberarzt","09.12.2026 07:30","CT Privatpatienten","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1004","FZ04","Dr. Felix Zimmermann (FZ)","DIAGqxq8fff9f000004","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1005","LV05","Dr. Lisa Vogt (LV)","DIAGqxq8fff9f000005","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1006","MS06","Dr. Markus Stein (MS)","DIAGqxq8fff9f000006","Sonstiges","","Weiterbildungsassistent","09.12.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1007","NR07","Dr. Nina Roth (NR)","MRTOAqxq8fff9f000007","Sonstiges","","Oberarzt","09.12.2026 07:30","MRT-OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1008","PK08","Dr. Paul Krämer (PK)","CHIRqxq8fff9f000008","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Chir Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1009","SL09","Dr. Sophie Lang (SL)","CHIROAqxq8fff9f000009","Sonstiges","","Oberarzt","09.12.2026 07:30","OA / FA Chir","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1010","JB10","Dr. Jan Bauer (JB)","MAMMOqxq8fff9f000010","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Mammo Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1011","EF11","Dr. Elena Fuchs (EF)","MAMMOOAqxq8fff9f000011","Sonstiges","","Oberarzt","09.12.2026 07:30","Mammo OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1012","DL12","Dr. David Lorenz (DL)","GYNqxq8fff9f000012","Sonstiges","","Oberarzt","09.12.2026 07:30","Gyn Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1013","MSe13","Dr. Marie Seidel (MSe)","MSKqxq8fff9f000013","Sonstiges","","Oberarzt","09.12.2026 07:30","MSK/Haut Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1014","LF14","Dr. Lukas Frank (LF)","ABDqxq8fff9f000014","Sonstiges","","Oberarzt","09.12.2026 07:30","Abd/Onco Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1015","HW15","Dr. Hannah Weiß (HW)","KHqxq8fff9f000015","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Kopf/Hals Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1015","HW15","Dr. Hannah Weiß (HW)","KHBqxq8fff9f000015","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Kopf-Hals-Board","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1016","TB16","Dr. Tim Brandt (TB)","CARDqxq8fff9f000016","Sonstiges","","Oberarzt","09.12.2026 07:30","Card/Thor Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1017","JK17","Dr. Julia Kern (JK)","UROqxq8fff9f000017","Sonstiges","","Weiterbildungsassistent","09.12.2026 07:30","Uro Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1018","OH18","Dr. Oliver Hahn (OH)","PAEDqxq8fff9f000018","Sonstiges","","Oberarzt","09.12.2026 07:30","Päd Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"06.01.2026","VM","1019","MH19","Dr. Max Hoffmann (MH)","BESPqxq8fff9f000019","Sonstiges","","Oberarzt","09.12.2026 07:30","Besprechung","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1002","TH02","Dr. Tobias Hartmann (TH)","DIAGqxq8fff9f000002","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1001","AB01","Dr. Anna Bergmann (AB)","DIAGqxq8fff9f000001","Sonstiges","","Weiterbildungsassistent","05.01.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1003","CE03","Dr. Clara Engel (CE)","PRIVqxq8fff9f000003","Sonstiges","","Oberarzt","05.01.2026 07:30","CT Privatpatienten","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1006","MS06","Dr. Markus Stein (MS)","DIAGqxq8fff9f000006","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1005","LV05","Dr. Lisa Vogt (LV)","DIAGqxq8fff9f000005","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1004","FZ04","Dr. Felix Zimmermann (FZ)","DIAGqxq8fff9f000004","Sonstiges","","Weiterbildungsassistent","05.01.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1007","NR07","Dr. Nina Roth (NR)","MRTOAqxq8fff9f000007","Sonstiges","","Oberarzt","05.01.2026 07:30","MRT-OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1009","SL09","Dr. Sophie Lang (SL)","CHIRqxq8fff9f000009","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Chir Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1008","PK08","Dr. Paul Krämer (PK)","CHIROAqxq8fff9f000008","Sonstiges","","Oberarzt","05.01.2026 07:30","OA / FA Chir","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1011","EF11","Dr. Elena Fuchs (EF)","MAMMOqxq8fff9f000011","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Mammo Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1010","JB10","Dr. Jan Bauer (JB)","MAMMOOAqxq8fff9f000010","Sonstiges","","Oberarzt","05.01.2026 07:30","Mammo OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1012","DL12","Dr. David Lorenz (DL)","GYNqxq8fff9f000012","Sonstiges","","Oberarzt","05.01.2026 07:30","Gyn Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1014","LF14","Dr. Lukas Frank (LF)","MSKqxq8fff9f000014","Sonstiges","","Oberarzt","05.01.2026 07:30","MSK/Haut Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1013","MSe13","Dr. Marie Seidel (MSe)","ABDqxq8fff9f000013","Sonstiges","","Oberarzt","05.01.2026 07:30","Abd/Onco Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1016","TB16","Dr. Tim Brandt (TB)","KHqxq8fff9f000016","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Kopf/Hals Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1015","HW15","Dr. Hannah Weiß (HW)","CARDqxq8fff9f000015","Sonstiges","","Oberarzt","05.01.2026 07:30","Card/Thor Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1017","JK17","Dr. Julia Kern (JK)","UROqxq8fff9f000017","Sonstiges","","Weiterbildungsassistent","05.01.2026 07:30","Uro Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1018","OH18","Dr. Oliver Hahn (OH)","PAEDqxq8fff9f000018","Sonstiges","","Oberarzt","05.01.2026 07:30","Päd Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1019","MH19","Dr. Max Hoffmann (MH)","BOARDqxq8fff9f000019","Sonstiges","","Oberarzt","05.01.2026 07:30","Board","Universitätsklinikum Freiburg Röntgendiagnostik"
-"07.01.2026","VM","1020","LS20","Dr. Lena Schuster (LS)","AUFKqxq8fff9f000020","Sonstiges","","Oberarzt","05.01.2026 07:30","Aufklärung","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1003","CE03","Dr. Clara Engel (CE)","DIAGqxq8fff9f000003","Sonstiges","","Oberarzt","06.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1001","AB01","Dr. Anna Bergmann (AB)","DIAGqxq8fff9f000001","Sonstiges","","Weiterbildungsassistent","06.01.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1002","TH02","Dr. Tobias Hartmann (TH)","PRIVqxq8fff9f000002","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","CT Privatpatienten","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1004","FZ04","Dr. Felix Zimmermann (FZ)","DIAGqxq8fff9f000004","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1006","MS06","Dr. Markus Stein (MS)","DIAGqxq8fff9f000006","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1005","LV05","Dr. Lisa Vogt (LV)","DIAGqxq8fff9f000005","Sonstiges","","Weiterbildungsassistent","06.01.2026 11:00","Diag-Spätdienst","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1007","NR07","Dr. Nina Roth (NR)","MRTOAqxq8fff9f000007","Sonstiges","","Oberarzt","06.01.2026 07:30","MRT-OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1008","PK08","Dr. Paul Krämer (PK)","CHIRqxq8fff9f000008","Sonstiges","","Oberarzt","06.01.2026 07:30","Chir Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1009","SL09","Dr. Sophie Lang (SL)","CHIROAqxq8fff9f000009","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","OA / FA Chir","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1010","JB10","Dr. Jan Bauer (JB)","MAMMOqxq8fff9f000010","Sonstiges","","Oberarzt","06.01.2026 07:30","Mammo Assistent","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1011","EF11","Dr. Elena Fuchs (EF)","MAMMOOAqxq8fff9f000011","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","Mammo OA","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1012","DL12","Dr. David Lorenz (DL)","GYNqxq8fff9f000012","Sonstiges","","Oberarzt","06.01.2026 07:30","Gyn Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1013","MSe13","Dr. Marie Seidel (MSe)","MSKqxq8fff9f000013","Sonstiges","","Oberarzt","06.01.2026 07:30","MSK/Haut Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1014","LF14","Dr. Lukas Frank (LF)","ABDqxq8fff9f000014","Sonstiges","","Oberarzt","06.01.2026 07:30","Abd/Onco Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1015","HW15","Dr. Hannah Weiß (HW)","KHqxq8fff9f000015","Sonstiges","","Oberarzt","06.01.2026 07:30","Kopf/Hals Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1016","TB16","Dr. Tim Brandt (TB)","CARDqxq8fff9f000016","Sonstiges","","Oberarzt","06.01.2026 07:30","Card/Thor Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1017","JK17","Dr. Julia Kern (JK)","UROqxq8fff9f000017","Sonstiges","","Weiterbildungsassistent","06.01.2026 07:30","Uro Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1018","OH18","Dr. Oliver Hahn (OH)","PAEDqxq8fff9f000018","Sonstiges","","Oberarzt","06.01.2026 07:30","Päd Team","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1019","MH19","Dr. Max Hoffmann (MH)","BOARDqxq8fff9f000019","Sonstiges","","Oberarzt","06.01.2026 07:30","Board","Universitätsklinikum Freiburg Röntgendiagnostik"
-"08.01.2026","VM","1020","LS20","Dr. Lena Schuster (LS)","BESPqxq8fff9f000020","Sonstiges","","Oberarzt","06.01.2026 07:30","Besprechung","Universitätsklinikum Freiburg Röntgendiagnostik"
+Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code der Aktivität,Art der Aktivität,Standort,Gruppe,Zeit ändern,Beschreibung der Aktivität,Quelle
+09.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,09.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,10.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,11.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,12.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,13.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,NM,2002,LC02,Dr. Lisa Chen,DIAG01,Sonstiges,,Assisentsarzt,09.03.2026 13:00,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,NM,2006,JR06,Dr. Julia Roth,SBZ01,Sonstiges,,Assisentsarzt,09.03.2026 11:30,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2018,AK18,Dr. Andrea Krause,CTP01,Sonstiges,,Oberarzt,09.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2004,SB04,Dr. Sandra Braun,MR01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,OA MR,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2010,AM10,Dr. Anna Müller,XR01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2008,MS08,Dr. Maria Schmidt,MM01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2019,FH19,Dr. Friedrich Hauser,FA01,Sonstiges,,Facharzt,09.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2014,ER14,Dr. Eva Richter,PRIVGYN01,Sonstiges,,Oberarzt,09.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2020,CP20,Dr. Claudia Peters,CT01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GAP01,Sonstiges,,Assisentsarzt,09.03.2026 15:30,Mult. Myelom Board (Mo 15:30),Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2015,KM15,Dr. Klaus Meyer,GAP02,Sonstiges,,Assisentsarzt,09.03.2026 13:00,Medizin-Demo (Mo Nephro 13 Uhr/Di Gastro 14 Uhr/Mi Onko 12:30),Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2009,SL09,Dr. Stefan Lang,GAP03,Sonstiges,,Assisentsarzt,09.03.2026 15:30,Kopf-Hals-Board (Mo 15:30),Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2003,MK03,Dr. Michael Koch,GAP04,Sonstiges,,Assisentsarzt,09.03.2026 16:00,CCCF-Leber (Mo 16:00),Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2005,TE05,Dr. Thomas Engel,GAP05,Sonstiges,,Assisentsarzt,09.03.2026 14:30,ZGT Fallbesprechung (Mo 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2006,JR06,Dr. Julia Roth,GAP06,Sonstiges,,Assisentsarzt,09.03.2026 07:30,SBZ Geräteassistenz,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2012,KB12,Dr. Katharina Bauer,XR02,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2021,NK21,Dr. Nora Klein,MM02,Sonstiges,,Assisentsarzt,10.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2022,LS22,Dr. Laura Seidel,MM03,Sonstiges,,Oberarzt,10.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2023,MW23,Dr. Markus Wolf,PRIVCT,Sonstiges,,Oberarzt,10.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2024,RJ24,Dr. Ralf Jahn,PRIVMR,Sonstiges,,Oberarzt,10.03.2026 07:30,OA MR,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2025,BL25,Dr. Bianca Lorenz,PRIVXR,Sonstiges,,Oberarzt,10.03.2026 07:30,OA Röntgen,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2016,HB16,Dr. Hannah Berg,XR03,Sonstiges,,Assisentsarzt,10.03.2026 07:30,3. Dienst,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,GAP07,Sonstiges,,Assisentsarzt,10.03.2026 16:00,"Emphysem-Board, Di 16:00 Uhr",Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2005,TE05,Dr. Thomas Engel,GAP08,Sonstiges,,Assisentsarzt,10.03.2026 14:30,Thoraxdemo ZTT (Di 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2001,FW01,Dr. Frank Weber,GAP09,Sonstiges,,Assisentsarzt,10.03.2026 14:30,Lymphom-Board (Di 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GAP10,Sonstiges,,Assisentsarzt,10.03.2026 14:30,"Gyn Tumorboard (Di 14:30-16:00, Fr 07:30)",Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2015,KM15,Dr. Klaus Meyer,GAP11,Sonstiges,,Assisentsarzt,10.03.2026 14:15,"PRIS (Di 14:15 Uhr, 0_117 OA Büro)",Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2011,CS11,Dr. Christian Schulz,GAP12,Sonstiges,,Assisentsarzt,10.03.2026 14:00,Medizin-Demo (Mo Nephro 13 Uhr/Di Gastro 14 Uhr/Mi Onko 12:30),Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,NM,2002,LC02,Dr. Lisa Chen,DIAG02,Sonstiges,,Assisentsarzt,11.03.2026 13:00,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,NM,2006,JR06,Dr. Julia Roth,SBZ02,Sonstiges,,Assisentsarzt,11.03.2026 11:30,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2004,SB04,Dr. Sandra Braun,MR02,Sonstiges,,Assisentsarzt,11.03.2026 07:30,OA MR,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2003,MK03,Dr. Michael Koch,GAP13,Sonstiges,,Assisentsarzt,11.03.2026 15:00,"ILD-Board (Mi 15:00, 14-tägig)",Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2001,FW01,Dr. Frank Weber,GAP14,Sonstiges,,Assisentsarzt,11.03.2026 14:30,Sarkom/Haut/Knochen-Board (Mi 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2014,ER14,Dr. Eva Richter,GAP15,Sonstiges,,Assisentsarzt,11.03.2026 16:00,"BB (Mi 16 Uhr, am letzten Mi des Monats)",Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,GAP16,Sonstiges,,Assisentsarzt,11.03.2026 14:00,"TB: Immunvermittelte NW (Mi 14:00, jeden 1. Mittwoch im Monat)",Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2010,AM10,Dr. Anna Müller,GAP17,Sonstiges,,Assisentsarzt,11.03.2026 15:30,Gefäßchir-Angiol-Kolloq (Mi 15:30),Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2011,CS11,Dr. Christian Schulz,GAP18,Sonstiges,,Assisentsarzt,11.03.2026 15:30,"Nephr/urol. Kolloq. (Mi 15:30 Uhr, Konf.raum 6)",Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2005,TE05,Dr. Thomas Engel,GAP19,Sonstiges,,Assisentsarzt,11.03.2026 07:30,ZGT/NET-Board (ehem. CCCF) (Do 07:30),Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2015,KM15,Dr. Klaus Meyer,GAP20,Sonstiges,,Assisentsarzt,11.03.2026 12:30,Medizin-Demo (Mo Nephro 13 Uhr/Di Gastro 14 Uhr/Mi Onko 12:30),Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2026,FA26,Dr. Felix Arnold,FAK01,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2027,FA27,Dr. Fiona Adler,FAK02,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2028,FA28,Dr. Fabian Albrecht,FAK03,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow CVT,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2029,FA29,Dr. Frida Albers,FAK04,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow AOU,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2030,FA30,Dr. Florian Auer,FAK05,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2031,FA31,Dr. Franziska Amann,FAK06,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Päd,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2032,FA32,Dr. Frederik Ahlers,FAK07,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2033,FA33,Dr. Felicitas Albrecht,FAK08,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2018,AK18,Dr. Andrea Krause,CTP02,Sonstiges,,Oberarzt,12.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2022,LS22,Dr. Laura Seidel,MM04,Sonstiges,,Oberarzt,12.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2014,ER14,Dr. Eva Richter,PRIVGYN02,Sonstiges,,Oberarzt,12.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2003,MK03,Dr. Michael Koch,GAP21,Sonstiges,,Assisentsarzt,12.03.2026 13:30,"Rheuma-Demo (Do 13:30 Uhr, kl. Hörsaal Medizin)",Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,GAP22,Sonstiges,,Assisentsarzt,12.03.2026 14:30,Uro-Board (Do 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2005,TE05,Dr. Thomas Engel,GAP23,Sonstiges,,Assisentsarzt,12.03.2026 14:30,Leukämie-Board (Do 14:30),Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2001,FW01,Dr. Frank Weber,GAP24,Sonstiges,,Assisentsarzt,12.03.2026 15:30,"EmaH (Do 15:30 Uhr, Konf.raum 8)",Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GAP25,Sonstiges,,Assisentsarzt,12.03.2026 16:00,"VasMuT (Do 16 Uhr, Konf.raum 5)",Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2009,SL09,Dr. Stefan Lang,GAP26,Sonstiges,,Assisentsarzt,12.03.2026 07:30,ZGT/NET-Board (ehem. CCCF) (Do 07:30),Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2011,CS11,Dr. Christian Schulz,GAP27,Sonstiges,,Assisentsarzt,12.03.2026 14:00,"Gyn Tumorboard (Di 14:30-16:00, Fr 07:30)",Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,NM,2002,LC02,Dr. Lisa Chen,DIAG03,Sonstiges,,Assisentsarzt,13.03.2026 13:00,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,NM,2006,JR06,Dr. Julia Roth,SBZ03,Sonstiges,,Assisentsarzt,13.03.2026 11:30,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GAP28,Sonstiges,,Assisentsarzt,13.03.2026 07:30,"Gyn Tumorboard (Di 14:30-16:00, Fr 07:30)",Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2015,KM15,Dr. Klaus Meyer,GAP29,Sonstiges,,Assisentsarzt,13.03.2026 13:00,"IPOK (Fr 13 Uhr, Konf.raum 5)",Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2023,MW23,Dr. Markus Wolf,PRIVCT2,Sonstiges,,Oberarzt,13.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2024,RJ24,Dr. Ralf Jahn,PRIVMR2,Sonstiges,,Oberarzt,13.03.2026 07:30,OA MR,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2025,BL25,Dr. Bianca Lorenz,PRIVXR2,Sonstiges,,Oberarzt,13.03.2026 07:30,OA Röntgen,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2014,ER14,Dr. Eva Richter,PRIVGYN03,Sonstiges,,Oberarzt,13.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik

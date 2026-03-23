@@ -1,5 +1,4 @@
 Datum,Beschreibung der Aktivität,Name des Mitarbeiters,Code des Mitarbeiters
 23.01.2026,Baseline CT Notfall,Dr. Base CT,BM01
 23.01.2026,Baseline MR Privat,Dr. Base MR,BM02
-23.01.2026,Baseline XRAY Paed,Dr. Base XR,BM03
-23.01.2026,Baseline Mammo Gyn,Dr. Base MM,BM04
+23.01.2026,Baseline XRAY MHD,Dr. Base XR,BM03

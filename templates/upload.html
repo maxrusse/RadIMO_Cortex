@@ -38,6 +38,27 @@
       gap: 1.5rem;
     }
 
+    .page-actions {
+      display: flex;
+      justify-content: flex-start;
+      margin-bottom: 1rem;
+    }
+
+    .back-button {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: background 0.3s;
+      background: #004892;
+    }
+
+    .back-button:hover {
+      background: #003f73;
+    }
+
     @media (max-width: 1100px) {
       .page-layout {
         grid-template-columns: 1fr;
@@ -141,6 +162,21 @@
       font-size: 0.85rem;
       color: #666;
       margin-top: 0.75rem;
+    }
+
+    .external-action-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: #004892;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      margin-top: 0.75rem;
+    }
+
+    .external-action-link:hover {
+      text-decoration: underline;
     }
 
     .admin-footer {
@@ -325,6 +361,10 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
+  <div class="page-actions">
+    <a href="{{ url_for('routes.index', modality=modality) }}" class="back-button">Zurück</a>
+  </div>
+
   <div id="message-container"></div>
 
   <div class="page-layout">
@@ -388,11 +428,18 @@
                 Upload Master CSV
               </button>
               <button class="btn btn-success" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
-                Reset Today
+                HARD RELOAD TODAY
               </button>
             </div>
+            <a
+              class="external-action-link"
+              href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
+              target="_blank"
+              rel="noopener noreferrer">
+              Medspace Export Open
+            </a>
             <div class="upload-note">
-              Reset Today setzt den heutigen Plan auf den Master-Stand zurück und setzt die Zähler neu. NUR wenn ein Reset am selben Tag nötig ist.
+              HARD RELOAD TODAY setzt den heutigen Plan auf den Master-Stand zurück und setzt die Zähler neu. NUR wenn ein Reset am selben Tag nötig ist.
             </div>
           </form>
         </div>
@@ -463,10 +510,10 @@
       const btn = document.getElementById('load-today-btn');
       const msgContainer = document.getElementById('message-container');
 
-      if (!confirm('Reset today from Master CSV? (Resets counters)')) return;
+      if (!confirm('HARD RELOAD TODAY from Master CSV? (Resets counters)')) return;
 
       btn.disabled = true;
-      btn.textContent = 'Loading...';
+      btn.textContent = 'HARD RELOAD TODAY...';
 
       try {
         const response = await fetch('/load-today-from-master', { method: 'POST' });
@@ -504,7 +551,7 @@
       }
 
       btn.disabled = false;
-      btn.textContent = 'Reset Today';
+      btn.textContent = 'HARD RELOAD TODAY';
     }
 
   </script>

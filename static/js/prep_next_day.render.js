@@ -181,7 +181,7 @@ function renderTableHeader(tab) {
     });
   }
 
-  headerHtml += '<th rowspan="2" class="modifier-col">W Mod.</th>';
+  headerHtml += '<th rowspan="2" class="modifier-col">Load Mod.</th>';
   headerHtml += '<th rowspan="2">Actions</th>';
   headerHtml += '</tr>';
 
@@ -460,13 +460,9 @@ function renderTable(tab) {
         const modData = shift.modalities[modKey];
         return modData && modData.row_index !== undefined && modData.row_index >= 0;
       });
-      const hasAnyWeighted = modKeysToShow.some(modKey => {
-        const modData = shift.modalities[modKey];
-        return modData && Object.values(modData.skills || {}).some(v => isWeightedSkill(v));
-      });
       const modVal = shift.modifier || 1.0;
       const modCellClass = `grid-cell grid-modifier ${hasAnyAssigned ? '' : 'ghost'}`;
-      const modClass = hasAnyWeighted ? 'modifier-high' : (modVal < 1 ? 'modifier-low' : '');
+      const modClass = modVal > 1 ? 'modifier-high' : (modVal < 1 ? 'modifier-low' : '');
       if (isEditMode) {
         tr.innerHTML += `<td class="${modCellClass}">
           <input type="text" class="grid-mod-input" value="${modVal}"
@@ -605,13 +601,15 @@ function renderEditModalContent() {
   </div>
 
   <div style="min-width: 70px;">
-    <label style="font-size: 0.75rem; color: #666; display: block;">Shift W Modifier</label>
+    <label style="font-size: 0.75rem; color: #666; display: block;">Shift Load Modifier</label>
     <select id="edit-shift-${shiftIdx}-modifier" style="padding: 0.4rem; font-size: 0.85rem;"
       onchange="updateShiftFromModal(${shiftIdx}, { Modifier: parseFloat(this.value) })" ${isEditable ? '' : 'disabled'}>
-      <option value="0.3" ${shift.modifier === 0.3 ? 'selected' : ''}>0.3x (30%, weighted-only)</option>
+      <option value="0.3" ${shift.modifier === 0.3 ? 'selected' : ''}>0.3x (~30% load)</option>
       <option value="0.5" ${shift.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
       <option value="0.75" ${shift.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+      <option value="0.9" ${shift.modifier === 0.9 ? 'selected' : ''}>0.9x</option>
       <option value="1.0" ${!shift.modifier || shift.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
+      <option value="1.1" ${shift.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
       <option value="1.25" ${shift.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
       <option value="1.5" ${shift.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
     </select>
@@ -706,12 +704,14 @@ function renderEditModalContent() {
   <input type="time" id="modal-add-end" value="15:00" style="padding: 0.4rem; font-size: 0.85rem;">
 </div>
 <div style="min-width: 70px;">
-  <label style="font-size: 0.75rem; color: #666; display: block;">Shift W Modifier</label>
+  <label style="font-size: 0.75rem; color: #666; display: block;">Shift Load Modifier</label>
   <select id="modal-add-modifier" style="padding: 0.4rem; font-size: 0.85rem;">
-    <option value="0.3">0.3x (30%, weighted-only)</option>
+    <option value="0.3">0.3x (~30% load)</option>
     <option value="0.5">0.5x</option>
     <option value="0.75">0.75x</option>
+    <option value="0.9">0.9x</option>
     <option value="1.0" selected>1.0x</option>
+    <option value="1.1">1.1x</option>
     <option value="1.25">1.25x</option>
     <option value="1.5">1.5x</option>
   </select>
@@ -820,12 +820,14 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
         </div>
 
         <div style="min-width: 70px;">
-          <label style="font-size: 0.75rem; color: #666; display: block;">Shift W Modifier</label>
+          <label style="font-size: 0.75rem; color: #666; display: block;">Shift Load Modifier</label>
           <select onchange="updateAddWorkerTask(${idx}, 'modifier', parseFloat(this.value))" style="padding: 0.4rem; font-size: 0.85rem;">
-            <option value="0.3" ${task.modifier === 0.3 ? 'selected' : ''}>0.3x (30%, weighted-only)</option>
+            <option value="0.3" ${task.modifier === 0.3 ? 'selected' : ''}>0.3x (~30% load)</option>
             <option value="0.5" ${task.modifier === 0.5 ? 'selected' : ''}>0.5x</option>
             <option value="0.75" ${task.modifier === 0.75 ? 'selected' : ''}>0.75x</option>
+            <option value="0.9" ${task.modifier === 0.9 ? 'selected' : ''}>0.9x</option>
             <option value="1.0" ${!task.modifier || task.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
+            <option value="1.1" ${task.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
             <option value="1.25" ${task.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
             <option value="1.5" ${task.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
           </select>
@@ -923,29 +925,39 @@ function convertToTimelineData(tab) {
         modalities: modalityList,
         row_type: isGapRow ? 'gap_segment' : 'shift_segment',
         tasks: shift.task ? [shift.task] : [],
+        activeSkillsByModality: {},
+        explicitSkillsByModality: {},
         explicitSkillValues: {}
       };
 
-      SKILLS.forEach(skill => {
-        let isActive = false;
-        let isExplicit = false;
-        if (!isGapRow) {
-          assignedModalities.forEach(([_, modData]) => {
+      if (!isGapRow) {
+        assignedModalities.forEach(([modKey, modData]) => {
+          const mod = String(modKey || '').toUpperCase();
+          if (!mod) return;
+          entry.activeSkillsByModality[mod] = entry.activeSkillsByModality[mod] || {};
+          entry.explicitSkillsByModality[mod] = entry.explicitSkillsByModality[mod] || {};
+
+          SKILLS.forEach(skill => {
             const val = modData.skills?.[skill];
             const normalized = normalizeSkillValueJS(val);
-            if (normalized === 1) {
-              isExplicit = true;
-            }
-            if (val === 'w' || val === 'W') {
-              isActive = true;
-              return;
-            }
+            const isWeighted = val === 'w' || val === 'W';
             const numVal = Number(val);
-            if (!Number.isNaN(numVal) && numVal >= 1) {
-              isActive = true;
+            const isActive = isWeighted || (!Number.isNaN(numVal) && numVal >= 1);
+            const isExplicit = normalized === 1;
+
+            if (isActive) {
+              entry.activeSkillsByModality[mod][skill] = 1;
+            }
+            if (isExplicit) {
+              entry.explicitSkillsByModality[mod][skill] = 1;
             }
           });
-        }
+        });
+      }
+
+      SKILLS.forEach(skill => {
+        const isActive = Object.values(entry.activeSkillsByModality).some(modSkills => modSkills?.[skill] === 1);
+        const isExplicit = Object.values(entry.explicitSkillsByModality).some(modSkills => modSkills?.[skill] === 1);
         entry[skill] = isActive ? 1 : 0;
         if (isExplicit) {
           entry.explicitSkillValues[skill] = 1;

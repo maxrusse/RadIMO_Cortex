@@ -167,9 +167,9 @@ def normalize_skill_mod_key(key: str) -> str:
     Returns canonical "skill_modality" format with case-insensitive matching.
 
     Examples:
-        "msk-haut_ct" -> "msk-haut_ct"
-        "ct_msk-haut" -> "msk-haut_ct"
-        "MSK-HAUT_CT" -> "msk-haut_ct"  (case-insensitive)
+        "mhd_ct" -> "mhd_ct"
+        "ct_mhd" -> "mhd_ct"
+        "MSK-HAUT_CT" -> "mhd_ct"  (case-insensitive)
         "notfall_mr" -> "notfall_mr"
     """
     if '_' not in key:
@@ -210,9 +210,65 @@ def build_disabled_worker_entry() -> Dict[str, Any]:
     Create a new worker entry with all Skill x Modality combinations disabled (-1).
 
     Format: {"skill_modality": -1, ...} (flat structure)
-    Example: {"msk-haut_ct": -1, "msk-haut_mr": -1, "notfall_ct": -1, ...}
+    Example: {"mhd_ct": -1, "mhd_mr": -1, "notfall_ct": -1, ...}
     """
     return _build_skill_mod_map(-1)
+
+
+def build_passive_worker_entry() -> Dict[str, Any]:
+    """
+    Create a new worker entry with all Skill x Modality combinations passive (0).
+
+    Format: {"skill_modality": 0, ...} (flat structure)
+    """
+    return _build_skill_mod_map(0)
+
+
+def ensure_workers_in_skill_roster(worker_names: Iterable[str]) -> tuple[int, List[str]]:
+    """
+    Ensure the provided worker names exist in the JSON skill roster.
+
+    Missing workers are added as lightweight metadata-only entries so
+    shift-level overrides can activate them later without overwriting
+    config/YAML roster definitions for the same worker.
+    Existing workers are left unchanged, except that their full_name is
+    backfilled when missing.
+    """
+    roster = load_worker_skill_json()
+    added_count = 0
+    added_workers: List[str] = []
+    roster_updated = False
+
+    for worker_name in worker_names:
+        full_name = '' if worker_name is None else str(worker_name).strip()
+        if not full_name:
+            continue
+
+        worker_id = get_canonical_worker_id(full_name)
+        if not worker_id:
+            continue
+
+        if worker_id in roster:
+            if isinstance(roster[worker_id], dict) and 'full_name' not in roster[worker_id]:
+                roster[worker_id]['full_name'] = full_name
+                roster_updated = True
+            continue
+
+        entry = {'full_name': full_name}
+        roster[worker_id] = entry
+        added_count += 1
+        added_workers.append(worker_id)
+        roster_updated = True
+        selection_logger.info(
+            "Auto-added synthetic worker %s (%s) to skill roster as metadata-only seed",
+            worker_id,
+            full_name,
+        )
+
+    if roster_updated:
+        save_worker_skill_json(roster)
+
+    return added_count, added_workers
 
 
 def get_roster_modifier(canonical_id: str) -> float:
@@ -278,43 +334,11 @@ def get_roster_modifier_raw(canonical_id: str) -> Optional[float]:
         return None
 
 
-def get_global_modifier(canonical_id: str) -> float:
-    """
-    Get worker's global modifier from skill roster.
-
-    Returns the 'global_modifier' field from the worker's roster entry.
-    This modifier is applied to ALL assignments (0, w, 1) for this worker.
-    Higher value = less work (e.g., 1.5 = ~33% less work).
-    Defaults to 1.0 (no adjustment).
-
-    Args:
-        canonical_id: Worker's canonical ID
-
-    Returns:
-        Global modifier value (float), defaults to 1.0
-    """
-    # Ensure roster is loaded
-    if not worker_skill_json_roster:
-        load_worker_skill_json()
-
-    worker_data = worker_skill_json_roster.get(canonical_id, {})
-    modifier = worker_data.get('global_modifier', 1.0)
-
-    try:
-        modifier = float(modifier)
-        if modifier <= 0:
-            modifier = 1.0
-    except (TypeError, ValueError):
-        modifier = 1.0
-
-    return modifier
-
-
 def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> tuple:
     """
     Auto-populate skill roster with new workers found in uploaded schedules.
 
-    New workers are added with all skills disabled (-1) by default.
+    New workers are added with all skills passive (0) by default.
     Uses canonical_id (derived from PPL if not present) to ensure consistent worker IDs.
     Stores full_name alongside the canonical ID for display purposes.
 
@@ -324,6 +348,7 @@ def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> tuple:
     roster = load_worker_skill_json()
     added_count = 0
     added_workers = []
+    roster_updated = False
 
     for modality, df in modality_dfs.items():
         if df is None or df.empty:
@@ -343,20 +368,144 @@ def auto_populate_skill_roster(modality_dfs: Dict[str, pd.DataFrame]) -> tuple:
                 # If worker exists, update full_name if not already set
                 if worker_id in roster and 'full_name' not in roster[worker_id]:
                     roster[worker_id]['full_name'] = full_name
+                    roster_updated = True
                 continue
 
-            entry = build_disabled_worker_entry()
+            entry = build_passive_worker_entry()
             entry['full_name'] = full_name
             roster[worker_id] = entry
             added_count += 1
             added_workers.append(worker_id)
+            roster_updated = True
             selection_logger.info(
-                "Auto-added worker %s (%s) to skill roster with all skills disabled",
+                "Auto-added worker %s (%s) to skill roster with all skills passive",
                 worker_id,
                 full_name,
             )
 
-    if added_count > 0:
+    if added_count > 0 or roster_updated:
+        save_worker_skill_json(roster)
+
+    return added_count, added_workers
+
+
+def _match_csv_activity_rule(activity_desc: str, rules: List[dict]) -> Optional[dict]:
+    """Return the first matching CSV activity rule, mirroring parser order."""
+    if not activity_desc:
+        return None
+
+    activity_lower = activity_desc.lower()
+    for rule in rules:
+        match_str = str(rule.get('match', '')).strip()
+        if match_str and match_str.lower() in activity_lower:
+            return rule
+    return None
+
+
+def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -> tuple:
+    """
+    Auto-populate skill roster with workers found in shift-managed CSV rows.
+
+    New workers are added with all skills disabled (-1) by default. Gap rows,
+    board-style activities, and unmatched CSV rows are ignored.
+    Existing workers are preserved, but their full_name is filled if missing.
+
+    Returns:
+        Tuple of (added_count, list of added worker IDs)
+    """
+    vendor_mapping = config.get('medweb_mapping', {})
+    rules = vendor_mapping.get('rules', [])
+    cols = vendor_mapping.get('columns', {
+        'employee_name': 'Name des Mitarbeiters',
+        'employee_code': 'Code des Mitarbeiters',
+        'activity': 'Beschreibung der Aktivität',
+    })
+    name_col = cols.get('employee_name', 'Name des Mitarbeiters')
+    code_col = cols.get('employee_code', 'Code des Mitarbeiters')
+    activity_col = cols.get('activity', 'Beschreibung der Aktivität')
+
+    read_attempts = [
+        {'sep': ',', 'encoding': 'utf-8'},
+        {'sep': ',', 'encoding': 'latin1'},
+        {'sep': ';', 'encoding': 'utf-8'},
+        {'sep': ';', 'encoding': 'latin1'},
+    ]
+
+    csv_df: Optional[pd.DataFrame] = None
+    last_error: Optional[Exception] = None
+    for kwargs in read_attempts:
+        try:
+            csv_df = pd.read_csv(csv_path, **kwargs)
+            break
+        except Exception as exc:
+            last_error = exc
+
+    if csv_df is None:
+        raise ValueError(f"Fehler beim Laden der CSV: {last_error}")
+
+    if (
+        name_col not in csv_df.columns
+        or code_col not in csv_df.columns
+        or activity_col not in csv_df.columns
+    ):
+        raise ValueError(
+            "CSV missing worker columns: expected "
+            f"'{name_col}', '{code_col}', and '{activity_col}'"
+        )
+
+    roster = load_worker_skill_json()
+    added_count = 0
+    added_workers: List[str] = []
+    roster_updated = False
+
+    for _, row in csv_df.iterrows():
+        activity_desc = row.get(activity_col, '')
+        activity_desc = '' if pd.isna(activity_desc) else str(activity_desc).strip()
+        matched_rule = _match_csv_activity_rule(activity_desc, rules)
+        if not matched_rule or matched_rule.get('type', 'shift') != 'shift':
+            continue
+
+        employee_name = row.get(name_col, '')
+        employee_code = row.get(code_col, '')
+
+        if pd.isna(employee_name) and pd.isna(employee_code):
+            continue
+
+        employee_name = '' if pd.isna(employee_name) else str(employee_name).strip()
+        employee_code = '' if pd.isna(employee_code) else str(employee_code).strip()
+
+        if not employee_name and not employee_code:
+            continue
+
+        full_name = (
+            f"{employee_name} ({employee_code})"
+            if employee_name and employee_code else
+            employee_name or employee_code
+        )
+        worker_id = get_canonical_worker_id(full_name)
+        if not worker_id:
+            continue
+
+        if worker_id in roster:
+            if 'full_name' not in roster[worker_id] and full_name:
+                roster[worker_id]['full_name'] = full_name
+                roster_updated = True
+            continue
+
+        entry = build_disabled_worker_entry()
+        if full_name:
+            entry['full_name'] = full_name
+        roster[worker_id] = entry
+        added_count += 1
+        added_workers.append(worker_id)
+        roster_updated = True
+        selection_logger.info(
+            "Auto-added worker %s (%s) to skill roster from CSV with all skills disabled",
+            worker_id,
+            full_name,
+        )
+
+    if added_count > 0 or roster_updated:
         save_worker_skill_json(roster)
 
     return added_count, added_workers
@@ -366,8 +515,9 @@ def get_merged_worker_roster(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge YAML config roster with JSON roster.
 
-    JSON roster has priority and completely overrides YAML entries for the same worker.
-    Format: {worker_id: {'default': {skills}, 'ct': {overrides}, ...}}
+    JSON roster has field-level priority for the same worker, but missing JSON
+    keys do not erase YAML-defined values. This keeps lightweight synthetic
+    worker seeds or partial JSON edits from deleting config-defined exclusions.
     """
     # Start with YAML config
     yaml_roster = config.get('worker_roster', {})
@@ -377,9 +527,16 @@ def get_merged_worker_roster(config: Dict[str, Any]) -> Dict[str, Any]:
     if not worker_skill_json_roster:
         load_worker_skill_json()
 
-    # JSON roster completely overrides YAML for each worker
+    # JSON roster overrides YAML per field for each worker.
     for worker_id, worker_data in worker_skill_json_roster.items():
-        merged[worker_id] = copy.deepcopy(worker_data)
+        existing = merged.get(worker_id)
+        if isinstance(existing, dict) and isinstance(worker_data, dict):
+            merged_entry = copy.deepcopy(existing)
+            for key, value in worker_data.items():
+                merged_entry[key] = copy.deepcopy(value)
+            merged[worker_id] = merged_entry
+        else:
+            merged[worker_id] = copy.deepcopy(worker_data)
 
     return merged
 
@@ -393,11 +550,12 @@ def get_worker_skill_mod_combinations(
 
     Returns flat dict: {"skill_modality": value, ...}
     Normalizes keys to canonical "skill_modality" format.
-    Missing combinations default to 0 (passive).
+    Missing workers default to -1 (excluded) until explicitly enabled in the roster.
+    Missing combinations for known workers still default to 0 (passive).
     """
     if canonical_id not in worker_roster:
-        # Worker not in roster -> all combinations = 0 (passive)
-        return _build_skill_mod_map(0)
+        # Worker not in roster -> all combinations = -1 (excluded)
+        return _build_skill_mod_map(-1)
 
     worker_data = worker_roster[canonical_id]
     result = _build_skill_mod_map(0)
@@ -416,10 +574,10 @@ def expand_skill_overrides(rule_overrides: dict) -> dict:
     Expand skill_overrides shortcuts to full skill_modality combinations.
 
     Supports:
-        - Full keys: "msk-haut_ct": 1 -> {"msk-haut_ct": 1}
+        - Full keys: "mhd_ct": 1 -> {"mhd_ct": 1}
         - all shortcut: "all": -1 -> all skill_modality combos = -1
-        - Skill shortcut: "msk-haut": 1 -> msk-haut_ct, msk-haut_mr, msk-haut_xray, msk-haut_mammo = 1
-        - Modality shortcut: "ct": 1 -> notfall_ct, msk-haut_ct, privat_ct, etc. = 1
+        - Skill shortcut: "mhd": 1 -> mhd_ct, mhd_mr, mhd_xray, mhd_mammo = 1
+        - Modality shortcut: "ct": 1 -> notfall_ct, mhd_ct, privat_ct, etc. = 1
 
     Args:
         rule_overrides: Raw skill_overrides dict from config
@@ -439,7 +597,7 @@ def expand_skill_overrides(rule_overrides: dict) -> dict:
                     expanded[f"{skill}_{mod}"] = value
             continue
 
-        # Check if key is a skill shortcut (e.g., "msk-haut")
+        # Check if key is a skill shortcut (e.g., "mhd")
         canonical_skill = skill_columns_map.get(key_lower)
         if canonical_skill:
             for mod in allowed_modalities:
@@ -477,7 +635,7 @@ def apply_skill_overrides(
     - Roster -1 (hard exclude) always wins and cannot be overridden unless
       allow_roster_exclusion_override=True and override value is 1 or w.
     - Roster 'w' (weighted/training):
-      - Override 1 → 'w' (worker stays weighted)
+      - Override 1 or w → 'w' (worker stays weighted)
       - Override 0 → -1 (not assigned to team, excluded) unless ignore_zero_overrides=True
       - Override -1 → -1 (explicit exclusion)
       - No override → -1 (not on any shift, excluded) unless exclude_unprocessed_weighted=False
@@ -485,7 +643,7 @@ def apply_skill_overrides(
 
     Args:
         roster_combinations: Worker's baseline skill x modality combinations
-        rule_overrides: CSV rule overrides (e.g., {"msk-haut_ct": 1, "all": -1})
+        rule_overrides: CSV rule overrides (e.g., {"mhd_ct": 1, "all": -1})
         allow_roster_exclusion_override: Allow overriding roster -1 with 1/w.
         ignore_zero_overrides: Skip overrides with value 0.
         exclude_unprocessed_weighted: Convert unprocessed roster 'w' values to -1.
@@ -518,8 +676,8 @@ def apply_skill_overrides(
 
             # Roster 'w' (weighted/training) special handling
             if is_weighted_skill(roster_value):
-                if override_value == '1':
-                    # CSV assigns as specialist → keep as weighted
+                if override_value in {'1', 'w'}:
+                    # CSV assigns as specialist/weighted → keep as weighted
                     final[key] = 'w'
                 else:
                     # CSV assigns as 0 (helper) or -1 (exclude) → exclude
@@ -546,9 +704,9 @@ def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
 
     Handles all key formats:
     - "all" → all modalities
-    - Skill shortcut (e.g., "msk-haut") → all modalities
+    - Skill shortcut (e.g., "mhd") → all modalities
     - Modality shortcut (e.g., "ct") → just that modality
-    - Full key (e.g., "msk-haut_ct") → extract modality from key
+    - Full key (e.g., "mhd_ct") → extract modality from key
 
     Returns list of unique canonical modalities found.
     """
@@ -561,7 +719,7 @@ def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
         if key_lower == 'all':
             return list(allowed_modalities)
 
-        # Skill-only shortcut (e.g., "msk-haut") → all modalities
+        # Skill-only shortcut (e.g., "mhd") → all modalities
         if skill_columns_map.get(key_lower):
             modalities.update(allowed_modalities)
             continue

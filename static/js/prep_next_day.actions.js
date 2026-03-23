@@ -1874,7 +1874,7 @@ function applyPresetToShift(shiftIdx, taskName) {
 
   // Apply skills to all modalities in this shift
   // Config uses skill×modality format: { "notfall_ct": 1, "privat_mr": 0 }
-  // Also supports shortcuts: { "all": -1 }, { "msk-haut": 1 }
+  // Also supports shortcuts: { "all": -1 }, { "mhd": 1 }
   Object.keys(shift.modalities).forEach(modKey => {
     SKILLS.forEach(skill => {
       const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
@@ -1894,7 +1894,7 @@ function applyPresetToShift(shiftIdx, taskName) {
     });
   });
 
-  // Apply modifier if task has one (for weighted skills)
+  // Apply shift load modifier if task config provides one.
   if (task.modifier !== undefined) {
     const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
     if (modifierEl) {
@@ -2658,8 +2658,8 @@ async function loadFromCSV(mode) {
   if (mode === 'today') {
     const hasPendingChanges = Object.keys(pendingChanges.today || {}).length > 0;
     const message = hasPendingChanges
-      ? 'Load Today will discard unsaved Quick Edit changes and reset today from the Master CSV. Continue?'
-      : 'Load Today will reset today from the Master CSV. Continue?';
+      ? 'HARD RELOAD TODAY will discard unsaved Quick Edit changes and reset today from the Master CSV. Continue?'
+      : 'HARD RELOAD TODAY will reset today from the Master CSV. Continue?';
     if (!window.confirm(message)) {
       return;
     }

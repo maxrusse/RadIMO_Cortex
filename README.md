@@ -8,7 +8,7 @@ Worker assignment for radiology teams with automatic load balancing, skill-aware
 
 ## What is RadIMO Cortex?
 
-RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY, Mammo) and skills (Notfall, Privat, Gyn, Päd, MSK/Haut, Abd/Onco, Card/Thor, Uro, Kopf/Hals). It balances assignments for fairness while respecting availability, shift timing, and skill levels.
+RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY, Mammo) and skills (Notfall, Privat, Gyn, Päd, AOU, CVT, MHD). It balances assignments for fairness while respecting availability, shift timing, and skill levels.
 
 **Key capabilities:**
 - Real-time worker assignment with automatic load balancing
@@ -22,6 +22,7 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 - GAP handling (split shifts) for meetings and boards
 - Smart skill filtering on Schedule Edit and Timetable views
 - Special tasks for custom sub-workflows with separate tracking
+- Recurring synthetic shift workers defined in config for summary roles
 
 ---
 
@@ -44,7 +45,7 @@ flask --app app run --debug  # Start application
 | Page | URL | Description |
 |------|-----|-------------|
 | Main Interface | `/` | Assignment by modality (CT/MR/XRAY/Mammo) |
-| Skill View | `/by-skill` | Assignment by skill (Notfall, Card/Thor, MSK/Haut, etc.) |
+| Skill View | `/by-skill` | Assignment by skill (Notfall, CVT, MHD, etc.) |
 | Timetable | `/timetable` | Visualize shifts and schedules |
 
 If basic access protection is enabled, users authenticate via `/access-login` before reaching the operational pages.
@@ -91,8 +92,8 @@ Real-time assignment with load balancing
 ### Skill System
 | Value | Name | Behavior |
 |-------|------|----------|
-| **w** | Weighted | Assisted/learning worker - uses personal Modifier for load calculation |
-| **1** | Active | Primary routing - actively performs this skill (Modifier NOT applied) |
+| **w** | Weighted | Assisted/learning worker - uses additional W modifier stream |
+| **1** | Active | Primary routing - actively performs this skill (shift load modifier applies) |
 | **0** | Passive | Fallback only - can help if needed |
 | **-1** | Excluded | Never assigned - cannot do this skill |
 
@@ -100,9 +101,14 @@ Real-time assignment with load balancing
 Assignments are weighted by:
 - **Skill weight**: e.g., Notfall=1.1, Privat=1.2
 - **Modality factor**: e.g., MR=1.2, XRAY=0.33
-- **Global modifier**: Per-worker multiplier applied to all assignments
-- **Weighted modifier**: Individual multiplier (only applied when skill='w')
+- **Shift load modifier**: Per-shift multiplier from schedule rows (applied to all assignments)
+- **Weighted modifier**: Worker-level multiplier for `w` assignments
 - **Skill×Modality overrides**: Custom weights for specific combinations
+
+Where each control lives:
+- **Shift load modifier**: `/prep-today` and `/prep-tomorrow` (Change/Prep pages)
+- **W modifier**: `/skill-roster` (Skill Matrix page)
+- **Skill×Modality matrix**: `/button-weights` (Weight Matrix page)
 
 ### Admin Pages
 1. **Skill Matrix** (`/skill-roster`) - Edit worker skills across modalities (saves directly)

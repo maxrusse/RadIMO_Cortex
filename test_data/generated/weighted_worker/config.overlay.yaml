@@ -11,14 +11,14 @@ medweb_mapping:
     times:
       default: 08:00-16:00
     skill_overrides:
-      abd-onco_ct: 1
+      aou_ct: 1
   - match: Regular Abd Shift
     type: shift
     label: Regular Abd Shift
     times:
       default: 08:00-16:00
     skill_overrides:
-      abd-onco_ct: 1
+      aou_ct: 1
 balancer:
   hours_counting:
     shift_default: true

@@ -79,6 +79,9 @@
       min-height: 84px;
       position: relative;
       background: var(--btn-bg, var(--primary-color));
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .btn:disabled,
@@ -99,11 +102,11 @@
     }
 
     .modality-main-btn {
-      flex: 0 0 65%;
+      flex: 1 1 auto;
     }
 
     .modality-strict-btn {
-      flex: 0 0 25%;
+      flex: 0 0 72px;
       min-height: 84px;
       font-size: 1.4rem;
       padding: 0.5rem;
@@ -170,7 +173,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.4rem;
     }
 
     .edit-btn {
@@ -190,15 +193,28 @@
 
     .info-item {
       background: var(--info-item-bg);
-      padding: 0.75rem;
-      margin-bottom: 0.5rem;
+      padding: 0.45rem 0.6rem;
+      margin-bottom: 0.25rem;
       border-radius: 4px;
-      font-size: 1rem;
+      font-size: 0.92rem;
       box-shadow: 0 1px 2px var(--info-item-shadow);
     }
 
     .info-item:last-child {
       margin-bottom: 0;
+    }
+
+    .info-item--label {
+      margin-top: 0.15rem;
+      font-weight: 700;
+      background: transparent;
+      box-shadow: none;
+      padding: 0.2rem 0;
+    }
+
+    .info-item--empty {
+      color: #999;
+      font-style: italic;
     }
 
     .modal-overlay {
@@ -262,6 +278,12 @@
       color: #666;
     }
 
+    .footer-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
     .last-assignment {
       font-size: 0.8rem;
       color: #666;
@@ -312,11 +334,15 @@
           onclick="getNextAssignment('{{ mod_key }}')" class="btn assignment-btn modality-main-btn">
           {{ modalities[mod_key].label }}
         </button>
-        <button type="button" class="btn assignment-btn modality-strict-btn"
+        {% if mod_key in regular_strict_button_modalities %}
+        <button type="button"
+          class="btn assignment-btn modality-strict-btn"
           onclick="getNextAssignment('{{ mod_key }}', true)"
-          aria-label="Nur diese Modalität (kein Fallback)" title="Nur diese Modalität">
+          aria-label="Strikte Zuweisung"
+          title="Strikte Zuweisung">
           *
         </button>
+        {% endif %}
       </div>
       {% endfor %}
       {% if special_task_buttons %}
@@ -328,13 +354,16 @@
           onclick="getSpecialAssignment('{{ task.modality }}', '{{ task.slug }}', '{{ task.label }}')">
           {{ task.label }}
         </button>
+        {% if task.show_strict_button %}
         <button type="button"
           class="btn assignment-btn modality-strict-btn"
           style="--btn-bg: {{ task.button_color }}; --btn-text: {{ task.text_color }};"
           onclick="getSpecialAssignment('{{ task.modality }}', '{{ task.slug }}', '{{ task.label }}', true)"
-          aria-label="Nur diese Gruppe (kein Fallback)" title="Nur diese Gruppe">
+          aria-label="Strikte Zuweisung"
+          title="Strikte Zuweisung">
           *
         </button>
+        {% endif %}
       </div>
       {% endfor %}
       {% endif %}
@@ -342,6 +371,9 @@
     <div id="result"></div>
     <div class="clipboard-note">
       <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
+    </div>
+    <div class="clipboard-note">
+      <span>AOU = Abdomen / Uro / Onko, MHD = Muskel-Skelett / Hals / Derma, CVT = Cardio / Vask / Thorax</span>
     </div>
     <div class="info-box">
       <div class="info-header">
@@ -351,12 +383,19 @@
         {% endif %}
       </div>
       <div class="info-texts" id="infoTextsContainer">
-        {% for info in info_texts %}
-        <div class="info-item">{{ info }}</div>
-        {% endfor %}
-        {% if not info_texts %}
-        <div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>
+        {% for mod in visible_modalities %}
+        <div class="info-item info-item--label">
+          {{ modality_labels.get(mod, mod|upper) }}
+        </div>
+        {% set mod_infos = info_texts_by_modality.get(mod, []) %}
+        {% if mod_infos %}
+          {% for info in mod_infos %}
+          <div class="info-item">{{ info }}</div>
+          {% endfor %}
+        {% else %}
+        <div class="info-item info-item--empty">Keine Hinweise vorhanden</div>
         {% endif %}
+        {% endfor %}
       </div>
     </div>
   </section>
@@ -378,7 +417,16 @@
   <!-- Footer -->
   <div class="footer">
     <div id="lastAssignment" class="last-assignment"></div>
-    <div>RadIMO v17 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a></div>
+    <div class="footer-meta">RadIMO v17 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a>
+      {% if show_probe_badges %}
+      <a href="{{ url_for('routes.status_page') }}"
+        class="probe-badge probe-badge--{{ health_badge_status }}"
+        title="Health: {{ health_badge_text }}">H</a>
+      <a href="{{ url_for('routes.status_page') }}"
+        class="probe-badge probe-badge--{{ ready_badge_status }}"
+        title="Ready: {{ ready_badge_text }}">R</a>
+      {% endif %}
+    </div>
   </div>
 
   <script>
@@ -427,10 +475,8 @@
     const currentSkillLabel = currentSkillDef?.label || currentSkill;
     let lastModalityUsed = "";
 
-    {% if is_admin %}
     const infoTextsByModality = JSON.parse('{{ info_texts_by_modality|tojson|safe }}');
-    let currentInfoModality = '{{ default_info_modality }}';
-    {% endif %}
+    const visibleModalities = JSON.parse('{{ visible_modalities|tojson|safe }}');
 
     // Utility: Escape HTML to prevent XSS
     function escapeHtml(text) {
@@ -443,14 +489,13 @@
     // Button visibility is now controlled by config only
     // All modality buttons are always visible
 
-    function getNextAssignment(modality, forcePrimary = false) {
+    function getNextAssignment(modality, forceStrict = false) {
       if (requestInProgress) return;
       lastModalityUsed = modality;
       setButtonsDisabled(true);
       const encodedSkill = encodeURIComponent(currentSkillSlug);
-      const endpoint = forcePrimary
-        ? `/api/${modality}/${encodedSkill}/strict`
-        : `/api/${modality}/${encodedSkill}`;
+      const strictSuffix = forceStrict ? ('/' + 'strict') : '';
+      const endpoint = `/api/${modality}/${encodedSkill}${strictSuffix}`;
       fetch(endpoint)
         .then(response => {
           if (!response.ok) {
@@ -471,14 +516,13 @@
         });
     }
 
-    function getSpecialAssignment(modality, taskSlug, taskLabel, forcePrimary = false) {
+    function getSpecialAssignment(modality, taskSlug, taskLabel, forceStrict = false) {
       if (requestInProgress) return;
       lastModalityUsed = modality;
       setButtonsDisabled(true);
       const encodedTask = encodeURIComponent(taskSlug);
-      const endpoint = forcePrimary
-        ? `/api/${modality}/${encodedTask}/strict`
-        : `/api/${modality}/${encodedTask}`;
+      const strictSuffix = forceStrict ? ('/' + 'strict') : '';
+      const endpoint = `/api/${modality}/${encodedTask}${strictSuffix}`;
       fetch(endpoint)
         .then(response => {
           if (!response.ok) {
@@ -596,21 +640,34 @@
       }
     }
 
-    {% if is_admin %}
-    function renderInfoTexts(modality) {
+    function renderInfoTextsAll() {
       const container = document.getElementById('infoTextsContainer');
-      const texts = infoTextsByModality[modality] || [];
-      if (texts.length > 0) {
-        container.innerHTML = texts.map(text => `<div class="info-item">${escapeHtml(text)}</div>`).join('');
-      } else {
-        container.innerHTML = '<div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>';
+      if (!container) return;
+      if (!visibleModalities || visibleModalities.length === 0) {
+        container.innerHTML = '<div class="info-item info-item--empty">Keine Hinweise vorhanden</div>';
+        return;
       }
+      container.innerHTML = visibleModalities.map(mod => {
+        const label = escapeHtml((modalities[mod] && modalities[mod].label) ? modalities[mod].label : mod.toUpperCase());
+        const texts = infoTextsByModality[mod] || [];
+        const body = texts.length > 0
+          ? texts.map(text => `<div class="info-item">${escapeHtml(text)}</div>`).join('')
+          : '<div class="info-item info-item--empty">Keine Hinweise vorhanden</div>';
+        return `
+          <div class="info-item info-item--label">${label}</div>
+          ${body}
+        `;
+      }).join('');
     }
+
+    {% if is_admin %}
 
     function setupAdminFunctions() {
       const modal = document.getElementById('editModal');
       const editorRows = document.getElementById('infoEditorRows');
-      const editableModalities = Object.keys(infoTextsByModality || {});
+      const editableModalities = (visibleModalities && visibleModalities.length)
+        ? visibleModalities
+        : Object.keys(infoTextsByModality || {});
 
       function buildEditorRows() {
         editorRows.innerHTML = editableModalities.map(mod => {
@@ -647,7 +704,7 @@
             if (!data.success) throw new Error(data.error || 'Save failed');
             infoTextsByModality[mod] = data.info_texts || [];
           }
-          renderInfoTexts(currentInfoModality);
+          renderInfoTextsAll();
           closeEditModal();
         } catch (error) {
           alert('Fehler beim Speichern: ' + error.message);
@@ -660,10 +717,10 @@
       modal.addEventListener('click', function (e) {
         if (e.target === modal) closeEditModal();
       });
-
-      renderInfoTexts(currentInfoModality);
     }
     {% endif %}
+
+    renderInfoTextsAll();
   </script>
 
   {% if is_admin %}

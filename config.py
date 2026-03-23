@@ -42,6 +42,14 @@ if not selection_logger.handlers:
     handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
     selection_logger.addHandler(handler)
 
+FLOW_SNAPSHOT_LOGGER = logging.getLogger('flow_snapshot')
+FLOW_SNAPSHOT_LOGGER.setLevel(logging.INFO)
+FLOW_SNAPSHOT_LOGGER.propagate = False
+if not FLOW_SNAPSHOT_LOGGER.handlers:
+    flow_handler = RotatingFileHandler('logs/flow_balance.log', maxBytes=10_000_000, backupCount=3)
+    flow_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+    FLOW_SNAPSHOT_LOGGER.addHandler(flow_handler)
+
 # -----------------------------------------------------------
 # Default Constants
 # -----------------------------------------------------------
@@ -55,6 +63,7 @@ DEFAULT_TIMEZONE = 'Europe/Berlin'  # Default timezone for all date/time operati
 DEFAULT_BALANCER = {
     'enabled': True,
     'min_assignments_per_skill': 3,
+    'warm_start_release_mode': 'either',  # 'either' or 'both'
     'imbalance_threshold_pct': 30,
     'disable_overflow_at_shift_start_minutes': 0,  # 0 = disabled
     'disable_overflow_at_shift_end_minutes': 0,  # 0 = disabled
@@ -170,6 +179,11 @@ def _build_app_config() -> Dict[str, Any]:
     # Include worker_roster
     config['worker_roster'] = raw_config.get('worker_roster', {})
 
+    # Assignment-routing controls
+    config['no_overflow'] = raw_config.get('no_overflow', [])
+    config['specialist_fallback_routes'] = raw_config.get('specialist_fallback_routes', {})
+    config['strict_button_visibility'] = raw_config.get('strict_button_visibility', {})
+
     # Include UI colors (needed for prep page)
     config['ui_colors'] = raw_config.get('ui_colors', {})
     config['skill_value_colors'] = raw_config.get('skill_value_colors', {})
@@ -209,6 +223,7 @@ def _build_app_config() -> Dict[str, Any]:
         load_monitor_config = default_load_monitor
     config['worker_load_monitor'] = load_monitor_config
     config['special_tasks'] = raw_config.get('special_tasks', [])
+    config['synthetic_shifts'] = raw_config.get('synthetic_shifts', [])
 
     return config
 
@@ -256,6 +271,8 @@ modality_labels = {
 }
 # Load no_overflow combinations (strict mode - no overflow to generalists)
 _raw_no_overflow = APP_CONFIG.get('no_overflow', [])
+_raw_specialist_fallback_routes = APP_CONFIG.get('specialist_fallback_routes', {})
+_raw_strict_button_visibility = APP_CONFIG.get('strict_button_visibility', {})
 
 # Build skill metadata
 SKILL_COLUMNS, SKILL_SLUG_MAP, SKILL_TEMPLATES = _build_skill_metadata(SKILL_SETTINGS)
@@ -269,6 +286,54 @@ SKILL_LABEL_MAP = {
 # - skill_columns_map: name.lower() -> canonical name (for case-insensitive name lookups)
 ROLE_MAP = {slug.lower(): name for name, slug in SKILL_SLUG_MAP.items()}
 skill_columns_map = {s.lower(): s for s in SKILL_COLUMNS}
+
+
+def _build_runtime_config_state(config: Dict[str, Any]) -> Dict[str, Any]:
+    modality_settings = config['modalities']
+    skill_settings = config['skills']
+    allowed_modalities_list = list(modality_settings.keys())
+    skill_columns, skill_slug_map, skill_templates = _build_skill_metadata(skill_settings)
+    skill_label_map = {
+        data.get('label', name).lower(): name
+        for name, data in skill_settings.items()
+    }
+    special_tasks = _normalize_special_tasks(config.get('special_tasks', []))
+    special_tasks_map = {task['slug']: task for task in special_tasks}
+    strict_button_visibility = _normalize_strict_button_visibility(
+        config.get('strict_button_visibility', {}),
+        special_tasks_map=special_tasks_map,
+        modalities_map={m.lower(): m for m in allowed_modalities_list},
+    )
+    balancer_settings = config.get('balancer', DEFAULT_BALANCER)
+
+    return {
+        'modality_settings': modality_settings,
+        'skill_settings': skill_settings,
+        'allowed_modalities': allowed_modalities_list,
+        'allowed_modalities_map': {m.lower(): m for m in allowed_modalities_list},
+        'default_modality': allowed_modalities_list[0] if allowed_modalities_list else 'ct',
+        'modality_labels': {
+            mod: settings.get('label', mod.upper())
+            for mod, settings in modality_settings.items()
+        },
+        'skill_columns': skill_columns,
+        'skill_slug_map': skill_slug_map,
+        'skill_templates': skill_templates,
+        'skill_label_map': skill_label_map,
+        'role_map': {slug.lower(): name for name, slug in skill_slug_map.items()},
+        'skill_columns_map': {s.lower(): s for s in skill_columns},
+        'special_tasks': special_tasks,
+        'special_tasks_map': special_tasks_map,
+        'no_overflow': _normalize_no_overflow(config.get('no_overflow', [])),
+        'specialist_fallback_routes': _normalize_specialist_fallback_routes(
+            config.get('specialist_fallback_routes', {})
+        ),
+        'strict_button_visibility': strict_button_visibility,
+        'balancer_settings': balancer_settings,
+        'exclude_skills': _normalize_exclude_skills(
+            balancer_settings.get('exclude_skills', {})
+        ),
+    }
 
 def _resolve_skill(key_lower: str) -> Optional[str]:
     """Resolve a lowercase skill key to its canonical name via slug or direct match."""
@@ -352,6 +417,13 @@ def _normalize_special_tasks(raw_tasks: Any) -> List[Dict[str, Any]]:
             )
             work_amount = 1.0
         allow_overflow = bool(entry.get('allow_overflow', True))
+        skill_config = SKILL_SETTINGS.get(base_skill, {})
+        button_color = str(
+            entry.get('button_color') or skill_config.get('button_color', '#004892')
+        ).strip()
+        text_color = str(
+            entry.get('text_color') or skill_config.get('text_color', '#ffffff')
+        ).strip()
 
         raw_modalities = entry.get('modalities_dashboards', [])
         if isinstance(raw_modalities, str):
@@ -406,7 +478,6 @@ def _normalize_special_tasks(raw_tasks: Any) -> List[Dict[str, Any]]:
                 "Special task '%s' target_skill_modalities must be a list", name
             )
 
-        skill_config = SKILL_SETTINGS.get(base_skill, {})
         normalized.append({
             'name': name,
             'slug': slug,
@@ -418,8 +489,8 @@ def _normalize_special_tasks(raw_tasks: Any) -> List[Dict[str, Any]]:
             'work_amount': work_amount,
             'allow_overflow': allow_overflow,
             'display_order': display_order,
-            'button_color': skill_config.get('button_color', '#004892'),
-            'text_color': skill_config.get('text_color', '#ffffff'),
+            'button_color': button_color,
+            'text_color': text_color,
         })
         seen_slugs.add(slug)
 
@@ -431,7 +502,12 @@ SPECIAL_TASKS_MAP = {task['slug']: task for task in SPECIAL_TASKS}
 APP_CONFIG['special_tasks'] = SPECIAL_TASKS
 
 
-def _resolve_special_task_modality_pair(key: str) -> Optional[Tuple[str, str]]:
+def _resolve_special_task_modality_pair(
+    key: str,
+    *,
+    special_tasks_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    modalities_map: Optional[Dict[str, str]] = None,
+) -> Optional[Tuple[str, str]]:
     """
     Resolve a special_task_modality key to canonical (task_slug, modality) tuple.
 
@@ -446,10 +522,59 @@ def _resolve_special_task_modality_pair(key: str) -> Optional[Tuple[str, str]]:
         return None
 
     task_slug = parts[0]
-    modality = allowed_modalities_map.get(parts[1])
-    if task_slug in SPECIAL_TASKS_MAP and modality:
+    effective_modalities_map = modalities_map or allowed_modalities_map
+    effective_special_tasks_map = special_tasks_map or SPECIAL_TASKS_MAP
+    modality = effective_modalities_map.get(parts[1])
+    if task_slug in effective_special_tasks_map and modality:
         return (task_slug, modality)
     return None
+
+
+def _normalize_strict_button_visibility(
+    raw_map: Any,
+    *,
+    special_tasks_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    modalities_map: Optional[Dict[str, str]] = None,
+) -> Dict[str, set[str]]:
+    """
+    Normalize visible strict-button config for regular skills and special tasks.
+
+    Expected input:
+      strict_button_visibility:
+        cvt_ct: true
+        ct-herz_ct: true
+    """
+    normalized: Dict[str, set[str]] = {
+        'regular': set(),
+        'special': set(),
+    }
+    if not isinstance(raw_map, dict):
+        return normalized
+
+    for key, value in raw_map.items():
+        if not value or not isinstance(key, str):
+            continue
+
+        regular_pair = _resolve_skill_modality_pair(key)
+        if regular_pair:
+            normalized['regular'].add(f"{regular_pair[0]}_{regular_pair[1]}")
+            continue
+
+        special_pair = _resolve_special_task_modality_pair(
+            key,
+            special_tasks_map=special_tasks_map,
+            modalities_map=modalities_map,
+        )
+        if special_pair:
+            normalized['special'].add(f"{special_pair[0]}_{special_pair[1]}")
+            continue
+
+        selection_logger.warning(
+            "Unknown strict_button_visibility key '%s' - skipping",
+            key,
+        )
+
+    return normalized
 
 
 def _normalize_exclude_skills(raw_exclude_skills: Dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -515,8 +640,8 @@ def _normalize_no_overflow(raw_list: list) -> set:
     Normalize no_overflow list to canonical Skill_Modality format.
 
     Supports:
-    - Skill_Modality: card-thor_ct → card-thor_ct
-    - Modality_Skill: ct_card-thor → card-thor_ct
+    - Skill_Modality: cvt_ct → cvt_ct
+    - Modality_Skill: ct_cvt → cvt_ct
 
     Returns: set of canonical 'Skill_modality' strings
     """
@@ -538,8 +663,8 @@ def _normalize_button_weights(raw_map: Dict[str, Any]) -> Dict[str, Any]:
     Normalize per-button weights to canonical Skill_Modality keys.
 
     Supports:
-    - Skill_Modality: card-thor_ct → card-thor_ct
-    - Modality_Skill: ct_card-thor → card-thor_ct
+    - Skill_Modality: cvt_ct → cvt_ct
+    - Modality_Skill: ct_cvt → cvt_ct
 
     Returns: dict with "normal" and "strict" maps of canonical keys to weights
     """
@@ -585,6 +710,228 @@ def _normalize_button_weights(raw_map: Dict[str, Any]) -> Dict[str, Any]:
 
 # Normalize no_overflow list
 NO_OVERFLOW = _normalize_no_overflow(_raw_no_overflow)
+
+
+def _normalize_specialist_fallback_routes(raw_routes: Any) -> Dict[str, List[str]]:
+    """
+    Normalize specialist fallback routes to canonical skill names.
+
+    Format:
+      specialist_fallback_routes:
+        aou: [mhd]
+        mhd: [aou]
+
+    Returns:
+      Dict[primary_skill, List[fallback_skill]]
+    """
+    normalized: Dict[str, List[str]] = {}
+    if not isinstance(raw_routes, dict):
+        return normalized
+
+    for primary_key, targets_raw in raw_routes.items():
+        if not isinstance(primary_key, str):
+            continue
+        primary_skill = _resolve_skill(primary_key.strip().lower())
+        if not primary_skill:
+            selection_logger.warning(
+                "Unknown specialist_fallback_routes key '%s' - skipping", primary_key
+            )
+            continue
+
+        if isinstance(targets_raw, str):
+            targets_raw = [targets_raw]
+        if not isinstance(targets_raw, list):
+            selection_logger.warning(
+                "specialist_fallback_routes['%s'] must be a list", primary_key
+            )
+            continue
+
+        targets: List[str] = []
+        for target in targets_raw:
+            if not isinstance(target, str):
+                continue
+            resolved = _resolve_skill(target.strip().lower())
+            if not resolved:
+                selection_logger.warning(
+                    "Unknown fallback skill '%s' in specialist_fallback_routes['%s']",
+                    target,
+                    primary_key,
+                )
+                continue
+            if resolved == primary_skill:
+                continue
+            if resolved not in targets:
+                targets.append(resolved)
+
+        if targets:
+            normalized[primary_skill] = targets
+
+    return normalized
+
+
+SPECIALIST_FALLBACK_ROUTES = _normalize_specialist_fallback_routes(
+    _raw_specialist_fallback_routes
+)
+STRICT_BUTTON_VISIBILITY = _normalize_strict_button_visibility(_raw_strict_button_visibility)
+APP_CONFIG['strict_button_visibility'] = {
+    'regular': sorted(STRICT_BUTTON_VISIBILITY['regular']),
+    'special': sorted(STRICT_BUTTON_VISIBILITY['special']),
+}
+
+
+def reload_runtime_config() -> Dict[str, Any]:
+    """
+    Reload config.yaml into the current process for safe config-only changes.
+
+    This hot reload is intentionally conservative: it rejects structural edits
+    that would require rebuilding state containers or imported scalar defaults.
+    In those cases the existing in-memory config remains active.
+    """
+    global SKILL_ROSTER_AUTO_IMPORT
+    global TIMEZONE
+    global default_modality
+    global BUTTON_WEIGHTS
+
+    try:
+        new_config = _build_app_config()
+        new_state = _build_runtime_config_state(new_config)
+    except Exception as exc:
+        selection_logger.warning("Runtime config reload skipped due to parse error: %s", exc)
+        return {
+            'applied': False,
+            'message': f'Config reload skipped: {exc}',
+            'reason': 'invalid_config',
+        }
+
+    current_modalities = list(allowed_modalities)
+    new_modalities = list(new_state['allowed_modalities'])
+    if current_modalities != new_modalities:
+        return {
+            'applied': False,
+            'message': (
+                'Modalities changed and require restart '
+                f'({current_modalities} -> {new_modalities})'
+            ),
+            'reason': 'modalities_changed',
+        }
+
+    current_skills = set(SKILL_COLUMNS)
+    new_skills = set(new_state['skill_columns'])
+    if current_skills != new_skills:
+        return {
+            'applied': False,
+            'message': (
+                'Skill set changed and requires restart '
+                f'({sorted(current_skills)} -> {sorted(new_skills)})'
+            ),
+            'reason': 'skills_changed',
+        }
+
+    APP_CONFIG.clear()
+    APP_CONFIG.update(new_config)
+
+    MODALITY_SETTINGS.clear()
+    MODALITY_SETTINGS.update(new_state['modality_settings'])
+
+    SKILL_SETTINGS.clear()
+    SKILL_SETTINGS.update(new_state['skill_settings'])
+
+    SKILL_ROSTER_AUTO_IMPORT = bool(APP_CONFIG.get('skill_roster_auto_import', True))
+    TIMEZONE = APP_CONFIG.get('timezone', DEFAULT_TIMEZONE)
+    default_modality = new_state['default_modality']
+
+    allowed_modalities[:] = new_state['allowed_modalities']
+    allowed_modalities_map.clear()
+    allowed_modalities_map.update(new_state['allowed_modalities_map'])
+
+    modality_labels.clear()
+    modality_labels.update(new_state['modality_labels'])
+
+    SKILL_COLUMNS[:] = new_state['skill_columns']
+
+    SKILL_SLUG_MAP.clear()
+    SKILL_SLUG_MAP.update(new_state['skill_slug_map'])
+
+    SKILL_TEMPLATES[:] = new_state['skill_templates']
+
+    SKILL_LABEL_MAP.clear()
+    SKILL_LABEL_MAP.update(new_state['skill_label_map'])
+
+    ROLE_MAP.clear()
+    ROLE_MAP.update(new_state['role_map'])
+
+    skill_columns_map.clear()
+    skill_columns_map.update(new_state['skill_columns_map'])
+
+    SPECIAL_TASKS[:] = new_state['special_tasks']
+    SPECIAL_TASKS_MAP.clear()
+    SPECIAL_TASKS_MAP.update(new_state['special_tasks_map'])
+    APP_CONFIG['special_tasks'] = SPECIAL_TASKS
+
+    NO_OVERFLOW.clear()
+    NO_OVERFLOW.update(new_state['no_overflow'])
+
+    SPECIALIST_FALLBACK_ROUTES.clear()
+    SPECIALIST_FALLBACK_ROUTES.update(new_state['specialist_fallback_routes'])
+
+    STRICT_BUTTON_VISIBILITY['regular'].clear()
+    STRICT_BUTTON_VISIBILITY['regular'].update(
+        new_state['strict_button_visibility']['regular']
+    )
+    STRICT_BUTTON_VISIBILITY['special'].clear()
+    STRICT_BUTTON_VISIBILITY['special'].update(
+        new_state['strict_button_visibility']['special']
+    )
+    APP_CONFIG['strict_button_visibility'] = {
+        'regular': sorted(STRICT_BUTTON_VISIBILITY['regular']),
+        'special': sorted(STRICT_BUTTON_VISIBILITY['special']),
+    }
+
+    BALANCER_SETTINGS.clear()
+    BALANCER_SETTINGS.update(new_state['balancer_settings'])
+
+    EXCLUDE_SKILLS.clear()
+    EXCLUDE_SKILLS.update(new_state['exclude_skills'])
+
+    BUTTON_WEIGHTS = load_button_weights()
+    selection_logger.info("Runtime config reload applied successfully")
+    return {
+        'applied': True,
+        'message': 'Config reload applied',
+        'reason': 'applied',
+    }
+
+
+def get_specialist_fallback_targets(skill: str, modality: str) -> List[Tuple[str, str]]:
+    """
+    Build fallback specialist routing targets for a primary skill in one modality.
+
+    Returns:
+      [(fallback_skill_1, modality), (fallback_skill_2, modality), ...]
+      or [] if no fallback route exists.
+    """
+    canonical_skill = normalize_skill(skill)
+    fallback_skills = SPECIALIST_FALLBACK_ROUTES.get(canonical_skill, [])
+    if not fallback_skills:
+        return []
+
+    canonical_modality = normalize_modality(modality)
+    targets: List[Tuple[str, str]] = []
+    for fb in fallback_skills:
+        candidate = (fb, canonical_modality)
+        if candidate not in targets:
+            targets.append(candidate)
+    return targets
+
+
+def is_strict_button_visible(skill: str, modality: str) -> bool:
+    key = f"{normalize_skill(skill)}_{normalize_modality(modality)}"
+    return key in STRICT_BUTTON_VISIBILITY['regular']
+
+
+def is_special_task_strict_button_visible(task_slug: str, modality: str) -> bool:
+    key = f"{str(task_slug or '').strip().lower()}_{normalize_modality(modality)}"
+    return key in STRICT_BUTTON_VISIBILITY['special']
 
 def _migrate_button_weights() -> None:
     """Migrate button_weights.json from uploads/ to data/ if needed."""
@@ -696,9 +1043,10 @@ def is_no_overflow(skill: str, modality: str) -> bool:
     """
     Check if a skill×modality combination has overflow disabled.
 
-    When True, the normal button acts like the [*] strict button -
+    When True, the normal button uses strict routing -
     only specialists will be assigned, never generalists.
+    Weight selection remains in normal mode unless the explicit /strict
+    endpoint is used.
     """
     key = f"{skill}_{modality}"
     return key in NO_OVERFLOW
-
