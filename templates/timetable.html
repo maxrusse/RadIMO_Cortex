@@ -378,6 +378,7 @@
 
   <!-- Shared timeline module -->
   <script src="{{ url_for('static', filename='js/timeline.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/timeline_feed.js') }}"></script>
   <!-- Timetable page JS -->
   <script src="{{ url_for('static', filename='js/timetable.js') }}"></script>
   <!-- Page configuration with Jinja data -->
@@ -389,9 +390,12 @@
       skillSlugMap: {{ skill_slug_map|tojson|safe }},
       skillColorMap: {{ skill_color_map|tojson|safe }},
       modColorMap: {{ modality_color_map|tojson|safe }},
+      taskRoles: {{ task_roles|tojson|safe }},
+      workerSkills: {{ worker_skills|tojson|safe }},
+      targetWeekday: {{ target_weekday_name|tojson|safe }},
       currentModality: '{{ modality }}',
       skillFilter: '{{ skill_filter }}',
-      data: {{ debug_data|safe }}
+      dataByModality: {{ debug_data|safe }}
     });
   </script>
 {% endblock %}

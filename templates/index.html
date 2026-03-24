@@ -141,6 +141,11 @@
       margin-bottom: 0.25rem;
     }
 
+    .previous-assignment-strong {
+      font-weight: 700;
+      color: #2b2b2b;
+    }
+
     .timer {
       color: #666;
       font-size: 1rem;
@@ -359,55 +364,50 @@
   <!-- Main Assignment Panel -->
   <section class="card">
     <div id="buttonGrid" class="button-grid">
-      {% for skill in skill_definitions %}
-      {% set is_visible = skill.name in visible_skills %}
-      <div class="skill-button-wrapper" data-skill-slug="{{ skill.slug }}" data-skill-name="{{ skill.name }}" {% if not
-        is_visible %}style="display: none" {% endif %}>
-        <button id="skill-btn-{{ skill.slug }}" data-skill-name="{{ skill.name }}"
-          onclick="getNextAssignment('{{ skill.slug }}', '{{ skill.label }}')"
-          class="btn assignment-btn skill-main-btn {% if skill.special %}special-btn{% endif %}">
-          {{ skill.label }}
-        </button>
-        {% if skill.name in regular_strict_button_skills %}
-        <button type="button"
-          class="btn assignment-btn skill-strict-btn"
-          onclick="getNextAssignment('{{ skill.slug }}', '{{ skill.label }}', true)"
-          aria-label="Strikte Zuweisung"
-          title="Strikte Zuweisung">
-          *
-        </button>
-        {% endif %}
-      </div>
-      {% endfor %}
-      {% if special_tasks %}
-        {% for task in special_tasks %}
-        <div class="skill-button-wrapper"
-          data-special-slug="{{ task.slug }}"
-          style="--btn-bg: {{ task.button_color }}; --btn-text: {{ task.text_color }};">
-          <button id="special-btn-{{ task.slug }}" data-special-slug="{{ task.slug }}"
-            onclick="getNextAssignment('{{ task.slug }}', '{{ task.label }}')"
-            class="btn assignment-btn skill-main-btn special-btn">
-            {{ task.label }}
+      {% for item in dashboard_buttons %}
+        {% if item.button_type == 'skill' %}
+        <div class="skill-button-wrapper" data-skill-slug="{{ item.slug }}" data-skill-name="{{ item.name }}">
+          <button id="skill-btn-{{ item.slug }}" data-skill-name="{{ item.name }}"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}')"
+            class="btn assignment-btn skill-main-btn {% if item.special %}special-btn{% endif %}">
+            {{ item.label }}
           </button>
-          {% if task.show_strict_button %}
+          {% if item.show_strict_button %}
           <button type="button"
             class="btn assignment-btn skill-strict-btn"
-            onclick="getNextAssignment('{{ task.slug }}', '{{ task.label }}', true)"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true)"
             aria-label="Strikte Zuweisung"
             title="Strikte Zuweisung">
             *
           </button>
           {% endif %}
         </div>
-        {% endfor %}
-      {% endif %}
+        {% else %}
+        <div class="skill-button-wrapper"
+          data-special-slug="{{ item.slug }}"
+          style="--btn-bg: {{ item.button_color }}; --btn-text: {{ item.text_color }};">
+          <button id="special-btn-{{ item.slug }}" data-special-slug="{{ item.slug }}"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}')"
+            class="btn assignment-btn skill-main-btn special-btn">
+            {{ item.label }}
+          </button>
+          {% if item.show_strict_button %}
+          <button type="button"
+            class="btn assignment-btn skill-strict-btn"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true)"
+            aria-label="Strikte Zuweisung"
+            title="Strikte Zuweisung">
+            *
+          </button>
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
     </div>
     <div id="result"></div>
     <div class="clipboard-note">
-      <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
-    </div>
-    <div class="clipboard-note">
-      <span>AOU = Abdomen / Uro / Onko, MHD = Muskel-Skelett / Hals / Derma, CVT = Cardio / Vask / Thorax</span>
+      <div>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</div>
+      <div>AOU = Abdomen / Uro / Onko, MHD = Muskel-Skelett / Hals / Derma, CVT = Cardio / Vask / Thorax</div>
     </div>
     <div class="info-box">
       <div class="info-header">
@@ -558,7 +558,7 @@
 
       // Show previous assignment in footer (if exists)
       if (currentAssignment) {
-        lastEl.textContent = `Vorherige Zuweisung: ${currentAssignment.time} · ${currentAssignment.person} · ${currentAssignment.skill}`;
+        lastEl.innerHTML = `Vorherige Zuweisung: ${escapeHtml(currentAssignment.time)} · <span class="previous-assignment-strong">${escapeHtml(currentAssignment.person)}</span> · <span class="previous-assignment-strong">${escapeHtml(currentAssignment.skill)}</span>`;
         lastEl.classList.add('visible');
       }
 

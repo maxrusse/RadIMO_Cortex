@@ -246,6 +246,7 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
             'name': name,
             'label': data.get('label', name),
             'slug': slug,
+            'display_order': coerce_int(data.get('display_order', 0)),
             'button_color': data.get('button_color', '#004892'),
             'text_color': data.get('text_color', '#ffffff'),
             'special': bool(data.get('special', False)),

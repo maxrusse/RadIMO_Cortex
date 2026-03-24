@@ -38,14 +38,19 @@
       gap: 1.5rem;
     }
 
-    .page-actions {
+    .page-toolbar {
       display: flex;
-      justify-content: flex-start;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
       margin-bottom: 1rem;
     }
 
     .back-button {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
       padding: 0.75rem 1.5rem;
       color: #fff;
       text-decoration: none;
@@ -57,6 +62,30 @@
 
     .back-button:hover {
       background: #003f73;
+    }
+
+    .page-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.25rem;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: background 0.3s;
+      background: #6b7280;
+    }
+
+    .toolbar-link:hover {
+      background: #4b5563;
     }
 
     @media (max-width: 1100px) {
@@ -140,43 +169,96 @@
       border: 2px dashed #90a4b8;
     }
 
-    .upload-area small {
-      color: #666;
-      display: block;
-      margin-top: 0.5rem;
+    .upload-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .status-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .upload-form-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
     }
 
     .upload-actions {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 0.75rem;
-      margin-top: 1rem;
-      align-items: center;
+      align-items: stretch;
+    }
+
+    .reset-box {
+      max-width: 420px;
+      background: #fff4f2;
+      border: 1px solid #e7b4ae;
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .reset-box-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #8b3028;
+      margin-bottom: 0.55rem;
+    }
+
+    .reset-box .btn {
+      min-height: 38px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .reset-box-note {
+      margin-top: 0.6rem;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: #8b3028;
     }
 
     .upload-actions .btn {
-      flex: 0 0 auto;
+      width: 100%;
+      justify-content: center;
     }
 
     .upload-note {
       font-size: 0.85rem;
-      color: #666;
-      margin-top: 0.75rem;
+      color: #5f6b7a;
+      line-height: 1.45;
     }
 
     .external-action-link {
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
+      justify-content: center;
+      gap: 0.5rem;
       color: #004892;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       text-decoration: none;
-      margin-top: 0.75rem;
+      border: 1px solid #b8c8d8;
+      border-radius: 4px;
+      background: #ffffff;
+      min-height: 48px;
+      padding: 0.75rem 1rem;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
     }
 
     .external-action-link:hover {
-      text-decoration: underline;
+      background: #eef4fb;
+      border-color: #7aa3c8;
+      color: #003670;
+      text-decoration: none;
     }
 
     .admin-footer {
@@ -241,6 +323,15 @@
 
     .btn-success:hover {
       background: #218838;
+    }
+
+    .btn-danger {
+      background: #c0392b;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #a93226;
     }
 
     .btn-warning {
@@ -313,8 +404,9 @@
     .master-status {
       padding: 0.75rem;
       border-radius: 4px;
-      margin-bottom: 1rem;
       font-size: 0.9rem;
+      margin: 0;
+      flex: 1 1 320px;
     }
 
     .master-status.loaded {
@@ -325,6 +417,20 @@
     .master-status.empty {
       background: #fff3cd;
       color: #856404;
+    }
+
+    .upload-info-note {
+      padding: 0.75rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid #d7e1ec;
+      background: #f7fafc;
+      color: #415364;
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .upload-info-note strong {
+      color: #203040;
     }
 
     .stats-table {
@@ -361,10 +467,6 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <div class="page-actions">
-    <a href="{{ url_for('routes.index', modality=modality) }}" class="back-button">Zurück</a>
-  </div>
-
   <div id="message-container"></div>
 
   <div class="page-layout">
@@ -383,23 +485,23 @@
             </div>
             <div class="step">
               <div class="step-num">2</div>
-              <div class="step-title">Reset Today</div>
-              <div class="step-desc">Setzt den heutigen Plan auf Master-Stand zurück und setzt Zähler neu. NUR wenn ein Reset am selben Tag nötig ist.</div>
-            </div>
-            <div class="step">
-              <div class="step-num">3</div>
               <div class="step-title">Prep Tomorrow</div>
               <div class="step-desc">Vorbereitung für morgen (Staging).</div>
             </div>
             <div class="step">
-              <div class="step-num">4</div>
+              <div class="step-num">3</div>
               <div class="step-title">Auto-Live</div>
               <div class="step-desc">Staged → Live erfolgt automatisch um {{ scheduler_config.daily_reset_time }} Uhr.</div>
             </div>
             <div class="step">
-              <div class="step-num">5</div>
+              <div class="step-num">4</div>
               <div class="step-title">Change Today</div>
               <div class="step-desc">In-Day Anpassungen ohne Reset der Zähler durchführen.</div>
+            </div>
+            <div class="step">
+              <div class="step-num">!</div>
+              <div class="step-title">Hard Reload Today</div>
+              <div class="step-desc">Auf dieser Seite verwenden: lädt den heutigen Stand neu aus dem Master und setzt die Zähler zurück.</div>
             </div>
           </div>
         </div>
@@ -411,37 +513,51 @@
       <div class="card">
         <div class="section-header">
           <h2>Master CSV Upload</h2>
-        </div>
-
-        <div id="master-status" class="master-status empty">
-          Keine Master-CSV geladen
+          <div class="section-subtitle">Export öffnen und die aktuelle Master-Datei hochladen.</div>
         </div>
 
         <div class="upload-area">
-          <form id="master-upload-form" enctype="multipart/form-data">
-            <div class="form-group">
-              <label>Medweb CSV:</label>
-              <input type="file" id="master-csv-file" name="file" accept=".csv" required>
+          <div class="upload-panel">
+            <div class="status-strip">
+              <div id="master-status" class="master-status empty">
+                Keine Master-CSV geladen
+              </div>
             </div>
-            <div class="upload-actions">
-              <a
-                class="external-action-link"
-                href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
-                target="_blank"
-                rel="noopener noreferrer">
-                MedSpace CSV Export
-              </a>
-              <button type="submit" class="btn btn-primary" id="master-upload-btn">
-                Upload Master CSV
-              </button>
-              <button class="btn btn-success" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
-                HARD RELOAD TODAY
-              </button>
-            </div>
-            <div class="upload-note">
-              HARD RELOAD TODAY setzt den heutigen Plan auf den Master-Stand zurück und setzt die Zähler neu. NUR wenn ein Reset am selben Tag nötig ist.
-            </div>
-          </form>
+            <form id="master-upload-form" enctype="multipart/form-data">
+              <div class="upload-form-stack">
+                <div class="form-group">
+                  <label>Medweb CSV</label>
+                  <input type="file" id="master-csv-file" name="file" accept=".csv" required>
+                </div>
+                <div class="upload-actions">
+                  <a
+                    class="external-action-link"
+                    href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    MedSpace CSV Export
+                  </a>
+                  <button type="submit" class="btn btn-primary" id="master-upload-btn">
+                    Upload Master CSV
+                  </button>
+                </div>
+                <div class="upload-info-note">
+                  <strong>Hinweis:</strong> Upload Master CSV ersetzt nur die gespeicherte Master-Datei.
+                  Eine bereits vorbereitete <strong>Prep Tomorrow</strong>-Planung bleibt bestehen, bis du
+                  <strong>Prep Tomorrow</strong> für das gewünschte Datum erneut lädst.
+                </div>
+                <div class="reset-box">
+                  <div class="reset-box-title">HARD RELOAD TODAY</div>
+                  <button class="btn btn-danger" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
+                    HARD RELOAD TODAY
+                  </button>
+                  <div class="reset-box-note">
+                    Setzt den heutigen Plan auf den aktuellen Master-Stand zurück und startet die Zähler neu. Nur für echte Tages-Resets verwenden.
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -505,7 +621,6 @@
       btn.textContent = 'Upload Master CSV';
     });
 
-    // Load Today from Master
     async function loadTodayFromMaster() {
       const btn = document.getElementById('load-today-btn');
       const msgContainer = document.getElementById('message-container');
@@ -527,24 +642,8 @@
               <strong>Workers:</strong> ${result.total_workers}
             </div>
           `;
-          setTimeout(() => location.reload(), 2000);
         } else {
-          let errorHtml = `<div class="message error">${result.error}`;
-          if (result.debug) {
-            errorHtml += `<br><br><strong>Debug Info:</strong><br>`;
-            errorHtml += `Target: ${result.debug.target_date}<br>`;
-            errorHtml += `Dates in CSV: ${result.debug.dates_in_csv?.join(', ') || 'none'}<br>`;
-            errorHtml += `Activities: ${result.debug.activities_in_csv?.join(', ') || 'none'}<br>`;
-            if (result.debug.mapping_rules) {
-              errorHtml += `Mapping rules: ${result.debug.mapping_rules?.join(', ') || 'none'}<br>`;
-            }
-            if (result.debug.matched_activities) {
-              errorHtml += `Matched: ${result.debug.matched_activities?.join(', ') || 'none'}<br>`;
-            }
-            errorHtml += `<em>${result.debug.hint || ''}</em>`;
-          }
-          errorHtml += `</div>`;
-          msgContainer.innerHTML = errorHtml;
+          msgContainer.innerHTML = `<div class="message error">${result.error || 'Load failed'}</div>`;
         }
       } catch (error) {
         msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;

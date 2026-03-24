@@ -8,6 +8,8 @@ const SKILL_SETTINGS = CONFIG.skill_settings;
 const MODALITY_SETTINGS = CONFIG.modality_settings;
 const LOAD_MONITOR_CONFIG = CONFIG.load_monitor_config;
 const UI_COLORS = CONFIG.ui_colors;
+const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
+const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
 
 // State
 let currentMode = CONFIG.initial_mode || LOAD_MONITOR_CONFIG.default_view || 'simple';
@@ -17,6 +19,8 @@ let maxWeight = 0;
 let autoRefreshInterval = null;
 let flowDataLoaded = false;
 let flowData = null;
+let modalityWeightData = {};
+let skillWeightData = {};
 let filters = { modality: '', skill: '', hideZero: false };
 let sortState = {
   global: { column: 'weight', direction: 'desc' },
@@ -77,6 +81,33 @@ function getLoadColorClass(weight) {
   if (weight < lowThreshold) return 'load-green';
   if (weight < highThreshold) return 'load-yellow';
   return 'load-red';
+}
+
+function buildWorkerSortKey(name) {
+  const raw = (name == null ? '' : String(name)).trim();
+  if (!raw) return '';
+
+  const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return raw.toLowerCase();
+
+  const tokens = cleaned
+    .split(' ')
+    .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
+    .filter(Boolean)
+    .filter(token => {
+      const normalized = token.toLowerCase();
+      return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
+    });
+
+  if (tokens.length === 0) {
+    const fallback = cleaned.toLowerCase();
+    return `${fallback}|${fallback}`;
+  }
+
+  const last = tokens[tokens.length - 1].toLowerCase();
+  const first = tokens.slice(0, -1).join(' ').toLowerCase();
+  const full = tokens.join(' ').toLowerCase();
+  return `${last}|${first}|${full}`;
 }
 
 // Mode switching
@@ -146,7 +177,7 @@ function sortTable(tableType, column) {
 }
 
 function getSortValue(worker, column, tableType) {
-  if (column === 'name') return worker.name.toLowerCase();
+  if (column === 'name') return buildWorkerSortKey(worker.name);
   if (column === 'weight') return worker.global_weight || 0;
   if (column === 'total') {
     if (tableType === 'modality') {
@@ -259,121 +290,134 @@ function renderGlobalTable() {
 
 // Render Per-Modality table (Simple mode)
 function renderModalityTable() {
-  const tbody = document.getElementById('tbody-modality');
-  if (!tbody) return;
+  const container = document.getElementById('summary-modality');
+  if (!container) return;
 
   const filteredWorkers = filterWorkers(workersData);
-  const sorted = sortWorkers(filteredWorkers, 'modality');
+  const visibleWorkerIds = new Set(filteredWorkers.map(function(worker) {
+    return worker.canonical_id;
+  }));
+  const grandWeight = MODALITIES.reduce(function(total, mod) {
+    const weighted = modalityWeightData[mod] || {};
+    return total + Object.entries(weighted).reduce(function(modTotal, [canonicalId, value]) {
+      return modTotal + (visibleWorkerIds.has(canonicalId) ? Number(value || 0) : 0);
+    }, 0);
+  }, 0);
 
-  if (sorted.length === 0) {
-    const colCount = MODALITIES.length + 2;
-    tbody.innerHTML = `<tr><td colspan="${colCount}" class="no-data">No workers match filters</td></tr>`;
+  const cards = MODALITIES.map(function(mod) {
+    const settings = MODALITY_SETTINGS[mod] || {};
+    const label = settings.label || mod.toUpperCase();
+    const color = settings.nav_color || '#6c757d';
+    const assignments = filteredWorkers.reduce(function(sum, worker) {
+      return sum + (worker.modalities[mod]?.assignment_total || 0);
+    }, 0);
+    const weight = filteredWorkers.reduce(function(sum, worker) {
+      return sum + Number(worker.modalities[mod]?.weighted_total || 0);
+    }, 0);
+    const activeWorkers = filteredWorkers.reduce(function(sum, worker) {
+      return sum + ((worker.modalities[mod]?.assignment_total || 0) > 0 ? 1 : 0);
+    }, 0);
+    const share = grandWeight > 0 ? Math.round((weight / grandWeight) * 100) : 0;
+
+    return {
+      label,
+      color,
+      assignments,
+      weight,
+      activeWorkers,
+      share
+    };
+  });
+
+  if (!cards.some(function(card) { return card.assignments > 0 || card.weight > 0 || card.activeWorkers > 0; })) {
+    container.innerHTML = '<div class="summary-card-empty">No modality activity for the current filter.</div>';
     return;
   }
 
-  let html = '';
-
-  // Track column totals
-  const modalityTotals = {};
-  MODALITIES.forEach(function(mod) { modalityTotals[mod] = 0; });
-  let grandTotal = 0;
-
-  sorted.forEach(function(worker) {
-    let total = 0;
-    let modCells = '';
-
-    MODALITIES.forEach(function(mod) {
-      const modData = worker.modalities[mod];
-      const count = modData?.assignment_total || 0;
-      total += count;
-      modalityTotals[mod] += count;
-      const color = getLoadColor(count);
-
-      modCells += `<td class="${color.text}" style="text-align: center;">${count > 0 ? count : '-'}</td>`;
-    });
-
-    grandTotal += total;
-    const totalColor = getLoadColor(total);
-
-    html += `<tr>
-      <td class="worker-col">${escapeHtml(worker.name)}</td>
-      ${modCells}
-      <td class="${totalColor.text}" style="text-align: center; font-weight: 600;">${total}</td>
-    </tr>`;
-  });
-
-  // Add totals row
-  let totalModCells = '';
-  MODALITIES.forEach(function(mod) {
-    const count = modalityTotals[mod];
-    totalModCells += `<td style="text-align: center; font-weight: 700;">${count > 0 ? count : '-'}</td>`;
-  });
-  html += `<tr class="totals-row">
-    <td class="worker-col" style="font-weight: 700;">Total</td>
-    ${totalModCells}
-    <td style="text-align: center; font-weight: 700;">${grandTotal}</td>
-  </tr>`;
-
-  tbody.innerHTML = html;
+  container.innerHTML = cards.map(function(card) {
+    return `<div class="summary-card">
+      <div class="summary-card-header">
+        <span class="summary-card-title">${escapeHtml(card.label)}</span>
+        <span class="summary-card-badge" style="background:${card.color};">${card.share}%</span>
+      </div>
+      <div class="summary-card-main">${card.weight.toFixed(1)}</div>
+      <div class="summary-card-main-label">Weighted</div>
+      <div class="summary-card-sub summary-card-sub-stack">
+        <span>Assignments</span>
+        <span>${card.assignments}</span>
+      </div>
+      <div class="summary-card-sub">
+        <span>${card.activeWorkers} active</span>
+        <span>${card.assignments > 0 ? 'live' : 'idle'}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // Render Per-Skill table (Simple mode)
 function renderSkillTable() {
-  const tbody = document.getElementById('tbody-skill');
-  if (!tbody) return;
+  const container = document.getElementById('summary-skill');
+  if (!container) return;
 
   const filteredWorkers = filterWorkers(workersData);
-  const sorted = sortWorkers(filteredWorkers, 'skill');
+  const visibleWorkerIds = new Set(filteredWorkers.map(function(worker) {
+    return worker.canonical_id;
+  }));
+  const grandWeight = SKILLS.reduce(function(total, skill) {
+    const weighted = skillWeightData[skill] || {};
+    return total + Object.entries(weighted).reduce(function(skillTotal, [canonicalId, value]) {
+      return skillTotal + (visibleWorkerIds.has(canonicalId) ? Number(value || 0) : 0);
+    }, 0);
+  }, 0);
 
-  if (sorted.length === 0) {
-    const colCount = SKILLS.length + 2;
-    tbody.innerHTML = `<tr><td colspan="${colCount}" class="no-data">No workers match filters</td></tr>`;
+  const cards = SKILLS.map(function(skill) {
+    const settings = SKILL_SETTINGS[skill] || {};
+    const label = settings.label || skill;
+    const color = settings.button_color || '#6c757d';
+    const assignments = filteredWorkers.reduce(function(sum, worker) {
+      return sum + (worker.skills[skill] || 0);
+    }, 0);
+    const weight = filteredWorkers.reduce(function(sum, worker) {
+      return sum + Number(worker.skill_weights?.[skill] || 0);
+    }, 0);
+    const activeWorkers = filteredWorkers.reduce(function(sum, worker) {
+      return sum + ((worker.skills[skill] || 0) > 0 ? 1 : 0);
+    }, 0);
+    const share = grandWeight > 0 ? Math.round((weight / grandWeight) * 100) : 0;
+
+    return {
+      label,
+      color,
+      assignments,
+      weight,
+      activeWorkers,
+      share
+    };
+  });
+
+  if (!cards.some(function(card) { return card.assignments > 0 || card.weight > 0 || card.activeWorkers > 0; })) {
+    container.innerHTML = '<div class="summary-card-empty">No skill activity for the current filter.</div>';
     return;
   }
 
-  let html = '';
-
-  // Track column totals
-  const skillTotals = {};
-  SKILLS.forEach(function(skill) { skillTotals[skill] = 0; });
-  let grandTotal = 0;
-
-  sorted.forEach(function(worker) {
-    let total = 0;
-    let skillCells = '';
-
-    SKILLS.forEach(function(skill) {
-      const count = worker.skills[skill] || 0;
-      total += count;
-      skillTotals[skill] += count;
-      const color = getLoadColor(count);
-
-      skillCells += `<td class="${color.text}" style="text-align: center;">${count > 0 ? count : '-'}</td>`;
-    });
-
-    grandTotal += total;
-    const totalColor = getLoadColor(total);
-
-    html += `<tr>
-      <td class="worker-col">${escapeHtml(worker.name)}</td>
-      ${skillCells}
-      <td class="${totalColor.text}" style="text-align: center; font-weight: 600;">${total}</td>
-    </tr>`;
-  });
-
-  // Add totals row
-  let totalSkillCells = '';
-  SKILLS.forEach(function(skill) {
-    const count = skillTotals[skill];
-    totalSkillCells += `<td style="text-align: center; font-weight: 700;">${count > 0 ? count : '-'}</td>`;
-  });
-  html += `<tr class="totals-row">
-    <td class="worker-col" style="font-weight: 700;">Total</td>
-    ${totalSkillCells}
-    <td style="text-align: center; font-weight: 700;">${grandTotal}</td>
-  </tr>`;
-
-  tbody.innerHTML = html;
+  container.innerHTML = cards.map(function(card) {
+    return `<div class="summary-card">
+      <div class="summary-card-header">
+        <span class="summary-card-title">${escapeHtml(card.label)}</span>
+        <span class="summary-card-badge" style="background:${card.color};">${card.share}%</span>
+      </div>
+      <div class="summary-card-main">${card.weight.toFixed(1)}</div>
+      <div class="summary-card-main-label">Weighted</div>
+      <div class="summary-card-sub summary-card-sub-stack">
+        <span>Assignments</span>
+        <span>${card.assignments}</span>
+      </div>
+      <div class="summary-card-sub">
+        <span>${card.activeWorkers} active</span>
+        <span>${card.assignments > 0 ? 'live' : 'idle'}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // Render Advanced table (Full matrix)
@@ -483,8 +527,6 @@ function renderAllTables() {
     renderModalityTable();
     renderSkillTable();
     updateSortIndicators('global');
-    updateSortIndicators('modality');
-    updateSortIndicators('skill');
   } else {
     renderAdvancedTable();
     updateSortIndicators('advanced');
@@ -541,6 +583,8 @@ function loadData() {
     .then(function(data) {
       if (data.success) {
         workersData = data.workers || [];
+        modalityWeightData = data.modality_weights || {};
+        skillWeightData = data.skill_weights || {};
         maxWeight = data.max_weight || 0;
 
         // Update last update time
@@ -569,19 +613,6 @@ function escapeHtml(text) {
 function formatFlowValue(value) {
   const numeric = Number(value || 0);
   return numeric.toFixed(numeric % 1 === 0 ? 0 : 1);
-}
-
-function renderFlowTableRows(rows, directionKey) {
-  if (!rows || rows.length === 0) {
-    return '<tr><td colspan="2" style="color:#889; font-style:italic;">No weighted movement</td></tr>';
-  }
-
-  return rows.map(function(row) {
-    const skillKey = String(row[directionKey] || '');
-    const target = escapeHtml(dataSkillLabel(skillKey));
-    const weight = formatFlowValue(row.weight || 0);
-    return `<tr><td>${target}</td><td class="count">${weight}</td></tr>`;
-  }).join('');
 }
 
 function getSkillColor(skillKey) {
@@ -732,66 +763,6 @@ function renderFlowDiagram(data) {
   `;
 }
 
-function renderFlowRows(data) {
-  const container = document.getElementById('flow-rows');
-  const noDataMsg = document.getElementById('flow-no-data-msg');
-  if (!container || !noDataMsg) return;
-
-  const skills = data.skills || [];
-  if (!skills.length) {
-    container.innerHTML = '';
-    noDataMsg.style.display = 'block';
-    return;
-  }
-
-  const activeSkills = skills.filter(function(skill) {
-    const totals = data.totals?.[skill] || {};
-    return Number(totals.out_total || 0) > 0 || Number(totals.in_total || 0) > 0;
-  });
-  if (!activeSkills.length) {
-    container.innerHTML = '';
-    noDataMsg.style.display = 'block';
-    return;
-  }
-
-  noDataMsg.style.display = 'none';
-  container.innerHTML = activeSkills.map(function(skill) {
-    const outRows = (data.out_by_skill && data.out_by_skill[skill]) || [];
-    const inRows = (data.in_by_skill && data.in_by_skill[skill]) || [];
-    const totals = (data.totals && data.totals[skill]) || { out_total: 0, in_total: 0 };
-    const label = (data.skill_labels && data.skill_labels[skill]) || skill;
-    const hasActivity = totals.out_total > 0 || totals.in_total > 0;
-
-    return `
-      <details class="flow-row" data-skill="${escapeHtml(skill)}" ${hasActivity ? 'open' : ''}>
-        <summary>
-          <span>${escapeHtml(label)}</span>
-          <span class="summary-badges">
-            <span class="badge-pill">OUT ${formatFlowValue(totals.out_total)}</span>
-            <span class="badge-pill">IN ${formatFlowValue(totals.in_total)}</span>
-          </span>
-        </summary>
-        <div class="flow-row-body">
-          <div class="flow-table-wrap">
-            <h4>Overflow Out</h4>
-            <table class="flow-table">
-              <thead><tr><th>To Main Skill</th><th>Weight</th></tr></thead>
-              <tbody>${renderFlowTableRows(outRows, 'to')}</tbody>
-            </table>
-          </div>
-          <div class="flow-table-wrap">
-            <h4>Overflow In</h4>
-            <table class="flow-table">
-              <thead><tr><th>From Requested Skill</th><th>Weight</th></tr></thead>
-              <tbody>${renderFlowTableRows(inRows, 'from')}</tbody>
-            </table>
-          </div>
-        </div>
-      </details>
-    `;
-  }).join('');
-}
-
 function updateFlowMeta(data) {
   const windowEl = document.getElementById('meta-window');
   const resetEl = document.getElementById('meta-reset-date');
@@ -819,7 +790,11 @@ function renderFlowDataState(data) {
 
   updateFlowMeta(data);
   renderFlowDiagram(data);
-  renderFlowRows(data);
+  const noDataMsg = document.getElementById('flow-no-data-msg');
+  if (noDataMsg) {
+    const links = getFlowLinks(data);
+    noDataMsg.style.display = links.length ? 'none' : 'block';
+  }
 }
 
 function loadFlowData() {

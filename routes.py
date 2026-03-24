@@ -49,6 +49,7 @@ from lib.utils import (
     get_next_workday,
     get_weekday_name_german,
     format_time_value,
+    build_worker_sort_key,
     skill_value_to_numeric,
     skill_value_to_display,
     strip_builder_fields,
@@ -69,6 +70,7 @@ from data_manager import (
     auto_populate_skill_roster_from_csv,
     load_staged_dataframe,
     backup_dataframe,
+    persist_live_backup,
     update_schedule_row,
     add_worker_to_schedule,
     delete_worker_from_schedule,
@@ -86,6 +88,7 @@ from balancer import (
     update_global_assignment,
     get_global_assignments,
     get_global_weighted_count,
+    get_modality_weighted_count,
     BALANCER_SETTINGS
 )
 
@@ -769,6 +772,28 @@ def index() -> Any:
         skill_name for skill_name in visible_skills
         if is_strict_button_visible(skill_name, modality)
     ]
+    dashboard_buttons = sorted(
+        [
+            {
+                'button_type': 'skill',
+                'name': skill['name'],
+                'slug': skill['slug'],
+                'label': skill['label'],
+                'special': skill.get('special', False),
+                'display_order': skill.get('display_order', 999),
+                'show_strict_button': skill['name'] in regular_strict_button_skills,
+            }
+            for skill in SKILL_TEMPLATES
+            if skill['name'] in visible_skills
+        ] + [
+            {
+                **task,
+                'button_type': 'special_task',
+            }
+            for task in visible_special_tasks
+        ],
+        key=lambda item: (item.get('display_order', 999), item.get('label', ''))
+    )
 
     return render_template(
         'index.html',
@@ -776,6 +801,7 @@ def index() -> Any:
         modality=modality,
         visible_skills=visible_skills,
         regular_strict_button_skills=regular_strict_button_skills,
+        dashboard_buttons=dashboard_buttons,
         special_tasks=visible_special_tasks,
         is_admin=has_admin_access()
     )
@@ -875,19 +901,43 @@ def index_by_skill() -> Any:
 def timetable() -> Any:
     modality = request.args.get('modality', 'all')
     skill_filter = request.args.get('skill', 'all')
-    
-    # Combine data from all modalities or a specific one
-    combined_data = []
-    
+
+    data_by_modality: dict[str, list[dict[str, Any]]] = {}
     target_modalities = allowed_modalities if modality == 'all' else [modality]
     for mod in target_modalities:
         df = modality_data[mod]['working_hours_df']
         if df is not None:
-            # Add modality info to each row for the frontend
             temp_df = df.copy()
             temp_df['_modality'] = mod
-            combined_data.extend(_df_to_api_response(temp_df))
-            
+            data_by_modality[mod] = _df_to_api_response(temp_df)
+        else:
+            data_by_modality[mod] = []
+
+    medweb_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
+    task_roles = []
+    for rule in medweb_rules:
+        rule_type = rule.get('type', 'shift')
+        hours_counting_config = APP_CONFIG.get('balancer', {}).get('hours_counting', {})
+        if 'counts_for_hours' in rule:
+            counts_for_hours = rule['counts_for_hours']
+        elif rule_type == 'gap':
+            counts_for_hours = hours_counting_config.get('gap_default', False)
+        else:
+            counts_for_hours = hours_counting_config.get('shift_default', True)
+
+        task_roles.append({
+            'name': rule.get('label', rule.get('match', '')),
+            'type': rule_type,
+            'times': rule.get('times', {}),
+            'gaps': rule.get('gaps', {}),
+            'skill_overrides': rule.get('skill_overrides', {}),
+            'modifier': rule.get('modifier', 1.0),
+            'counts_for_hours': counts_for_hours,
+        })
+
+    worker_skills = load_worker_skill_json()
+    target_weekday_name = get_weekday_name_german(datetime.now().date())
+
     # Skill slug/color maps for the frontend
     skill_slug_map = {s['name']: s['slug'] for s in SKILL_TEMPLATES}
     skill_color_map = {s['slug']: s['button_color'] for s in SKILL_TEMPLATES}
@@ -897,11 +947,14 @@ def timetable() -> Any:
         'timetable.html',
         modality=modality,
         skill_filter=skill_filter,
-        debug_data=json.dumps(combined_data),
+        debug_data=json.dumps(data_by_modality),
         skill_columns=SKILL_COLUMNS,
         skill_slug_map=skill_slug_map,
         skill_color_map=skill_color_map,
         modality_color_map=modality_color_map,
+        task_roles=task_roles,
+        worker_skills=worker_skills,
+        target_weekday_name=target_weekday_name,
         is_admin=has_admin_access()
     )
 
@@ -982,11 +1035,11 @@ def login() -> Any:
     if request.method == 'POST':
         if passwordless:
             # No password required - just proceed
-            return redirect(url_for('routes.upload_file', modality=modality))
+            return redirect(url_for('routes.prep_today'))
         pw = request.form.get('password', '')
         if pw == get_admin_password():
             session['admin_logged_in'] = True
-            return redirect(url_for('routes.upload_file', modality=modality))
+            return redirect(url_for('routes.prep_today'))
         else:
             error = "Falsches Passwort"
 
@@ -1234,7 +1287,7 @@ def upload_file() -> Any:
         global_counts[worker] = get_global_assignments(canonical)
         global_weighted_counts[worker] = get_global_weighted_count(canonical)
 
-    combined_workers = sorted(all_worker_names)
+    combined_workers = sorted(all_worker_names, key=build_worker_sort_key)
     modality_stats = {}
     for worker in combined_workers:
         modality_stats[worker] = {
@@ -1405,6 +1458,7 @@ def load_today_from_master() -> Any:
             # ALWAYS reset global state and ALL modalities first to prevent stale data
             # This handles both empty returns and partial modality returns
             global_worker_data['weighted_counts'] = {}
+            global_worker_data['flow_cross_pool'] = {}
 
             for modality in allowed_modalities:
                 d = modality_data[modality]
@@ -1428,6 +1482,7 @@ def load_today_from_master() -> Any:
 
                 # Persist cleared state
                 save_state()
+                persist_live_backup()
 
                 message = f"Keine Mitarbeiter für {target_date.strftime('%d.%m.%Y')} gefunden - Schichten können leer sein"
                 if reload_info:
@@ -1467,6 +1522,7 @@ def load_today_from_master() -> Any:
 
         # Persist state OUTSIDE the lock to prevent blocking I/O
         save_state()
+        persist_live_backup()
 
         workers_added = 0
         if APP_CONFIG.get('skill_roster_auto_import', True):
@@ -2233,6 +2289,7 @@ def get_worker_load_data() -> Any:
                     'canonical_id': canonical_id,
                     'modalities': {},
                     'skills': {},
+                    'skill_weights': {},
                     'global_weight': 0.0,
                     'global_assignments': {}
                 }
@@ -2244,7 +2301,8 @@ def get_worker_load_data() -> Any:
                 'modifier': float(row.get('Modifier', 1.0)) if pd.notnull(row.get('Modifier')) else 1.0,
                 'skills': {},
                 'skill_counts': {},
-                'assignment_total': 0
+                'assignment_total': 0,
+                'weighted_total': 0.0
             }
 
             # Collect skill values and counts for this modality
@@ -2266,29 +2324,34 @@ def get_worker_load_data() -> Any:
         # Aggregate per-skill totals across modalities
         for skill in SKILL_COLUMNS:
             total_count = 0
+            total_weight = 0.0
             for mod_key, mod_data in worker_data['modalities'].items():
-                total_count += mod_data['skill_counts'].get(skill, 0)
+                count = mod_data['skill_counts'].get(skill, 0)
+                total_count += count
+                if count > 0:
+                    total_weight += count * get_skill_modality_weight(skill, mod_key)
             worker_data['skills'][skill] = total_count
+            worker_data['skill_weights'][skill] = round(total_weight, 4)
 
-    # Calculate per-modality assignment totals
+        for modality in list(worker_data['modalities'].keys()):
+            worker_data['modalities'][modality]['weighted_total'] = round(
+                get_modality_weighted_count(canonical_id, modality),
+                4,
+            )
+
+    # Calculate per-modality weighted totals
     modality_weights = {}
     for modality in allowed_modalities:
         modality_weights[modality] = {}
         for canonical_id, worker_data in all_workers.items():
             if modality in worker_data['modalities']:
-                modality_weights[modality][canonical_id] = worker_data['modalities'][modality]['assignment_total']
+                modality_weights[modality][canonical_id] = worker_data['modalities'][modality]['weighted_total']
 
-    # Calculate per-skill weight totals (using global weighted assignment data)
+    # Calculate per-skill weighted totals across modalities
     skill_weights = {skill: {} for skill in SKILL_COLUMNS}
-    for mod in allowed_modalities:
-        d = modality_data[mod]
+    for canonical_id, worker_data in all_workers.items():
         for skill in SKILL_COLUMNS:
-            skill_counts = d['skill_counts'].get(skill, {})
-            for worker_name, count in skill_counts.items():
-                canonical_id = get_canonical_worker_id(worker_name)
-                if canonical_id not in skill_weights[skill]:
-                    skill_weights[skill][canonical_id] = 0
-                skill_weights[skill][canonical_id] += count
+            skill_weights[skill][canonical_id] = worker_data['skill_weights'].get(skill, 0.0)
 
     # Get max weight for relative color coding
     max_weight = max((w['global_weight'] for w in all_workers.values()), default=0.0)

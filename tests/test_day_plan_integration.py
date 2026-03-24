@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
+import routes
 from config import SKILL_COLUMNS, allowed_modalities
 from data_manager import schedule_crud
 from data_manager import worker_management
@@ -516,6 +517,249 @@ class TestDayPlanIntegration(unittest.TestCase):
         finally:
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
+
+    def test_segmented_shift_rule_applies_time_sliced_skill_overrides(self) -> None:
+        target_date = datetime(2026, 1, 23)
+
+        roster_entry = {
+            f"{skill}_{modality}": 0
+            for skill in SKILL_COLUMNS
+            for modality in allowed_modalities
+        }
+
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "SBZ Spät Assistent",
+                        "type": "shift",
+                        "label": "SBZ Spät Assistent",
+                        "times": {"default": "11:30-20:00"},
+                        "skill_overrides": {
+                            f"notfall_{self.modality}": -1,
+                            f"gyn_{self.modality}": 0,
+                        },
+                        "segments": [
+                            {
+                                "times": {"default": "11:30-15:45"},
+                                "skill_overrides": {f"gyn_{self.modality}": -1},
+                            },
+                            {
+                                "times": {"default": "15:45-20:00"},
+                                "skill_overrides": {f"gyn_{self.modality}": 0},
+                            },
+                        ],
+                    },
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "worker_roster": {
+                "A1": roster_entry,
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "SBZ Spät Assistent", "Alice", "A1"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
+
+            csv_df = csv_result[self.modality]
+            shift_rows = csv_df[csv_df["tasks"] == "SBZ Spät Assistent"].sort_values(by="start_time").reset_index(drop=True)
+
+            self.assertEqual(len(shift_rows), 2)
+            self.assertEqual(shift_rows.iloc[0]["start_time"].strftime("%H:%M"), "11:30")
+            self.assertEqual(shift_rows.iloc[0]["end_time"].strftime("%H:%M"), "15:45")
+            self.assertEqual(str(shift_rows.iloc[0]["gyn"]), "-1")
+            self.assertEqual(str(shift_rows.iloc[0]["notfall"]), "-1")
+
+            self.assertEqual(shift_rows.iloc[1]["start_time"].strftime("%H:%M"), "15:45")
+            self.assertEqual(shift_rows.iloc[1]["end_time"].strftime("%H:%M"), "20:00")
+            self.assertEqual(str(shift_rows.iloc[1]["gyn"]), "0")
+            self.assertEqual(str(shift_rows.iloc[1]["notfall"]), "-1")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_segmented_gap_rule_creates_multiple_gap_intervals(self) -> None:
+        target_date = datetime(2026, 1, 23)
+        skill_key = SKILL_COLUMNS[0]
+        skill_override_key = f"{skill_key}_{self.modality}"
+
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "Shift A",
+                        "type": "shift",
+                        "label": "Shift A",
+                        "times": {"default": "08:00-16:00"},
+                        "skill_overrides": {skill_override_key: 1},
+                    },
+                    {
+                        "match": "Board",
+                        "type": "gap",
+                        "label": "Board",
+                        "segments": [
+                            {
+                                "label": "Board A",
+                                "times": {"default": "09:00-10:00"},
+                            },
+                            {
+                                "label": "Board B",
+                                "times": {"default": "14:00-15:00"},
+                            },
+                        ],
+                    },
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "worker_roster": {
+                "A1": {
+                    f"{skill}_{modality}": 0
+                    for skill in SKILL_COLUMNS
+                    for modality in allowed_modalities
+                }
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "Board", "Alice", "A1"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
+
+            csv_df = csv_result[self.modality]
+            gap_rows = csv_df[csv_df["tasks"].isin(["Board A", "Board B"])].sort_values(by="start_time").reset_index(drop=True)
+
+            self.assertEqual(len(gap_rows), 2)
+            self.assertTrue(all("gap" in str(value) for value in gap_rows["row_type"]))
+            self.assertEqual(gap_rows.iloc[0]["start_time"].strftime("%H:%M"), "09:00")
+            self.assertEqual(gap_rows.iloc[0]["end_time"].strftime("%H:%M"), "10:00")
+            self.assertFalse(bool(gap_rows.iloc[0]["counts_for_hours"]))
+            self.assertEqual(gap_rows.iloc[1]["start_time"].strftime("%H:%M"), "14:00")
+            self.assertEqual(gap_rows.iloc[1]["end_time"].strftime("%H:%M"), "15:00")
+            self.assertFalse(bool(gap_rows.iloc[1]["counts_for_hours"]))
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_apply_worker_plan_keeps_multiple_full_gap_rows(self) -> None:
+        worker_name = "Alice (A1)"
+        skill_key = SKILL_COLUMNS[0]
+        active_skills = {skill: (1 if skill == skill_key else 0) for skill in SKILL_COLUMNS}
+        blocking_skills = {skill: -1 for skill in SKILL_COLUMNS}
+
+        shifts = [
+            {
+                "start_time": "08:00",
+                "end_time": "16:00",
+                "modifier": 1.0,
+                "counts_for_hours": True,
+                "task": "Shift A",
+                "row_type": "shift",
+                "modalities": {
+                    self.modality: {
+                        "skills": active_skills,
+                    }
+                },
+            },
+            {
+                "start_time": "09:00",
+                "end_time": "09:30",
+                "modifier": 1.0,
+                "counts_for_hours": False,
+                "task": "Break A",
+                "row_type": "gap",
+                "modalities": {
+                    self.modality: {
+                        "skills": blocking_skills,
+                    }
+                },
+            },
+            {
+                "start_time": "14:00",
+                "end_time": "14:30",
+                "modifier": 1.0,
+                "counts_for_hours": False,
+                "task": "Break B",
+                "row_type": "gap",
+                "modalities": {
+                    self.modality: {
+                        "skills": blocking_skills,
+                    }
+                },
+            },
+        ]
+
+        rows = routes._build_rows_from_plan(worker_name, shifts, self.modality)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(sum(1 for row in rows if row["row_type"] == "gap"), 2)
+
+        with patch.object(schedule_crud, "backup_dataframe"):
+            success, _, error = schedule_crud.replace_worker_schedule(
+                self.modality,
+                worker_name,
+                rows,
+                use_staged=False,
+            )
+
+        self.assertTrue(success, msg=error)
+
+        df = schedule_crud.modality_data[self.modality]["working_hours_df"]
+        self.assertIsNotNone(df)
+        worker_rows = df[df["PPL"] == worker_name].sort_values(by=["start_time", "end_time"]).reset_index(drop=True)
+        self.assertEqual(len(worker_rows), 5)
+
+        gap_rows = worker_rows[worker_rows["row_type"] == "gap_segment"].reset_index(drop=True)
+        self.assertEqual(len(gap_rows), 2)
+        self.assertEqual(gap_rows.iloc[0]["tasks"], "Break A")
+        self.assertEqual(gap_rows.iloc[0]["start_time"].strftime("%H:%M"), "09:00")
+        self.assertEqual(gap_rows.iloc[0]["end_time"].strftime("%H:%M"), "09:30")
+        self.assertEqual(gap_rows.iloc[1]["tasks"], "Break B")
+        self.assertEqual(gap_rows.iloc[1]["start_time"].strftime("%H:%M"), "14:00")
+        self.assertEqual(gap_rows.iloc[1]["end_time"].strftime("%H:%M"), "14:30")
+        shift_rows = worker_rows[worker_rows["row_type"] == "shift_segment"].reset_index(drop=True)
+        self.assertEqual(len(shift_rows), 3)
 
 
 if __name__ == "__main__":

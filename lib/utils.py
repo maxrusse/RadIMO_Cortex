@@ -1,5 +1,6 @@
 # Standard library imports
 import logging
+import re
 from datetime import datetime, time, timedelta, date
 from typing import Any, List, Optional, Tuple, Union
 import pytz
@@ -63,6 +64,48 @@ def format_time_value(value: Any) -> str:
     if hasattr(value, 'strftime'):
         return value.strftime(TIME_FORMAT)
     return str(value)
+
+
+_WORKER_SORT_TITLES = {
+    'dr', 'dr.', 'pd', 'pd.', 'prof', 'prof.', 'med', 'dent',
+    'dipl', 'dipl.', 'ing', 'ing.', 'dipl-ing', 'dipl.-ing',
+}
+_WORKER_SORT_PARTICLES = {
+    'von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur',
+}
+
+
+def build_worker_sort_key(name: Any) -> str:
+    """Build a surname-like sort key from the visible worker label."""
+    raw = '' if name is None else str(name).strip()
+    if not raw:
+        return ''
+
+    # Remove trailing canonical code like "Name (ABC)".
+    cleaned = re.sub(r'\s*\([^)]*\)\s*$', '', raw).strip()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    if not cleaned:
+        return raw.casefold()
+
+    tokens = []
+    for token in cleaned.split(' '):
+        normalized = token.strip().strip('.,;:()[]{}').casefold()
+        if not normalized:
+            continue
+        if normalized in _WORKER_SORT_TITLES:
+            continue
+        if normalized in _WORKER_SORT_PARTICLES:
+            continue
+        tokens.append(token.strip().strip('.,;:()[]{}'))
+
+    if not tokens:
+        fallback = cleaned.casefold()
+        return f"{fallback}|{fallback}"
+
+    last = tokens[-1].casefold()
+    first = ' '.join(tokens[:-1]).casefold()
+    full = ' '.join(tokens).casefold()
+    return f"{last}|{first}|{full}"
 
 
 def strip_builder_fields(row: dict) -> dict:

@@ -14,7 +14,7 @@
 
 # Basic access protection for non-admin pages (optional)
 # Set to false to disable password protection entirely
-access_protection_enabled: true
+access_protection_enabled: false
 # access_password: Simple password for basic access protection (optional)
 access_password: radimo
 
@@ -84,42 +84,42 @@ modalities:
 skills:
   notfall:
     label: Notfall
-    button_color: '#dc3545'
+    button_color: '#d8342a'
     text_color: '#ffffff'
     special: false
     display_order: 4
     slug: notfall
   privat:
     label: Privat
-    button_color: '#ffc107'
-    text_color: '#333333'
+    button_color: '#d4aa22'
+    text_color: '#2f2412'
     special: false
     display_order: 5
     slug: privat
   gyn:
     label: Gyn
-    button_color: '#b65c9a'
+    button_color: '#c45d8a'
     text_color: '#ffffff'
     special: true             # Subspecialty team
     display_order: 2
     slug: gyn
   aou:
     label: AOU
-    button_color: '#2b8fa1'
+    button_color: '#3478c6'
     text_color: '#ffffff'
     special: true             # Abdomen / Uro / Onko subspecialty
     display_order: 0
     slug: aou
   cvt:
     label: CVT
-    button_color: '#3d6aa8'
+    button_color: '#d07a2d'
     text_color: '#ffffff'
     special: true             # Cardio / Vask / Thorax subspecialty
     display_order: 1
     slug: cvt
   mhd:
     label: MHD
-    button_color: '#7a6bb0'
+    button_color: '#4a9a46'
     text_color: '#ffffff'
     special: true             # Musculoskeletal & skin subspecialty
     display_order: 3
@@ -154,24 +154,24 @@ special_tasks:
     skill_dashboards: [aou]
     allow_overflow: false
     display_order: 999
-  - name: ct-herz
-    label: CT-Herz
-    base_skill: cvt
-    target_skill_modalities:
-      - cvt_ct
-    modalities_dashboards: [ct]
-    skill_dashboards: []
-    allow_overflow: false
-    display_order: 120
-  - name: mr-herz
-    label: MR-Herz
-    base_skill: cvt
-    target_skill_modalities:
-      - cvt_mr
-    modalities_dashboards: [mr]
-    skill_dashboards: []
-    allow_overflow: false
-    display_order: 121
+  # - name: ct-herz
+  #   label: CT-Herz
+  #   base_skill: cvt
+  #   target_skill_modalities:
+  #     - cvt_ct
+  #   modalities_dashboards: [ct]
+  #   skill_dashboards: []
+  #   allow_overflow: false
+  #   display_order: 120
+  # - name: mr-herz
+  #   label: MR-Herz
+  #   base_skill: cvt
+  #   target_skill_modalities:
+  #     - cvt_mr
+  #   modalities_dashboards: [mr]
+  #   skill_dashboards: []
+  #   allow_overflow: false
+  #   display_order: 121
   - name: xray-normal
     label: Normal
     base_skill: aou
@@ -183,7 +183,7 @@ special_tasks:
     modalities_dashboards: [xray]
     skill_dashboards: []
     allow_overflow: true
-    display_order: 110
+    display_order: -1
     button_color: '#3f8f82'
     text_color: '#ffffff'
 
@@ -199,16 +199,18 @@ synthetic_shifts:
     label: "Gynarzt-shift"
     weekdays: [workdays]
     times:
-      default: "07:30-16:15"
+      default: "07:30-15:45"
     skill_overrides:
+      notfall: -1
       gyn_ct: 1
       gyn_mr: 1
   - worker_name: "Notfallarzt (NDOC)"
     label: "Notfallarzt-shift"
     weekdays: [workdays]
     times:
-      default: "07:30-16:15"
+      default: "07:30-15:45"
     skill_overrides:
+      gyn: -1
       notfall_ct: 1
       notfall_mr: 1
       notfall_xray: 1
@@ -236,7 +238,7 @@ worker_roster:
     mhd_ct: 0
     mhd_mr: -1
     mhd_xray: -1
-    notfall_ct: 0
+    notfall_ct: -1
     notfall_mr: -1
     notfall_xray: -1
     privat_ct: 0
@@ -250,7 +252,7 @@ worker_roster:
     cvt_ct: 0
     cvt_mr: -1
     cvt_xray: -1
-    gyn_ct: 0
+    gyn_ct: -1
     gyn_mr: -1
     gyn_xray: -1
     mhd_ct: 0
@@ -379,7 +381,7 @@ balancer:
   warm_start_release_mode: either            # either|both: overflow unlock by time/min count policy
   imbalance_threshold_pct: 20                # Percentage threshold to trigger rebalancing
   disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first X minutes
-  disable_overflow_at_shift_end_minutes: 30    # Don't assign overflow in last X minutes
+  disable_overflow_at_shift_end_minutes: 20    # Don't assign overflow in last X minutes
   default_w_modifier: 0.5                   # Default modifier for weighted ('w') skills
 
   # Hours counting for load balancing
@@ -404,7 +406,7 @@ balancer:
   #   skill: [skill1]              # Exclude workers with skill1=1
   #   skill: [skill1, skill2]      # Exclude workers with skill1=1 OR skill2=1
   exclude_skills:
-    notfall: [gyn]      # gyn can not get emergency work
+    notfall: []      # gyn can not get emergency work
     privat: []       # No exclusions - anyone can get private patients
     gyn: []
     mhd: []
@@ -475,26 +477,11 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         all: -1
         privat_mr: 1
         privat_ct: 1
-
-    - match: "OA CT"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        all: -1
-        privat_ct: 1
-
-    - match: "OA MR"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        all: -1
-        privat_mr: 1
 
     - match: "OA / FA Chir"
       type: "shift"
@@ -542,26 +529,27 @@ vendor_mappings:
     # SUBSPECIALTY SHIFTS (assistant level)
     # =========================================================================
 
-    - match: "Assistent Gyn"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        gyn_ct: 1
-        gyn_mr: 1
+    # - match: "Assistent Gyn"
+    #   type: "shift"
+    #   times:
+    #     default: "07:30-15:45"
+    #   skill_overrides:
+    #     gyn_ct: 1
+    #     gyn_mr: 1
 
-    - match: "Gyn Assistent"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        gyn_ct: 1
-        gyn_mr: 1
+    # - match: "Gyn Assistent"
+    #   type: "shift"
+    #   times:
+    #     default: "07:30-15:45"
+    #   skill_overrides:
+    #     gyn_ct: 1
+    #     gyn_mr: 1
 
     - match: "Assistent AOU"
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         aou_ct: 1
         aou_mr: 1
@@ -580,6 +568,7 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         cvt_ct: 1
         cvt_mr: 1
@@ -598,6 +587,7 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         mhd_ct: 1
         mhd_mr: 1
@@ -616,27 +606,28 @@ vendor_mappings:
     # SUBSPECIALTY SHIFTS (FA/Fellow level)
     # =========================================================================
 
-    - match: "FA/Fellow Notfall"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        notfall_ct: 1
-        notfall_mr: 1
-        notfall_xray: 1
+    # - match: "FA/Fellow Notfall"
+    #   type: "shift"
+    #   times:
+    #     default: "07:30-15:45"
+    #   skill_overrides:
+    #     notfall_ct: 1
+    #     notfall_mr: 1
+    #     notfall_xray: 1
 
-    - match: "FA/Fellow Gyn"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-      skill_overrides:
-        gyn_ct: 1
-        gyn_mr: 1
+    # - match: "FA/Fellow Gyn"
+    #   type: "shift"
+    #   times:
+    #     default: "07:30-15:45"
+    #   skill_overrides:
+    #     gyn_ct: 1
+    #     gyn_mr: 1
 
     - match: "FA/Fellow MHD"
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         mhd_ct: 1
         mhd_mr: 1
@@ -655,6 +646,7 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         aou_ct: 1
         aou_mr: 1
@@ -673,6 +665,7 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       skill_overrides:
         cvt_ct: 1
         cvt_mr: 1
@@ -687,6 +680,18 @@ vendor_mappings:
         mhd_xray: -1
         privat_xray: -1
 
+    - match: "OA-HELP"
+      type: "shift"
+      times:
+        default: "14:00-15:45"
+      skill_overrides:
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mhd_ct: 1
+        mhd_mr: 1
+
     # =========================================================================
     # LATE SHIFTS
     # =========================================================================
@@ -695,17 +700,40 @@ vendor_mappings:
     - match: "SBZ Spät Assistent"
       type: "shift"
       times:
-        default: "11:30-19:45"
+        default: "11:30-20:00"
       skill_overrides:
         all: 0
-        notfall_ct: -1
+        notfall: -1
+        aou_xray: -1
+        cvt_xray: -1
+        gyn_xray: -1
+        mhd_xray: -1
         notfall_xray: -1
+        privat_xray: -1
+      segments:
+        - times:
+            default: "11:30-15:45"
+          skill_overrides:
+            gyn: -1
+        - times:
+            default: "15:45-20:00"
+          skill_overrides:
+            aou_ct: 1
+            aou_mr: 1
+            cvt_ct: 1
+            cvt_mr: 1
+            mhd_ct: 1
+            mhd_mr: 1
+            gyn_ct: 1
+            gyn_mr: 1
+            privat_ct: 1
+            privat_mr: 1
 
     - match: "3. Dienst"
       label: "Röntgendienst"
       type: "shift"
       times:
-        default: "11:30-19:45"
+        default: "15:45-19:45"
       skill_overrides:
         notfall_xray: 1
 
@@ -745,6 +773,14 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
+    - match: "SBZ Geräteassistenz spät"
+      label: "Aufklärung Spät"
+      type: "gap"
+      times:
+        default: "15:45-20:00"
+      skill_overrides:
+        all: -1
+
     - match: "Durchleuchtung"
       label: "Durchleuchtung"
       type: "gap"
@@ -753,12 +789,28 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
+    - match: "Nrad-Dienst"
+      label: "Nrad-Dienst"
+      type: "gap"
+      times:
+        default: "07:30-11:30"
+      skill_overrides:
+        all: -1
+
+    - match: "6hday"
+      label: "6hday"
+      type: "gap"
+      times:
+        default: "13:00-16:00"
+      skill_overrides:
+        all: -1
+
     - match: "Mult. Myelom Board (Mo 15:30)"
       label: "Myelom-Board"
       type: "gap"
       times:
         Montag:
-          - "13:30-16:30"
+          - "12:00-16:30"
       skill_overrides:
         all: -1
 
@@ -767,11 +819,11 @@ vendor_mappings:
       type: "gap"
       times:
         Montag:
-          - "11:00-14:00"
+          - "11:30-13:30"
         Dienstag:
-          - "12:00-15:00"
+          - "12:30-14:30"
         Mittwoch:
-          - "10:30-13:30"
+          - "11:00-13:00"
       skill_overrides:
         all: -1
 
@@ -780,7 +832,7 @@ vendor_mappings:
       type: "gap"
       times:
         Donnerstag:
-          - "11:30-14:30"
+          - "11:30-14:00"
       skill_overrides:
         all: -1
 
@@ -807,7 +859,7 @@ vendor_mappings:
       type: "gap"
       times:
         Dienstag:
-          - "12:30-15:30"
+          - "12:00-15:45"
       skill_overrides:
         all: -1
 
@@ -816,25 +868,7 @@ vendor_mappings:
       type: "gap"
       times:
         Montag:
-          - "13:30-16:30"
-      skill_overrides:
-        all: -1
-
-    - match: "CCCF-Leber (Mo 16:00)"
-      label: "CCCF-Leber"
-      type: "gap"
-      times:
-        Montag:
-          - "14:00-17:00"
-      skill_overrides:
-        all: -1
-
-    - match: "Lymphom-Board (Di 14:30)"
-      label: "Lymphom-Board"
-      type: "gap"
-      times:
-        Dienstag:
-          - "12:30-15:30"
+          - "12:00-15:45"
       skill_overrides:
         all: -1
 
@@ -843,7 +877,7 @@ vendor_mappings:
       type: "gap"
       times:
         Mittwoch:
-          - "12:30-15:30"
+          - "07:30-15:45"
       skill_overrides:
         all: -1
 
@@ -852,16 +886,7 @@ vendor_mappings:
       type: "gap"
       times:
         Donnerstag:
-          - "12:30-15:30"
-      skill_overrides:
-        all: -1
-
-    - match: "Leukämie-Board (Do 14:30)"
-      label: "Leukämie-Board"
-      type: "gap"
-      times:
-        Donnerstag:
-          - "12:30-15:30"
+          - "12:00-15:45"
       skill_overrides:
         all: -1
 
@@ -872,29 +897,7 @@ vendor_mappings:
         Mittwoch:
           - "09:00-15:45"
         Donnerstag:
-          - "05:30-08:30"
-      skill_overrides:
-        all: -1
-
-    - match: "ZGT Fallbesprechung (Mo 14:30)"
-      label: "ZGT-Fallbesprechung"
-      type: "gap"
-      times:
-        Montag:
-          - "12:30-15:30"
-      skill_overrides:
-        all: -1
-
-    - match: "Gyn Tumorboard (Di 14:30-16:00, Fr 07:30)"
-      label: "Gyn-Tumorboard"
-      type: "gap"
-      times:
-        Dienstag:
-          - "12:30-15:30"
-        Donnerstag:
-          - "14:00-15:45"
-        Freitag:
-          - "05:30-08:30"
+          - "07:30-09:00"
       skill_overrides:
         all: -1
 
@@ -903,70 +906,7 @@ vendor_mappings:
       type: "gap"
       times:
         Mittwoch:
-          - "14:00-17:00"
-      skill_overrides:
-        all: -1
-
-    - match: "TB: Immunvermittelte NW (Mi 14:00, jeden 1. Mittwoch im Monat)"
-      label: "Immunvermittelte NW"
-      type: "gap"
-      times:
-        Mittwoch:
-          - "12:00-15:00"
-      skill_overrides:
-        all: -1
-
-    - match: "Gefäßchir-Angiol-Kolloq (Mi 15:30)"
-      label: "Gefäßchir-Kolloq"
-      type: "gap"
-      times:
-        Mittwoch:
-          - "13:30-16:30"
-      skill_overrides:
-        all: -1
-
-    - match: "EmaH (Do 15:30 Uhr, Konf.raum 8)"
-      label: "EmaH"
-      type: "gap"
-      times:
-        Donnerstag:
-          - "13:30-16:30"
-      skill_overrides:
-        all: -1
-
-    - match: "VasMuT (Do 16 Uhr, Konf.raum 5)"
-      label: "VasMuT"
-      type: "gap"
-      times:
-        Donnerstag:
-          - "14:00-17:00"
-      skill_overrides:
-        all: -1
-
-    - match: "IPOK (Fr 13 Uhr, Konf.raum 5)"
-      label: "IPOK"
-      type: "gap"
-      times:
-        Freitag:
-          - "11:00-14:00"
-      skill_overrides:
-        all: -1
-
-    - match: "PRIS (Di 14:15 Uhr, 0_117 OA Büro)"
-      label: "PRIS"
-      type: "gap"
-      times:
-        Dienstag:
-          - "12:15-15:15"
-      skill_overrides:
-        all: -1
-
-    - match: "Nephr/urol. Kolloq. (Mi 15:30 Uhr, Konf.raum 6)"
-      label: "Nephr-Kolloq"
-      type: "gap"
-      times:
-        Mittwoch:
-          - "13:30-16:30"
+          - "14:30-16:30"
       skill_overrides:
         all: -1
 
@@ -975,18 +915,6 @@ vendor_mappings:
     # =========================================================================
     - match: "Break"
       label: "Break"
-      type: "gap"
-      times: {}
-      skill_overrides:
-        all: -1
-
-    # =========================================================================
-    # GENERIC GAP - For manual entries on prep page
-    # =========================================================================
-    # Empty times = won't auto-match from CSV, only manual selection in UI
-    # =========================================================================
-    - match: "[Gap]"
-      label: "Gap"
       type: "gap"
       times: {}
       skill_overrides:

@@ -187,6 +187,80 @@ def parse_gap_times(times_config: dict, weekday_name: str) -> List[Tuple[time, t
     return _parse_time_ranges(time_ranges, log_label="gap")
 
 
+def _effective_rule_segments(
+    rule: dict,
+    *,
+    rule_type: str,
+) -> List[dict]:
+    """Return normalized effective rule segments for legacy and segmented rules."""
+    raw_segments = rule.get('segments')
+    if raw_segments is None:
+        return [rule]
+
+    if not isinstance(raw_segments, list) or not raw_segments:
+        selection_logger.warning(
+            "Rule '%s' has invalid segments configuration - skipping segmented expansion",
+            rule.get('match', ''),
+        )
+        return []
+
+    base_skill_overrides = rule.get('skill_overrides', {})
+    if base_skill_overrides is None:
+        base_skill_overrides = {}
+    if not isinstance(base_skill_overrides, dict):
+        selection_logger.warning(
+            "Rule '%s' has invalid base skill_overrides - expected dict",
+            rule.get('match', ''),
+        )
+        base_skill_overrides = {}
+
+    segments: List[dict] = []
+    for idx, segment in enumerate(raw_segments):
+        if not isinstance(segment, dict):
+            selection_logger.warning(
+                "Rule '%s' segment %s is not a dict - skipping",
+                rule.get('match', ''),
+                idx,
+            )
+            continue
+        if 'times' not in segment:
+            selection_logger.warning(
+                "Rule '%s' segment %s missing times - skipping",
+                rule.get('match', ''),
+                idx,
+            )
+            continue
+
+        effective_rule = dict(rule)
+        effective_rule.pop('segments', None)
+
+        for key in ('times', 'label', 'counts_for_hours', 'modifier', 'gaps'):
+            if key in segment:
+                effective_rule[key] = segment[key]
+
+        segment_skill_overrides = segment.get('skill_overrides', {})
+        if segment_skill_overrides is None:
+            segment_skill_overrides = {}
+        if not isinstance(segment_skill_overrides, dict):
+            selection_logger.warning(
+                "Rule '%s' segment %s has invalid skill_overrides - expected dict",
+                rule.get('match', ''),
+                idx,
+            )
+            continue
+
+        if rule_type == 'shift':
+            merged_skill_overrides = dict(base_skill_overrides)
+            merged_skill_overrides.update(segment_skill_overrides)
+            effective_rule['skill_overrides'] = merged_skill_overrides
+        elif 'skill_overrides' in segment:
+            effective_rule['skill_overrides'] = segment_skill_overrides
+
+        segments.append(effective_rule)
+
+    return segments
+
+
 def build_ppl_from_row(row: pd.Series, cols: Optional[dict] = None) -> str:
     """Build PPL string from CSV row."""
     name_col = cols.get('employee_name', 'Name des Mitarbeiters') if cols else 'Name des Mitarbeiters'
@@ -371,144 +445,137 @@ def build_working_hours_from_medweb(
         ppl_str = build_ppl_from_row(row, cols=cols)
         canonical_id = get_canonical_worker_id(ppl_str)
         rule_type = rule.get('type', 'shift')
+        effective_segments = _effective_rule_segments(rule, rule_type=rule_type)
+        if not effective_segments:
+            continue
 
-        # Handle GAP rules (standalone gaps)
-        if rule_type == 'gap':
-            # Use 'times' field (unified structure)
-            times_config = rule.get('times', {})
-            gap_times = parse_gap_times(times_config, weekday_name)
+        for effective_rule in effective_segments:
+            segment_rule_type = effective_rule.get('type', rule_type)
 
-            if not gap_times:
+            # Handle GAP rules (standalone gaps)
+            if segment_rule_type == 'gap':
+                gap_times = parse_gap_times(effective_rule.get('times', {}), weekday_name)
+
+                if not gap_times:
+                    continue
+
+                hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
+                if 'counts_for_hours' in effective_rule:
+                    counts_for_hours = effective_rule['counts_for_hours']
+                else:
+                    counts_for_hours = hours_counting_config.get('gap_default', False)
+
+                if canonical_id not in exclusions_per_worker:
+                    exclusions_per_worker[canonical_id] = []
+
+                gap_label = effective_rule.get('label', activity_desc)
+
+                for gap_start, gap_end in gap_times:
+                    exclusions_per_worker[canonical_id].append({
+                        'start_time': gap_start,
+                        'end_time': gap_end,
+                        'activity': gap_label,
+                        'counts_for_hours': counts_for_hours,
+                        'ppl_str': ppl_str
+                    })
+
+                    selection_logger.info(
+                        f"Time exclusion for {ppl_str} ({weekday_name}): "
+                        f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({activity_desc})"
+                    )
                 continue
 
-            hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
-            if 'counts_for_hours' in rule:
-                counts_for_hours = rule['counts_for_hours']
-            else:
-                counts_for_hours = hours_counting_config.get('gap_default', False)
+            # Handle SHIFT rules
+            if segment_rule_type != 'shift':
+                continue
 
-            if canonical_id not in exclusions_per_worker:
-                exclusions_per_worker[canonical_id] = []
+            skill_overrides = effective_rule.get('skill_overrides', {})
 
-            # Use label if available, otherwise fall back to raw activity
-            gap_label = rule.get('label', activity_desc)
-
-            for gap_start, gap_end in gap_times:
-                exclusions_per_worker[canonical_id].append({
-                    'start_time': gap_start,
-                    'end_time': gap_end,
-                    'activity': gap_label,
-                    'counts_for_hours': counts_for_hours,
-                    'ppl_str': ppl_str
-                })
-
-                selection_logger.info(
-                    f"Time exclusion for {ppl_str} ({weekday_name}): "
-                    f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({activity_desc})"
+            if not skill_overrides:
+                selection_logger.warning(
+                    f"Shift rule '{effective_rule.get('match', '')}' missing skill_overrides - skipping"
                 )
-            continue
+                continue
 
-        # Handle SHIFT rules
-        if rule_type != 'shift':
-            continue
+            target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
+            target_modalities = [m for m in target_modalities if m in allowed_modalities]
 
-        # Get skill_overrides - REQUIRED for shifts
-        skill_overrides = rule.get('skill_overrides', {})
-
-        if not skill_overrides:
-            selection_logger.warning(
-                f"Shift rule '{rule.get('match', '')}' missing skill_overrides - skipping"
-            )
-            continue
-
-        # Derive modalities from skill_overrides keys (e.g., MSK_ct -> ct)
-        target_modalities = extract_modalities_from_skill_overrides(skill_overrides)
-        target_modalities = [m for m in target_modalities if m in allowed_modalities]
-
-        if not target_modalities:
-            selection_logger.warning(
-                f"Shift rule '{rule.get('match', '')}' has no valid modalities in skill_overrides - skipping"
-            )
-            continue
-
-        workers_with_shifts.add(canonical_id)
-
-        # Get worker's Skill x Modality combinations from roster (all combinations)
-        roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
-
-        # Apply skill_overrides (roster -1 always wins, shortcuts are expanded)
-        final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
-
-        time_ranges = compute_time_ranges(row, rule, target_date, config)
-
-        # Handle embedded gaps in shift rule (team-specific gaps)
-        embedded_gaps = rule.get('gaps', {})
-        embedded_gap_times = parse_gap_times(embedded_gaps, weekday_name)
-
-        if embedded_gap_times:
-            hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
-            if 'counts_for_hours' in rule:
-                counts_for_hours = rule['counts_for_hours']
-            else:
-                counts_for_hours = hours_counting_config.get('gap_default', False)
-
-            if canonical_id not in exclusions_per_worker:
-                exclusions_per_worker[canonical_id] = []
-
-            # Use label if available for embedded gaps
-            embedded_gap_label = rule.get('label', activity_desc)
-
-            for gap_start, gap_end in embedded_gap_times:
-                exclusions_per_worker[canonical_id].append({
-                    'start_time': gap_start,
-                    'end_time': gap_end,
-                    'activity': f"{embedded_gap_label} (gap)",
-                    'counts_for_hours': counts_for_hours,
-                    'ppl_str': ppl_str
-                })
-                selection_logger.info(
-                    f"Embedded gap for {ppl_str} ({weekday_name}): "
-                    f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({embedded_gap_label})"
+            if not target_modalities:
+                selection_logger.warning(
+                    f"Shift rule '{effective_rule.get('match', '')}' has no valid modalities in skill_overrides - skipping"
                 )
+                continue
 
-        for modality in target_modalities:
-            # Extract skills for THIS modality from combinations
-            modality_skills = {}
-            for skill in SKILL_COLUMNS:
-                combo_key = f"{skill}_{modality}"
-                modality_skills[skill] = final_combinations.get(combo_key, 0)
+            workers_with_shifts.add(canonical_id)
 
-            for start_time, end_time in time_ranges:
-                start_dt = datetime.combine(target_date_obj, start_time)
-                end_dt = datetime.combine(target_date_obj, end_time)
-                # Same-day only: skip invalid shifts where end <= start
-                if end_dt <= start_dt:
-                    continue
-                duration_hours = (end_dt - start_dt).total_seconds() / 3600
+            roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
+            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
 
-                rule_modifier = rule.get('modifier', 1.0)
+            time_ranges = compute_time_ranges(row, effective_rule, target_date, config)
+
+            embedded_gaps = effective_rule.get('gaps', {})
+            embedded_gap_times = parse_gap_times(embedded_gaps, weekday_name)
+
+            if embedded_gap_times:
                 hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
-                if 'counts_for_hours' in rule:
-                    counts_for_hours = rule['counts_for_hours']
+                if 'counts_for_hours' in effective_rule:
+                    counts_for_hours = effective_rule['counts_for_hours']
                 else:
-                    counts_for_hours = hours_counting_config.get('shift_default', True)
+                    counts_for_hours = hours_counting_config.get('gap_default', False)
 
-                # Use label for task name (shorter, cleaner than raw CSV text)
-                task_label = rule.get('label', activity_desc)
+                if canonical_id not in exclusions_per_worker:
+                    exclusions_per_worker[canonical_id] = []
 
-                rows_per_modality[modality].append({
-                    'PPL': ppl_str,
-                    'canonical_id': canonical_id,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'shift_duration': duration_hours,
-                    'Modifier': rule_modifier,
-                    'tasks': task_label,
-                    'counts_for_hours': counts_for_hours,
-                    'row_type': 'shift',
-                    **modality_skills
-                })
-                workers_with_shifts_by_modality[modality].add(canonical_id)
+                embedded_gap_label = effective_rule.get('label', activity_desc)
+
+                for gap_start, gap_end in embedded_gap_times:
+                    exclusions_per_worker[canonical_id].append({
+                        'start_time': gap_start,
+                        'end_time': gap_end,
+                        'activity': f"{embedded_gap_label} (gap)",
+                        'counts_for_hours': counts_for_hours,
+                        'ppl_str': ppl_str
+                    })
+                    selection_logger.info(
+                        f"Embedded gap for {ppl_str} ({weekday_name}): "
+                        f"{gap_start.strftime(TIME_FORMAT)}-{gap_end.strftime(TIME_FORMAT)} ({embedded_gap_label})"
+                    )
+
+            for modality in target_modalities:
+                modality_skills = {}
+                for skill in SKILL_COLUMNS:
+                    combo_key = f"{skill}_{modality}"
+                    modality_skills[skill] = final_combinations.get(combo_key, 0)
+
+                for start_time, end_time in time_ranges:
+                    start_dt = datetime.combine(target_date_obj, start_time)
+                    end_dt = datetime.combine(target_date_obj, end_time)
+                    if end_dt <= start_dt:
+                        continue
+                    duration_hours = (end_dt - start_dt).total_seconds() / 3600
+
+                    rule_modifier = effective_rule.get('modifier', 1.0)
+                    hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
+                    if 'counts_for_hours' in effective_rule:
+                        counts_for_hours = effective_rule['counts_for_hours']
+                    else:
+                        counts_for_hours = hours_counting_config.get('shift_default', True)
+
+                    task_label = effective_rule.get('label', activity_desc)
+
+                    rows_per_modality[modality].append({
+                        'PPL': ppl_str,
+                        'canonical_id': canonical_id,
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'shift_duration': duration_hours,
+                        'Modifier': rule_modifier,
+                        'tasks': task_label,
+                        'counts_for_hours': counts_for_hours,
+                        'row_type': 'shift',
+                        **modality_skills
+                    })
+                    workers_with_shifts_by_modality[modality].add(canonical_id)
 
     # Synthetic recurring shifts are injected after Medweb parsing so they use the
     # same shift/gap normalization and roster precedence as CSV-derived rows.

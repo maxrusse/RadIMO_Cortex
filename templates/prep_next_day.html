@@ -1285,11 +1285,6 @@
     </div>
 
     <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-      <strong>HARD RELOAD TODAY from CSV:</strong>
-      <button class="btn btn-success" id="load-today-btn-today" onclick="loadFromCSV('today')" style="display: none;">
-        HARD RELOAD TODAY
-      </button>
-      <span id="load-status-today" style="color: #666;"></span>
       <button class="btn btn-primary" onclick="openAddWorkerModal('today')" style="margin-left: auto;">+ Add
         Worker</button>
     </div>
@@ -1529,6 +1524,7 @@
   </script>
 
   <script src="{{ url_for('static', filename='js/timeline.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/timeline_feed.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.config.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.state.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.render.js') }}"></script>

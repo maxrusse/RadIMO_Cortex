@@ -744,6 +744,34 @@ times:
     - "14:00-15:00"
 ```
 
+### Segmented Rules
+
+Use `segments` when one matched activity needs different times or different `skill_overrides`
+within the same rule. Parent values act as defaults and each segment can override only the
+parts that change.
+
+```yaml
+- match: "SBZ Spät Assistent"
+  type: "shift"
+  times:
+    default: "11:30-20:00"   # optional top-level summary time for admin display
+  skill_overrides:
+    all: 0
+    notfall: -1
+  segments:
+    - times:
+        default: "11:30-15:45"
+      skill_overrides:
+        gyn: -1
+    - times:
+        default: "15:45-20:00"
+      skill_overrides:
+        gyn: 0
+```
+
+This produces two shift segments from one matched CSV activity. The same `segments` shape is
+also supported for `type: "gap"` rules.
+
 ---
 
 ## Worker Skill Matrix

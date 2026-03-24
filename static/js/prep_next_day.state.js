@@ -11,7 +11,7 @@ let editMode = { today: false, tomorrow: false };  // Inline edit mode defaults 
 let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
 let tableFilters = { today: { modality: '', skill: '', hideZero: true }, tomorrow: { modality: '', skill: '', hideZero: true } };
 let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
-let sortState = { today: { column: 'worker', direction: 'asc' }, tomorrow: { column: 'worker', direction: 'asc' } };
+let sortState = { today: { column: 'shift', direction: 'asc' }, tomorrow: { column: 'shift', direction: 'asc' } };
 let modalMode = 'edit';
 let modalEditMode = true;
 let lastAddedShiftMeta = null;
@@ -35,6 +35,8 @@ const GERMAN_TO_ENGLISH_WEEKDAYS = {
   Freitag: 'friday',
   Samstag: 'saturday'
 };
+const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
+const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
 let prepTargetDate = CONFIG.prep_target_date || null;
 let prepTargetWeekday = CONFIG.prep_target_weekday_name || null;
 let prepTargetDateGerman = CONFIG.prep_target_date_german || null;
@@ -46,6 +48,33 @@ let addWorkerModalState = {
   tasks: [],  // Array of { task, modality, start_time, end_time, modifier, skills }
   containerId: 'modal-content'
 };
+
+function buildWorkerSortKey(name) {
+  const raw = (name == null ? '' : String(name)).trim();
+  if (!raw) return '';
+
+  const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return raw.toLowerCase();
+
+  const tokens = cleaned
+    .split(' ')
+    .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
+    .filter(Boolean)
+    .filter(token => {
+      const normalized = token.toLowerCase();
+      return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
+    });
+
+  if (tokens.length === 0) {
+    const fallback = cleaned.toLowerCase();
+    return `${fallback}|${fallback}`;
+  }
+
+  const last = tokens[tokens.length - 1].toLowerCase();
+  const first = tokens.slice(0, -1).join(' ').toLowerCase();
+  const full = tokens.join(' ').toLowerCase();
+  return `${last}|${first}|${full}`;
+}
 
 
 /**

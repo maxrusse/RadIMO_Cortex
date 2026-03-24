@@ -80,6 +80,7 @@ from data_manager.worker_management import (
 from data_manager.file_ops import (
     apply_roster_overrides_to_schedule,
     backup_dataframe,
+    persist_live_backup,
     load_staged_dataframe,
     load_unified_live_backup,
     initialize_data_from_unified,
@@ -158,6 +159,7 @@ __all__ = [
     # File operations
     'apply_roster_overrides_to_schedule',
     'backup_dataframe',
+    'persist_live_backup',
     'load_staged_dataframe',
     'load_unified_live_backup',
     'initialize_data_from_unified',

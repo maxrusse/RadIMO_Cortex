@@ -407,83 +407,83 @@
       color: #666;
     }
 
-    .flow-row {
-      border: 1px solid #dbe1e8;
-      border-radius: 6px;
-      margin-bottom: 0.5rem;
-      background: #fff;
-      overflow: hidden;
-    }
-
-    .flow-row summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 0.55rem 0.75rem;
-      background: #eef4fb;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-    }
-
-    .flow-row summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .flow-row-body {
+    .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 0.65rem;
-      padding: 0.7rem;
-      background: #fcfdff;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.85rem;
     }
 
-    .flow-table-wrap h4 {
-      margin: 0 0 0.4rem 0;
-      font-size: 0.85rem;
-      color: #333;
-    }
-
-    .flow-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
+    .summary-card {
       background: #fff;
+      border: 1px solid #dbe4ee;
+      border-radius: 8px;
+      padding: 0.85rem 0.95rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
 
-    .flow-table th,
-    .flow-table td {
-      border: 1px solid #e4e8ed;
-      padding: 0.35rem 0.45rem;
-      text-align: left;
+    .summary-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.65rem;
     }
 
-    .flow-table th {
-      background: #004892;
-      color: #fff;
-      font-weight: 600;
+    .summary-card-title {
+      font-weight: 700;
+      color: #203040;
+      font-size: 0.92rem;
     }
 
-    .flow-table td.count {
-      width: 70px;
-      text-align: right;
-      font-weight: 600;
-    }
-
-    .summary-badges {
-      display: inline-flex;
-      gap: 0.35rem;
-      font-size: 0.78rem;
-      color: #3f4b57;
-    }
-
-    .badge-pill {
-      background: #dfe9f6;
-      border: 1px solid #c5d8f0;
+    .summary-card-badge {
+      display: inline-block;
+      min-width: 44px;
+      text-align: center;
+      padding: 0.14rem 0.45rem;
       border-radius: 999px;
-      padding: 0.05rem 0.5rem;
-      white-space: nowrap;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .summary-card-main {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #0f2740;
+      line-height: 1.1;
+      margin-bottom: 0.15rem;
+    }
+
+    .summary-card-main-label {
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6a7a87;
+      margin-bottom: 0.5rem;
+    }
+
+    .summary-card-sub {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+      color: #5c6b77;
+    }
+
+    .summary-card-sub-stack {
+      padding-top: 0.35rem;
+      border-top: 1px solid #e6edf4;
+      margin-top: 0.1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .summary-card-empty {
+      padding: 1rem;
+      border: 1px dashed #ccd6e2;
+      border-radius: 8px;
+      color: #667;
+      font-style: italic;
+      background: #fbfcfe;
     }
 
     /* Hide sections based on mode */
@@ -616,42 +616,20 @@
       </table>
     </div>
 
-    <!-- Per Modality View -->
+    <!-- Per Modality Summary -->
     <div class="section-divider">
-      <h3>Per Modality (Counts)</h3>
+      <h3>Per Modality</h3>
     </div>
     <div class="table-container">
-      <table class="load-table" id="table-modality">
-        <thead>
-          <tr>
-            <th class="sortable" data-sort="name" onclick="sortTable('modality', 'name')">Worker</th>
-            {% for mod in modalities %}
-            <th class="sortable" data-sort="{{ mod }}" onclick="sortTable('modality', '{{ mod }}')">{{ modality_settings[mod].label }}</th>
-            {% endfor %}
-            <th class="sortable" data-sort="total" onclick="sortTable('modality', 'total')">Total Count</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-modality"></tbody>
-      </table>
+      <div class="summary-grid" id="summary-modality"></div>
     </div>
 
-    <!-- Per Skill View -->
+    <!-- Per Skill Summary -->
     <div class="section-divider">
       <h3>Per Skill</h3>
     </div>
     <div class="table-container">
-      <table class="load-table" id="table-skill">
-        <thead>
-          <tr>
-            <th class="sortable" data-sort="name" onclick="sortTable('skill', 'name')">Worker</th>
-            {% for skill in skills %}
-            <th class="sortable" data-sort="{{ skill }}" onclick="sortTable('skill', '{{ skill }}')">{{ skill_settings[skill].label }}</th>
-            {% endfor %}
-            <th class="sortable" data-sort="total" onclick="sortTable('skill', 'total')">Total</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-skill"></tbody>
-      </table>
+      <div class="summary-grid" id="summary-skill"></div>
     </div>
   </div>
 
@@ -700,8 +678,6 @@
         No weighted cross-skill movement to visualize yet.
       </div>
     </div>
-
-    <div id="flow-rows"></div>
     <div id="flow-no-data-msg" class="no-data" style="display: none;">
       No flow data available yet.
     </div>

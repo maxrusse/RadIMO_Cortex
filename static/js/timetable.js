@@ -11,9 +11,12 @@ let TimetableConfig = {
   skillSlugMap: {},
   skillColorMap: {},
   modColorMap: {},
+  taskRoles: [],
+  workerSkills: {},
+  targetWeekday: '',
   currentModality: 'all',
   skillFilter: 'all',
-  data: []
+  dataByModality: {}
 };
 let currentTimeIntervalId = null;
 
@@ -101,18 +104,53 @@ function buildTimeline() {
     return;
   }
 
-  const { data, skillColumns, skillSlugMap, skillColorMap, currentModality } = TimetableConfig;
+  const {
+    dataByModality,
+    skillColumns,
+    skillSlugMap,
+    skillColorMap,
+    currentModality,
+    taskRoles,
+    workerSkills,
+    targetWeekday,
+    modalities
+  } = TimetableConfig;
   const isAllView = currentModality === 'all';
 
   // Validate data
-  if (!Array.isArray(data)) {
-    console.error('Timeline data is not an array:', data);
+  if (!dataByModality || typeof dataByModality !== 'object') {
+    console.error('Timeline data is not a modality map:', dataByModality);
     grid.innerHTML = '<div class="empty-state">Error: Invalid timeline data format</div>';
     return;
   }
 
-  // Filter out empty entries
-  const filteredData = data.filter(function(entry) {
+  const feedResult = TimelineFeed.buildEntriesByWorker(dataByModality, {
+    modalities: Object.keys(modalities || {}),
+    skills: skillColumns,
+    workerSkills: workerSkills || {},
+    taskRoles: taskRoles || [],
+    targetDay: targetWeekday || '',
+    normalizeSkillValue: function(value) {
+      if (value === undefined || value === null) return 0;
+      if (value === 'w' || value === 'W' || value === 2 || value === '2') return 'w';
+      if (typeof value === 'string' && value.trim() === '') return 0;
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? value : parsed;
+    }
+  });
+  const timelineData = TimelineFeed.convertGroupsToTimelineData(feedResult.entries || [], {
+    skills: skillColumns,
+    normalizeSkillValue: function(value) {
+      if (value === undefined || value === null) return 0;
+      if (value === 'w' || value === 'W' || value === 2 || value === '2') return 'w';
+      if (typeof value === 'string' && value.trim() === '') return 0;
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? value : parsed;
+    }
+  });
+
+  // Filter out empty entries after shared normalization
+  const filteredData = timelineData.filter(function(entry) {
     return isValidTimelineEntry(entry, skillColumns);
   });
 

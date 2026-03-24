@@ -96,13 +96,6 @@ function applyEditModeUI(tab) {
   }
   updateSaveButtonCount(tab);
 
-  // Safety gate: only show Load Today in edit mode
-  if (tab === 'today') {
-    const loadBtn = document.getElementById('load-today-btn-today');
-    if (loadBtn) {
-      loadBtn.style.display = editMode[tab] ? 'inline-block' : 'none';
-    }
-  }
 }
 
 // Sort entries by column while keeping worker rows grouped
@@ -117,31 +110,34 @@ function sortEntries(tab, column) {
 
   const entries = entriesData[tab];
   entries.sort((a, b) => {
-    let aVal, bVal;
+    const aShift = getTableShifts(a)[0] || {};
+    const bShift = getTableShifts(b)[0] || {};
+    const aWorker = a.worker || '';
+    const bWorker = b.worker || '';
+    const aTime = aShift.start_time || '';
+    const bTime = bShift.start_time || '';
+    const aTask = aShift.task || '';
+    const bTask = bShift.task || '';
+
+    let cmp = 0;
     switch (column) {
       case 'worker':
-        aVal = a.worker || '';
-        bVal = b.worker || '';
+        cmp = buildWorkerSortKey(aWorker).localeCompare(buildWorkerSortKey(bWorker))
+          || aTime.localeCompare(bTime)
+          || aTask.localeCompare(bTask);
         break;
-      case 'shift': {
-        const aShifts = getTableShifts(a);
-        const bShifts = getTableShifts(b);
-        aVal = aShifts[0]?.start_time || '';
-        bVal = bShifts[0]?.start_time || '';
+      case 'task':
+        cmp = aTask.localeCompare(bTask)
+          || aTime.localeCompare(bTime)
+          || buildWorkerSortKey(aWorker).localeCompare(buildWorkerSortKey(bWorker));
         break;
-      }
-      case 'task': {
-        const aShifts = getTableShifts(a);
-        const bShifts = getTableShifts(b);
-        aVal = aShifts[0]?.task || '';
-        bVal = bShifts[0]?.task || '';
-        break;
-      }
+      case 'shift':
       default:
-        aVal = a.worker || '';
-        bVal = b.worker || '';
+        cmp = aTime.localeCompare(bTime)
+          || aTask.localeCompare(bTask)
+          || buildWorkerSortKey(aWorker).localeCompare(buildWorkerSortKey(bWorker));
+        break;
     }
-    const cmp = aVal.localeCompare(bVal);
     return state.direction === 'asc' ? cmp : -cmp;
   });
 
@@ -185,13 +181,13 @@ function renderTableHeader(tab) {
   headerHtml += '<th rowspan="2">Actions</th>';
   headerHtml += '</tr>';
 
-  // Second header row: sub-columns (2-char labels for compactness)
+  // Second header row: sub-columns (3-char labels for compactness)
   headerHtml += '<tr class="header-sub">';
   if (displayOrder === 'modality-first') {
     // Skill labels under each modality
     modalKeys.forEach(() => {
       SKILLS.forEach(skill => {
-        const shortLabel = skill.substring(0, 2);
+        const shortLabel = skill.substring(0, 3);
         headerHtml += `<th class="sub-col" title="${escapeHtml(skill)}">${shortLabel}</th>`;
       });
     });
@@ -201,7 +197,7 @@ function renderTableHeader(tab) {
       modalKeys.forEach(mod => {
         const modSettings = MODALITY_SETTINGS[mod] || {};
         const label = (modSettings.label || mod).replace(/-/g, '');
-        const shortLabel = label.substring(0, 2).toUpperCase();
+        const shortLabel = label.substring(0, 3).toUpperCase();
         headerHtml += `<th class="sub-col" title="${escapeHtml(label)}">${shortLabel}</th>`;
       });
     });
@@ -312,13 +308,11 @@ function renderTable(tab) {
     const shifts = getTableShifts(group).filter(shift => !shift.deleted);
     if (shifts.length === 0) return;
 
-    if (filter.hideZero && !groupHasActiveSkills(group, filter)) {
+    if (filterActive && !groupHasActiveSkills(group, filter)) {
       return;
     }
 
-    const useRowFiltering = filterActive && (filter.modality || filter.skill);
-    const shiftsToRender = useRowFiltering ? shifts.filter(shift => shiftMatchesFilters(shift, filter, group)) : shifts;
-    if (filterActive && shiftsToRender.length === 0) return;
+    const shiftsToRender = shifts;
 
     const escapedWorker = escapeHtml(group.worker);
 
@@ -904,71 +898,10 @@ function buildSkillSlugMap() {
 
 // Convert entriesData format to timeline chart format
 function convertToTimelineData(tab) {
-  const groups = entriesData[tab] || [];
-  const timelineEntries = [];
-
-  groups.forEach(group => {
-    const worker = (group.worker || '').trim();
-    const shifts = getTableShifts(group).filter(shift => !shift.deleted);
-    shifts.forEach(shift => {
-      const isGapRow = Boolean(shift.is_gap_entry);
-      const assignedModalities = Object.entries(shift.modalities || {})
-        .filter(([_, modData]) => modData.row_index !== undefined && modData.row_index >= 0);
-      const modalityList = assignedModalities.map(([modKey]) => modKey);
-
-      const entry = {
-        PPL: worker,
-        worker: worker,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        TIME: `${shift.start_time}-${shift.end_time}`,
-        modalities: modalityList,
-        row_type: isGapRow ? 'gap_segment' : 'shift_segment',
-        tasks: shift.task ? [shift.task] : [],
-        activeSkillsByModality: {},
-        explicitSkillsByModality: {},
-        explicitSkillValues: {}
-      };
-
-      if (!isGapRow) {
-        assignedModalities.forEach(([modKey, modData]) => {
-          const mod = String(modKey || '').toUpperCase();
-          if (!mod) return;
-          entry.activeSkillsByModality[mod] = entry.activeSkillsByModality[mod] || {};
-          entry.explicitSkillsByModality[mod] = entry.explicitSkillsByModality[mod] || {};
-
-          SKILLS.forEach(skill => {
-            const val = modData.skills?.[skill];
-            const normalized = normalizeSkillValueJS(val);
-            const isWeighted = val === 'w' || val === 'W';
-            const numVal = Number(val);
-            const isActive = isWeighted || (!Number.isNaN(numVal) && numVal >= 1);
-            const isExplicit = normalized === 1;
-
-            if (isActive) {
-              entry.activeSkillsByModality[mod][skill] = 1;
-            }
-            if (isExplicit) {
-              entry.explicitSkillsByModality[mod][skill] = 1;
-            }
-          });
-        });
-      }
-
-      SKILLS.forEach(skill => {
-        const isActive = Object.values(entry.activeSkillsByModality).some(modSkills => modSkills?.[skill] === 1);
-        const isExplicit = Object.values(entry.explicitSkillsByModality).some(modSkills => modSkills?.[skill] === 1);
-        entry[skill] = isActive ? 1 : 0;
-        if (isExplicit) {
-          entry.explicitSkillValues[skill] = 1;
-        }
-      });
-
-      timelineEntries.push(entry);
-    });
+  return TimelineFeed.convertGroupsToTimelineData(entriesData[tab] || [], {
+    skills: SKILLS,
+    normalizeSkillValue: normalizeSkillValueJS
   });
-
-  return timelineEntries;
 }
 
 // Render timeline chart for a tab

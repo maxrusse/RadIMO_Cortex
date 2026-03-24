@@ -456,6 +456,14 @@ def backup_dataframe(modality: str, use_staged: bool = False) -> None:
             selection_logger.error(f"Error backing up {mode_label} DataFrame for modality {modality}: {e}")
 
 
+def persist_live_backup() -> None:
+    """Persist the current live schedule snapshot for all modalities."""
+    try:
+        _write_unified_backup(use_staged=False)
+    except Exception as exc:
+        selection_logger.error("Error persisting unified live backup: %s", exc)
+
+
 def load_staged_dataframe(modality: str) -> bool:
     """
     Load staged or scheduled dataframe for a modality from JSON.

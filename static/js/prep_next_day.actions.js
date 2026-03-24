@@ -579,310 +579,19 @@ async function loadData() {
 
 // Build grouped entries list: worker -> shifts (time-based) -> modality×skills matrix
 function buildEntriesByWorker(data, tab = 'today') {
-  const counts = {};
-  const grouped = {};
-  const targetDay = getTargetWeekdayName(tab);
-
-  // First pass: collect all entries
-  MODALITIES.forEach(mod => {
-    const modData = Array.isArray(data[mod]) ? data[mod] : [];
-    modData.forEach(row => {
-      const workerName = row.PPL;
-      counts[workerName] = (counts[workerName] || 0) + 1;
-
-      // Parse task - handle both string and array formats
-      let taskStr = row.tasks || '';
-      let taskParts = [];
-      if (Array.isArray(taskStr)) {
-        taskParts = taskStr.filter(t => t && t.trim());
-        taskStr = taskParts.join(', ');
-      } else {
-        taskParts = String(taskStr)
-          .split(',')
-          .map(t => t.trim())
-          .filter(Boolean);
-      }
-
-      const rowType = row.row_type || 'shift';
-      const normalizedRowType = rowType.toString().toLowerCase();
-      const isGapRow = normalizedRowType === 'gap' || normalizedRowType === 'gap_segment';
-
-      // Pull default times from configured shifts/roles when missing
-      let roleConfig = TASK_ROLES.find(t => t.name === taskStr);
-      if (isGapRow && !roleConfig && taskParts.length > 0) {
-        const gapTaskName = taskParts.find(part => isGapTask(part));
-        if (gapTaskName) {
-          roleConfig = TASK_ROLES.find(t => t.name === gapTaskName);
-        }
-      }
-      let startTime = row.start_time;
-      let endTime = row.end_time;
-      if ((!startTime || !endTime) && roleConfig) {
-        if (isGapRow) {
-          const parsedTimes = getGapTimeRange(roleConfig, targetDay);
-          if (parsedTimes) {
-            [startTime, endTime] = parsedTimes;
-          }
-        } else {
-          // Use getShiftTimes helper for day-specific times
-          const shiftTimes = getShiftTimes(roleConfig, targetDay);
-          startTime = startTime || shiftTimes.start;
-          endTime = endTime || shiftTimes.end;
-        }
-      }
-      if (!startTime || !endTime) {
-        [startTime, endTime] = isGapRow ? ['12:00', '13:00'] : ['07:00', '15:00'];
-      }
-
-      // Roster structure is modality-scoped: { modality: { skill: value } }
-      const rosterPreset = (WORKER_SKILLS[workerName] || {});
-      const rosterSkills = rosterPreset[mod] || {};
-
-      // Get counts_for_hours from API response, or derive from task config
-      let countsForHours = row.counts_for_hours;
-      if (countsForHours === undefined) {
-        // Derive from task config if not in API response
-        countsForHours = roleConfig ? roleConfig.counts_for_hours : true;
-      }
-
-      const entry = {
-        worker: workerName,
-        modality: mod,
-        row_index: row.row_index,
-        start_time: startTime,
-        end_time: endTime,
-        modifier: row.Modifier !== undefined ? row.Modifier : 1.0,
-        counts_for_hours: countsForHours !== false,  // Default true
-        is_manual: Boolean(row.is_manual),
-        is_gap_entry: isGapRow,
-        skills: SKILLS.reduce((acc, skill) => {
-          const rawVal = row[skill];
-          const hasRaw = rawVal !== undefined && rawVal !== '';
-          if (isGapRow) {
-            if (hasRaw) {
-              acc[skill] = normalizeSkillValueJS(rawVal);
-              return acc;
-            }
-            const overrides = roleConfig?.skill_overrides || {};
-            const skillModKey = `${skill}_${mod.toLowerCase()}`;
-            if (overrides[skillModKey] !== undefined) {
-              acc[skill] = normalizeSkillValueJS(overrides[skillModKey]);
-              return acc;
-            }
-            if (overrides[skill] !== undefined) {
-              acc[skill] = normalizeSkillValueJS(overrides[skill]);
-              return acc;
-            }
-            if (overrides.all !== undefined) {
-              acc[skill] = normalizeSkillValueJS(overrides.all);
-              return acc;
-            }
-            acc[skill] = -1;
-            return acc;
-          }
-
-          const fallback = rosterSkills[skill];
-          const hasFallback = fallback !== undefined && fallback !== '';
-
-          const normalizedRaw = hasRaw ? normalizeSkillValueJS(rawVal) : undefined;
-          const normalizedFallback = hasFallback ? normalizeSkillValueJS(fallback) : undefined;
-
-          acc[skill] = hasRaw
-            ? normalizedRaw
-            : (hasFallback ? normalizedFallback : 0);
-          return acc;
-        }, {}),
-        task: taskStr
-      };
-
-      if (!grouped[workerName]) {
-        grouped[workerName] = {
-          worker: workerName,
-          shifts: {},
-          modalShifts: {},
-          allEntries: [],
-          allGaps: []
-        };
-      }
-      grouped[workerName].allEntries.push(entry);
-      const gapCandidates = isGapRow ? [{
-        start: startTime,
-        end: endTime,
-        activity: taskStr,
-        counts_for_hours: countsForHours === true
-      }] : [];
-      grouped[workerName].allGaps = [...(grouped[workerName].allGaps || []), ...gapCandidates];
-
-      const taskKey = (entry.task || '').trim();
-      // Group by time slot (shift key = start_time-end_time)
-      const shiftKey = entry.is_gap_entry
-        ? `${entry.start_time}-${entry.end_time}-gap-${taskKey}`
-        : `${entry.start_time}-${entry.end_time}`;
-      const modalShiftKey = `${entry.start_time}-${entry.end_time}-${entry.is_gap_entry ? 'gap' : 'shift'}-${taskKey}`;
-      if (!grouped[workerName].shifts[shiftKey]) {
-        grouped[workerName].shifts[shiftKey] = {
-          start_time: entry.start_time,
-          end_time: entry.end_time,
-          modifier: entry.modifier,
-          counts_for_hours: entry.counts_for_hours,
-          task: entry.task,
-        modalities: {},
-        timeSegments: [{ start: entry.start_time, end: entry.end_time }],
-        is_manual: entry.is_manual,
-        is_gap_entry: entry.is_gap_entry
-        };
-      }
-      if (!grouped[workerName].modalShifts[modalShiftKey]) {
-        grouped[workerName].modalShifts[modalShiftKey] = {
-          start_time: entry.start_time,
-          end_time: entry.end_time,
-          modifier: entry.modifier,
-          counts_for_hours: entry.counts_for_hours,
-          task: entry.task,
-        modalities: {},
-        timeSegments: [{ start: entry.start_time, end: entry.end_time }],
-        is_manual: entry.is_manual,
-        is_gap_entry: entry.is_gap_entry
-        };
-      }
-
-      // Add this modality's skills to the shift
-      const modKey = mod.toLowerCase();
-      grouped[workerName].shifts[shiftKey].modalities[modKey] = {
-        skills: entry.skills,
-        row_index: entry.row_index,
-        modifier: entry.modifier
-      };
-      grouped[workerName].modalShifts[modalShiftKey].modalities[modKey] = {
-        skills: entry.skills,
-        row_index: entry.row_index,
-        modifier: entry.modifier
-      };
-
-      // Merge tasks if different
-      const existingTask = grouped[workerName].shifts[shiftKey].task;
-      if (entry.task && existingTask && !existingTask.includes(entry.task)) {
-        grouped[workerName].shifts[shiftKey].task = existingTask + ', ' + entry.task;
-      } else if (entry.task && !existingTask) {
-        grouped[workerName].shifts[shiftKey].task = entry.task;
-      }
-      if (grouped[workerName].shifts[shiftKey].is_gap_entry !== undefined) {
-        grouped[workerName].shifts[shiftKey].is_gap_entry =
-          grouped[workerName].shifts[shiftKey].is_gap_entry && entry.is_gap_entry;
-      }
-      const existingModalTask = grouped[workerName].modalShifts[modalShiftKey].task;
-      if (entry.task && existingModalTask && !existingModalTask.includes(entry.task)) {
-        grouped[workerName].modalShifts[modalShiftKey].task = existingModalTask + ', ' + entry.task;
-      } else if (entry.task && !existingModalTask) {
-        grouped[workerName].modalShifts[modalShiftKey].task = entry.task;
-      }
-      // Gaps are tracked separately via explicit gap segment rows.
-    });
+  const result = TimelineFeed.buildEntriesByWorker(data, {
+    modalities: MODALITIES,
+    skills: SKILLS,
+    workerSkills: WORKER_SKILLS,
+    taskRoles: TASK_ROLES,
+    targetDay: getTargetWeekdayName(tab),
+    normalizeSkillValue: normalizeSkillValueJS,
+    lastAddedShiftMeta
   });
-
-  // Ensure every shift carries all modalities so inline+modal edits can add missing ones
-  Object.values(grouped).forEach(group => {
-    const preset = WORKER_SKILLS[group.worker] || {};
-    Object.values(group.shifts).forEach(shift => {
-      MODALITIES.map(m => m.toLowerCase()).forEach(modKey => {
-        if (!shift.modalities[modKey]) {
-          const skills = {};
-          // Default placeholders to -1 so new modality rows are opt-in
-          // Roster structure is modality-scoped: { modality: { skill: value } }
-          const rosterDefaults = preset[modKey] || {};
-          SKILLS.forEach(skill => {
-            const fallback = rosterDefaults[skill];
-            skills[skill] = fallback !== undefined ? fallback : -1;
-          });
-          shift.modalities[modKey] = {
-            skills,
-            row_index: -1,
-            modifier: shift.modifier || 1.0,
-            placeholder: true
-          };
-        }
-      });
-    });
-  });
-
-  // Convert shifts to array (no split-shift merging).
-  Object.values(grouped).forEach(group => {
-    const shiftsArr = Object.entries(group.shifts)
-      .map(([key, shift]) => ({ ...shift, shiftKey: key }))
-      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
-
-    let modalShiftsArr = Object.entries(group.modalShifts || {})
-      .map(([key, shift]) => ({ ...shift, shiftKey: key }))
-      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
-
-    if (lastAddedShiftMeta && lastAddedShiftMeta.worker === group.worker) {
-      const matchIdx = modalShiftsArr.findIndex(shift => shift.shiftKey === lastAddedShiftMeta.shiftKey);
-      if (matchIdx >= 0) {
-        const [match] = modalShiftsArr.splice(matchIdx, 1);
-        modalShiftsArr.push(match);
-        lastAddedShiftMeta = null;
-      }
-    }
-
-    group.modalShiftsArray = modalShiftsArr.map(shift => {
-      const segments = (shift.timeSegments || []).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-      const firstStart = segments[0]?.start || shift.start_time;
-      const lastEnd = segments[segments.length - 1]?.end || shift.end_time;
-
-      return {
-        ...shift,
-        start_time: firstStart,
-        end_time: lastEnd,
-        timeSegments: segments
-      };
-    });
-
-    // Keep shifts and gaps as independent rows (no split-shift merging).
-    const mergedShifts = [];
-    let currentMerged = null;
-
-    shiftsArr.forEach(shift => {
-      if (!currentMerged) {
-        currentMerged = {
-          ...shift,
-          timeSegments: [{ start: shift.start_time, end: shift.end_time }],
-          is_manual: shift.is_manual,
-          is_gap_entry: shift.is_gap_entry
-        };
-      } else {
-        // Different task or no gap - save current and start new
-        mergedShifts.push(currentMerged);
-        currentMerged = {
-          ...shift,
-          timeSegments: [{ start: shift.start_time, end: shift.end_time }],
-          is_manual: shift.is_manual,
-          is_gap_entry: shift.is_gap_entry
-        };
-      }
-    });
-    if (currentMerged) mergedShifts.push(currentMerged);
-
-    // Attach shift timing without embedding gaps (gap segments are separate).
-    group.shiftsArray = mergedShifts.map(shift => {
-      const segments = (shift.timeSegments || []).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-      const firstStart = segments[0]?.start || shift.start_time;
-      const lastEnd = segments[segments.length - 1]?.end || shift.end_time;
-
-      return {
-        ...shift,
-        start_time: firstStart,
-        end_time: lastEnd,
-        timeSegments: segments
-      };
-    });
-
-    group.tableShiftsArray = group.modalShiftsArray || group.shiftsArray;
-  });
-
-  // Sort workers (default by name)
-  const entries = Object.values(grouped).sort((a, b) => a.worker.localeCompare(b.worker));
-
-  return { entries, counts };
+  if (lastAddedShiftMeta) {
+    lastAddedShiftMeta = null;
+  }
+  return result;
 }
 
 // Track inline time change
@@ -2359,107 +2068,45 @@ async function saveAddWorkerModal() {
   }
 
   const { tab, tasks } = addWorkerModalState;
-  const workerEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
+  const workerEndpoint = tab === 'today'
+    ? '/api/live-schedule/apply-worker-plan'
+    : '/api/prep-next-day/apply-worker-plan';
 
   try {
-    // Group tasks into shifts vs gaps to handle ordering
-    const normalTasks = [];
-    const gapTasks = [];
+    const shifts = tasks.map(task => {
+      const isGap = isGapTask(task.task);
+      const modalities = {};
+      const skillsByModality = task.skillsByModality || {};
 
-    tasks.forEach(t => {
-      if (isGapTask(t.task)) {
-        gapTasks.push(t);
-      } else {
-        normalTasks.push(t);
-      }
+      Object.entries(skillsByModality).forEach(([modKey, modSkills]) => {
+        modalities[modKey] = {
+          skills: { ...(modSkills || {}) }
+        };
+      });
+
+      return {
+        start_time: task.start_time,
+        end_time: task.end_time,
+        modifier: task.modifier,
+        counts_for_hours: isGap ? task.counts_for_hours === true : task.counts_for_hours !== false,
+        task: task.task,
+        row_type: isGap ? 'gap' : 'shift',
+        modalities
+      };
     });
 
-    // Track new shifts: { start, end, modality, row_index }
-    const addedShifts = [];
+    const response = await fetch(workerEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        worker: workerLabel,
+        shifts
+      })
+    });
 
-    // 1. Process Normal Tasks (Shifts/Roles) first
-    // For each task, iterate through all modalities in skillsByModality
-    for (const task of normalTasks) {
-      const skillsByMod = task.skillsByModality || {};
-
-      // Add entry for each modality that has at least one skill != -1
-      for (const modKey of Object.keys(skillsByMod)) {
-        const modSkills = skillsByMod[modKey];
-        // Check if any skill is active (not all -1)
-        const hasActiveSkill = Object.values(modSkills).some(v => v !== -1);
-        if (!hasActiveSkill) continue;  // Skip modality if all skills are -1
-
-        const response = await fetch(workerEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality: modKey,
-            worker_data: {
-              PPL: workerLabel,
-              start_time: task.start_time,
-              end_time: task.end_time,
-              Modifier: task.modifier,
-              counts_for_hours: task.counts_for_hours !== false,
-              tasks: task.task,
-              ...modSkills
-            }
-          })
-        });
-
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to add worker task');
-        }
-
-        // Capture new row info for gap checking
-        if (result.row_index !== undefined) {
-          addedShifts.push({
-            start: task.start_time,
-            end: task.end_time,
-            modality: modKey,
-            row_index: result.row_index
-          });
-        }
-      }
-    }
-
-    // 2. Process Gap Tasks (create standalone gap intent rows)
-    // Gap intents are independent rows (row_type='gap') that the backend normalizes into gap_segment rows.
-    for (const gap of gapTasks) {
-      const gapStart = gap.start_time;
-      const gapEnd = gap.end_time;
-      const skillsByMod = gap.skillsByModality || {};
-
-      // Process each modality in the gap
-      for (const modKey of Object.keys(skillsByMod)) {
-        const modSkills = skillsByMod[modKey];
-        // Check if any skill is active (not all -1)
-        const hasActiveSkill = Object.values(modSkills).some(v => v !== -1);
-        if (!hasActiveSkill) continue;  // Skip modality if all skills are -1
-
-        const response = await fetch(workerEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            modality: modKey,
-            worker_data: {
-              PPL: workerLabel,
-              start_time: gapStart,
-              end_time: gapEnd,
-              Modifier: gap.modifier,
-              counts_for_hours: gap.counts_for_hours === true,
-              tasks: gap.task,
-              row_type: 'gap',
-              ...modSkills
-            }
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'Failed to add gap task');
-        }
-      }
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to add worker plan');
     }
 
     closeModal();
