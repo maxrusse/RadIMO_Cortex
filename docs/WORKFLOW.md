@@ -9,7 +9,7 @@
 ## 🔄 Complete Flow
 
 1) **Source**: medweb exports a monthly CSV with worker activities.
-2) **Ingestion**: the CSV is uploaded once as the master copy; it powers both manual processing and the daily preload.
+2) **Ingestion**: the CSV is uploaded as the current master copy; it powers both manual processing and the daily preload.
 3) **Parsing**: mapping rules attach modality and shift names; shift times come from the config with Friday-specific exceptions when defined.
 4) **Normalization**: shift windows become start/end datetimes. Durations are calculated for same-day shifts only (end time must be after start time).
 5) **Exclusions**: scheduled boards or meetings split shifts into available segments without losing total coverage accounting.
@@ -26,20 +26,23 @@ RadIMO uses a single monthly CSV (`master_medweb.csv`) to power the entire sched
 ### 1. Upload Master
 **Action**: Admin Panel -> **Master CSV Upload**
 - Saves the file to `uploads/master_medweb.csv`.
-- This file acts as the source of truth for "Load Today" and "Preload Tomorrow".
+- This file acts as the source of truth for `HARD RELOAD TODAY` and `Prep Tomorrow`.
+- Uploading a new file does **not** automatically overwrite an already staged next day.
 
 ### 2. Daily Operations
-**Action**: Admin Panel -> **Load Today**
+**Action**: Admin Panel -> **HARD RELOAD TODAY**
 - Manually trigger a rebuild of today's schedule from the Master CSV.
 - **WARNING**: This resets all current assignment counters and history.
+- Use only for real same-day resets. Normal same-day edits belong on `/prep-today`.
 
 ### 3. Future Planning
-**Action**: Admin Panel -> **Preload Tomorrow**
-- Fetches the next workday's data from the Master CSV.
-- Populates the "Prep Tomorrow" view in Schedule Edit.
+**Action**: **Prep Tomorrow** page -> reload selected date from Master CSV
+- Rebuilds the staged next-day plan from the current Master CSV.
+- Overwrites the saved staged plan for that selected target date.
+- This is the only normal path that refreshes an already prepared next day from a newly uploaded CSV.
 
 ### 4. Automated Reset
-- Every morning at the **configured time** (default 07:30 CET), the system automatically performs the "Load Today" logic for the new date.
+- Every morning at the configured reset time (currently `07:30`), the system performs the daily live reset logic for the new date.
 
 ---
 
@@ -51,6 +54,7 @@ Admins can adjust "Today" (Live) or plan "Tomorrow" (Staged) via separate pages.
 - **Manual highlighting**: Any shifts added or edited manually by an admin are highlighted (subtle yellow) to distinguish them from auto-loaded Master CSV data.
 - **Gaps as segments**: Gaps (meetings, breaks, boards) are stored as `gap_segment` rows, and shifts are split into `shift_segment` availability windows. Gaps always win over shifts, so availability comes only from `shift_segment` rows.
 - **Effective duration**: Each shift segment includes its own duration, and gap segments never contribute to availability or hours.
+- **Shared timeline semantics**: timetable and prep/change pages use the same grouped worker/shift feed, so tooltips and active skill-modality labels follow the same `1`/`w` logic on both pages.
 
 ---
 
@@ -59,6 +63,7 @@ Admins can adjust "Today" (Live) or plan "Tomorrow" (Staged) via separate pages.
 - **Mapping rules**: First match wins. Order from specific to general.
 - **Same-day shifts**: All shifts must have end time after start time on the same day.
 - **Skill roster**: Saves directly to `worker_skill_roster.json`; priority over mapping defaults.
+- **Synthetic shifts**: Config-defined recurring workers are injected during day build; roster `-1` still blocks them.
 
 ---
 
@@ -67,4 +72,5 @@ Admins can adjust "Today" (Live) or plan "Tomorrow" (Staged) via separate pages.
 - [ ] Upload Master CSV at start of month.
 - [ ] Review "Prep Tomorrow" in the evening (`/prep-tomorrow`).
 - [ ] Use "Change Today" for same-day sickness/changes (`/prep-today`).
+- [ ] Use `HARD RELOAD TODAY` only when today must be rebuilt from Master CSV.
 - [ ] Monitor `selection.log` for auto-reset confirmation at 07:30.

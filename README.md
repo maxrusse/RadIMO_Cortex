@@ -8,7 +8,7 @@ Worker assignment for radiology teams with automatic load balancing, skill-aware
 
 ## What is RadIMO Cortex?
 
-RadIMO Cortex orchestrates workload distribution for radiology teams across multiple modalities (CT, MR, XRAY, Mammo) and skills (Notfall, Privat, Gyn, Päd, AOU, CVT, MHD). It balances assignments for fairness while respecting availability, shift timing, and skill levels.
+RadIMO Cortex orchestrates workload distribution for radiology teams across CT, MR, and XRAY using skills such as Notfall, Privat, Gyn, AOU, CVT, and MHD. It balances assignments for fairness while respecting availability, shift timing, and skill levels.
 
 **Key capabilities:**
 - Real-time worker assignment with automatic load balancing
@@ -23,6 +23,7 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across mult
 - Smart skill filtering on Schedule Edit and Timetable views
 - Special tasks for custom sub-workflows with separate tracking
 - Recurring synthetic shift workers defined in config for summary roles
+- Shared timeline rendering for timetable + prep/change pages
 
 ---
 
@@ -44,7 +45,7 @@ flask --app app run --debug  # Start application
 **Operational pages (access-protected if enabled):**
 | Page | URL | Description |
 |------|-----|-------------|
-| Main Interface | `/` | Assignment by modality (CT/MR/XRAY/Mammo) |
+| Main Interface | `/` | Assignment by modality (CT/MR/XRAY) |
 | Skill View | `/by-skill` | Assignment by skill (Notfall, CVT, MHD, etc.) |
 | Timetable | `/timetable` | Visualize shifts and schedules |
 
@@ -54,7 +55,7 @@ Admin pages require a session via `/login` when `admin_access_protection_enabled
 **Admin pages (password protected when enabled):**
 | Page | URL | Description |
 |------|-----|-------------|
-| Admin Panel | `/upload` | Master CSV management, stats, system health |
+| Admin Panel | `/upload` | Master CSV upload and `HARD RELOAD TODAY` |
 | Skill Matrix | `/skill-roster` | Edit worker skills (Direct Save) |
 | Schedule Edit (Today) | `/prep-today` | Edit today (live) |
 | Schedule Edit (Tomorrow) | `/prep-tomorrow` | Prep tomorrow (staged) |
@@ -65,11 +66,11 @@ Admin pages require a session via `/login` when `admin_access_protection_enabled
 
 ## Core Workflow
 
-Master CSV (monthly schedule)
+Master CSV (current source file)
     ↓
 Upload via /upload (Master CSV)
     ↓
-Load Today (Live) or Preload Tomorrow (Staged)
+HARD RELOAD TODAY (Live) or Prep Tomorrow reload (Staged)
     ↓
 Config-driven parsing (medweb_mapping rules)
     ↓
@@ -115,6 +116,7 @@ Where each control lives:
 2. **Schedule Edit (Today)** (`/prep-today`) - Modify today (live)
 3. **Schedule Edit (Tomorrow)** (`/prep-tomorrow`) - Prepare tomorrow (staged)
 4. **Weight Matrix** (`/button-weights`) - Configure button weights and special task weights
+5. **Balance** (`/worker-load`) - Simple summary, Advanced matrix, Flow chart
 
 ### Navigation & UI Features
 
@@ -124,9 +126,16 @@ Where each control lives:
 - **Skill Matrix** (`/skill-roster`) - Manage worker skills (direct save)
 - **Change Today** (`/prep-today`) - Live edits for today
 - **Prep Tomorrow** (`/prep-tomorrow`) - Staged edits for tomorrow
-- **Worker Load** (`/worker-load`) - Load monitoring dashboard
+- **Worker Load** (`/worker-load`) - Balance dashboard with `Simple`, `Advanced`, and `Flow` modes
 - **Weight Matrix** (`/button-weights`) - Configure button and special task weights
-- **Admin** (`/upload`) - System configuration and CSV uploads
+- **Admin** (`/upload`) - Master CSV upload, MedSpace export link, and `HARD RELOAD TODAY`
+
+### Master CSV Semantics
+
+- Uploading a new Master CSV updates only the stored source file.
+- It does **not** overwrite an already staged `Prep Tomorrow` plan.
+- To refresh staged tomorrow data from a newly uploaded CSV, run `Prep Tomorrow` again for the selected target date.
+- `HARD RELOAD TODAY` rebuilds only the current live day from the current Master CSV and resets counters.
 
 ---
 

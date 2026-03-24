@@ -508,7 +508,7 @@ balancer:
   enabled: true
   min_assignments_per_skill: 5    # Minimum weighted assignments gate for specialists
   warm_start_release_mode: either # either|both for warm-start overflow release
-  imbalance_threshold_pct: 30     # Trigger overflow at 30% imbalance
+  imbalance_threshold_pct: 20     # Trigger overflow at 20% imbalance
   disable_overflow_at_shift_end_minutes: 30  # Don't assign overflow in last X minutes
 
   # Hours counting for workload calculation
@@ -577,7 +577,7 @@ The system prioritizes specialists while using pooled workers (skill=0) as backu
 balancer:
   min_assignments_per_skill: 3             # Specialist count gate
   warm_start_release_mode: either          # Release overflow when time OR count is ready
-  imbalance_threshold_pct: 30              # Overflow when specialists 30%+ more loaded than generalists
+  imbalance_threshold_pct: 20              # Overflow when specialists 20%+ more loaded than generalists
   disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first 15min of shift
   disable_overflow_at_shift_end_minutes: 30    # Don't assign overflow in last 30min of shift
   exclude_skills:
@@ -876,7 +876,7 @@ button_weights: (managed in data/button_weights.json)
 balancer:
   enabled: true
   min_assignments_per_skill: 3
-  imbalance_threshold_pct: 30
+  imbalance_threshold_pct: 20
   disable_overflow_at_shift_start_minutes: 15
   disable_overflow_at_shift_end_minutes: 30
   hours_counting:

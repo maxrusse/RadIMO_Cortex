@@ -15,6 +15,7 @@ RadIMO provides admin entry points for different operational needs:
 | **Schedule Edit (Tomorrow)** | `/prep-tomorrow` | Staged | Daily schedule preparation |
 | **Worker Load** | `/worker-load` | Monitor | Live load monitoring |
 | **Weight Matrix** | `/button-weights` | Direct | Button weight configuration (incl. special tasks) |
+| **Admin Panel** | `/upload` | Source + reset | Master CSV upload and day-reset actions |
 
 Admin pages require login with the admin password from `config.yaml` when `admin_access_protection_enabled` is true.
 
@@ -45,7 +46,7 @@ Admin pages require login with the admin password from `config.yaml` when `admin
 
 ## Skill Matrix (`/skill-roster`)
 
-**Purpose:** Manage permanent worker skills across CT, MR, X-ray, and Mammo.
+**Purpose:** Manage permanent worker skills across CT, MR, and X-ray.
 
 **Key behavior:** Changes save directly to `worker_skill_roster.json` and take effect on the next reload/assignment.
 
@@ -84,7 +85,7 @@ To allow "AM" to help on MHD work without making the roster an active-role sourc
 
 **Purpose:** Edit schedules with two modes: "Edit Today" for immediate live changes, or "Prep Tomorrow" for planning.
 
-**Key behavior:** Shared interface with modality tabs (CT/MR/XRAY/MAMMO).
+**Key behavior:** Shared interface with modality tabs (CT/MR/XRAY).
 - **Edit Today**: Immediate effect on live assignment pool.
 - **Prep Tomorrow**: Stages changes for the next workday schedule.
 
@@ -105,8 +106,8 @@ Both modes share the same editing interface with modality-specific tables:
 
 #### Data Loading
 Each mode allows rebuilding from the master data:
-- **"Load Today"**: Rebuilds today's live schedule from `master_medweb.csv`.
-- **"Load Next Day"**: Rebuilds tomorrow's staged schedule from `master_medweb.csv`.
+- **Change Today** links to `HARD RELOAD TODAY` from the admin/upload page when a full day reset is really needed.
+- **Prep Tomorrow** can rebuild the selected staged target date from the current `master_medweb.csv`.
 
 #### Interactive Grid
 - **Inline Edit**: Click any cell (Start, End, Skill, Modifier) to edit.
@@ -116,9 +117,9 @@ Each mode allows rebuilding from the master data:
 #### Filtering Controls
 
 Both modes include smart filters:
-- **Modality filter**: Show only specific modality (CT/MR/XRAY/Mammo)
+- **Modality filter**: Show only specific modality (CT/MR/XRAY)
 - **Skill filter**: Show only workers with specific skill active
-- **Hide 0/-1 checkbox**: Hide workers with passive/excluded values for cleaner view
+- **Hide 0/-1 checkbox**: Hide workers without active `1/w` values for cleaner view
 
 ### Editable Fields
 
@@ -156,7 +157,7 @@ Both modes include smart filters:
 
 1. Go to `/prep-tomorrow`
 2. Confirm you're on the **Prep Tomorrow** page (yellow header)
-3. Click "Load Next Day" to load the auto-generated schedule
+3. Load/reload the selected target date from Master CSV if needed
 4. Make adjustments as needed
 5. Click "Save Changes" → Stored in the staged schedule for the next workday
 
@@ -170,15 +171,16 @@ Central hub for Master CSV management and system health.
 
 | Action | Description |
 |--------|-------------|
-| **Master CSV Upload** | Upload monthly medweb export (powers everything) |
-| **Load Today** | Rebuild today's live schedule from Master (Resets counters) |
-| **Preload Tomorrow** | Prepare tomorrow's staged schedule from Master |
+| **Master CSV Upload** | Replace the stored master medweb export |
+| **MedSpace CSV Export** | Open the source export page in a new tab |
+| **HARD RELOAD TODAY** | Rebuild today's live schedule from Master and reset counters |
 
 ### Workflow Strategy
 
 1. **Upload Master CSV**: Once per month or whenever the master schedule changes.
-2. **Daily Reset**: Automated at 07:30 CET, or manual via "Load Today".
-3. **Daily Prep**: Use "Schedule Edit" -> "Prep Tomorrow" in the evening for the next day.
+2. **Daily Reset**: Automated at 07:30 CET, or manual only via `HARD RELOAD TODAY`.
+3. **Daily Prep**: Use `Prep Tomorrow` in the evening for the next workday.
+4. **Important:** Uploading a new Master CSV does **not** overwrite an already staged next day. Run `Prep Tomorrow` again for the target date if you want staged data refreshed from the new CSV.
 
 ---
 
@@ -222,6 +224,22 @@ To make CT Segmentation assignments count less toward worker load:
 
 ---
 
+## Worker Load (`/worker-load`)
+
+**Purpose:** Inspect current balance state without editing schedules.
+
+Modes:
+- **Simple**: Global worker weights plus aggregated `Per Modality` and `Per Skill` summary cards
+- **Advanced**: Full worker matrix by modality × skill
+- **Flow**: Cross-pool flow chart only
+
+In `Simple`, the modality/skill cards show:
+- weighted total as the main metric
+- assignment count as supporting info
+- number of active workers as supporting info
+
+---
+
 ## Best Practices
 
 ### Daily Operations
@@ -230,6 +248,7 @@ To make CT Segmentation assignments count less toward worker load:
 2. **During day:** Use assignment interface (`/` or `/by-skill`)
 3. **Same-day adjustments:** Use `/prep-today` (immediate effect, counters preserved)
 4. **End of day:** Review assignments, plan tomorrow via `/prep-tomorrow`
+5. **Only if necessary:** Use `/upload` -> `HARD RELOAD TODAY` for a full rebuild of the current day
 
 ### Planning Rotations
 
@@ -247,7 +266,7 @@ To make CT Segmentation assignments count less toward worker load:
 - Use for: worker additions, time adjustments, skill corrections
 
 **Option 2: Full Schedule Rebuild (Use with Caution)**
-- Use Admin Panel → "Load Today"
+- Use Admin Panel → `HARD RELOAD TODAY`
 - **WARNING:** Destroys ALL counters and assignment history
 - Only use when schedule structure fundamentally changes
 - Document reason and time of refresh
@@ -269,8 +288,8 @@ To make CT Segmentation assignments count less toward worker load:
 
 1. Check `selection.log` for errors
 2. Verify master CSV exists in `uploads/`
-3. Confirm the application was running at the configured auto-preload time (default 14:00)
-4. Manual trigger: Use admin panel "Preload Next Workday"
+3. Confirm the application was running at the configured daily reset time (currently 07:30)
+4. Manual trigger: Use `Prep Tomorrow` to rebuild the selected staged date
 
 ### Worker missing from schedule
 

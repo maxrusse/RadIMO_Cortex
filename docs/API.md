@@ -168,12 +168,16 @@ POST /upload-master-csv
 
 Upload a new monthly medweb file.
 
+Behavior:
+- Replaces the stored `master_medweb.csv`
+- Does **not** overwrite already staged `Prep Tomorrow` data by itself
+
 **Parameters:**
 - `file`: CSV file
 
 ---
 
-### Load Today from Master
+### Hard Reload Today from Master
 
 ```http
 POST /load-today-from-master
@@ -181,15 +185,26 @@ POST /load-today-from-master
 
 Rebuilds today's live schedule using the current date and Master CSV.
 
+Behavior:
+- applies a safe runtime config reload first when possible
+- resets current live counters/flow state
+- persists the rebuilt live backup used on restart
+- does not touch staged tomorrow data
+
 ---
 
-### Preload Next Workday from Master
+### Preload / Prep Tomorrow from Master
 
 ```http
 POST /preload-from-master
 ```
 
-Rebuilds the next workday's scheduled files from the Master CSV and refreshes staged data.
+Rebuilds staged next-day data from the current Master CSV and refreshes scheduled/staged files.
+
+Behavior:
+- accepts an optional selected `target_date`
+- overwrites the staged plan for that selected target date
+- this is the normal way to refresh `Prep Tomorrow` after a new CSV upload
 
 ---
 
