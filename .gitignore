@@ -41,6 +41,9 @@ uploads/
 *.local.yaml
 *.local.json
 
+# Runtime skill roster state
+data/worker_skill_roster.json
+
 # Code aggregator exports
 *_export.txt
 aggregation_summary.txt

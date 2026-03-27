@@ -74,3 +74,20 @@ Admins can adjust "Today" (Live) or plan "Tomorrow" (Staged) via separate pages.
 - [ ] Use "Change Today" for same-day sickness/changes (`/prep-today`).
 - [ ] Use `HARD RELOAD TODAY` only when today must be rebuilt from Master CSV.
 - [ ] Monitor `selection.log` for auto-reset confirmation at 07:30.
+
+---
+
+## GitHub Push Workflow
+
+When `git push` fails because the local credential helper is stale or points to a missing VS Code socket:
+
+1. Run `gh auth login --hostname github.com --git-protocol https --web --insecure-storage`.
+2. If you need the one-time code and URL printed in-terminal, use:
+   `printf 'y\n' | GH_BROWSER=echo gh auth login --hostname github.com --git-protocol https --web --insecure-storage`
+3. Verify login with `gh auth status`.
+4. Run `gh auth setup-git` so `git push` uses the `gh` credential helper instead of the broken VS Code helper.
+5. Push normally with `git push`.
+
+Typical failure symptom if this is not set up:
+- `Missing or invalid credentials`
+- `connect ENOENT /run/user/.../vscode-git-....sock`
