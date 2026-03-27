@@ -579,7 +579,11 @@
     <label>Skill:</label>
     <button class="filter-btn active" data-skill="" onclick="filterBySkill('')">All</button>
     {% for skill in skills %}
-    <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('{{ skill }}')">{{ skill_settings[skill].label }}</button>
+    <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('{{ skill }}')"
+      title="{{ skill_settings[skill].get('tooltip', skill_settings[skill].label) }}"
+      aria-label="{{ skill_settings[skill].get('tooltip', skill_settings[skill].label) }}">
+      {{ skill_settings[skill].label }}
+    </button>
     {% endfor %}
 
     <div class="filter-separator"></div>
@@ -601,7 +605,7 @@
   <div class="simple-only">
     <!-- Global View -->
     <div class="section-divider">
-      <h3>Global (Total Weight)</h3>
+      <h3>Global (Total Weight + Weight / Hour)</h3>
     </div>
     <div class="table-container">
       <table class="load-table" id="table-global">
@@ -609,6 +613,7 @@
           <tr>
             <th class="sortable" data-sort="name" onclick="sortTable('global', 'name')">Worker</th>
             <th class="sortable" data-sort="weight" onclick="sortTable('global', 'weight')">Total Weight</th>
+            <th class="sortable" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
             <th>Load Bar</th>
           </tr>
         </thead>

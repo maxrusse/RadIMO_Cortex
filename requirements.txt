@@ -3,4 +3,5 @@ pandas>=2.0.0
 PyYAML>=6.0
 pytz>=2023.3
 gunicorn>=21.2.0
+gevent>=24.2.1
 APScheduler>=3.10.0

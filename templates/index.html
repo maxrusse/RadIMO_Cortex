@@ -369,6 +369,8 @@
         <div class="skill-button-wrapper" data-skill-slug="{{ item.slug }}" data-skill-name="{{ item.name }}">
           <button id="skill-btn-{{ item.slug }}" data-skill-name="{{ item.name }}"
             onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}')"
+            title="{{ item.tooltip or item.label }}"
+            aria-label="{{ item.tooltip or item.label }}"
             class="btn assignment-btn skill-main-btn {% if item.special %}special-btn{% endif %}">
             {{ item.label }}
           </button>
@@ -388,6 +390,8 @@
           style="--btn-bg: {{ item.button_color }}; --btn-text: {{ item.text_color }};">
           <button id="special-btn-{{ item.slug }}" data-special-slug="{{ item.slug }}"
             onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}')"
+            title="{{ item.tooltip or item.label }}"
+            aria-label="{{ item.tooltip or item.label }}"
             class="btn assignment-btn skill-main-btn special-btn">
             {{ item.label }}
           </button>

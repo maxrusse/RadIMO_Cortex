@@ -16,6 +16,7 @@ let currentMode = CONFIG.initial_mode || LOAD_MONITOR_CONFIG.default_view || 'si
 let colorMode = LOAD_MONITOR_CONFIG.color_thresholds?.mode || 'absolute';
 let workersData = [];
 let maxWeight = 0;
+let maxLoadRatio = 0;
 let autoRefreshInterval = null;
 let flowDataLoaded = false;
 let flowData = null;
@@ -23,7 +24,7 @@ let modalityWeightData = {};
 let skillWeightData = {};
 let filters = { modality: '', skill: '', hideZero: false };
 let sortState = {
-  global: { column: 'weight', direction: 'desc' },
+  global: { column: 'weight_per_hour', direction: 'desc' },
   modality: { column: 'total', direction: 'desc' },
   skill: { column: 'total', direction: 'desc' },
   advanced: { column: 'weight', direction: 'desc' }
@@ -48,14 +49,14 @@ let sortState = {
 })();
 
 // Color calculation based on weight thresholds
-function getLoadThresholds() {
+function getLoadThresholds(scaleMax = maxWeight) {
   const thresholds = LOAD_MONITOR_CONFIG.color_thresholds || {};
   let lowThreshold, highThreshold;
 
-  if (colorMode === 'relative' && maxWeight > 0) {
+  if (colorMode === 'relative' && scaleMax > 0) {
     const relConfig = thresholds.relative || { low_pct: 33, high_pct: 66 };
-    lowThreshold = maxWeight * (relConfig.low_pct / 100);
-    highThreshold = maxWeight * (relConfig.high_pct / 100);
+    lowThreshold = scaleMax * (relConfig.low_pct / 100);
+    highThreshold = scaleMax * (relConfig.high_pct / 100);
   } else {
     const absConfig = thresholds.absolute || { low: 3.0, high: 7.0 };
     lowThreshold = absConfig.low;
@@ -65,8 +66,8 @@ function getLoadThresholds() {
   return { lowThreshold, highThreshold };
 }
 
-function getLoadColor(weight) {
-  const { lowThreshold, highThreshold } = getLoadThresholds();
+function getLoadColor(weight, scaleMax = maxWeight) {
+  const { lowThreshold, highThreshold } = getLoadThresholds(scaleMax);
 
   if (weight <= 0) return { bg: '#e9ecef', text: 'text-muted' };
   if (weight < lowThreshold) return { bg: 'var(--load-green)', text: 'text-green' };
@@ -74,8 +75,8 @@ function getLoadColor(weight) {
   return { bg: 'var(--load-red)', text: 'text-red' };
 }
 
-function getLoadColorClass(weight) {
-  const { lowThreshold, highThreshold } = getLoadThresholds();
+function getLoadColorClass(weight, scaleMax = maxWeight) {
+  const { lowThreshold, highThreshold } = getLoadThresholds(scaleMax);
 
   if (weight <= 0) return '';
   if (weight < lowThreshold) return 'load-green';
@@ -179,6 +180,7 @@ function sortTable(tableType, column) {
 function getSortValue(worker, column, tableType) {
   if (column === 'name') return buildWorkerSortKey(worker.name);
   if (column === 'weight') return worker.global_weight || 0;
+  if (column === 'weight_per_hour') return worker.weight_per_hour || 0;
   if (column === 'total') {
     if (tableType === 'modality') {
       return MODALITIES.reduce(function(total, mod) {
@@ -246,25 +248,30 @@ function renderGlobalTable() {
   const sorted = sortWorkers(filteredWorkers, 'global');
 
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="no-data">No workers match filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="no-data">No workers match filters</td></tr>';
     return;
   }
 
-  const maxBarWeight = Math.max(maxWeight, 1);
+  const maxBarRatio = Math.max(maxLoadRatio, 1);
   let html = '';
 
   let totalWeight = 0;
+  let totalHours = 0;
 
   sorted.forEach(function(worker) {
-    const weight = worker.global_weight || 0;
+    const weight = Number(worker.global_weight || 0);
+    const hours = Number(worker.hours_worked_now || 0);
+    const ratio = Number(worker.weight_per_hour || 0);
     totalWeight += weight;
-    const color = getLoadColor(weight);
-    const colorClass = getLoadColorClass(weight);
-    const barWidth = Math.min((weight / maxBarWeight) * 100, 100);
+    totalHours += hours;
+    const color = getLoadColor(ratio, maxLoadRatio);
+    const colorClass = getLoadColorClass(ratio, maxLoadRatio);
+    const barWidth = Math.min((ratio / maxBarRatio) * 100, 100);
 
     html += `<tr>
       <td class="worker-col">${escapeHtml(worker.name)}</td>
-      <td class="weight-value ${color.text}">${weight.toFixed(1)}</td>
+      <td class="weight-value ${getLoadColor(weight).text}">${weight.toFixed(1)}</td>
+      <td class="weight-value ${color.text}">${ratio.toFixed(2)}</td>
       <td>
         <div class="weight-bar">
           <div class="weight-bar-fill ${colorClass}" style="width: ${barWidth}%; max-width: 200px;"></div>
@@ -273,11 +280,12 @@ function renderGlobalTable() {
     </tr>`;
   });
 
-  // Add totals row
-  const totalBarWidth = Math.min((totalWeight / maxBarWeight) * 100, 100);
+  const totalRatio = totalHours > 0 ? (totalWeight / totalHours) : 0;
+  const totalBarWidth = Math.min((totalRatio / maxBarRatio) * 100, 100);
   html += `<tr class="totals-row">
     <td class="worker-col" style="font-weight: 700;">Total</td>
     <td class="weight-value" style="font-weight: 700;">${totalWeight.toFixed(1)}</td>
+    <td class="weight-value" style="font-weight: 700;">${totalRatio.toFixed(2)}</td>
     <td>
       <div class="weight-bar">
         <div class="weight-bar-fill" style="width: ${totalBarWidth}%; max-width: 200px; background: #6c757d;"></div>
@@ -586,6 +594,7 @@ function loadData() {
         modalityWeightData = data.modality_weights || {};
         skillWeightData = data.skill_weights || {};
         maxWeight = data.max_weight || 0;
+        maxLoadRatio = data.max_weight_per_hour || 0;
 
         // Update last update time
         const lastUpdate = document.getElementById('last-update');

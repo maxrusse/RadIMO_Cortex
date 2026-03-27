@@ -8,7 +8,7 @@ This module provides functions for:
 - Skill roster merging (YAML + JSON)
 """
 import copy
-from typing import Dict, Any, List, Iterable, Mapping, Optional
+from typing import Dict, Any, List, Iterable, Mapping, Optional, Tuple
 
 import pandas as pd
 
@@ -224,7 +224,7 @@ def build_passive_worker_entry() -> Dict[str, Any]:
     return _build_skill_mod_map(0)
 
 
-def ensure_workers_in_skill_roster(worker_names: Iterable[str]) -> tuple[int, List[str]]:
+def ensure_workers_in_skill_roster(worker_names: Iterable[str]) -> Tuple[int, List[str]]:
     """
     Ensure the provided worker names exist in the JSON skill roster.
 
@@ -417,10 +417,12 @@ def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -
     rules = vendor_mapping.get('rules', [])
     cols = vendor_mapping.get('columns', {
         'employee_name': 'Name des Mitarbeiters',
+        'employee_personalnummer': 'Personalnummer',
         'employee_code': 'Code des Mitarbeiters',
         'activity': 'Beschreibung der Aktivität',
     })
     name_col = cols.get('employee_name', 'Name des Mitarbeiters')
+    personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer')
     code_col = cols.get('employee_code', 'Code des Mitarbeiters')
     activity_col = cols.get('activity', 'Beschreibung der Aktivität')
 
@@ -468,19 +470,22 @@ def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -
         employee_name = row.get(name_col, '')
         employee_code = row.get(code_col, '')
 
-        if pd.isna(employee_name) and pd.isna(employee_code):
+        employee_personalnummer = row.get(personalnummer_col, '')
+        if pd.isna(employee_name) and pd.isna(employee_personalnummer) and pd.isna(employee_code):
             continue
 
         employee_name = '' if pd.isna(employee_name) else str(employee_name).strip()
+        employee_personalnummer = '' if pd.isna(employee_personalnummer) else str(employee_personalnummer).strip()
         employee_code = '' if pd.isna(employee_code) else str(employee_code).strip()
 
-        if not employee_name and not employee_code:
+        if not employee_name and not employee_personalnummer and not employee_code:
             continue
 
+        worker_code = employee_personalnummer or employee_code
         full_name = (
-            f"{employee_name} ({employee_code})"
-            if employee_name and employee_code else
-            employee_name or employee_code
+            f"{employee_name} ({worker_code})"
+            if employee_name and worker_code else
+            employee_name or worker_code
         )
         worker_id = get_canonical_worker_id(full_name)
         if not worker_id:

@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}RadIMO Cortex | Logs{% endblock %}
+
+{% block styles %}
+    {% include 'partials/admin_theme.html' %}
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f0f0;
+      padding: 1rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.55rem 0.9rem;
+      border-radius: 6px;
+      border: 0;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #004892;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #003b78;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+
+    .btn-outline {
+      background: #fff;
+      color: #004892;
+      border: 1px solid #cbd5e1;
+    }
+
+    .btn-outline:hover {
+      background: #f8fafc;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+
+    .log-item {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1rem;
+      background: #fff;
+    }
+
+    .log-item h3 {
+      margin: 0 0 0.35rem 0;
+      font-size: 1rem;
+    }
+
+    .log-meta {
+      color: #5f6b7a;
+      font-size: 0.88rem;
+      margin-bottom: 0.75rem;
+      line-height: 1.4;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-left: 0.35rem;
+    }
+
+    .badge-ok {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-missing {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .hint {
+      color: #5f6b7a;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+{% endblock %}
+
+{% block content %}
+  {% set header_title = 'RadIMO Cortex | Logs' %}
+  {% set header_subtitle = 'Admin-only log downloads for Gunicorn and RadIMO runtime logs' %}
+  {% set header_mode = 'global' %}
+  {% set active_page = 'logs' %}
+  {% set header_nav = namespace(links=[]) %}
+  {% include 'partials/header_links.html' %}
+  {% set header_links = header_nav.links %}
+  {% include 'partials/header.html' %}
+
+  <section class="card">
+    <div class="toolbar">
+      <a class="btn btn-primary" href="{{ default_tail_url }}">Download current logs, last 5000 lines</a>
+      <a class="btn btn-secondary" href="{{ default_full_url }}">Download full rotating logs</a>
+    </div>
+    <div class="hint">
+      The downloads are protected by the admin login. The default archive includes the Gunicorn log and the RadIMO app log.
+      Use the full archive if you want the rotated files as well.
+    </div>
+  </section>
+
+  <div class="grid">
+    {% for source in sources %}
+    <article class="log-item">
+      <h3>
+        {{ source.label }}
+        <span class="badge {{ 'badge-ok' if source.exists else 'badge-missing' }}">
+          {{ 'present' if source.exists else 'missing' }}
+        </span>
+      </h3>
+      <div class="log-meta">
+        File: {{ source.filename }}<br>
+        {% if source.size_bytes is not none %}
+        Size: {{ source.size_bytes }} bytes
+        {% else %}
+        Size: unavailable
+        {% endif %}
+      </div>
+      <div class="toolbar">
+        <a class="btn btn-outline" href="{{ source.download_tail_url }}">Tail 2000 lines</a>
+        <a class="btn btn-outline" href="{{ source.download_full_url }}">Full rotating set</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -7,8 +7,9 @@ This module handles:
 - Skill overrides and time range computation
 - Gap handling (standalone and embedded) as independent intent rows (canonicalized to gap segments)
 """
+import re
 from datetime import datetime, time, date
-from typing import Dict, List, Optional, Tuple, Any, Iterable
+from typing import Dict, List, Optional, Tuple, Any, Iterable, Set
 
 import pandas as pd
 
@@ -99,14 +100,95 @@ def _parse_time_ranges(
     return parsed_ranges
 
 
-def match_mapping_rule(activity_desc: str, rules: List[dict]) -> Optional[dict]:
-    """Match activity description against mapping rules."""
+def _normalize_day_part_values(raw_value: Any) -> Set[str]:
+    """Normalize CSV/config day-part values to canonical VM/NM tokens."""
+    if raw_value is None:
+        return set()
+
+    if isinstance(raw_value, (list, tuple, set)):
+        raw_items = list(raw_value)
+    else:
+        raw_items = [raw_value]
+
+    normalized: Set[str] = set()
+    for item in raw_items:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            tokens = re.split(r"[,\s+/|&;]+", item.strip())
+        else:
+            tokens = [str(item)]
+
+        for token in tokens:
+            token_norm = token.strip().lower()
+            if not token_norm:
+                continue
+            if token_norm in {"vm", "vormittag", "morning"}:
+                normalized.add("VM")
+            elif token_norm in {"nm", "nachmittag", "afternoon"}:
+                normalized.add("NM")
+            elif token_norm in {"vm+nm", "nm+vm", "vm/nm", "nm/vm", "vmnm", "nmvm", "both", "all", "any"}:
+                normalized.update({"VM", "NM"})
+
+    return normalized
+
+
+def _normalize_row_day_part_values(raw_value: Any) -> Set[str]:
+    """Normalize Medweb row day-part values for matching.
+
+    Combined VM+NM rows are treated as VM/Früh for rule selection so the
+    normal rule wins over the late-only rule.
+    """
+    normalized = _normalize_day_part_values(raw_value)
+    if normalized == {"VM", "NM"}:
+        return {"VM"}
+    return normalized
+
+
+def _normalize_rule_day_parts(rule: dict) -> Optional[Set[str]]:
+    raw_value = rule.get("day_parts", rule.get("day_part"))
+    normalized = _normalize_day_part_values(raw_value)
+    return normalized or None
+
+
+def _extract_row_day_part(row: pd.Series, cols: Optional[dict]) -> Optional[str]:
+    if not cols:
+        return None
+    day_part_col = cols.get("day_part")
+    if not day_part_col:
+        return None
+    value = row.get(day_part_col, None)
+    if pd.isna(value):
+        return None
+    day_part = str(value).strip()
+    return day_part or None
+
+
+def _rule_matches_day_part(rule: dict, row_day_part: Optional[str]) -> bool:
+    allowed_day_parts = _normalize_rule_day_parts(rule)
+    if not allowed_day_parts:
+        return True
+
+    row_day_parts = _normalize_row_day_part_values(row_day_part)
+    if not row_day_parts:
+        return False
+
+    return bool(allowed_day_parts.intersection(row_day_parts))
+
+
+def match_mapping_rule(activity_desc: str, rules: List[dict], *, day_part: Optional[str] = None) -> Optional[dict]:
+    """Match activity description against mapping rules.
+
+    When rules declare `day_part`/`day_parts`, the CSV row must match that
+    VM/NM value as well. Rules without a day-part filter keep the old
+    wildcard behavior.
+    """
     if not activity_desc:
         return None
     activity_lower = activity_desc.lower()
     for rule in rules:
         match_str = rule.get('match', '')
-        if match_str.lower() in activity_lower:
+        if match_str.lower() in activity_lower and _rule_matches_day_part(rule, day_part):
             return rule
     return None
 
@@ -234,7 +316,7 @@ def _effective_rule_segments(
         effective_rule = dict(rule)
         effective_rule.pop('segments', None)
 
-        for key in ('times', 'label', 'counts_for_hours', 'modifier', 'gaps'):
+        for key in ('times', 'label', 'counts_for_hours', 'modifier', 'gaps', 'day_part', 'day_parts'):
             if key in segment:
                 effective_rule[key] = segment[key]
 
@@ -264,10 +346,15 @@ def _effective_rule_segments(
 def build_ppl_from_row(row: pd.Series, cols: Optional[dict] = None) -> str:
     """Build PPL string from CSV row."""
     name_col = cols.get('employee_name', 'Name des Mitarbeiters') if cols else 'Name des Mitarbeiters'
+    personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer') if cols else 'Personalnummer'
     code_col = cols.get('employee_code', 'Code des Mitarbeiters') if cols else 'Code des Mitarbeiters'
-    name = str(row.get(name_col, 'Unknown'))
-    code = str(row.get(code_col, 'UNK'))
-    return f"{name} ({code})"
+    name = '' if pd.isna(row.get(name_col, '')) else str(row.get(name_col, '')).strip()
+    if not name:
+        name = 'Unknown'
+    personalnummer = '' if pd.isna(row.get(personalnummer_col, '')) else str(row.get(personalnummer_col, '')).strip()
+    code = '' if pd.isna(row.get(code_col, '')) else str(row.get(code_col, '')).strip()
+    worker_id = personalnummer or code or 'UNK'
+    return f"{name} ({worker_id})"
 
 
 def _coerce_bool_like(value: Any, default: bool) -> bool:
@@ -284,7 +371,7 @@ def _coerce_bool_like(value: Any, default: bool) -> bool:
     return bool(value)
 
 
-def _normalize_synthetic_weekdays(raw_value: Any) -> set[str]:
+def _normalize_synthetic_weekdays(raw_value: Any) -> Set[str]:
     if raw_value is None:
         return set(DEFAULT_SYNTHETIC_WORKDAYS)
     if isinstance(raw_value, str):
@@ -294,7 +381,7 @@ def _normalize_synthetic_weekdays(raw_value: Any) -> set[str]:
     else:
         return set()
 
-    result: set[str] = set()
+    result: Set[str] = set()
     for item in raw_items:
         if not isinstance(item, str):
             continue
@@ -401,6 +488,7 @@ def build_working_hours_from_medweb(
         'date': 'Datum',
         'activity': 'Beschreibung der Aktivität',
         'employee_name': 'Name des Mitarbeiters',
+        'employee_personalnummer': 'Personalnummer',
         'employee_code': 'Code des Mitarbeiters'
     })
 
@@ -437,7 +525,8 @@ def build_working_hours_from_medweb(
     # FIRST PASS: Collect all Medweb-derived shifts and gaps for each worker
     for _, row in day_df.iterrows():
         activity_desc = str(row.get(cols.get('activity', 'Beschreibung der Aktivität'), ''))
-        rule = match_mapping_rule(activity_desc, mapping_rules)
+        row_day_part = _extract_row_day_part(row, cols)
+        rule = match_mapping_rule(activity_desc, mapping_rules, day_part=row_day_part)
         if not rule:
             unmatched_activities.append(activity_desc)
             continue
@@ -450,6 +539,9 @@ def build_working_hours_from_medweb(
             continue
 
         for effective_rule in effective_segments:
+            if not _rule_matches_day_part(effective_rule, row_day_part):
+                continue
+
             segment_rule_type = effective_rule.get('type', rule_type)
 
             # Handle GAP rules (standalone gaps)

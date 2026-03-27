@@ -78,6 +78,42 @@ Public HTML page for manual inspection. It shows:
 
 ---
 
+## Admin Logs
+
+### Logs Dashboard
+
+```http
+GET /admin/logs
+```
+
+Admin-only HTML page with download links for:
+- the current Gunicorn log
+- the current RadIMO application log (`selection.log`)
+- the flow balance log
+
+### Download Logs Archive
+
+```http
+GET /admin/logs/download?sources=gunicorn,selection&scope=tail&lines=5000
+```
+
+Downloads a zip archive containing the selected log sources.
+
+Query parameters:
+- `sources`: comma-separated list of `gunicorn`, `selection`, `flow`, or `all`
+- `scope`: `tail` for the last `lines` entries from the current log file, or `full` for the rotated set
+- `lines`: number of lines to keep in tail mode, default `5000`
+
+Examples:
+- `GET /admin/logs/download` returns the default tail archive for `gunicorn` and `selection`
+- `GET /admin/logs/download?sources=all&scope=full` returns the full rotated archive for all supported logs
+
+Access control:
+- protected by the existing admin login session
+- if `admin_access_protection_enabled` is enabled in `config.yaml`, users must log in via `/login`
+
+---
+
 ## Worker Assignment
 
 ### Assign Worker (with overflow)
@@ -361,6 +397,13 @@ GET /api/usage-stats/file
 ```http
 GET /api/worker-load/data
 ```
+
+Returns worker load data used by the balance monitor.
+
+Key response fields:
+- `global_weight`: total weighted assignments per worker
+- `hours_worked_now`: cumulative worked hours up to now
+- `weight_per_hour`: `global_weight / hours_worked_now` for the simple view load bar
 
 Returns the worker load monitoring payload for the dashboard.
 

@@ -1,7 +1,7 @@
 import unittest
 
 from config import SKILL_COLUMNS, allowed_modalities
-from data_manager.worker_management import apply_skill_overrides
+from data_manager.worker_management import apply_skill_overrides, expand_skill_overrides
 
 
 class TestWorkerSkillOverrides(unittest.TestCase):
@@ -37,6 +37,11 @@ class TestWorkerSkillOverrides(unittest.TestCase):
             {self.key: -1},
         )
         self.assertEqual(result[self.key], '-1')
+
+    def test_xray_modality_shortcut_excludes_all_xray_combinations(self) -> None:
+        result = expand_skill_overrides({"xray": -1})
+        for skill in SKILL_COLUMNS:
+            self.assertEqual(result[f"{skill}_xray"], -1)
 
 
 if __name__ == "__main__":

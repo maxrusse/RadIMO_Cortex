@@ -1,9 +1,16 @@
+"""Flask routes for the RadIMO Cortex app."""
+
 # Standard library imports
+import io
 import json
 import os
+import re
 from datetime import date, datetime
 from functools import wraps
+from pathlib import Path
+from collections import deque
 from typing import Any, Callable, Optional
+import zipfile
 
 # Third-party imports
 from flask import (
@@ -12,6 +19,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -89,11 +97,38 @@ from balancer import (
     get_global_assignments,
     get_global_weighted_count,
     get_modality_weighted_count,
+    calculate_global_work_hours_now,
     BALANCER_SETTINGS
 )
 
 # Create Blueprint
 routes = Blueprint('routes', __name__)
+
+LOG_ROOT = Path('logs')
+LOG_SOURCE_DEFINITIONS: dict[str, dict[str, str]] = {
+    'gunicorn': {
+        'label': 'Gunicorn',
+        'filename': 'gunicorn.log',
+    },
+    'selection': {
+        'label': 'RadIMO',
+        'filename': 'selection.log',
+    },
+    'flow': {
+        'label': 'Flow balance',
+        'filename': 'flow_balance.log',
+    },
+}
+LOG_SOURCE_ALIASES = {
+    'radimo': 'selection',
+    'app': 'selection',
+    'radimo-app': 'selection',
+    'gunicorn-log': 'gunicorn',
+    'selection-log': 'selection',
+    'flow-log': 'flow',
+}
+DEFAULT_LOG_SOURCES = ('gunicorn', 'selection')
+MAX_LOG_TAIL_LINES = 50_000
 
 # -----------------------------------------------------------
 # Helpers for Routes
@@ -714,6 +749,92 @@ def _build_probe_badge_context() -> dict[str, Any]:
     return badge_context
 
 
+def _normalize_log_sources(raw_sources: str | None) -> list[str]:
+    if not raw_sources:
+        return list(DEFAULT_LOG_SOURCES)
+
+    tokens = [token.strip().lower() for token in re.split(r'[\s,]+', raw_sources) if token.strip()]
+    if not tokens:
+        return list(DEFAULT_LOG_SOURCES)
+
+    if any(token == 'all' for token in tokens):
+        return list(LOG_SOURCE_DEFINITIONS.keys())
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        source_key = LOG_SOURCE_ALIASES.get(token, token)
+        if source_key not in LOG_SOURCE_DEFINITIONS:
+            raise ValueError(f'Unknown log source: {token}')
+        if source_key in seen:
+            continue
+        seen.add(source_key)
+        normalized.append(source_key)
+    return normalized or list(DEFAULT_LOG_SOURCES)
+
+
+def _log_path(source_key: str) -> Path:
+    return LOG_ROOT / LOG_SOURCE_DEFINITIONS[source_key]['filename']
+
+
+def _rotated_log_paths(base_path: Path) -> list[Path]:
+    if not base_path.exists():
+        return []
+
+    paths = [base_path]
+    stem_prefix = f"{base_path.name}."
+    rotated: list[tuple[int, Path]] = []
+    for candidate in base_path.parent.glob(f"{base_path.name}.*"):
+        suffix = candidate.name[len(stem_prefix):]
+        if suffix.isdigit():
+            rotated.append((int(suffix), candidate))
+
+    rotated.sort(key=lambda item: item[0])
+    paths.extend(path for _, path in rotated)
+    return paths
+
+
+def _read_tail_text(path: Path, lines: int) -> str:
+    line_count = max(1, min(int(lines), MAX_LOG_TAIL_LINES))
+    with path.open('r', encoding='utf-8', errors='replace') as handle:
+        return ''.join(deque(handle, maxlen=line_count))
+
+
+def _build_logs_archive_payload(source_keys: list[str], scope: str, lines: int) -> tuple[io.BytesIO, str]:
+    buffer = io.BytesIO()
+    archive_name = f"radimo-logs-{scope}-{get_local_now().strftime('%Y%m%d-%H%M%S')}.zip"
+
+    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for source_key in source_keys:
+            meta = LOG_SOURCE_DEFINITIONS[source_key]
+            base_path = _log_path(source_key)
+
+            if scope == 'tail':
+                if base_path.exists():
+                    tail_name = f"{source_key}/{base_path.name}.tail.log"
+                    archive.writestr(tail_name, _read_tail_text(base_path, lines))
+                else:
+                    archive.writestr(
+                        f"{source_key}/MISSING.txt",
+                        f'{meta["label"]} log file not found at {base_path}\n',
+                    )
+                continue
+
+            rotated_paths = _rotated_log_paths(base_path)
+            if not rotated_paths:
+                archive.writestr(
+                    f"{source_key}/MISSING.txt",
+                    f'{meta["label"]} log file not found at {base_path}\n',
+                )
+                continue
+
+            for log_path in rotated_paths:
+                archive.write(log_path, arcname=f"{source_key}/{log_path.name}")
+
+    buffer.seek(0)
+    return buffer, archive_name
+
+
 # -----------------------------------------------------------
 # Route Definitions
 # -----------------------------------------------------------
@@ -779,6 +900,7 @@ def index() -> Any:
                 'name': skill['name'],
                 'slug': skill['slug'],
                 'label': skill['label'],
+                'tooltip': skill.get('tooltip', skill['label']),
                 'special': skill.get('special', False),
                 'display_order': skill.get('display_order', 999),
                 'show_strict_button': skill['name'] in regular_strict_button_skills,
@@ -847,6 +969,7 @@ def index_by_skill() -> Any:
                 special_task_buttons.append({
                     'modality': mod,
                     'label': task.get('label', task['name']),
+                    'tooltip': task.get('tooltip', task.get('label', task['name'])),
                     'slug': task['slug'],
                     'button_color': task.get('button_color', '#004892'),
                     'text_color': task.get('text_color', '#ffffff'),
@@ -863,6 +986,7 @@ def index_by_skill() -> Any:
             special_task_buttons.append({
                 'modality': default_mod,
                 'label': task.get('label', task['name']),
+                'tooltip': task.get('tooltip', task.get('label', task['name'])),
                 'slug': task['slug'],
                 'button_color': task.get('button_color', '#004892'),
                 'text_color': task.get('text_color', '#ffffff'),
@@ -1131,6 +1255,71 @@ def status_page() -> Any:
         readiness_http_status=readiness_http_status,
         modality=resolve_modality_from_request(),
         is_admin=has_admin_access(),
+    )
+
+
+@routes.route('/admin/logs')
+@admin_required
+def admin_logs_page() -> Any:
+    """Admin page with direct links for log downloads."""
+    sources = []
+    for source_key, meta in LOG_SOURCE_DEFINITIONS.items():
+        base_path = _log_path(source_key)
+        sources.append({
+            'key': source_key,
+            'label': meta['label'],
+            'filename': meta['filename'],
+            'exists': base_path.exists(),
+            'size_bytes': base_path.stat().st_size if base_path.exists() else None,
+            'download_tail_url': url_for(
+                'routes.download_logs',
+                sources=source_key,
+                scope='tail',
+                lines=2000,
+            ),
+            'download_full_url': url_for(
+                'routes.download_logs',
+                sources=source_key,
+                scope='full',
+            ),
+        })
+
+    return render_template(
+        'admin_logs.html',
+        sources=sources,
+        default_tail_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='tail', lines=5000),
+        default_full_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='full'),
+        is_admin=True,
+        active_page='logs',
+    )
+
+
+@routes.route('/admin/logs/download', methods=['GET'])
+@admin_required
+def download_logs() -> Any:
+    """Download RadIMO and Gunicorn logs as a zip archive."""
+    try:
+        source_keys = _normalize_log_sources(request.args.get('sources'))
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+    scope = (request.args.get('scope') or 'tail').strip().lower()
+    if scope not in {'tail', 'full'}:
+        return jsonify({'success': False, 'error': 'scope must be tail or full'}), 400
+
+    try:
+        line_count = int(request.args.get('lines', '5000'))
+    except ValueError:
+        return jsonify({'success': False, 'error': 'lines must be an integer'}), 400
+
+    line_count = max(1, min(line_count, MAX_LOG_TAIL_LINES))
+    archive_buffer, archive_name = _build_logs_archive_payload(source_keys, scope, line_count)
+    return send_file(
+        archive_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=archive_name,
+        max_age=0,
     )
 
 
@@ -2270,6 +2459,9 @@ def worker_load_monitor() -> Any:
 @admin_required
 def get_worker_load_data() -> Any:
     """API endpoint returning all worker load data for monitoring."""
+    current_dt = get_local_now()
+    global_hours_map = calculate_global_work_hours_now(current_dt)
+
     # Collect all unique workers across all modalities
     all_workers = {}  # canonical_id -> {name, shift_info, modality_data}
 
@@ -2284,13 +2476,17 @@ def get_worker_load_data() -> Any:
             canonical_id = get_canonical_worker_id(worker_name)
 
             if canonical_id not in all_workers:
+                hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
+                global_weight = round(float(get_global_weighted_count(canonical_id)), 4)
                 all_workers[canonical_id] = {
                     'name': worker_name,
                     'canonical_id': canonical_id,
                     'modalities': {},
                     'skills': {},
                     'skill_weights': {},
-                    'global_weight': 0.0,
+                    'hours_worked_now': hours_worked_now,
+                    'weight_per_hour': round(global_weight / hours_worked_now, 4) if hours_worked_now > 0 else 0.0,
+                    'global_weight': global_weight,
                     'global_assignments': {}
                 }
 
@@ -2318,8 +2514,11 @@ def get_worker_load_data() -> Any:
 
     # Add global weighted counts and assignments
     for canonical_id, worker_data in all_workers.items():
-        worker_data['global_weight'] = get_global_weighted_count(canonical_id)
+        worker_data['global_weight'] = round(float(get_global_weighted_count(canonical_id)), 4)
         worker_data['global_assignments'] = get_global_assignments(canonical_id)
+        hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
+        worker_data['hours_worked_now'] = hours_worked_now
+        worker_data['weight_per_hour'] = round(worker_data['global_weight'] / hours_worked_now, 4) if hours_worked_now > 0 else 0.0
 
         # Aggregate per-skill totals across modalities
         for skill in SKILL_COLUMNS:
@@ -2355,6 +2554,7 @@ def get_worker_load_data() -> Any:
 
     # Get max weight for relative color coding
     max_weight = max((w['global_weight'] for w in all_workers.values()), default=0.0)
+    max_weight_per_hour = max((w.get('weight_per_hour', 0.0) for w in all_workers.values()), default=0.0)
 
     return jsonify({
         'success': True,
@@ -2362,6 +2562,7 @@ def get_worker_load_data() -> Any:
         'modality_weights': modality_weights,
         'skill_weights': skill_weights,
         'max_weight': max_weight,
+        'max_weight_per_hour': max_weight_per_hour,
         'skills': SKILL_COLUMNS,
         'modalities': allowed_modalities,
         'config': APP_CONFIG.get('worker_load_monitor', {})

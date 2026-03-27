@@ -351,7 +351,9 @@
         <button type="button"
           class="btn assignment-btn modality-main-btn"
           style="--btn-bg: {{ task.button_color }}; --btn-text: {{ task.text_color }};"
-          onclick="getSpecialAssignment('{{ task.modality }}', '{{ task.slug }}', '{{ task.label }}')">
+          onclick="getSpecialAssignment('{{ task.modality }}', '{{ task.slug }}', '{{ task.label }}')"
+          title="{{ task.tooltip or task.label }}"
+          aria-label="{{ task.tooltip or task.label }}">
           {{ task.label }}
         </button>
         {% if task.show_strict_button %}

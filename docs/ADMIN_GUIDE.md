@@ -184,6 +184,30 @@ Central hub for Master CSV management and system health.
 
 ---
 
+## Logs (`/admin/logs`)
+
+Use this page when you need browser access to runtime logs and do not have SSH access to the server.
+
+### What It Provides
+
+- **Tail archive**: current `gunicorn.log`, `selection.log`, and `flow_balance.log` with only the last N lines
+- **Full archive**: the current log files plus their rotated backups (`.1`, `.2`, `.3`, ...)
+- **Admin-only access**: protected by the existing admin login session
+
+### Common Downloads
+
+| Download | Example URL |
+|----------|-------------|
+| Current Gunicorn + RadIMO logs, tail | `/admin/logs/download?sources=gunicorn,selection&scope=tail&lines=5000` |
+| All supported logs, full rotation set | `/admin/logs/download?sources=all&scope=full` |
+
+### Notes
+
+- `selection.log` is the main RadIMO application log.
+- If `admin_access_protection_enabled` is enabled in `config.yaml`, users must log in via `/login` before they can open the logs page.
+
+---
+
 ## Weight Matrix (`/button-weights`)
 
 **Purpose:** Configure per-button weights for load balancing across skill×modality combinations and special tasks.
@@ -290,6 +314,13 @@ In `Simple`, the modality/skill cards show:
 2. Verify master CSV exists in `uploads/`
 3. Confirm the application was running at the configured daily reset time (currently 07:30)
 4. Manual trigger: Use `Prep Tomorrow` to rebuild the selected staged date
+
+### Need logs but no SSH access
+
+1. Open `/admin/logs`
+2. Download the tail archive first if you only need the latest messages
+3. Use the full archive when you need rotated history
+4. If the page redirects to login, authenticate with the admin password from `config.yaml`
 
 ### Worker missing from schedule
 

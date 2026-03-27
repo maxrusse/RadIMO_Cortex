@@ -66,13 +66,14 @@ modalities:
     nav_color: '#239b56'
     hover_color: '#1d7a48'
     background_color: '#e0f2e9'
+    hidden_skills: [gyn, aou, cvt]  # MHD is shown again on xray
   mammo:
     label: Mammo
     nav_color: '#e91e63'
     hover_color: '#c2185b'
     background_color: '#fce4ec'
     valid_skills: [notfall, privat, gyn]  # Optional whitelist
-    # hidden_skills: [mhd, cvt] # Optional blacklist
+    # hidden_skills: [gyn, aou, cvt] # Optional blacklist
 ```
 
 **Visibility filters (optional):**
@@ -84,6 +85,9 @@ modalities:
 ## Skills
 
 Define skills with UI styling and ordering.
+
+Use `tooltip` for a longer hover text when the visible button label is short
+or abbreviated. If omitted, the button falls back to `label`.
 
 ```yaml
 skills:
@@ -123,6 +127,7 @@ skills:
 
   mhd:
     label: MHD
+    tooltip: Muskel-Skelett / Hals / Derma
     button_color: '#9c27b0'
     text_color: '#ffffff'
     special: true
@@ -131,6 +136,7 @@ skills:
 
   aou:
     label: AOU
+    tooltip: Abdomen / Uro / Onko
     button_color: '#00bcd4'
     text_color: '#ffffff'
     special: true
@@ -139,6 +145,7 @@ skills:
 
   cvt:
     label: CVT
+    tooltip: Cardio / Vask / Thorax
     button_color: '#28a745'
     text_color: '#ffffff'
     special: true
@@ -156,6 +163,8 @@ skills:
 
 **Special flag:**
 - `special: true` marks subspecialty buttons with distinct styling (larger buttons).
+**Tooltip:**
+- `tooltip` is optional and is used as hover text / accessible label for short button names.
 **Key format:**
 - Skill keys are URL-safe slugs (lowercase, no spaces, no `/`, no umlauts).
 - Use `label` for the human-readable display name (e.g., `label: "MHD"`).
@@ -188,9 +197,17 @@ no_overflow:
   - cvt_ct    # Cardiac CT - specialists only
   - cvt_mr    # Cardiac MR - specialists only
   - gyn_mr         # Gyn MR - specialists only
+  - notfall_ct     # Notfall CT - specialists only, no strict button
+  - notfall_mr     # Notfall MR - specialists only, no strict button
+  - notfall_xray   # Notfall Xray - specialists only, no strict button
+  - mhd_xray   # Xray MHD runs strict/no-overflow only
 ```
 
 **Format:** `Skill_Modality` (same as `skill_overrides` in shift rules)
+
+The config loader also accepts the reversed alias `Modality_Skill` and normalizes
+it to canonical `Skill_Modality` internally. For example, `xray_notfall` becomes
+`notfall_xray`.
 
 **How it works:**
 1. When assignment is requested for a listed combo, `allow_overflow` is forced to `false`
@@ -212,6 +229,8 @@ Buttons are hidden by default and must be enabled per button.
 strict_button_visibility:
   cvt_ct: true
   cvt_mr: true
+  mhd_ct: true
+  mhd_mr: true
   ct-herz_ct: true
   mr-herz_mr: true
 ```
@@ -219,6 +238,8 @@ strict_button_visibility:
 **Supported keys:**
 - Regular skill buttons use `skill_modality` keys such as `cvt_ct`
 - Special task buttons use `taskslug_modality` keys such as `ct-herz_ct`
+
+This is dashboard-level UI behavior, not per-worker behavior.
 
 **Behavior:**
 1. Visibility is UI-only; it does not change routing by itself
@@ -276,6 +297,7 @@ special_tasks:
 | `skill_dashboards` | list | No | Which skill dashboards show this button (e.g., `[aou]`) |
 | `allow_overflow` | boolean | No | Whether generalists (skill=0) can be assigned (default: true) |
 | `display_order` | integer | No | Button ordering (default: 999, appears after regular skills) |
+| `tooltip` | string | No | Hover text / accessible full name (defaults to `label`) |
 
 ### How It Works
 
@@ -316,6 +338,22 @@ Special task weights are managed in the **Weight Matrix** admin page (`/button-w
   modalities_dashboards: [mr]
   skill_dashboards: [cvt]
 ```
+
+**Current xray setup in this repo:**
+```yaml
+- name: xray-normal
+  label: Normal
+  base_skill: cvt
+  target_skill_modalities:
+    - cvt_xray
+  modalities_dashboards: [xray]
+  allow_overflow: true
+```
+
+- The xray dashboard shows MHD again.
+- `mhd_xray` runs in no-overflow mode without a visible strict `*` button.
+- The NDOC roster/shifts use the `xray_notfall` alias, which normalizes to
+  `notfall_xray`.
 
 ---
 
@@ -610,7 +648,7 @@ vendor_mappings:
       activity: "Beschreibung der Aktivität"
       employee_name: "Name des Mitarbeiters"
       employee_code: "Code des Mitarbeiters"
-      day_part: "Tageszeit"  # Optional: VM/NM split heuristic
+      day_part: "Tageszeit"  # Optional: VM/NM import column for rule filters
 
     # Rules for mapping activities to shifts/gaps
     # Rules are evaluated in order; first match wins
@@ -712,6 +750,7 @@ The `skill_overrides` field supports shortcuts:
 - `all: -1` → all Skill×Modality combinations = -1
 - `mhd: 1` → all mhd_* combinations = 1 (mhd_ct, mhd_mr, etc.)
 - `ct: 1` → all *_ct combinations = 1 (notfall_ct, mhd_ct, etc.)
+- `xray: -1` → all *_xray combinations = -1
 
 ### Weighted/Assisted Workers
 
@@ -743,6 +782,34 @@ times:
     - "10:00-11:00"
     - "14:00-15:00"
 ```
+
+### VM/NM Day Parts
+
+If the Medweb export includes a `Tageszeit` column, rules can also filter on it.
+Use `day_part` for a single value or `day_parts` for multiple values:
+
+```yaml
+- match: "SBZ Geräteassistenz"
+  type: "gap"
+  day_part: NM
+  times:
+    default: "15:45-20:00"
+
+- match: "SBZ Geräteassistenz"
+  type: "gap"
+  day_part: VM
+  times:
+    default: "07:30-15:45"
+```
+
+Rules without `day_part` keep the old wildcard behavior and match both VM and NM.
+
+Matching is day-part aware:
+- `day_part: VM` matches rows tagged `VM`
+- `day_part: NM` matches rows tagged `NM`
+- `day_parts: [VM, NM]` matches either `VM` or `NM`
+- combined labels like `VM+NM`, `VM/NM`, `both`, `all`, or `any` are treated as `VM` for rule matching
+- `NM`-only rows stay `NM` and therefore route to the late rule
 
 ### Segmented Rules
 

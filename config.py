@@ -6,7 +6,7 @@ import yaml
 import copy
 import logging
 from logging.handlers import RotatingFileHandler
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional, Set
 from lib.utils import (
     coerce_float,
     coerce_int,
@@ -238,6 +238,7 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
     templates: List[Dict[str, Any]] = []
     for name, data in ordered_skills:
         slug = data.get('slug') or _slugify(name)
+        tooltip = str(data.get('tooltip') or data.get('label', name)).strip()
 
         columns.append(name)
         slug_map[name] = slug
@@ -245,6 +246,7 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
         templates.append({
             'name': name,
             'label': data.get('label', name),
+            'tooltip': tooltip,
             'slug': slug,
             'display_order': coerce_int(data.get('display_order', 0)),
             'button_color': data.get('button_color', '#004892'),
@@ -410,6 +412,7 @@ def _normalize_special_tasks(raw_tasks: Any) -> List[Dict[str, Any]]:
             continue
 
         label = str(entry.get('label') or name)
+        tooltip = str(entry.get('tooltip') or label).strip()
         display_order = coerce_int(entry.get('display_order', 999))
         work_amount = coerce_float(entry.get('work_amount', 1.0), 1.0)
         if work_amount <= 0:
@@ -483,6 +486,7 @@ def _normalize_special_tasks(raw_tasks: Any) -> List[Dict[str, Any]]:
             'name': name,
             'slug': slug,
             'label': label,
+            'tooltip': tooltip,
             'base_skill': base_skill,
             'target_skill_modalities': target_skill_modalities,
             'modalities_dashboards': modalities_dashboards,
@@ -536,7 +540,7 @@ def _normalize_strict_button_visibility(
     *,
     special_tasks_map: Optional[Dict[str, Dict[str, Any]]] = None,
     modalities_map: Optional[Dict[str, str]] = None,
-) -> Dict[str, set[str]]:
+) -> Dict[str, Set[str]]:
     """
     Normalize visible strict-button config for regular skills and special tasks.
 
@@ -545,7 +549,7 @@ def _normalize_strict_button_visibility(
         cvt_ct: true
         ct-herz_ct: true
     """
-    normalized: Dict[str, set[str]] = {
+    normalized: Dict[str, Set[str]] = {
         'regular': set(),
         'special': set(),
     }

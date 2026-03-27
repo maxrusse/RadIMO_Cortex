@@ -9,10 +9,10 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 
 import routes
-from config import SKILL_COLUMNS, allowed_modalities
+from config import APP_CONFIG, SKILL_COLUMNS, allowed_modalities
 from data_manager import schedule_crud
 from data_manager import worker_management
-from data_manager.csv_parser import build_working_hours_from_medweb
+from data_manager.csv_parser import build_ppl_from_row, build_working_hours_from_medweb, match_mapping_rule
 
 
 class TestDayPlanIntegration(unittest.TestCase):
@@ -375,6 +375,69 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
+    def test_csv_import_prefers_personalnummer_over_code(self) -> None:
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "Shift A",
+                        "type": "shift",
+                    },
+                ],
+            },
+        }
+
+        row = pd.Series(
+            {
+                "Name des Mitarbeiters": "Alex Example",
+                "Personalnummer": "P123",
+                "Code des Mitarbeiters": "C12",
+            }
+        )
+        self.assertEqual(build_ppl_from_row(row, config["medweb_mapping"]["columns"]), "Alex Example (P123)")
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Name des Mitarbeiters",
+                        "Personalnummer",
+                        "Code des Mitarbeiters",
+                        "Beschreibung der Aktivität",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "Alex Example", "P123", "C12", "Shift A"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}),                  patch("data_manager.worker_management.save_worker_skill_json") as mock_save:
+                added_count, added_workers = worker_management.auto_populate_skill_roster_from_csv(
+                    csv_path,
+                    config,
+                )
+
+            self.assertEqual(added_count, 1)
+            self.assertEqual(added_workers, ["P123"])
+            saved_roster = mock_save.call_args.args[0]
+            self.assertIn("P123", saved_roster)
+            self.assertNotIn("C12", saved_roster)
+            self.assertEqual(saved_roster["P123"]["full_name"], "Alex Example (P123)")
+            for skill in SKILL_COLUMNS:
+                for modality in allowed_modalities:
+                    self.assertEqual(saved_roster["P123"][f"{skill}_{modality}"], -1)
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
     def test_synthetic_shift_loads_without_same_day_medweb_rows_and_seeds_roster(self) -> None:
         target_date = datetime(2026, 1, 23)  # Friday
         worker_name = "GynDoc"
@@ -599,6 +662,121 @@ class TestDayPlanIntegration(unittest.TestCase):
         finally:
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
+
+    def test_day_part_filters_use_medweb_tageszeit(self) -> None:
+        target_date = datetime(2026, 1, 23)
+        skill_key = SKILL_COLUMNS[0]
+        skill_override_key = f"{skill_key}_{self.modality}"
+
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                    "day_part": "Tageszeit",
+                },
+                "rules": [
+                    {
+                        "match": "Gerätearzt",
+                        "type": "shift",
+                        "label": "Gerätearzt",
+                        "times": {"default": "07:30-15:45"},
+                        "skill_overrides": {skill_override_key: 1},
+                        "segments": [
+                            {
+                                "label": "Gerätearzt VM",
+                                "day_part": "VM",
+                                "times": {"default": "07:30-12:00"},
+                            },
+                            {
+                                "label": "Gerätearzt NM",
+                                "day_part": "NM",
+                                "times": {"default": "13:00-15:45"},
+                            },
+                        ],
+                    },
+                    {
+                        "match": "Spätdienst Aufklärung",
+                        "type": "gap",
+                        "label": "Aufklärung Spät",
+                        "day_part": "NM",
+                        "times": {"default": "15:45-20:00"},
+                        "skill_overrides": {"all": -1},
+                    },
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "worker_roster": {
+                "A1": {
+                    f"{skill}_{modality}": 0
+                    for skill in SKILL_COLUMNS
+                    for modality in allowed_modalities
+                }
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                        "Tageszeit",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "Gerätearzt", "Alice", "A1", "VM"])
+                writer.writerow(["23.01.2026", "Gerätearzt", "Alice", "A1", "NM"])
+                writer.writerow(["23.01.2026", "Spätdienst Aufklärung", "Alice", "A1", "VM"])
+                writer.writerow(["23.01.2026", "Spätdienst Aufklärung", "Alice", "A1", "NM"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
+
+            csv_df = csv_result[self.modality]
+            shift_rows = csv_df[csv_df["tasks"].isin(["Gerätearzt VM", "Gerätearzt NM"])]
+            gap_rows = csv_df[csv_df["tasks"] == "Aufklärung Spät"]
+
+            self.assertEqual(len(shift_rows), 2)
+            self.assertEqual(
+                sorted(shift_rows["tasks"].tolist()),
+                ["Gerätearzt NM", "Gerätearzt VM"],
+            )
+            self.assertEqual(
+                sorted(time.strftime("%H:%M") for time in shift_rows["start_time"]),
+                ["07:30", "13:00"],
+            )
+            self.assertEqual(
+                sorted(time.strftime("%H:%M") for time in shift_rows["end_time"]),
+                ["12:00", "15:45"],
+            )
+
+            self.assertEqual(len(gap_rows), 1)
+            self.assertEqual(gap_rows.iloc[0]["start_time"].strftime("%H:%M"), "15:45")
+            self.assertEqual(gap_rows.iloc[0]["end_time"].strftime("%H:%M"), "20:00")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_real_medweb_config_matches_late_geraeteassistenz_before_generic_rule(self) -> None:
+        rules = APP_CONFIG["medweb_mapping"]["rules"]
+
+        normal_rule = match_mapping_rule("SBZ Geräteassistenz", rules, day_part="VM+NM")
+        self.assertIsNotNone(normal_rule)
+        self.assertEqual(normal_rule["label"], "Aufklärung")
+        self.assertEqual(normal_rule["day_part"], "VM")
+
+        late_rule = match_mapping_rule("SBZ Geräteassistenz", rules, day_part="NM")
+        self.assertIsNotNone(late_rule)
+        self.assertEqual(late_rule["label"], "Aufklärung Spät")
+        self.assertEqual(late_rule["day_part"], "NM")
 
     def test_segmented_gap_rule_creates_multiple_gap_intervals(self) -> None:
         target_date = datetime(2026, 1, 23)

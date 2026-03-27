@@ -192,6 +192,7 @@ RadIMO_Cortex/
     ├── ADMIN_GUIDE.md          # Admin pages guide
     ├── API.md                  # API endpoints
     ├── CONFIGURATION.md        # Config reference (incl. special tasks)
+    ├── INSTALL_UBUNTU.md       # Ubuntu installation and service setup
     ├── SCREENSHOTS.md          # Screenshot generation for training docs
     ├── USAGE_LOGGING.md        # Usage logging documentation
     └── WORKFLOW.md             # Master CSV workflow guide
@@ -207,6 +208,7 @@ RadIMO_Cortex/
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Full config.yaml reference |
 | [API.md](docs/API.md) | REST API endpoints |
 | [ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Admin pages and skill roster |
+| [INSTALL_UBUNTU.md](docs/INSTALL_UBUNTU.md) | Ubuntu server installation and intranet deployment guide |
 | [USAGE_LOGGING.md](docs/USAGE_LOGGING.md) | Usage statistics and export workflow |
 | [TEST_DATA.md](docs/TEST_DATA.md) | Scenario-based generated test data workflow |
 | [SCREENSHOTS.md](docs/SCREENSHOTS.md) | Training screenshot workflow and scene catalog |

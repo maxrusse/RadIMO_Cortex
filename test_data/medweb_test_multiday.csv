@@ -1,45 +1,45 @@
 Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code der Aktivität,Art der Aktivität,Standort,Gruppe,Zeit ändern,Beschreibung der Aktivität,Quelle
 09.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-09.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-09.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-09.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-09.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,09.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
 10.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-10.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-10.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-10.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-10.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+10.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 10.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 10.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 10.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,10.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 10.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,10.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,11.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,11.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
 12.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-12.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-12.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-12.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-12.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+12.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 12.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 12.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 12.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,12.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 12.03.2026,VM,2017,MSz17,Dr. Martin Schulze,PRIV01,Sonstiges,,Oberarzt,12.03.2026 07:30,OA CT,Universitätsklinikum Freiburg Röntgendiagnostik
 13.03.2026,VM,2001,FW01,Dr. Frank Weber,MSK01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-13.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-13.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-13.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-13.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2003,MK03,Dr. Michael Koch,ABD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2005,TE05,Dr. Thomas Engel,CARD01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2007,PH07,Dr. Peter Hoffmann,URO01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+13.03.2026,VM,2009,SL09,Dr. Stefan Lang,KH01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 13.03.2026,VM,2011,CS11,Dr. Christian Schulz,PAED01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 13.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GYN01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 13.03.2026,VM,2015,KM15,Dr. Klaus Meyer,NOT01,Sonstiges,,Assisentsarzt,13.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -50,7 +50,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 09.03.2026,VM,2004,SB04,Dr. Sandra Braun,MR01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,OA MR,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2010,AM10,Dr. Anna Müller,XR01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2008,MS08,Dr. Maria Schmidt,MM01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
-09.03.2026,VM,2019,FH19,Dr. Friedrich Hauser,FA01,Sonstiges,,Facharzt,09.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+09.03.2026,VM,2019,FH19,Dr. Friedrich Hauser,FA01,Sonstiges,,Facharzt,09.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2014,ER14,Dr. Eva Richter,PRIVGYN01,Sonstiges,,Oberarzt,09.03.2026 07:30,OA Mammo,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2020,CP20,Dr. Claudia Peters,CT01,Sonstiges,,Assisentsarzt,09.03.2026 07:30,Assistent Notfall,Universitätsklinikum Freiburg Röntgendiagnostik
 09.03.2026,VM,2013,SW13,Dr. Susanne Wolf,GAP01,Sonstiges,,Assisentsarzt,09.03.2026 15:30,Mult. Myelom Board (Mo 15:30),Universitätsklinikum Freiburg Röntgendiagnostik
@@ -83,11 +83,11 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 11.03.2026,VM,2011,CS11,Dr. Christian Schulz,GAP18,Sonstiges,,Assisentsarzt,11.03.2026 15:30,"Nephr/urol. Kolloq. (Mi 15:30 Uhr, Konf.raum 6)",Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2005,TE05,Dr. Thomas Engel,GAP19,Sonstiges,,Assisentsarzt,11.03.2026 07:30,ZGT/NET-Board (ehem. CCCF) (Do 07:30),Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2015,KM15,Dr. Klaus Meyer,GAP20,Sonstiges,,Assisentsarzt,11.03.2026 12:30,Medizin-Demo (Mo Nephro 13 Uhr/Di Gastro 14 Uhr/Mi Onko 12:30),Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2026,FA26,Dr. Felix Arnold,FAK01,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2027,FA27,Dr. Fiona Adler,FAK02,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2028,FA28,Dr. Fabian Albrecht,FAK03,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow CVT,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2029,FA29,Dr. Frida Albers,FAK04,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow AOU,Universitätsklinikum Freiburg Röntgendiagnostik
-11.03.2026,VM,2030,FA30,Dr. Florian Auer,FAK05,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow MHD,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2026,FA26,Dr. Felix Arnold,FAK01,Sonstiges,,Facharzt,11.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2027,FA27,Dr. Fiona Adler,FAK02,Sonstiges,,Facharzt,11.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2028,FA28,Dr. Fabian Albrecht,FAK03,Sonstiges,,Facharzt,11.03.2026 07:30,SBZ: Cardio/Vask/Thorax,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2029,FA29,Dr. Frida Albers,FAK04,Sonstiges,,Facharzt,11.03.2026 07:30,SBZ: Abdomen/Onko/Uro,Universitätsklinikum Freiburg Röntgendiagnostik
+11.03.2026,VM,2030,FA30,Dr. Florian Auer,FAK05,Sonstiges,,Facharzt,11.03.2026 07:30,SBZ: Muskel-Skelett/Hals/Derma,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2031,FA31,Dr. Franziska Amann,FAK06,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Päd,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2032,FA32,Dr. Frederik Ahlers,FAK07,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Gyn,Universitätsklinikum Freiburg Röntgendiagnostik
 11.03.2026,VM,2033,FA33,Dr. Felicitas Albrecht,FAK08,Sonstiges,,Facharzt,11.03.2026 07:30,FA/Fellow Notfall,Universitätsklinikum Freiburg Röntgendiagnostik

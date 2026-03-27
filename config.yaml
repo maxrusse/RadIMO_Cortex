@@ -62,7 +62,7 @@ modalities:
     nav_color: '#2f8c7a'
     hover_color: '#247060'
     background_color: '#e3f3ef'
-    hidden_skills: [gyn, aou, cvt, mhd]
+    hidden_skills: [gyn, aou, cvt]
 
 # =============================================================================
 # SKILLS
@@ -79,6 +79,7 @@ modalities:
 #   slug: URL-safe identifier (lowercase, no special chars)
 #   valid_modalities: (optional) Only show skill in these modalities
 #   hidden_modalities: (optional) Hide skill in these modalities
+#   tooltip: (optional) Hover text / accessible full name for short labels
 # =============================================================================
 
 skills:
@@ -98,6 +99,7 @@ skills:
     slug: privat
   gyn:
     label: Gyn
+    tooltip: Gynäkologie
     button_color: '#c45d8a'
     text_color: '#ffffff'
     special: true             # Subspecialty team
@@ -105,6 +107,7 @@ skills:
     slug: gyn
   aou:
     label: AOU
+    tooltip: Abdomen / Uro / Onko
     button_color: '#3478c6'
     text_color: '#ffffff'
     special: true             # Abdomen / Uro / Onko subspecialty
@@ -112,6 +115,7 @@ skills:
     slug: aou
   cvt:
     label: CVT
+    tooltip: Cardio / Vask / Thorax
     button_color: '#d07a2d'
     text_color: '#ffffff'
     special: true             # Cardio / Vask / Thorax subspecialty
@@ -119,6 +123,7 @@ skills:
     slug: cvt
   mhd:
     label: MHD
+    tooltip: Muskel-Skelett / Hals / Derma
     button_color: '#4a9a46'
     text_color: '#ffffff'
     special: true             # Musculoskeletal & skin subspecialty
@@ -142,6 +147,7 @@ skills:
 #   skill_dashboards: List of skill dashboards to render on
 #   allow_overflow: Whether overflow to generalists is allowed
 #   display_order: Ordering (default 999)
+#   tooltip: (optional) Hover text / accessible full name
 #
 special_tasks:
   - name: aou_ct-seg
@@ -174,12 +180,9 @@ special_tasks:
   #   display_order: 121
   - name: xray-normal
     label: Normal
-    base_skill: aou
+    base_skill: cvt
     target_skill_modalities:
-      - gyn_xray
-      - aou_xray
       - cvt_xray
-      - mhd_xray
     modalities_dashboards: [xray]
     skill_dashboards: []
     allow_overflow: true
@@ -213,7 +216,7 @@ synthetic_shifts:
       gyn: -1
       notfall_ct: 1
       notfall_mr: 1
-      notfall_xray: 1
+      xray_notfall: 1  # Alias; normalizes to notfall_xray
 
 # =============================================================================
 # WORKER ROSTER BASELINES
@@ -260,7 +263,7 @@ worker_roster:
     mhd_xray: -1
     notfall_ct: 1
     notfall_mr: 1
-    notfall_xray: 1
+    xray_notfall: 1  # Alias; normalizes to notfall_xray
     privat_ct: 0
     privat_mr: -1
     privat_xray: -1
@@ -283,6 +286,10 @@ no_overflow:
   - privat_ct
   - privat_mr
   - privat_xray
+  - notfall_ct
+  - notfall_mr
+  - notfall_xray
+  - mhd_xray
 
 # =============================================================================
 # STRICT BUTTON VISIBILITY
@@ -298,6 +305,8 @@ no_overflow:
 strict_button_visibility:
   cvt_ct: true
   cvt_mr: true
+  mhd_ct: true
+  mhd_mr: true
 
 # =============================================================================
 # SPECIALIST FALLBACK ROUTES (NO GENERALIST OVERFLOW)
@@ -457,8 +466,14 @@ vendor_mappings:
       date: "Datum"                           # Date column
       activity: "Beschreibung der Aktivität"  # Activity description (matched against rules)
       employee_name: "Name des Mitarbeiters"  # Worker name
-      employee_code: "Code des Mitarbeiters"  # Worker ID code
-      day_part: "Tageszeit"                   # Optional: VM/NM for time heuristics (TODO: future granular shifts)
+      employee_personalnummer: "Personalnummer"  # Authoritative worker ID / initials
+      employee_code: "Code des Mitarbeiters"  # Legacy/internal worker code fallback
+      day_part: "Tageszeit"                   # Optional: VM/NM import column for rule filters
+                                              # Inclusive matching:
+                                              # - day_part: VM/NM matches one part
+                                              # - day_parts: [VM, NM] matches either VM or NM
+                                              # - VM+NM rows are treated as VM/Früh for rule matching
+                                              # - NM-only rows stay NM/Spät
 
     # Rules for mapping activities to shifts/gaps
     # Rules are evaluated in order; first match wins.
@@ -545,7 +560,7 @@ vendor_mappings:
     #     gyn_ct: 1
     #     gyn_mr: 1
 
-    - match: "Assistent AOU"
+    - match: "SBZ: Abdomen/Onko/Uro"
       type: "shift"
       times:
         default: "07:30-15:45"
@@ -564,7 +579,7 @@ vendor_mappings:
         mhd_xray: -1
         privat_xray: -1
 
-    - match: "Assistent CVT"
+    - match: "SBZ: Cardio/Vask/Thorax"
       type: "shift"
       times:
         default: "07:30-15:45"
@@ -583,7 +598,7 @@ vendor_mappings:
         mhd_xray: -1
         privat_xray: -1
 
-    - match: "Assistent MHD"
+    - match: "SBZ: Muskel-Skelett/Hals/Derma"
       type: "shift"
       times:
         default: "07:30-15:45"
@@ -591,84 +606,6 @@ vendor_mappings:
       skill_overrides:
         mhd_ct: 1
         mhd_mr: 1
-        gyn_ct: -1
-        gyn_mr: -1
-        gyn_xray: -1
-        notfall_ct: -1
-        notfall_mr: -1
-        notfall_xray: -1
-        aou_xray: -1
-        cvt_xray: -1
-        mhd_xray: -1
-        privat_xray: -1
-
-    # =========================================================================
-    # SUBSPECIALTY SHIFTS (FA/Fellow level)
-    # =========================================================================
-
-    # - match: "FA/Fellow Notfall"
-    #   type: "shift"
-    #   times:
-    #     default: "07:30-15:45"
-    #   skill_overrides:
-    #     notfall_ct: 1
-    #     notfall_mr: 1
-    #     notfall_xray: 1
-
-    # - match: "FA/Fellow Gyn"
-    #   type: "shift"
-    #   times:
-    #     default: "07:30-15:45"
-    #   skill_overrides:
-    #     gyn_ct: 1
-    #     gyn_mr: 1
-
-    - match: "FA/Fellow MHD"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-        Freitag: "07:30-15:15"
-      skill_overrides:
-        mhd_ct: 1
-        mhd_mr: 1
-        gyn_ct: -1
-        gyn_mr: -1
-        gyn_xray: -1
-        notfall_ct: -1
-        notfall_mr: -1
-        notfall_xray: -1
-        aou_xray: -1
-        cvt_xray: -1
-        mhd_xray: -1
-        privat_xray: -1
-
-    - match: "FA/Fellow AOU"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-        Freitag: "07:30-15:15"
-      skill_overrides:
-        aou_ct: 1
-        aou_mr: 1
-        gyn_ct: -1
-        gyn_mr: -1
-        gyn_xray: -1
-        notfall_ct: -1
-        notfall_mr: -1
-        notfall_xray: -1
-        aou_xray: -1
-        cvt_xray: -1
-        mhd_xray: -1
-        privat_xray: -1
-
-    - match: "FA/Fellow CVT"
-      type: "shift"
-      times:
-        default: "07:30-15:45"
-        Freitag: "07:30-15:15"
-      skill_overrides:
-        cvt_ct: 1
-        cvt_mr: 1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -691,6 +628,7 @@ vendor_mappings:
         cvt_mr: 1
         mhd_ct: 1
         mhd_mr: 1
+        xray: -1
 
     # =========================================================================
     # LATE SHIFTS
@@ -699,6 +637,7 @@ vendor_mappings:
 
     - match: "SBZ Spät Assistent"
       type: "shift"
+      day_parts: [VM, NM]
       times:
         default: "11:30-20:00"
       skill_overrides:
@@ -733,7 +672,7 @@ vendor_mappings:
       label: "Röntgendienst"
       type: "shift"
       times:
-        default: "15:45-19:45"
+        default: "16:15-19:45"
       skill_overrides:
         notfall_xray: 1
 
@@ -759,25 +698,28 @@ vendor_mappings:
     # Gaps define time periods when workers are unavailable for assignments.
     # Uses times field with skill_overrides: {all: -1} to exclude from all skills.
     #
-    # Shortcuts for skill_overrides:
-    #   all: -1        → all skill_modality combos = -1
-    #   mhd: 1    → all mhd_* combos = 1
-    #   ct: 1          → all *_ct combos = 1
-    # =========================================================================
+# Shortcuts for skill_overrides:
+#   all: -1        → all skill_modality combos = -1
+#   mhd: 1    → all mhd_* combos = 1
+#   ct: 1          → all *_ct combos = 1
+#   xray: -1      → all *_xray combos = -1
+# =========================================================================
+
+    - match: "SBZ Geräteassistenz"
+      label: "Aufklärung Spät"
+      type: "gap"
+      day_part: NM
+      times:
+        default: "15:45-20:00"
+      skill_overrides:
+        all: -1
 
     - match: "SBZ Geräteassistenz"
       label: "Aufklärung"
       type: "gap"
+      day_part: VM
       times:
         default: "07:30-15:45"
-      skill_overrides:
-        all: -1
-
-    - match: "SBZ Geräteassistenz spät"
-      label: "Aufklärung Spät"
-      type: "gap"
-      times:
-        default: "15:45-20:00"
       skill_overrides:
         all: -1
 
@@ -785,7 +727,19 @@ vendor_mappings:
       label: "Durchleuchtung"
       type: "gap"
       times:
-        default: "07:30-10:00"
+        Dienstag:
+          - "08:30-10:30"
+        Donnerstag:
+          - "08:30-10:30"
+      skill_overrides:
+        all: -1
+
+    - match: "PJ Unterricht"
+      label: "PJ Unterricht"
+      type: "gap"
+      times:
+        Freitag:
+          - "09:30-10:30"
       skill_overrides:
         all: -1
 

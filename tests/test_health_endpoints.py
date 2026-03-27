@@ -112,7 +112,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
-    def test_xray_page_shows_normal_notfall_privat_and_hides_specialty_buttons(
+    def test_xray_page_shows_normal_notfall_privat_mhd_and_hides_other_specialty_buttons(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -124,14 +124,65 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="special-btn-xray-normal"', response.data)
         self.assertIn(b'id="skill-btn-notfall"', response.data)
         self.assertIn(b'id="skill-btn-privat"', response.data)
+        self.assertIn(b'id="skill-btn-mhd"', response.data)
         self.assertNotIn(b'id="skill-btn-gyn"', response.data)
         self.assertNotIn(b'id="skill-btn-aou"', response.data)
         self.assertNotIn(b'id="skill-btn-cvt"', response.data)
-        self.assertNotIn(b'id="skill-btn-mhd"', response.data)
         self.assertLess(
             response.data.index(b'id="special-btn-xray-normal"'),
             response.data.index(b'id="skill-btn-notfall"'),
         )
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_special_task_strict_button_visible", return_value=False)
+    @patch("routes.is_strict_button_visible", return_value=False)
+    def test_xray_page_shows_mhd_without_strict_button(
+        self,
+        _mock_visibility,
+        _mock_special_visibility,
+        _mock_access,
+    ) -> None:
+        response = self.client.get("/?modality=xray")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="skill-btn-mhd"', response.data)
+        self.assertIn(b'title="Muskel-Skelett / Hals / Derma"', response.data)
+        self.assertNotIn(b'aria-label="Strikte Zuweisung"', response.data)
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_special_task_strict_button_visible", return_value=False)
+    @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill == "mhd" and modality in {"ct", "mr"})
+    def test_ct_and_mr_pages_render_mhd_strict_button_when_enabled(
+        self,
+        _mock_visibility,
+        _mock_special_visibility,
+        _mock_access,
+    ) -> None:
+        ct_response = self.client.get("/?modality=ct")
+        mr_response = self.client.get("/?modality=mr")
+
+        self.assertEqual(ct_response.status_code, 200)
+        self.assertEqual(mr_response.status_code, 200)
+        self.assertIn(b'aria-label="Strikte Zuweisung"', ct_response.data)
+        self.assertIn(b'aria-label="Strikte Zuweisung"', mr_response.data)
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_special_task_strict_button_visible", return_value=False)
+    def test_notfall_uses_no_overflow_without_strict_button_by_config(
+        self,
+        _mock_special_visibility,
+        _mock_access,
+    ) -> None:
+        ct_response = self.client.get("/?modality=ct")
+        mr_response = self.client.get("/?modality=mr")
+        xray_response = self.client.get("/?modality=xray")
+
+        self.assertEqual(ct_response.status_code, 200)
+        self.assertEqual(mr_response.status_code, 200)
+        self.assertEqual(xray_response.status_code, 200)
+        self.assertNotIn(b"getNextAssignment('notfall', 'Notfall', true)", ct_response.data)
+        self.assertNotIn(b"getNextAssignment('notfall', 'Notfall', true)", mr_response.data)
+        self.assertNotIn(b"getNextAssignment('notfall', 'Notfall', true)", xray_response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
@@ -189,6 +240,36 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
 
     @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_no_overflow", return_value=True)
+    @patch("routes.get_next_available_worker")
+    @patch("routes.update_global_assignment", return_value="TT")
+    @patch("routes.save_state")
+    @patch("routes._record_cross_pool_flow", return_value=False)
+    @patch("routes.usage_logger.record_skill_modality_usage")
+    @patch("routes.usage_logger.check_and_export_at_scheduled_time")
+    def test_notfall_xray_regular_route_keeps_normal_weight_mode(
+        self,
+        _mock_export,
+        _mock_usage,
+        _mock_flow,
+        _mock_save,
+        mock_update,
+        mock_get_worker,
+        _mock_no_overflow,
+        _mock_access,
+    ) -> None:
+        mock_get_worker.return_value = (
+            {"PPL": "Tester (TT)", "Modifier": 1.0, "notfall": 1},
+            "notfall",
+            "xray",
+        )
+
+        response = self.client.get("/api/xray/notfall")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.get_next_available_worker")
     @patch("routes.get_special_task_weight", return_value=1.0)
     @patch("routes.update_global_assignment", return_value="TT")
@@ -219,16 +300,124 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
         self.assertFalse(mock_get_special_weight.call_args.kwargs["strict"])
 
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.get_next_available_worker")
+    @patch("routes.get_special_task_weight", return_value=1.0)
+    @patch("routes.update_global_assignment", return_value="TT")
+    @patch("routes.save_state")
+    @patch("routes._record_cross_pool_flow", return_value=False)
+    @patch("routes.usage_logger.record_skill_modality_usage")
+    @patch("routes.usage_logger.check_and_export_at_scheduled_time")
+    def test_xray_normal_special_task_routes_to_cvt_only(
+        self,
+        _mock_export,
+        _mock_usage,
+        _mock_flow,
+        _mock_save,
+        mock_update,
+        mock_get_special_weight,
+        mock_get_worker,
+        _mock_access,
+    ) -> None:
+        mock_get_worker.return_value = (
+            {"PPL": "Tester (TT)", "Modifier": 1.0, "cvt": 1},
+            "cvt",
+            "xray",
+        )
+
+        response = self.client.get("/api/xray/xray-normal")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_get_worker.call_args.kwargs["target_skill_modalities"], [("cvt", "xray")])
+        self.assertEqual(mock_get_worker.call_args.kwargs["role"], "cvt")
+        self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
+        self.assertFalse(mock_get_special_weight.call_args.kwargs["strict"])
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_no_overflow", return_value=True)
+    @patch("routes.get_next_available_worker")
+    @patch("routes.update_global_assignment", return_value="TT")
+    @patch("routes.save_state")
+    @patch("routes._record_cross_pool_flow", return_value=False)
+    @patch("routes.usage_logger.record_skill_modality_usage")
+    @patch("routes.usage_logger.check_and_export_at_scheduled_time")
+    def test_mhd_xray_regular_route_keeps_normal_weights_but_no_overflow(
+        self,
+        _mock_export,
+        _mock_usage,
+        _mock_flow,
+        _mock_save,
+        mock_update,
+        mock_get_worker,
+        _mock_no_overflow,
+        _mock_access,
+    ) -> None:
+        mock_get_worker.return_value = (
+            {"PPL": "Tester (TT)", "Modifier": 1.0, "mhd": 1},
+            "mhd",
+            "xray",
+        )
+
+        response = self.client.get("/api/xray/mhd")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
+        self.assertFalse(mock_get_worker.call_args.kwargs["allow_overflow"])
+
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_simple_mode_renders_summary_sections_without_detail_tables(self, _mock_admin) -> None:
         response = self.client.get("/worker-load?mode=simple")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-global"', response.data)
+        self.assertIn(b'Weight / Hour', response.data)
+        self.assertIn(b'Total Weight', response.data)
         self.assertIn(b'id="summary-modality"', response.data)
         self.assertIn(b'id="summary-skill"', response.data)
         self.assertNotIn(b'id="table-modality"', response.data)
         self.assertNotIn(b'id="table-skill"', response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.allowed_modalities", ["ct"])
+    @patch.dict(
+        "routes.modality_data",
+        {
+            "ct": {
+                "working_hours_df": pd.DataFrame(
+                    [
+                        {
+                            "PPL": "Worker One",
+                            "start_time": pd.Timestamp("2026-03-27 08:00:00"),
+                            "end_time": pd.Timestamp("2026-03-27 10:00:00"),
+                            "Modifier": 1.0,
+                        }
+                    ]
+                ),
+                "skill_counts": {},
+            }
+        },
+        clear=True,
+    )
+    @patch("routes.get_canonical_worker_id", side_effect=lambda name: "worker-one")
+    @patch("routes.calculate_global_work_hours_now", return_value={"worker-one": 2.0})
+    @patch("routes.get_global_weighted_count", return_value=4.0)
+    @patch("routes.get_global_assignments", return_value={"total": 2})
+    @patch("routes.get_modality_weighted_count", return_value=4.0)
+    def test_worker_load_api_exposes_weight_per_hour(
+        self,
+        *_mocks,
+    ) -> None:
+        response = self.client.get("/api/worker-load/data")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["max_weight_per_hour"], 2.0)
+        worker = payload["workers"][0]
+        self.assertEqual(worker["hours_worked_now"], 2.0)
+        self.assertEqual(worker["weight_per_hour"], 2.0)
+        self.assertEqual(worker["global_weight"], 4.0)
+        self.assertEqual(worker["global_assignments"]["total"], 2)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_flow_mode_hides_granular_flow_rows(self, _mock_admin) -> None:
