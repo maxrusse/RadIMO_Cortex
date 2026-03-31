@@ -66,7 +66,7 @@ modalities:
     nav_color: '#239b56'
     hover_color: '#1d7a48'
     background_color: '#e0f2e9'
-    hidden_skills: [gyn, aou, cvt]  # MHD is shown again on xray
+    hidden_skills: [gyn, aou, cvt]  # MDH is shown again on xray
   mammo:
     label: Mammo
     nav_color: '#e91e63'
@@ -125,14 +125,14 @@ skills:
     display_order: 3
     slug: paed
 
-  mhd:
-    label: MHD
+  mdh:
+    label: MDH
     tooltip: Muskel-Skelett / Hals / Derma
     button_color: '#9c27b0'
     text_color: '#ffffff'
     special: true
     display_order: 4
-    slug: mhd
+    slug: mdh
 
   aou:
     label: AOU
@@ -152,13 +152,13 @@ skills:
     display_order: 1
     slug: cvt
 
-  mhd:
-    label: MHD
+  mdh:
+    label: MDH
     button_color: '#607d8b'
     text_color: '#ffffff'
     special: true
     display_order: 3
-    slug: mhd
+    slug: mdh
 ```
 
 **Special flag:**
@@ -167,7 +167,7 @@ skills:
 - `tooltip` is optional and is used as hover text / accessible label for short button names.
 **Key format:**
 - Skill keys are URL-safe slugs (lowercase, no spaces, no `/`, no umlauts).
-- Use `label` for the human-readable display name (e.g., `label: "MHD"`).
+- Use `label` for the human-readable display name (e.g., `label: "MDH"`).
 
 ---
 
@@ -200,7 +200,7 @@ no_overflow:
   - notfall_ct     # Notfall CT - specialists only, no strict button
   - notfall_mr     # Notfall MR - specialists only, no strict button
   - notfall_xray   # Notfall Xray - specialists only, no strict button
-  - mhd_xray   # Xray MHD runs strict/no-overflow only
+  - mdh_xray   # Xray MDH runs strict/no-overflow only
 ```
 
 **Format:** `Skill_Modality` (same as `skill_overrides` in shift rules)
@@ -229,8 +229,8 @@ Buttons are hidden by default and must be enabled per button.
 strict_button_visibility:
   cvt_ct: true
   cvt_mr: true
-  mhd_ct: true
-  mhd_mr: true
+  mdh_ct: true
+  mdh_mr: true
   ct-herz_ct: true
   mr-herz_mr: true
 ```
@@ -253,8 +253,8 @@ before any generic overflow.
 
 ```yaml
 specialist_fallback_routes:
-  aou: [mhd]
-  mhd: [aou]
+  aou: [mdh]
+  mdh: [aou]
 ```
 
 **Behavior:**
@@ -266,7 +266,7 @@ specialist_fallback_routes:
 4. In strict mode (`allow_overflow=false`): only primary+fallback specialists are used (no generalist overflow).
 
 **Best use case:**
-- operationally merged teams (for example MHD merged with AOU)
+- operationally merged teams (for example MDH merged with AOU)
 - controlled cross-cover without opening to full generalist overflow
 
 ---
@@ -350,8 +350,8 @@ Special task weights are managed in the **Weight Matrix** admin page (`/button-w
   allow_overflow: true
 ```
 
-- The xray dashboard shows MHD again.
-- `mhd_xray` runs in no-overflow mode without a visible strict `*` button.
+- The xray dashboard shows MDH again.
+- `mdh_xray` runs in no-overflow mode without a visible strict `*` button.
 - The NDOC roster/shifts use the `xray_notfall` alias, which normalizes to
   `notfall_xray`.
 
@@ -561,16 +561,16 @@ balancer:
   #   skill: []                    # No exclusions
   #   skill: [skill1]              # Exclude workers with skill1=1 (all modalities)
   #   skill: [skill1, skill2]      # Exclude workers with skill1=1 OR skill2=1
-  #   skill_mod: [skill1_mod]      # Exclude specific combo (e.g., cvt_ct: [mhd_ct])
+  #   skill_mod: [skill1_mod]      # Exclude specific combo (e.g., cvt_ct: [mdh_ct])
   #   mod: [skill1]                # Modality-wide (all *_mod skills exclude skill1)
   exclude_skills:
     notfall: []      # No exclusions
     privat: []
     gyn: []
     paed: []
-    mhd: []
+    mdh: []
     aou: []
-    cvt: []     # Example: cvt: [mhd] means CVT work excludes MHD specialists
+    cvt: []     # Example: cvt: [mdh] means CVT work excludes MDH specialists
 ```
 
 ### Specialist-First Assignment with Pooled Worker Overflow
@@ -619,7 +619,7 @@ balancer:
   disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first 15min of shift
   disable_overflow_at_shift_end_minutes: 30    # Don't assign overflow in last 30min of shift
   exclude_skills:
-    cvt: [mhd]  # MHD specialists won't get CVT work unless no one else available
+    cvt: [mdh]  # MDH specialists won't get CVT work unless no one else available
 ```
 
 ### Warm-Start Release Modes
@@ -666,7 +666,7 @@ vendor_mappings:
       skill_overrides:
         notfall_ct: 1
         privat_ct: 1
-        mhd_ct: 0
+        mdh_ct: 0
         aou_ct: 0
         cvt_ct: 0
         gyn_ct: 0
@@ -680,7 +680,7 @@ vendor_mappings:
       skill_overrides:
         notfall_ct: 1
         privat_ct: 1
-        mhd_ct: 0
+        mdh_ct: 0
 
     # Weighted entry (beginner/assisted worker)
     - match: "MR Assistent 1. Monat"
@@ -694,15 +694,15 @@ vendor_mappings:
         privat_mr: 0
 
     # Multi-modality team
-    - match: "MHD Team"
+    - match: "MDH Team"
       type: "shift"
       times:
         default: "07:00-15:00"
         Freitag: "07:00-13:00"
       skill_overrides:
-        mhd_ct: 1
-        mhd_mr: 1
-        mhd_xray: 1
+        mdh_ct: 1
+        mdh_mr: 1
+        mdh_xray: 1
 
     # Administrative shift that doesn't count toward load balancing
     - match: "Cortex Aufklärung"
@@ -748,19 +748,19 @@ vendor_mappings:
 
 The `skill_overrides` field supports shortcuts:
 - `all: -1` → all Skill×Modality combinations = -1
-- `mhd: 1` → all mhd_* combinations = 1 (mhd_ct, mhd_mr, etc.)
-- `ct: 1` → all *_ct combinations = 1 (notfall_ct, mhd_ct, etc.)
+- `mdh: 1` → all mdh_* combinations = 1 (mdh_ct, mdh_mr, etc.)
+- `ct: 1` → all *_ct combinations = 1 (notfall_ct, mdh_ct, etc.)
 - `xray: -1` → all *_xray combinations = -1
 
 ### Weighted/Assisted Workers
 
 Use `skill_overrides: {Skill_mod: w}` plus a `modifier` (0.3–1.5):
 ```yaml
-- match: "MHD Anfänger"
+- match: "MDH Anfänger"
   modifier: 0.3  # Very low-yield shift (~30% capacity, e.g., protected non-RadIMO time)
   skill_overrides:
-    mhd_ct: w
-    mhd_xray: w
+    mdh_ct: w
+    mdh_xray: w
 ```
 
 ### Hours Counting
@@ -789,13 +789,13 @@ If the Medweb export includes a `Tageszeit` column, rules can also filter on it.
 Use `day_part` for a single value or `day_parts` for multiple values:
 
 ```yaml
-- match: "SBZ Geräteassistenz"
+- match: "SBZ: Geräteassistenz"
   type: "gap"
   day_part: NM
   times:
     default: "15:45-20:00"
 
-- match: "SBZ Geräteassistenz"
+- match: "SBZ: Geräteassistenz"
   type: "gap"
   day_part: VM
   times:
@@ -845,7 +845,7 @@ also supported for `type: "gap"` rules.
 
 Defines Skill×Modality combinations for each worker. The worker roster is stored in `data/worker_skill_roster.json` and can be edited via the Skill Matrix admin page (`/skill-roster`).
 
-**Format:** `"skill_modality": value` (e.g., `"mhd_ct": 0`)
+**Format:** `"skill_modality": value` (e.g., `"mdh_ct": 0`)
 
 Both `"skill_modality"` and `"modality_skill"` formats are accepted and normalized automatically.
 
@@ -856,10 +856,10 @@ Both `"skill_modality"` and `"modality_skill"` formats are accepted and normaliz
 ```json
 {
   "AA": {
-    "mhd_ct": 0,
-    "mhd_mr": 0,
-    "mhd_xray": 0,
-    "mhd_mammo": 0,
+    "mdh_ct": 0,
+    "mdh_mr": 0,
+    "mdh_xray": 0,
+    "mdh_mammo": 0,
     "notfall_ct": 0,
     "notfall_mr": 0,
     "notfall_xray": 0,
@@ -870,15 +870,15 @@ Both `"skill_modality"` and `"modality_skill"` formats are accepted and normaliz
     "cvt_mr": 0,
     "notfall_ct": 0,
     "notfall_mr": 0,
-    "mhd_ct": -1,
-    "mhd_mr": -1,
-    "mhd_xray": -1
+    "mdh_ct": -1,
+    "mdh_mr": -1,
+    "mdh_xray": -1
   },
   "DEMO_WEIGHTED": {
     "modifier": 2.0,
-    "mhd_ct": 0,
-    "mhd_xray": 0,
-    "mhd_mr": 0
+    "mdh_ct": 0,
+    "mdh_xray": 0,
+    "mdh_mr": 0
   }
 }
 ```
@@ -898,10 +898,10 @@ When combining roster values with vendor CSV `skill_overrides`:
 3. **Roster -1 (hard exclude)** - always wins, cannot be overridden
 
 **Example:**
-- Worker roster: `{"mhd_ct": 0, "mhd_mr": 0, "gyn_ct": 0, "gyn_mr": 0}`
+- Worker roster: `{"mdh_ct": 0, "mdh_mr": 0, "gyn_ct": 0, "gyn_mr": 0}`
 - CSV rule assigns "Gyn Team" with `skill_overrides: {"gyn_ct": 1, "gyn_mr": 1}`
-- Result: Gyn → 1, MHD stays 0 (passive baseline remains passive unless the shift assigns it)
-- If roster had `"mhd_ct": -1`, it stays -1 (hard exclude wins)
+- Result: Gyn → 1, MDH stays 0 (passive baseline remains passive unless the shift assigns it)
+- If roster had `"mdh_ct": -1`, it stays -1 (hard exclude wins)
 
 ---
 
@@ -950,7 +950,7 @@ balancer:
     shift_default: true
     gap_default: false
   exclude_skills:
-    cvt: [mhd]
+    cvt: [mdh]
     notfall: []
 
 vendor_mappings:

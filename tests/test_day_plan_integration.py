@@ -768,12 +768,12 @@ class TestDayPlanIntegration(unittest.TestCase):
     def test_real_medweb_config_matches_late_geraeteassistenz_before_generic_rule(self) -> None:
         rules = APP_CONFIG["medweb_mapping"]["rules"]
 
-        normal_rule = match_mapping_rule("SBZ Geräteassistenz", rules, day_part="VM+NM")
+        normal_rule = match_mapping_rule("SBZ: Geräteassistenz", rules, day_part="VM+NM")
         self.assertIsNotNone(normal_rule)
         self.assertEqual(normal_rule["label"], "Aufklärung")
         self.assertEqual(normal_rule["day_part"], "VM")
 
-        late_rule = match_mapping_rule("SBZ Geräteassistenz", rules, day_part="NM")
+        late_rule = match_mapping_rule("SBZ: Geräteassistenz", rules, day_part="NM")
         self.assertIsNotNone(late_rule)
         self.assertEqual(late_rule["label"], "Aufklärung Spät")
         self.assertEqual(late_rule["day_part"], "NM")

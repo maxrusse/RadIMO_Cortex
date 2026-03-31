@@ -30,7 +30,7 @@ BUTTON_WEIGHTS_PATH = DATA_DIR / "button_weights.json"
 WORKER_ROSTER_PATH = DATA_DIR / "worker_skill_roster.json"
 
 DEMO_WEIGHTS_PATH = ROOT / "test_data" / "demo" / "button_weights_demo.json"
-SKILLS = ["notfall", "privat", "gyn", "mhd", "aou", "cvt"]
+SKILLS = ["notfall", "privat", "gyn", "mdh", "aou", "cvt"]
 MODALITIES = ["ct", "mr", "xray"]
 
 
@@ -39,7 +39,7 @@ DEMO_ACTIVITY_PLAN: list[tuple[str, list[str]]] = [
     ("UNZ Assistent", ["MS11"]),
     ("OA CT", ["AK18"]),
     ("OA MR", ["CP20", "TN31"]),
-    ("SBZ: SBZ Privatpatienten", ["TY33"]),
+    ("SBZ: Privatbefundung", ["TY33"]),
     ("OA / FA Chir", ["ER14", "FH19"]),
     ("Chir Assistent", ["XR41", "YK42"]),
     ("Assistent Gyn", ["MG17"]),
@@ -59,8 +59,8 @@ GAP_BY_WEEKDAY = {
     2: "ILD-Board (Mi 15:00, 14-tägig)",
     3: "Uro-Board (Do 14:30)",
     4: "IPOK (Fr 13 Uhr, Konf.raum 5)",
-    5: "SBZ Geräteassistenz",
-    6: "SBZ Geräteassistenz",
+    5: "SBZ: Geräteassistenz",
+    6: "SBZ: Geräteassistenz",
 }
 
 
@@ -101,12 +101,12 @@ DEMO_WORKERS: list[dict[str, Any]] = [
     {
         "id": "XR41",
         "name": "Dr. Xenia Reuter (XR41)",
-        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mhd_xray": 1, "notfall_xray": -1},
+        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mdh_xray": 1, "notfall_xray": -1},
     },
     {
         "id": "YK42",
         "name": "Dr. Yann Kiefer (YK42)",
-        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mhd_xray": 1, "notfall_xray": -1},
+        "overrides": {"gyn_xray": 1, "aou_xray": 1, "cvt_xray": 1, "mdh_xray": 1, "notfall_xray": -1},
     },
     {
         "id": "MG17",
@@ -122,8 +122,8 @@ DEMO_WORKERS: list[dict[str, Any]] = [
     },
     {"id": "PK12", "name": "Dr. Paul Koch (PK12)", "overrides": {"cvt_ct": 1, "cvt_mr": 1}},
     {"id": "QL10", "name": "Dr. Quentin Lang (QL10)", "overrides": {"aou_ct": 1, "aou_mr": 1}},
-    {"id": "RM13", "name": "Dr. Rina Maurer (RM13)", "overrides": {"mhd_ct": 1, "mhd_mr": 1}},
-    {"id": "ST27", "name": "Dr. Sven Thaler (ST27)", "overrides": {"mhd_ct": 1, "mhd_mr": 1, "mhd_xray": 1}},
+    {"id": "RM13", "name": "Dr. Rina Maurer (RM13)", "overrides": {"mdh_ct": 1, "mdh_mr": 1}},
+    {"id": "ST27", "name": "Dr. Sven Thaler (ST27)", "overrides": {"mdh_ct": 1, "mdh_mr": 1, "mdh_xray": 1}},
     {"id": "UV09", "name": "Dr. Ute Vogler (UV09)", "overrides": {"notfall_mr": 0, "notfall_xray": 0}},
     {"id": "WX07", "name": "Dr. Willem Xander (WX07)", "overrides": {"notfall_xray": 1}},
     {
@@ -163,7 +163,7 @@ def _build_worker_catalog() -> dict[str, dict[str, Any]]:
 
 
 def _gap_activity_for_day(day: date) -> str:
-    return GAP_BY_WEEKDAY.get(day.weekday(), "SBZ Geräteassistenz")
+    return GAP_BY_WEEKDAY.get(day.weekday(), "SBZ: Geräteassistenz")
 
 
 def _write_demo_master_csv(target: date, preload: date) -> dict[str, int]:

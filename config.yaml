@@ -121,14 +121,14 @@ skills:
     special: true             # Cardio / Vask / Thorax subspecialty
     display_order: 1
     slug: cvt
-  mhd:
-    label: MHD
+  mdh:
+    label: MDH
     tooltip: Muskel-Skelett / Hals / Derma
     button_color: '#4a9a46'
     text_color: '#ffffff'
     special: true             # Musculoskeletal & skin subspecialty
     display_order: 3
-    slug: mhd
+    slug: mdh
 
 # =============================================================================
 # SPECIAL TASKS
@@ -238,9 +238,9 @@ worker_roster:
     gyn_ct: 1
     gyn_mr: 1
     gyn_xray: -1
-    mhd_ct: 0
-    mhd_mr: -1
-    mhd_xray: -1
+    mdh_ct: 0
+    mdh_mr: -1
+    mdh_xray: -1
     notfall_ct: -1
     notfall_mr: -1
     notfall_xray: -1
@@ -258,9 +258,9 @@ worker_roster:
     gyn_ct: -1
     gyn_mr: -1
     gyn_xray: -1
-    mhd_ct: 0
-    mhd_mr: -1
-    mhd_xray: -1
+    mdh_ct: 0
+    mdh_mr: -1
+    mdh_xray: -1
     notfall_ct: 1
     notfall_mr: 1
     xray_notfall: 1  # Alias; normalizes to notfall_xray
@@ -289,7 +289,7 @@ no_overflow:
   - notfall_ct
   - notfall_mr
   - notfall_xray
-  - mhd_xray
+  - mdh_xray
 
 # =============================================================================
 # STRICT BUTTON VISIBILITY
@@ -305,8 +305,8 @@ no_overflow:
 strict_button_visibility:
   cvt_ct: true
   cvt_mr: true
-  mhd_ct: true
-  mhd_mr: true
+  mdh_ct: true
+  mdh_mr: true
 
 # =============================================================================
 # SPECIALIST FALLBACK ROUTES (NO GENERALIST OVERFLOW)
@@ -418,7 +418,7 @@ balancer:
     notfall: []      # gyn can not get emergency work
     privat: []       # No exclusions - anyone can get private patients
     gyn: []
-    mhd: []
+    mdh: []
     aou: []
     cvt: []
 
@@ -488,7 +488,7 @@ vendor_mappings:
     # These rules keep privat activity scoped to the specific modality.
     # Set all: -1 to exclude other modalities, then enable the target one(s).
 
-    - match: "SBZ: SBZ Privatpatienten"
+    - match: "SBZ: Privatbefundung"
       type: "shift"
       times:
         default: "07:30-15:45"
@@ -515,7 +515,7 @@ vendor_mappings:
         gyn_xray: 1
         aou_xray: 1
         cvt_xray: 1
-        mhd_xray: 1
+        mdh_xray: 1
 
     # =========================================================================
     # NOTFALL SHIFTS (emergency coverage across modalities)
@@ -576,7 +576,7 @@ vendor_mappings:
         notfall_xray: -1
         aou_xray: -1
         cvt_xray: -1
-        mhd_xray: -1
+        mdh_xray: -1
         privat_xray: -1
 
     - match: "SBZ: Cardio/Vask/Thorax"
@@ -595,7 +595,7 @@ vendor_mappings:
         notfall_xray: -1
         aou_xray: -1
         cvt_xray: -1
-        mhd_xray: -1
+        mdh_xray: -1
         privat_xray: -1
 
     - match: "SBZ: Muskel-Skelett/Hals/Derma"
@@ -604,8 +604,8 @@ vendor_mappings:
         default: "07:30-15:45"
         Freitag: "07:30-15:15"
       skill_overrides:
-        mhd_ct: 1
-        mhd_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -614,7 +614,7 @@ vendor_mappings:
         notfall_xray: -1
         aou_xray: -1
         cvt_xray: -1
-        mhd_xray: -1
+        mdh_xray: -1
         privat_xray: -1
 
     - match: "OA-HELP"
@@ -626,8 +626,8 @@ vendor_mappings:
         aou_mr: 1
         cvt_ct: 1
         cvt_mr: 1
-        mhd_ct: 1
-        mhd_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
         xray: -1
 
     # =========================================================================
@@ -646,7 +646,7 @@ vendor_mappings:
         aou_xray: -1
         cvt_xray: -1
         gyn_xray: -1
-        mhd_xray: -1
+        mdh_xray: -1
         notfall_xray: -1
         privat_xray: -1
       segments:
@@ -661,8 +661,8 @@ vendor_mappings:
             aou_mr: 1
             cvt_ct: 1
             cvt_mr: 1
-            mhd_ct: 1
-            mhd_mr: 1
+            mdh_ct: 1
+            mdh_mr: 1
             gyn_ct: 1
             gyn_mr: 1
             privat_ct: 1
@@ -700,12 +700,12 @@ vendor_mappings:
     #
 # Shortcuts for skill_overrides:
 #   all: -1        → all skill_modality combos = -1
-#   mhd: 1    → all mhd_* combos = 1
+#   mdh: 1    → all mdh_* combos = 1
 #   ct: 1          → all *_ct combos = 1
 #   xray: -1      → all *_xray combos = -1
 # =========================================================================
 
-    - match: "SBZ Geräteassistenz"
+    - match: "SBZ: Geräteassistenz"
       label: "Aufklärung Spät"
       type: "gap"
       day_part: NM
@@ -714,7 +714,7 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
-    - match: "SBZ Geräteassistenz"
+    - match: "SBZ: Geräteassistenz"
       label: "Aufklärung"
       type: "gap"
       day_part: VM
