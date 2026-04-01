@@ -656,6 +656,94 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(rule["segments"][0]["skill_overrides"][f"gyn_{self.modality}"], -1)
         self.assertEqual(rule["segments"][1]["skill_overrides"][f"gyn_{self.modality}"], 0)
 
+    def test_fa_fellow_alias_keeps_legacy_and_new_shift_names(self) -> None:
+        config = {
+            "medweb_mapping": {
+                "rules": [
+                    {
+                        "match": "SBZ: FA",
+                        "label": "SBZ: FA NM",
+                        "type": "shift",
+                        "day_part": "NM",
+                        "times": {"default": "12:00-15:45"},
+                        "modifier": 1.2,
+                        "skill_overrides": {
+                            "all": -1,
+                            "aou_ct": 1,
+                            "aou_mr": 1,
+                            "cvt_ct": 1,
+                            "cvt_mr": 1,
+                            "mdh_ct": 1,
+                            "mdh_mr": 1,
+                        },
+                    },
+                    {
+                        "match": "FA/Fellow SBZ",
+                        "label": "FA/Fellow SBZ NM",
+                        "type": "shift",
+                        "day_part": "NM",
+                        "times": {"default": "12:00-15:45"},
+                        "modifier": 1.2,
+                        "skill_overrides": {
+                            "all": -1,
+                            "aou_ct": 1,
+                            "aou_mr": 1,
+                            "cvt_ct": 1,
+                            "cvt_mr": 1,
+                            "mdh_ct": 1,
+                            "mdh_mr": 1,
+                        },
+                    },
+                    {
+                        "match": "SBZ: FA",
+                        "type": "shift",
+                        "day_parts": ["VM", "VMNM"],
+                        "times": {"default": "07:30-15:45", "Freitag": "07:30-15:15"},
+                        "modifier": 1.2,
+                        "skill_overrides": {
+                            "all": -1,
+                            "aou_ct": 1,
+                            "aou_mr": 1,
+                            "cvt_ct": 1,
+                            "cvt_mr": 1,
+                            "mdh_ct": 1,
+                            "mdh_mr": 1,
+                        },
+                    },
+                    {
+                        "match": "FA/Fellow SBZ",
+                        "type": "shift",
+                        "day_parts": ["VM", "VMNM"],
+                        "times": {"default": "07:30-15:45", "Freitag": "07:30-15:15"},
+                        "modifier": 1.2,
+                        "skill_overrides": {
+                            "all": -1,
+                            "aou_ct": 1,
+                            "aou_mr": 1,
+                            "cvt_ct": 1,
+                            "cvt_mr": 1,
+                            "mdh_ct": 1,
+                            "mdh_mr": 1,
+                        },
+                    },
+                ],
+            },
+        }
+
+        rules = config["medweb_mapping"]["rules"]
+        self.assertEqual(len([rule for rule in rules if rule["match"] == "SBZ: FA"]), 2)
+        self.assertEqual(len([rule for rule in rules if rule["match"] == "FA/Fellow SBZ"]), 2)
+
+        renamed_nm = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_part") == "NM")
+        legacy_nm = next(rule for rule in rules if rule["match"] == "FA/Fellow SBZ" and rule.get("day_part") == "NM")
+        renamed_base = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_parts") == ["VM", "VMNM"])
+        legacy_base = next(rule for rule in rules if rule["match"] == "FA/Fellow SBZ" and rule.get("day_parts") == ["VM", "VMNM"])
+
+        self.assertEqual(renamed_nm["times"], legacy_nm["times"])
+        self.assertEqual(renamed_nm["skill_overrides"], legacy_nm["skill_overrides"])
+        self.assertEqual(renamed_base["times"], legacy_base["times"])
+        self.assertEqual(renamed_base["skill_overrides"], legacy_base["skill_overrides"])
+
     def test_day_part_filters_use_medweb_tageszeit(self) -> None:
         target_date = datetime(2026, 1, 23)
         skill_key = SKILL_COLUMNS[0]

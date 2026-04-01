@@ -661,12 +661,44 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
+    - match: "SBZ: FA"
+      label: "SBZ: FA NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-15:45"
+      modifier: 1.2
+      skill_overrides:
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
+
     - match: "FA/Fellow SBZ"
       label: "FA/Fellow SBZ NM"
       type: "shift"
       day_part: NM
       times:
         default: "12:00-15:45"
+      modifier: 1.2
+      skill_overrides:
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
+
+    - match: "SBZ: FA"
+      type: "shift"
+      day_parts: [VM, VMNM]
+      times:
+        default: "07:30-15:45"
+        Freitag: "07:30-15:15"
       modifier: 1.2
       skill_overrides:
         all: -1
