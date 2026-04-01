@@ -712,7 +712,7 @@ vendor_mappings:
     # =========================================================================
     # Late-day coverage and limited-capacity assignments.
 
-    - match: "SBZ Spät Assistent"
+    - match: "SBZ: Spätdienst"
       type: "shift"
       day_part: NM
       times:

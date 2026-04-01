@@ -818,7 +818,7 @@ within the same rule. Parent values act as defaults and each segment can overrid
 parts that change.
 
 ```yaml
-- match: "SBZ Spät Assistent"
+- match: "SBZ: Spätdienst"
   type: "shift"
   times:
     default: "11:30-20:00"   # optional top-level summary time for admin display

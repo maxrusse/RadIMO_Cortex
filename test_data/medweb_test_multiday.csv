@@ -50,8 +50,8 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 31.03.2026,NM,LE,PL,Philipp Dr Lenz,MVZqxqdfdfdf007800,Sonstiges,,Oberarzt,15.12.2025 09:20,Brustzentrum,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,NM,BOG,BB,Balazs Bogner,DEMO_AUFKLAERUNG_SPAET,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,Aufklärung Spät,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,NM,SIMONC,CPS,Carl Philipp Simon,CTsqxq8fff9f000000,Sonstiges,,Oberarzt,15.12.2025 11:26,OA Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
-31.03.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-31.03.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+31.03.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
+31.03.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,AV,WAT,BW,Barbara Wattinger,D1fqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,04.12.2025 12:53,Dienst 1 freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,AV,KAESTINK,KK,Kai Kästingschäfer,D2fqxq979797cfe4ff,Dienst,Freiburg,Weiterbildungsassistent,12.11.2025 10:35,Dienst 2 Freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,VM,RUS,MR,Maximilian Dr Russe,DAqxqdfdfdfff4d18,Sonstiges,,Oberarzt,07.01.2026 09:02,Dienstliche Abwesenheit,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -95,7 +95,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 31.03.2026,AV,SOS,MS,Martin Dr Soschynski,IR2qxq979797000000,Dienst,,Oberarzt,01.12.2025 15:49,IR Hintergrund 2,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,VM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,NM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
-31.03.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+31.03.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,VM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,NM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 31.03.2026,VM,KUZ,HKu,Hanna Kuzior,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,12.11.2025 09:27,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
@@ -269,8 +269,8 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 01.04.2026,NM,LE,PL,Philipp Dr Lenz,MVZqxqdfdfdf007800,Sonstiges,,Oberarzt,15.12.2025 09:20,Brustzentrum,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,NM,BOG,BB,Balazs Bogner,DEMO_AUFKLAERUNG_SPAET,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,Aufklärung Spät,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,NM,SIMONC,CPS,Carl Philipp Simon,CTsqxq8fff9f000000,Sonstiges,,Oberarzt,15.12.2025 11:26,OA Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
-01.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-01.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+01.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
+01.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,AV,WAT,BW,Barbara Wattinger,D1fqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,04.12.2025 12:53,Dienst 1 freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,AV,KAESTINK,KK,Kai Kästingschäfer,D2fqxq979797cfe4ff,Dienst,Freiburg,Weiterbildungsassistent,12.11.2025 10:35,Dienst 2 Freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,VM,RUS,MR,Maximilian Dr Russe,DAqxqdfdfdfff4d18,Sonstiges,,Oberarzt,07.01.2026 09:02,Dienstliche Abwesenheit,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -314,7 +314,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 01.04.2026,AV,SOS,MS,Martin Dr Soschynski,IR2qxq979797000000,Dienst,,Oberarzt,01.12.2025 15:49,IR Hintergrund 2,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,VM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,NM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
-01.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+01.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,VM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,NM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 01.04.2026,VM,KUZ,HKu,Hanna Kuzior,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,12.11.2025 09:27,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
@@ -488,8 +488,8 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 02.04.2026,NM,LE,PL,Philipp Dr Lenz,MVZqxqdfdfdf007800,Sonstiges,,Oberarzt,15.12.2025 09:20,Brustzentrum,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,NM,BOG,BB,Balazs Bogner,DEMO_AUFKLAERUNG_SPAET,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,Aufklärung Spät,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,NM,SIMONC,CPS,Carl Philipp Simon,CTsqxq8fff9f000000,Sonstiges,,Oberarzt,15.12.2025 11:26,OA Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
-02.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-02.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+02.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
+02.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,AV,WAT,BW,Barbara Wattinger,D1fqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,04.12.2025 12:53,Dienst 1 freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,AV,KAESTINK,KK,Kai Kästingschäfer,D2fqxq979797cfe4ff,Dienst,Freiburg,Weiterbildungsassistent,12.11.2025 10:35,Dienst 2 Freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,VM,RUS,MR,Maximilian Dr Russe,DAqxqdfdfdfff4d18,Sonstiges,,Oberarzt,07.01.2026 09:02,Dienstliche Abwesenheit,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -533,7 +533,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 02.04.2026,AV,SOS,MS,Martin Dr Soschynski,IR2qxq979797000000,Dienst,,Oberarzt,01.12.2025 15:49,IR Hintergrund 2,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,VM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,NM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
-02.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+02.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,VM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,NM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 02.04.2026,VM,KUZ,HKu,Hanna Kuzior,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,12.11.2025 09:27,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
@@ -707,8 +707,8 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 03.04.2026,NM,LE,PL,Philipp Dr Lenz,MVZqxqdfdfdf007800,Sonstiges,,Oberarzt,15.12.2025 09:20,Brustzentrum,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,NM,BOG,BB,Balazs Bogner,DEMO_AUFKLAERUNG_SPAET,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,Aufklärung Spät,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,NM,SIMONC,CPS,Carl Philipp Simon,CTsqxq8fff9f000000,Sonstiges,,Oberarzt,15.12.2025 11:26,OA Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
-03.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-03.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+03.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
+03.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,AV,WAT,BW,Barbara Wattinger,D1fqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,04.12.2025 12:53,Dienst 1 freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,AV,KAESTINK,KK,Kai Kästingschäfer,D2fqxq979797cfe4ff,Dienst,Freiburg,Weiterbildungsassistent,12.11.2025 10:35,Dienst 2 Freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,VM,RUS,MR,Maximilian Dr Russe,DAqxqdfdfdfff4d18,Sonstiges,,Oberarzt,07.01.2026 09:02,Dienstliche Abwesenheit,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -752,7 +752,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 03.04.2026,AV,SOS,MS,Martin Dr Soschynski,IR2qxq979797000000,Dienst,,Oberarzt,01.12.2025 15:49,IR Hintergrund 2,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,VM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,NM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
-03.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+03.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,VM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,NM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 03.04.2026,VM,KUZ,HKu,Hanna Kuzior,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,12.11.2025 09:27,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
@@ -926,8 +926,8 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 04.04.2026,NM,LE,PL,Philipp Dr Lenz,MVZqxqdfdfdf007800,Sonstiges,,Oberarzt,15.12.2025 09:20,Brustzentrum,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,NM,BOG,BB,Balazs Bogner,DEMO_AUFKLAERUNG_SPAET,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,Aufklärung Spät,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,NM,SIMONC,CPS,Carl Philipp Simon,CTsqxq8fff9f000000,Sonstiges,,Oberarzt,15.12.2025 11:26,OA Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
-04.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
-04.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+04.04.2026,NM,BREIT,ChB,Christiane Breit,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 15:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
+04.04.2026,NM,GLUE,VGl,Vivian Glück,CTsqxq8fff9f000000,Sonstiges,,Weiterbildungsassistent,15.01.2026 07:49,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,AV,WAT,BW,Barbara Wattinger,D1fqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,04.12.2025 12:53,Dienst 1 freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,AV,KAESTINK,KK,Kai Kästingschäfer,D2fqxq979797cfe4ff,Dienst,Freiburg,Weiterbildungsassistent,12.11.2025 10:35,Dienst 2 Freitag,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,VM,RUS,MR,Maximilian Dr Russe,DAqxqdfdfdfff4d18,Sonstiges,,Oberarzt,07.01.2026 09:02,Dienstliche Abwesenheit,Universitätsklinikum Freiburg Röntgendiagnostik
@@ -971,7 +971,7 @@ Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code 
 04.04.2026,AV,SOS,MS,Martin Dr Soschynski,IR2qxq979797000000,Dienst,,Oberarzt,01.12.2025 15:49,IR Hintergrund 2,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,VM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,NM,KLEM,DIK,David Immanuel Klemm,LEHqxqdfdfdfff70ff,Sonstiges,,Weiterbildungsassistent,16.12.2025 12:22,Lehre,Universitätsklinikum Freiburg Röntgendiagnostik
-04.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ Spät Assistent,Universitätsklinikum Freiburg Röntgendiagnostik
+04.04.2026,NM,HEINE,HL,Laura Heine,MRSqxq8ff2ff000000,Sonstiges,,Weiterbildungsassistent,18.11.2025 16:10,SBZ: Spätdienst,Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,VM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,NM,ANZ,AAn,Alona Anzalone,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,24.11.2025 08:20,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik
 04.04.2026,VM,KUZ,HKu,Hanna Kuzior,NDqxqdfdfdfff4d18-,Ausgleich,,Weiterbildungsassistent,12.11.2025 09:27,ND-Frei (Abbau),Universitätsklinikum Freiburg Röntgendiagnostik

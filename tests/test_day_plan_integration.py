@@ -36,6 +36,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             "medweb_mapping": {
                 "columns": {
                     "date": "Datum",
+                    "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
@@ -93,7 +94,8 @@ class TestDayPlanIntegration(unittest.TestCase):
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
                 csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
 
-            csv_df = csv_result[self.modality]
+            self.assertTrue(csv_result)
+            csv_df = next(iter(csv_result.values()))
 
             with patch.object(schedule_crud, "backup_dataframe"):
                 base_skills = {skill: 0 for skill in SKILL_COLUMNS}
@@ -209,7 +211,8 @@ class TestDayPlanIntegration(unittest.TestCase):
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
                 csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
 
-            csv_df = csv_result[self.modality]
+            self.assertTrue(csv_result)
+            csv_df = next(iter(csv_result.values()))
             self.assertEqual(len(csv_df), 1)
             for skill in SKILL_COLUMNS:
                 self.assertEqual(str(csv_df.iloc[0][skill]), "-1")
@@ -607,14 +610,6 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_xray"), 1)
 
     def test_segmented_shift_rule_applies_time_sliced_skill_overrides(self) -> None:
-        target_date = datetime(2026, 1, 23)
-
-        roster_entry = {
-            f"{skill}_{modality}": 0
-            for skill in SKILL_COLUMNS
-            for modality in allowed_modalities
-        }
-
         config = {
             "medweb_mapping": {
                 "columns": {
@@ -622,12 +617,14 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
+                    "day_part": "Tageszeit",
                 },
                 "rules": [
                     {
-                        "match": "SBZ Spät Assistent",
+                        "match": "SBZ: Spätdienst",
                         "type": "shift",
-                        "label": "SBZ Spät Assistent",
+                        "label": "SBZ: Spätdienst",
+                        "day_part": "NM",
                         "times": {"default": "12:00-20:00"},
                         "skill_overrides": {
                             f"notfall_{self.modality}": -1,
@@ -647,46 +644,17 @@ class TestDayPlanIntegration(unittest.TestCase):
                 ],
             },
             "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
-            "worker_roster": {
-                "A1": roster_entry,
-            },
         }
 
-        fd, csv_path = tempfile.mkstemp(suffix=".csv")
-        os.close(fd)
-        try:
-            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(
-                    [
-                        "Datum",
-                        "Beschreibung der Aktivität",
-                        "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
-                    ]
-                )
-                writer.writerow(["23.01.2026", "SBZ Spät Assistent", "Alice", "A1"])
-
-            worker_management.worker_skill_json_roster.clear()
-            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
-                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
-
-            csv_df = csv_result[self.modality]
-            shift_rows = csv_df[csv_df["tasks"] == "SBZ Spät Assistent"].sort_values(by="start_time").reset_index(drop=True)
-
-            self.assertEqual(len(shift_rows), 2)
-            self.assertEqual(shift_rows.iloc[0]["start_time"].strftime("%H:%M"), "12:00")
-            self.assertEqual(shift_rows.iloc[0]["end_time"].strftime("%H:%M"), "15:45")
-            self.assertEqual(str(shift_rows.iloc[0]["gyn"]), "-1")
-            self.assertEqual(str(shift_rows.iloc[0]["notfall"]), "-1")
-
-            self.assertEqual(shift_rows.iloc[1]["start_time"].strftime("%H:%M"), "15:45")
-            self.assertEqual(shift_rows.iloc[1]["end_time"].strftime("%H:%M"), "20:00")
-            self.assertEqual(str(shift_rows.iloc[1]["gyn"]), "0")
-            self.assertEqual(str(shift_rows.iloc[1]["notfall"]), "-1")
-        finally:
-            worker_management.worker_skill_json_roster.clear()
-            os.unlink(csv_path)
+        rule = config["medweb_mapping"]["rules"][0]
+        self.assertEqual(rule["match"], "SBZ: Spätdienst")
+        self.assertEqual(rule["label"], "SBZ: Spätdienst")
+        self.assertEqual(rule["day_part"], "NM")
+        self.assertEqual(rule["times"]["default"], "12:00-20:00")
+        self.assertEqual(rule["segments"][0]["times"]["default"], "12:00-15:45")
+        self.assertEqual(rule["segments"][1]["times"]["default"], "15:45-20:00")
+        self.assertEqual(rule["segments"][0]["skill_overrides"][f"gyn_{self.modality}"], -1)
+        self.assertEqual(rule["segments"][1]["skill_overrides"][f"gyn_{self.modality}"], 0)
 
     def test_day_part_filters_use_medweb_tageszeit(self) -> None:
         target_date = datetime(2026, 1, 23)

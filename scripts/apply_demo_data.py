@@ -48,7 +48,7 @@ DEMO_ACTIVITY_PLAN: list[tuple[str, list[str]]] = [
     ("SBZ: Abdomen/Onko/Uro", ["QL10"]),
     ("SBZ: Muskel-Skelett/Hals/Derma", ["RM13"]),
     ("SBZ: Muskel-Skelett/Hals/Derma", ["ST27"]),
-    ("SBZ Spät Assistent", ["UV09"]),
+    ("SBZ: Spätdienst", ["UV09"]),
     ("3. Dienst", ["WX07"]),
 ]
 
