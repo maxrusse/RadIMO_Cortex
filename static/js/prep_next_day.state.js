@@ -238,14 +238,27 @@ function isNonNegativeSkillValue(value) {
   return v === 0 || v === 1 || isWeightedSkill(v);
 }
 
-// Helper: Get shifts (type='shift')
+// Helper: Get regular shifts (type='shift' and counts_for_hours !== false)
 function getShiftRoles() {
-  return TASK_ROLES.filter(t => t.type === 'shift');
+  return TASK_ROLES.filter(t => t.type === 'shift' && t.counts_for_hours !== false);
+}
+
+// Helper: Get blocker shifts (type='shift' and counts_for_hours === false)
+function getBlockerShiftRoles() {
+  return TASK_ROLES.filter(t => t.type === 'shift' && t.counts_for_hours === false);
 }
 
 // Helper: Get gaps (type='gap')
 function getGapTasks() {
   return TASK_ROLES.filter(t => t.type === 'gap');
+}
+
+function sortTasksByName(tasks) {
+  return [...tasks].sort((a, b) => {
+    const aName = String(a?.name || '').trim();
+    const bName = String(b?.name || '').trim();
+    return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
+  });
 }
 
 // Helper: Get the target weekday name (German) based on current tab
@@ -318,8 +331,9 @@ function buildTaskOptionsCache(targetDay) {
     return taskOptionsCacheByDay.get(cacheKey);
   }
 
-  const shifts = getShiftRoles();
-  const gaps = getGapTasks().filter(t => isGapAvailableForDay(t, targetDay));
+  const shifts = sortTasksByName(getShiftRoles());
+  const blockerShifts = sortTasksByName(getBlockerShiftRoles());
+  const gaps = sortTasksByName(getGapTasks().filter(t => isGapAvailableForDay(t, targetDay)));
 
   // Build base HTML without selection (for includeGaps: false)
   let baseHtmlNoGaps = '<option value="">-- Select --</option>';
@@ -329,9 +343,9 @@ function buildTaskOptionsCache(targetDay) {
   // Map of option value -> { html, htmlSelected } for quick selection updates
   const optionsByValue = new Map();
 
-  // Shifts/Roles group
+  // Regular shifts group
   if (shifts.length > 0) {
-    const optgroupStart = '<optgroup label="Shifts / Roles">';
+    const optgroupStart = '<optgroup label="Shifts">';
     const optgroupEnd = '</optgroup>';
     baseHtmlNoGaps += optgroupStart;
     baseHtmlWithGaps += optgroupStart;
@@ -351,9 +365,31 @@ function buildTaskOptionsCache(targetDay) {
     baseHtmlWithGaps += optgroupEnd;
   }
 
-  // Gaps/Tasks group (only for baseHtmlWithGaps)
+  // Blocker shifts group
+  if (blockerShifts.length > 0) {
+    const optgroupStart = '<optgroup label="Blocker Shifts">';
+    const optgroupEnd = '</optgroup>';
+    baseHtmlNoGaps += optgroupStart;
+    baseHtmlWithGaps += optgroupStart;
+
+    blockerShifts.forEach(t => {
+      const escapedName = escapeHtml(t.name);
+      const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${t.modifier || 1.0}" data-counts-for-hours="false"`;
+      const optionHtml = `<option value="${escapedName}" ${dataAttrs}>${escapedName}</option>`;
+      const optionHtmlSelected = `<option value="${escapedName}" ${dataAttrs} selected>${escapedName}</option>`;
+
+      baseHtmlNoGaps += optionHtml;
+      baseHtmlWithGaps += optionHtml;
+      optionsByValue.set(t.name, { html: optionHtml, htmlSelected: optionHtmlSelected, isShift: true });
+    });
+
+    baseHtmlNoGaps += optgroupEnd;
+    baseHtmlWithGaps += optgroupEnd;
+  }
+
+  // Gaps group (only for baseHtmlWithGaps)
   if (gaps.length > 0) {
-    baseHtmlWithGaps += '<optgroup label="Tasks / Gaps (makes -1)">';
+    baseHtmlWithGaps += '<optgroup label="Gaps">';
     gaps.forEach(t => {
       const escapedName = escapeHtml(t.name);
       const dataAttrs = `data-type="gap" data-times='${JSON.stringify(t.times || {})}'`;
@@ -367,7 +403,7 @@ function buildTaskOptionsCache(targetDay) {
   }
 
   // Get first shift name for autoSelectFirst feature
-  const firstShiftName = shifts.length > 0 ? shifts[0].name : null;
+  const firstShiftName = shifts.length > 0 ? shifts[0].name : (blockerShifts.length > 0 ? blockerShifts[0].name : null);
 
   const taskOptionsCache = {
     baseHtmlNoGaps,

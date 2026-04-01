@@ -204,19 +204,19 @@ synthetic_shifts:
     times:
       default: "07:30-15:45"
     skill_overrides:
-      notfall: -1
       gyn_ct: 1
       gyn_mr: 1
+      notfall: -1
   - worker_name: "Notfallarzt (NDOC)"
     label: "Notfallarzt-shift"
     weekdays: [workdays]
     times:
       default: "07:30-15:45"
     skill_overrides:
-      gyn: -1
       notfall_ct: 1
       notfall_mr: 1
-      xray_notfall: 1  # Alias; normalizes to notfall_xray
+      notfall_xray: 1
+      gyn: -1
 
 # =============================================================================
 # WORKER ROSTER BASELINES
@@ -386,11 +386,11 @@ scheduler:
 
 balancer:
   enabled: true                              # Enable/disable load balancing
-  min_assignments_per_skill: 3               # Minimum weighted assignments gate for specialists
+  min_assignments_per_skill: 2               # Minimum weighted assignments gate for specialists
   warm_start_release_mode: either            # either|both: overflow unlock by time/min count policy
   imbalance_threshold_pct: 20                # Percentage threshold to trigger rebalancing
-  disable_overflow_at_shift_start_minutes: 15  # Don't assign overflow in first X minutes
-  disable_overflow_at_shift_end_minutes: 20    # Don't assign overflow in last X minutes
+  disable_overflow_at_shift_start_minutes: 0   # Don't assign overflow in first X minutes
+  disable_overflow_at_shift_end_minutes: 0     # Don't assign overflow in last X minutes
   default_w_modifier: 0.5                   # Default modifier for weighted ('w') skills
 
   # Hours counting for load balancing
@@ -474,6 +474,7 @@ vendor_mappings:
                                               # - day_parts: [VM, NM] matches either VM or NM
                                               # - VM+NM rows are treated as VM/Früh for rule matching
                                               # - NM-only rows stay NM/Spät
+                                              # - if omitted, day_parts default to [VM, VMNM, NM]
 
     # Rules for mapping activities to shifts/gaps
     # Rules are evaluated in order; first match wins.
@@ -490,6 +491,7 @@ vendor_mappings:
 
     - match: "SBZ: Privatbefundung"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-15:45"
         Freitag: "07:30-15:15"
@@ -500,6 +502,7 @@ vendor_mappings:
 
     - match: "OA / FA Chir"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-16:15"
       skill_overrides:
@@ -508,6 +511,7 @@ vendor_mappings:
 
     - match: "Chir Assistent"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-16:15"
       skill_overrides:
@@ -524,6 +528,7 @@ vendor_mappings:
 
     - match: "Assistent Notfall"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-15:45"
       skill_overrides:
@@ -544,6 +549,42 @@ vendor_mappings:
     # SUBSPECIALTY SHIFTS (assistant level)
     # =========================================================================
 
+    - match: "SBZ: Abdomen/Onko/Uro"
+      label: "SBZ: Abdomen/Onko/Uro NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-15:45"
+      modifier: 1.0
+      skill_overrides:
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+
+    - match: "SBZ: Cardio/Vask/Thorax"
+      label: "SBZ: Cardio/Vask/Thorax NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-15:45"
+      modifier: 1.0
+      skill_overrides:
+        all: -1
+        cvt_ct: 1
+        cvt_mr: 1
+
+    - match: "SBZ: Muskel-Skelett/Hals/Derma"
+      label: "SBZ: Muskel-Skelett/Hals/Derma NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-15:45"
+      modifier: 1.0
+      skill_overrides:
+        all: -1
+        mdh_ct: 1
+        mdh_mr: 1
+
     # - match: "Assistent Gyn"
     #   type: "shift"
     #   times:
@@ -562,6 +603,7 @@ vendor_mappings:
 
     - match: "SBZ: Abdomen/Onko/Uro"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-15:45"
         Freitag: "07:30-15:15"
@@ -581,6 +623,7 @@ vendor_mappings:
 
     - match: "SBZ: Cardio/Vask/Thorax"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-15:45"
         Freitag: "07:30-15:15"
@@ -600,6 +643,7 @@ vendor_mappings:
 
     - match: "SBZ: Muskel-Skelett/Hals/Derma"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "07:30-15:45"
         Freitag: "07:30-15:15"
@@ -617,8 +661,41 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
+    - match: "FA/Fellow SBZ"
+      label: "FA/Fellow SBZ NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-15:45"
+      modifier: 1.2
+      skill_overrides:
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
+
+    - match: "FA/Fellow SBZ"
+      type: "shift"
+      day_parts: [VM, VMNM]
+      times:
+        default: "07:30-15:45"
+        Freitag: "07:30-15:15"
+      modifier: 1.2
+      skill_overrides:
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
+
     - match: "OA-HELP"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "14:00-15:45"
       skill_overrides:
@@ -637,9 +714,9 @@ vendor_mappings:
 
     - match: "SBZ Spät Assistent"
       type: "shift"
-      day_parts: [VM, NM]
+      day_part: NM
       times:
-        default: "11:30-20:00"
+        default: "12:00-20:00"
       skill_overrides:
         all: 0
         notfall: -1
@@ -651,7 +728,7 @@ vendor_mappings:
         privat_xray: -1
       segments:
         - times:
-            default: "11:30-15:45"
+            default: "12:00-15:45"
           skill_overrides:
             gyn: -1
         - times:
@@ -671,6 +748,7 @@ vendor_mappings:
     - match: "3. Dienst"
       label: "Röntgendienst"
       type: "shift"
+      day_parts: [VM, VMNM]
       times:
         default: "16:15-19:45"
       skill_overrides:
@@ -723,9 +801,33 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
+    - match: "Gyn Spät"
+      label: "Gyn Spät"
+      type: "shift"
+      times:
+        default: "07:30-12:00"
+      counts_for_hours: false
+      skill_overrides:
+        all: -1
+        gyn_ct: 1
+        gyn_mr: 1
+
+    - match: "Notfall spät"
+      label: "Notfall spät"
+      type: "shift"
+      times:
+        default: "07:30-12:00"
+      counts_for_hours: false
+      skill_overrides:
+        all: -1
+        notfall_ct: 1
+        notfall_mr: 1
+        notfall_xray: 1
+
     - match: "Durchleuchtung"
       label: "Durchleuchtung"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Dienstag:
           - "08:30-10:30"
@@ -737,6 +839,7 @@ vendor_mappings:
     - match: "PJ Unterricht"
       label: "PJ Unterricht"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Freitag:
           - "09:30-10:30"
@@ -746,6 +849,7 @@ vendor_mappings:
     - match: "Nrad-Dienst"
       label: "Nrad-Dienst"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         default: "07:30-11:30"
       skill_overrides:
@@ -754,6 +858,7 @@ vendor_mappings:
     - match: "6hday"
       label: "6hday"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         default: "13:00-16:00"
       skill_overrides:
@@ -762,6 +867,7 @@ vendor_mappings:
     - match: "Mult. Myelom Board (Mo 15:30)"
       label: "Myelom-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Montag:
           - "12:00-16:30"
@@ -771,6 +877,7 @@ vendor_mappings:
     - match: "Medizin-Demo (Mo Nephro 13 Uhr/Di Gastro 14 Uhr/Mi Onko 12:30)"
       label: "Medizin-Demo"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Montag:
           - "11:30-13:30"
@@ -784,6 +891,7 @@ vendor_mappings:
     - match: "Rheuma-Demo (Do 13:30 Uhr, kl. Hörsaal Medizin)"
       label: "Rheuma-Demo"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Donnerstag:
           - "11:30-14:00"
@@ -793,6 +901,7 @@ vendor_mappings:
     - match: "Emphysem-Board, Di 16:00 Uhr"
       label: "Emphysem-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Dienstag:
           - "14:00-17:00"
@@ -802,6 +911,7 @@ vendor_mappings:
     - match: "ILD-Board (Mi 15:00, 14-tägig)"
       label: "ILD-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Mittwoch:
           - "13:00-16:00"
@@ -811,6 +921,7 @@ vendor_mappings:
     - match: "Thoraxdemo ZTT (Di 14:30)"
       label: "Thoraxdemo"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Dienstag:
           - "12:00-15:45"
@@ -820,6 +931,7 @@ vendor_mappings:
     - match: "Kopf-Hals-Board (Mo 15:30)"
       label: "Kopf-Hals-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Montag:
           - "12:00-15:45"
@@ -829,6 +941,7 @@ vendor_mappings:
     - match: "Sarkom/Haut/Knochen-Board (Mi 14:30)"
       label: "Sarkom-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Mittwoch:
           - "07:30-15:45"
@@ -838,6 +951,7 @@ vendor_mappings:
     - match: "Uro-Board (Do 14:30)"
       label: "Uro-Board"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Donnerstag:
           - "12:00-15:45"
@@ -847,6 +961,7 @@ vendor_mappings:
     - match: "ZGT/NET-Board (ehem. CCCF) (Do 07:30)"
       label: "ZGT"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Mittwoch:
           - "09:00-15:45"
@@ -858,6 +973,7 @@ vendor_mappings:
     - match: "BB (Mi 16 Uhr, am letzten Mi des Monats)"
       label: "Beckenboden-Konferenz"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times:
         Mittwoch:
           - "14:30-16:30"
@@ -870,6 +986,7 @@ vendor_mappings:
     - match: "Break"
       label: "Break"
       type: "gap"
+      day_parts: [VM, VMNM, NM]
       times: {}
       skill_overrides:
         all: -1

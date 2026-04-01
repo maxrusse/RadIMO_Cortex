@@ -12,7 +12,13 @@ import routes
 from config import APP_CONFIG, SKILL_COLUMNS, allowed_modalities
 from data_manager import schedule_crud
 from data_manager import worker_management
-from data_manager.csv_parser import build_ppl_from_row, build_working_hours_from_medweb, match_mapping_rule
+from data_manager.csv_parser import (
+    _normalize_day_part_label,
+    _normalize_rule_day_parts,
+    build_ppl_from_row,
+    build_working_hours_from_medweb,
+    match_mapping_rule,
+)
 
 
 class TestDayPlanIntegration(unittest.TestCase):
@@ -581,6 +587,25 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
+    def test_gap_presets_include_gyn_and_notfall_blockers(self) -> None:
+        rules = APP_CONFIG.get("medweb_mapping", {}).get("rules", [])
+        labels = {str(rule.get("label", "")).strip(): rule for rule in rules}
+
+        for label in ("Gyn Spät", "Notfall spät"):
+            self.assertIn(label, labels)
+            rule = labels[label]
+            self.assertEqual(rule.get("type"), "shift")
+            self.assertEqual(rule.get("times", {}).get("default"), "07:30-12:00")
+            self.assertFalse(bool(rule.get("counts_for_hours", False)))
+            self.assertEqual(rule.get("skill_overrides", {}).get("all"), -1)
+        gyn_rule = labels["Gyn Spät"]
+        self.assertEqual(gyn_rule.get("skill_overrides", {}).get("gyn_ct"), 1)
+        self.assertEqual(gyn_rule.get("skill_overrides", {}).get("gyn_mr"), 1)
+        notfall_rule = labels["Notfall spät"]
+        self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_ct"), 1)
+        self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_mr"), 1)
+        self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_xray"), 1)
+
     def test_segmented_shift_rule_applies_time_sliced_skill_overrides(self) -> None:
         target_date = datetime(2026, 1, 23)
 
@@ -603,14 +628,14 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "match": "SBZ Spät Assistent",
                         "type": "shift",
                         "label": "SBZ Spät Assistent",
-                        "times": {"default": "11:30-20:00"},
+                        "times": {"default": "12:00-20:00"},
                         "skill_overrides": {
                             f"notfall_{self.modality}": -1,
                             f"gyn_{self.modality}": 0,
                         },
                         "segments": [
                             {
-                                "times": {"default": "11:30-15:45"},
+                                "times": {"default": "12:00-15:45"},
                                 "skill_overrides": {f"gyn_{self.modality}": -1},
                             },
                             {
@@ -650,7 +675,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             shift_rows = csv_df[csv_df["tasks"] == "SBZ Spät Assistent"].sort_values(by="start_time").reset_index(drop=True)
 
             self.assertEqual(len(shift_rows), 2)
-            self.assertEqual(shift_rows.iloc[0]["start_time"].strftime("%H:%M"), "11:30")
+            self.assertEqual(shift_rows.iloc[0]["start_time"].strftime("%H:%M"), "12:00")
             self.assertEqual(shift_rows.iloc[0]["end_time"].strftime("%H:%M"), "15:45")
             self.assertEqual(str(shift_rows.iloc[0]["gyn"]), "-1")
             self.assertEqual(str(shift_rows.iloc[0]["notfall"]), "-1")
@@ -765,6 +790,18 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
+    def test_day_part_helper_normalizes_vmnm(self) -> None:
+        self.assertEqual(_normalize_day_part_label("VM"), "VM")
+        self.assertEqual(_normalize_day_part_label("NM"), "NM")
+        self.assertEqual(_normalize_day_part_label("VM+NM"), "VMNM")
+        self.assertEqual(_normalize_day_part_label("NM/VM"), "VMNM")
+
+    def test_rule_day_parts_default_to_all_three_when_unspecified(self) -> None:
+        self.assertEqual(
+            _normalize_rule_day_parts({"match": "Example Shift"}),
+            {"VM", "VMNM", "NM"},
+        )
+
     def test_real_medweb_config_matches_late_geraeteassistenz_before_generic_rule(self) -> None:
         rules = APP_CONFIG["medweb_mapping"]["rules"]
 
@@ -777,6 +814,106 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertIsNotNone(late_rule)
         self.assertEqual(late_rule["label"], "Aufklärung Spät")
         self.assertEqual(late_rule["day_part"], "NM")
+
+    def test_real_medweb_config_has_nm_only_specialty_shift_variants(self) -> None:
+        rules = APP_CONFIG["medweb_mapping"]["rules"]
+        expected = [
+            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "12:00-15:45"),
+            ("SBZ: Cardio/Vask/Thorax", "SBZ: Cardio/Vask/Thorax NM", "12:00-15:45"),
+            ("SBZ: Muskel-Skelett/Hals/Derma", "SBZ: Muskel-Skelett/Hals/Derma NM", "12:00-15:45"),
+        ]
+
+        for activity, expected_label, expected_time in expected:
+            with self.subTest(activity=activity):
+                nm_rule = match_mapping_rule(activity, rules, day_part="NM")
+                self.assertIsNotNone(nm_rule)
+                self.assertEqual(nm_rule["label"], expected_label)
+                self.assertEqual(nm_rule["day_part"], "NM")
+                self.assertEqual(nm_rule["times"]["default"], expected_time)
+                self.assertAlmostEqual(float(nm_rule.get("modifier", 1.0)), 1.0)
+
+                base_rule = match_mapping_rule(activity, rules, day_part="VM")
+                self.assertIsNotNone(base_rule)
+                self.assertEqual(base_rule["times"]["default"], "07:30-15:45")
+                self.assertAlmostEqual(float(base_rule.get("modifier", 1.0)), 1.0)
+                self.assertIn("VMNM", base_rule.get("day_parts", []))
+
+                vmnm_rule = match_mapping_rule(activity, rules, day_part="VMNM")
+                self.assertIsNotNone(vmnm_rule)
+                self.assertEqual(vmnm_rule["times"]["default"], "07:30-15:45")
+
+    def test_vm_nm_pair_collapses_to_single_base_shift(self) -> None:
+        target_date = datetime(2026, 4, 1)
+        skill_key = SKILL_COLUMNS[0]
+        skill_override_key = f"{skill_key}_{self.modality}"
+
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                    "day_part": "Tageszeit",
+                },
+                "rules": [
+                    {
+                        "match": "SBZ: Cardio/Vask/Thorax",
+                        "type": "shift",
+                        "label": "SBZ: Cardio/Vask/Thorax NM",
+                        "day_part": "NM",
+                        "times": {"default": "12:00-15:45"},
+                        "modifier": 1.0,
+                        "skill_overrides": {skill_override_key: 1},
+                    },
+                    {
+                        "match": "SBZ: Cardio/Vask/Thorax",
+                        "type": "shift",
+                        "day_parts": ["VM", "VMNM"],
+                        "times": {"default": "07:30-15:45"},
+                        "modifier": 1.0,
+                        "skill_overrides": {skill_override_key: 1},
+                    },
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "worker_roster": {
+                "WALZ": {
+                    skill_override_key: 0,
+                }
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                        "Tageszeit",
+                    ]
+                )
+                writer.writerow(["01.04.2026", "SBZ: Cardio/Vask/Thorax", "Malin Walz", "WALZ", "VM"])
+                writer.writerow(["01.04.2026", "SBZ: Cardio/Vask/Thorax", "Malin Walz", "WALZ", "NM"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
+
+            csv_df = csv_result[self.modality]
+            shift_rows = csv_df[csv_df["tasks"] == "SBZ: Cardio/Vask/Thorax"]
+
+            self.assertEqual(len(shift_rows), 1)
+            self.assertEqual(shift_rows.iloc[0]["start_time"].strftime("%H:%M"), "07:30")
+            self.assertEqual(shift_rows.iloc[0]["end_time"].strftime("%H:%M"), "15:45")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
 
     def test_segmented_gap_rule_creates_multiple_gap_intervals(self) -> None:
         target_date = datetime(2026, 1, 23)

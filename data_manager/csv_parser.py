@@ -53,6 +53,97 @@ def _default_shift_ranges() -> List[Tuple[time, time]]:
     return [DEFAULT_SHIFT_RANGE]
 
 
+def _time_to_minutes(value: Optional[time]) -> int:
+    if value is None:
+        return 0
+    return value.hour * 60 + value.minute
+
+
+def _minutes_to_time(minutes: int) -> time:
+    hours, mins = divmod(max(0, minutes), 60)
+    return time(hour=hours, minute=mins)
+
+
+def _strip_vm_nm_merge_metadata(row: dict) -> dict:
+    cleaned = dict(row)
+    for key in (
+        '_vm_nm_merge_enabled',
+        '_vm_nm_merge_key',
+        '_vm_nm_source_day_part',
+        '_vm_nm_source_activity',
+    ):
+        cleaned.pop(key, None)
+    return cleaned
+
+
+def _merge_vm_nm_pair_rows(rows: List[dict]) -> List[dict]:
+    """
+    Collapse config-driven VM/NM shift rows into a single row when both source
+    parts exist for the same worker and source activity.
+
+    This is intentionally conservative:
+    - only rows from shift rules whose day-parts declare VMNM participate
+    - only rows with both VM and NM source parts merge
+    - rows with different source activities remain separate
+    """
+    if not rows:
+        return []
+
+    passthrough: List[dict] = []
+    merge_buckets: Dict[Tuple[str, str], List[dict]] = {}
+
+    for row in rows:
+        if not row.get('_vm_nm_merge_enabled'):
+            passthrough.append(_strip_vm_nm_merge_metadata(row))
+            continue
+
+        ppl = str(row.get('PPL', '')).strip()
+        activity = str(row.get('_vm_nm_source_activity') or row.get('tasks') or '').strip()
+        source_day_part = str(row.get('_vm_nm_source_day_part') or '').upper().strip()
+        if not ppl or not activity:
+            passthrough.append(_strip_vm_nm_merge_metadata(row))
+            continue
+
+        merge_key = str(row.get('_vm_nm_merge_key') or activity).strip().lower()
+        bucket_key = (ppl, merge_key, activity)
+        bucket = merge_buckets.setdefault(bucket_key, [])
+        bucket.append({**row, '_vm_nm_source_day_part': source_day_part})
+
+    merged_rows: List[dict] = passthrough[:]
+    for bucket_rows in merge_buckets.values():
+        day_parts = {str(row.get('_vm_nm_source_day_part') or '').upper() for row in bucket_rows}
+        if not {'VM', 'NM'}.issubset(day_parts):
+            merged_rows.extend(_strip_vm_nm_merge_metadata(row) for row in bucket_rows)
+            continue
+
+        valid_rows = [
+            row for row in bucket_rows
+            if isinstance(row.get('start_time'), time) and isinstance(row.get('end_time'), time)
+        ]
+        if len(valid_rows) < 2:
+            merged_rows.extend(_strip_vm_nm_merge_metadata(row) for row in bucket_rows)
+            continue
+
+        template = min(valid_rows, key=lambda row: (_time_to_minutes(row['start_time']), _time_to_minutes(row['end_time'])))
+        start_min = min(_time_to_minutes(row['start_time']) for row in valid_rows)
+        end_min = max(_time_to_minutes(row['end_time']) for row in valid_rows)
+        if end_min <= start_min:
+            merged_rows.extend(_strip_vm_nm_merge_metadata(row) for row in bucket_rows)
+            continue
+
+        merged_row = _strip_vm_nm_merge_metadata(template)
+        merged_row['start_time'] = _minutes_to_time(start_min)
+        merged_row['end_time'] = _minutes_to_time(end_min)
+        merged_row['shift_duration'] = round((end_min - start_min) / 60.0, 4)
+        merged_row['TIME'] = (
+            f"{merged_row['start_time'].strftime(TIME_FORMAT)}-"
+            f"{merged_row['end_time'].strftime(TIME_FORMAT)}"
+        )
+        merged_rows.append(merged_row)
+
+    return merged_rows
+
+
 def _select_day_times(
     times_config: Dict[str, Any],
     weekday_name: str,
@@ -133,20 +224,62 @@ def _normalize_day_part_values(raw_value: Any) -> Set[str]:
     return normalized
 
 
+def _normalize_day_part_label(raw_value: Any) -> Optional[str]:
+    """Normalize day-part values to the internal VM / VMNM / NM helper label."""
+    normalized = _normalize_day_part_values(raw_value)
+    if not normalized:
+        return None
+    if normalized == {"VM"}:
+        return "VM"
+    if normalized == {"NM"}:
+        return "NM"
+    if normalized == {"VM", "NM"}:
+        return "VMNM"
+    if "VM" in normalized and "NM" in normalized:
+        return "VMNM"
+    if "VM" in normalized:
+        return "VM"
+    if "NM" in normalized:
+        return "NM"
+    return None
+
+
+def _normalize_rule_day_part_labels(raw_value: Any) -> Set[str]:
+    """Normalize rule day-part declarations to helper labels like VM, VMNM, NM."""
+    if raw_value is None:
+        return set()
+
+    if isinstance(raw_value, (list, tuple, set)):
+        raw_items = list(raw_value)
+    else:
+        raw_items = [raw_value]
+
+    normalized: Set[str] = set()
+    for item in raw_items:
+        label = _normalize_day_part_label(item)
+        if label:
+            normalized.add(label)
+    return normalized
+
+
 def _normalize_row_day_part_values(raw_value: Any) -> Set[str]:
     """Normalize Medweb row day-part values for matching.
 
     Combined VM+NM rows are treated as VM/Früh for rule selection so the
-    normal rule wins over the late-only rule.
+    normal rule wins over the late-only rule. The internal helper label for
+    such rows is VMNM.
     """
-    normalized = _normalize_day_part_values(raw_value)
-    if normalized == {"VM", "NM"}:
+    day_part_label = _normalize_day_part_label(raw_value)
+    if day_part_label == "VMNM":
         return {"VM"}
+    normalized = _normalize_day_part_values(raw_value)
     return normalized
 
 
 def _normalize_rule_day_parts(rule: dict) -> Optional[Set[str]]:
     raw_value = rule.get("day_parts", rule.get("day_part"))
+    if raw_value is None:
+        return {"VM", "VMNM", "NM"}
     normalized = _normalize_day_part_values(raw_value)
     return normalized or None
 
@@ -160,8 +293,7 @@ def _extract_row_day_part(row: pd.Series, cols: Optional[dict]) -> Optional[str]
     value = row.get(day_part_col, None)
     if pd.isna(value):
         return None
-    day_part = str(value).strip()
-    return day_part or None
+    return _normalize_day_part_label(value)
 
 
 def _rule_matches_day_part(rule: dict, row_day_part: Optional[str]) -> bool:
@@ -522,6 +654,16 @@ def build_working_hours_from_medweb(
     workers_with_shifts_by_modality: Dict[str, set] = {mod: set() for mod in allowed_modalities}
     unmatched_activities = []
 
+    mergeable_match_strings: Set[str] = set()
+    for rule in mapping_rules:
+        if str(rule.get('type', 'shift')).strip().lower() != 'shift':
+            continue
+        day_part_labels = _normalize_rule_day_part_labels(rule.get('day_parts', rule.get('day_part')))
+        if 'VMNM' in day_part_labels:
+            match_str = str(rule.get('match', '')).strip().lower()
+            if match_str:
+                mergeable_match_strings.add(match_str)
+
     # FIRST PASS: Collect all Medweb-derived shifts and gaps for each worker
     for _, row in day_df.iterrows():
         activity_desc = str(row.get(cols.get('activity', 'Beschreibung der Aktivität'), ''))
@@ -655,7 +797,7 @@ def build_working_hours_from_medweb(
 
                     task_label = effective_rule.get('label', activity_desc)
 
-                    rows_per_modality[modality].append({
+                    row_payload = {
                         'PPL': ppl_str,
                         'canonical_id': canonical_id,
                         'start_time': start_time,
@@ -666,8 +808,18 @@ def build_working_hours_from_medweb(
                         'counts_for_hours': counts_for_hours,
                         'row_type': 'shift',
                         **modality_skills
-                    })
+                    }
+                    merge_key = str(effective_rule.get('match', '')).strip().lower()
+                    if merge_key in mergeable_match_strings:
+                        row_payload['_vm_nm_merge_enabled'] = True
+                        row_payload['_vm_nm_merge_key'] = merge_key
+                        row_payload['_vm_nm_source_day_part'] = str(row_day_part or '').strip().upper()
+                        row_payload['_vm_nm_source_activity'] = activity_desc
+                    rows_per_modality[modality].append(row_payload)
                     workers_with_shifts_by_modality[modality].add(canonical_id)
+
+    for modality, modality_rows in rows_per_modality.items():
+        rows_per_modality[modality] = _merge_vm_nm_pair_rows(modality_rows)
 
     # Synthetic recurring shifts are injected after Medweb parsing so they use the
     # same shift/gap normalization and roster precedence as CSV-derived rows.

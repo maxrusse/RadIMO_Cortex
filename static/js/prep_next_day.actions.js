@@ -1583,7 +1583,7 @@ function applyPresetToShift(shiftIdx, taskName) {
 
   // Apply skills to all modalities in this shift
   // Config uses skill×modality format: { "notfall_ct": 1, "privat_mr": 0 }
-  // Also supports shortcuts: { "all": -1 }, { "mhd": 1 }
+  // Also supports shortcuts: { "all": -1 }, { "mdh": 1 }
   Object.keys(shift.modalities).forEach(modKey => {
     SKILLS.forEach(skill => {
       const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
@@ -1883,8 +1883,12 @@ function resetAddWorkerModalState() {
 }
 
 function addTaskToAddWorkerModal() {
-  // Find default task to prefill (prefer shifts over gaps)
-  const defaultTask = TASK_ROLES.find(t => t.type === 'shift') || TASK_ROLES[0] || {};
+  // Find default task to prefill (prefer regular shifts over blocker shifts, then gaps)
+  const defaultTask =
+    TASK_ROLES.find(t => t.type === 'shift' && t.counts_for_hours !== false) ||
+    TASK_ROLES.find(t => t.type === 'shift') ||
+    TASK_ROLES[0] ||
+    {};
 
   // Get day-specific times from task config
   const targetDay = getTargetWeekdayName(addWorkerModalState.tab || currentTab);
