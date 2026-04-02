@@ -81,14 +81,15 @@ class TestDayPlanIntegration(unittest.TestCase):
                 writer.writerow(
                     [
                         "Datum",
+                        "Tageszeit",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
                         "Code des Mitarbeiters",
                     ]
                 )
-                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1"])
-                writer.writerow(["23.01.2026", "Shift B", "Alice", "A1"])
-                writer.writerow(["23.01.2026", "Break", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "VM", "Shift A", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "VM", "Shift B", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "VM", "Break", "Alice", "A1"])
 
             worker_management.worker_skill_json_roster.clear()
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
@@ -380,6 +381,109 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertEqual(added_workers, [])
             saved_roster = mock_save.call_args.args[0]
             self.assertEqual(saved_roster["A1"]["full_name"], "Alice (A1)")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_csv_candidate_list_includes_manual_only_missing_workers(self) -> None:
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "Shift A",
+                        "type": "shift",
+                    },
+                ],
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                        "Beschreibung der Aktivität",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "Alice", "A1", "Shift A"])
+                writer.writerow(["23.01.2026", "Bob", "B2", "Urlaub"])
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                candidates = worker_management.get_missing_csv_worker_candidates(csv_path, config)
+
+            self.assertEqual([candidate["worker_id"] for candidate in candidates], ["A1", "B2"])
+            alice = next(candidate for candidate in candidates if candidate["worker_id"] == "A1")
+            bob = next(candidate for candidate in candidates if candidate["worker_id"] == "B2")
+            self.assertTrue(alice["auto_import_eligible"])
+            self.assertFalse(bob["auto_import_eligible"])
+            self.assertEqual(alice["full_name"], "Alice (A1)")
+            self.assertEqual(bob["full_name"], "Bob (B2)")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_csv_worker_import_adds_passive_roster_entry(self) -> None:
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "Shift A",
+                        "type": "shift",
+                    },
+                ],
+            },
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                        "Beschreibung der Aktivität",
+                    ]
+                )
+                writer.writerow(["23.01.2026", "Bob", "B2", "Urlaub"])
+
+            worker_management.worker_skill_json_roster.clear()
+
+            def _fake_save(roster, create_backup=True):
+                worker_management.worker_skill_json_roster.clear()
+                worker_management.worker_skill_json_roster.update(roster)
+                return True
+
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}), \
+                 patch("data_manager.worker_management.save_worker_skill_json", side_effect=_fake_save):
+                candidate = worker_management.import_csv_worker_to_skill_roster(csv_path, config, "B2")
+
+            self.assertEqual(candidate["worker_id"], "B2")
+            self.assertEqual(candidate["full_name"], "Bob (B2)")
+            saved_roster = worker_management.worker_skill_json_roster
+            self.assertIn("B2", saved_roster)
+            self.assertEqual(saved_roster["B2"]["full_name"], "Bob (B2)")
+            for skill in SKILL_COLUMNS:
+                for modality in allowed_modalities:
+                    self.assertEqual(saved_roster["B2"][f"{skill}_{modality}"], 0)
         finally:
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
@@ -783,7 +887,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "type": "gap",
                         "label": "Aufklärung Spät",
                         "day_part": "NM",
-                        "times": {"default": "15:45-20:00"},
+                        "times": {"default": "15:15-20:00", "Freitag": ["15:00-20:00"]},
                         "skill_overrides": {"all": -1},
                     },
                 ],
@@ -836,11 +940,11 @@ class TestDayPlanIntegration(unittest.TestCase):
             )
             self.assertEqual(
                 sorted(time.strftime("%H:%M") for time in shift_rows["end_time"]),
-                ["12:00", "15:45"],
+                ["12:00", "15:00"],
             )
 
             self.assertEqual(len(gap_rows), 1)
-            self.assertEqual(gap_rows.iloc[0]["start_time"].strftime("%H:%M"), "15:45")
+            self.assertEqual(gap_rows.iloc[0]["start_time"].strftime("%H:%M"), "15:00")
             self.assertEqual(gap_rows.iloc[0]["end_time"].strftime("%H:%M"), "20:00")
         finally:
             worker_management.worker_skill_json_roster.clear()
@@ -1053,6 +1157,41 @@ class TestDayPlanIntegration(unittest.TestCase):
         finally:
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
+
+    def test_zgt_thursday_gap_rule_emits_two_gap_intervals(self) -> None:
+        config = {
+            "medweb_mapping": {
+                "rules": [
+                    {
+                        "match": "ZGT/NET-Board (ehem. CCCF) (Do 07:30)",
+                        "type": "gap",
+                        "label": "ZGT",
+                        "day_parts": ["VM", "VMNM", "NM"],
+                        "segments": [
+                            {
+                                "label": "ZGT",
+                                "times": {"Donnerstag": ["07:30-09:00"]},
+                                "skill_overrides": {"all": -1},
+                            },
+                            {
+                                "label": "ZGT Ausgleich",
+                                "times": {"Donnerstag": ["15:30-15:45"]},
+                                "skill_overrides": {"all": -1},
+                            },
+                        ],
+                    },
+                ],
+            },
+        }
+
+        rule = config["medweb_mapping"]["rules"][0]
+        self.assertEqual(rule["match"], "ZGT/NET-Board (ehem. CCCF) (Do 07:30)")
+        self.assertEqual(rule["label"], "ZGT")
+        self.assertEqual(rule["type"], "gap")
+        self.assertEqual(rule["segments"][0]["label"], "ZGT")
+        self.assertEqual(rule["segments"][0]["times"]["Donnerstag"], ["07:30-09:00"])
+        self.assertEqual(rule["segments"][1]["label"], "ZGT Ausgleich")
+        self.assertEqual(rule["segments"][1]["times"]["Donnerstag"], ["15:30-15:45"])
 
     def test_apply_worker_plan_keeps_multiple_full_gap_rows(self) -> None:
         worker_name = "Alice (A1)"

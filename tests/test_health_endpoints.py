@@ -112,7 +112,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
-    def test_xray_page_shows_normal_notfall_privat_mhd_and_hides_other_specialty_buttons(
+    def test_xray_page_shows_normal_notfall_privat_mdh_and_hides_other_specialty_buttons(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -124,7 +124,7 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="special-btn-xray-normal"', response.data)
         self.assertIn(b'id="skill-btn-notfall"', response.data)
         self.assertIn(b'id="skill-btn-privat"', response.data)
-        self.assertIn(b'id="skill-btn-mhd"', response.data)
+        self.assertIn(b'id="skill-btn-mdh"', response.data)
         self.assertNotIn(b'id="skill-btn-gyn"', response.data)
         self.assertNotIn(b'id="skill-btn-aou"', response.data)
         self.assertNotIn(b'id="skill-btn-cvt"', response.data)
@@ -136,7 +136,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
-    def test_xray_page_shows_mhd_without_strict_button(
+    def test_xray_page_shows_mdh_without_strict_button(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -145,14 +145,14 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/?modality=xray")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'id="skill-btn-mhd"', response.data)
+        self.assertIn(b'id="skill-btn-mdh"', response.data)
         self.assertIn(b'title="Muskel-Skelett / Hals / Derma"', response.data)
         self.assertNotIn(b'aria-label="Strikte Zuweisung"', response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
-    @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill == "mhd" and modality in {"ct", "mr"})
-    def test_ct_and_mr_pages_render_mhd_strict_button_when_enabled(
+    @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill == "mdh" and modality in {"ct", "mr"})
+    def test_ct_and_mr_pages_render_mdh_strict_button_when_enabled(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -341,7 +341,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes._record_cross_pool_flow", return_value=False)
     @patch("routes.usage_logger.record_skill_modality_usage")
     @patch("routes.usage_logger.check_and_export_at_scheduled_time")
-    def test_mhd_xray_regular_route_keeps_normal_weights_but_no_overflow(
+    def test_mdh_xray_regular_route_keeps_normal_weights_but_no_overflow(
         self,
         _mock_export,
         _mock_usage,
@@ -353,12 +353,12 @@ class TestHealthEndpoints(unittest.TestCase):
         _mock_access,
     ) -> None:
         mock_get_worker.return_value = (
-            {"PPL": "Tester (TT)", "Modifier": 1.0, "mhd": 1},
-            "mhd",
+            {"PPL": "Tester (TT)", "Modifier": 1.0, "mdh": 1},
+            "mdh",
             "xray",
         )
 
-        response = self.client.get("/api/xray/mhd")
+        response = self.client.get("/api/xray/mdh")
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
@@ -596,6 +596,58 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(global_worker_data["flow_cross_pool"], {})
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.get_missing_csv_worker_candidates", return_value=[
+        {
+            "worker_id": "B2",
+            "full_name": "Bob (B2)",
+            "display_name": "Bob (B2)",
+            "auto_import_eligible": False,
+            "source_activity": "Urlaub",
+            "source_date": "23.01.2026",
+        }
+    ])
+    @patch("routes.build_worker_name_mapping", return_value={"A1": "Alice (A1)"})
+    @patch("routes.load_worker_skill_json", return_value={"A1": {"full_name": "Alice (A1)"}})
+    def test_skill_roster_api_includes_csv_candidates(
+        self,
+        _mock_load_roster,
+        _mock_name_map,
+        _mock_candidates,
+        _mock_admin,
+    ) -> None:
+        response = self.client.get("/api/admin/skill_roster")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["csv_candidates"][0]["worker_id"], "B2")
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.import_csv_worker_to_skill_roster", return_value={
+        "worker_id": "B2",
+        "full_name": "Bob (B2)",
+        "display_name": "Bob (B2)",
+        "auto_import_eligible": False,
+        "source_activity": "Urlaub",
+        "source_date": "23.01.2026",
+    })
+    def test_import_csv_skill_roster_worker_api_imports_selected_worker(
+        self,
+        mock_import,
+        _mock_admin,
+    ) -> None:
+        response = self.client.post(
+            "/api/admin/skill_roster/import_csv_worker",
+            json={"worker_id": "B2"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["worker_id"], "B2")
+        mock_import.assert_called_once()
 
 
 if __name__ == "__main__":

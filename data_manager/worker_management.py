@@ -167,9 +167,9 @@ def normalize_skill_mod_key(key: str) -> str:
     Returns canonical "skill_modality" format with case-insensitive matching.
 
     Examples:
-        "mhd_ct" -> "mhd_ct"
-        "ct_mhd" -> "mhd_ct"
-        "MSK-HAUT_CT" -> "mhd_ct"  (case-insensitive)
+        "mdh_ct" -> "mdh_ct"
+        "ct_mdh" -> "mdh_ct"
+        "MSK-HAUT_CT" -> "mdh_ct"  (case-insensitive)
         "notfall_mr" -> "notfall_mr"
     """
     if '_' not in key:
@@ -210,7 +210,7 @@ def build_disabled_worker_entry() -> Dict[str, Any]:
     Create a new worker entry with all Skill x Modality combinations disabled (-1).
 
     Format: {"skill_modality": -1, ...} (flat structure)
-    Example: {"mhd_ct": -1, "mhd_mr": -1, "notfall_ct": -1, ...}
+    Example: {"mdh_ct": -1, "mdh_mr": -1, "notfall_ct": -1, ...}
     """
     return _build_skill_mod_map(-1)
 
@@ -222,6 +222,175 @@ def build_passive_worker_entry() -> Dict[str, Any]:
     Format: {"skill_modality": 0, ...} (flat structure)
     """
     return _build_skill_mod_map(0)
+
+
+def _load_medweb_csv_dataframe(csv_path: str) -> pd.DataFrame:
+    """Load a Medweb CSV using the encodings/ separators we support."""
+    read_attempts = [
+        {'sep': ',', 'encoding': 'utf-8'},
+        {'sep': ',', 'encoding': 'latin1'},
+        {'sep': ';', 'encoding': 'utf-8'},
+        {'sep': ';', 'encoding': 'latin1'},
+    ]
+
+    csv_df: Optional[pd.DataFrame] = None
+    last_error: Optional[Exception] = None
+    for kwargs in read_attempts:
+        try:
+            csv_df = pd.read_csv(csv_path, **kwargs)
+            break
+        except Exception as exc:
+            last_error = exc
+
+    if csv_df is None:
+        raise ValueError(f"Fehler beim Laden der CSV: {last_error}")
+
+    return csv_df
+
+
+def _build_medweb_worker_candidate(
+    row: pd.Series,
+    *,
+    name_col: str,
+    personalnummer_col: str,
+    code_col: str,
+    activity_col: str,
+    rules: List[dict],
+) -> Optional[Dict[str, Any]]:
+    """Build a single worker candidate from a CSV row."""
+    activity_desc = row.get(activity_col, '')
+    activity_desc = '' if pd.isna(activity_desc) else str(activity_desc).strip()
+    matched_rule = _match_csv_activity_rule(activity_desc, rules)
+    auto_import_eligible = bool(matched_rule and matched_rule.get('type', 'shift') == 'shift')
+
+    employee_name = row.get(name_col, '')
+    employee_personalnummer = row.get(personalnummer_col, '')
+    employee_code = row.get(code_col, '')
+
+    if pd.isna(employee_name) and pd.isna(employee_personalnummer) and pd.isna(employee_code):
+        return None
+
+    employee_name = '' if pd.isna(employee_name) else str(employee_name).strip()
+    employee_personalnummer = '' if pd.isna(employee_personalnummer) else str(employee_personalnummer).strip()
+    employee_code = '' if pd.isna(employee_code) else str(employee_code).strip()
+
+    if employee_name and (employee_name.startswith('!') or 'findet nicht statt' in employee_name.lower()):
+        return None
+
+    if not employee_name and not employee_personalnummer and not employee_code:
+        return None
+
+    worker_code = employee_personalnummer or employee_code
+    full_name = (
+        f"{employee_name} ({worker_code})"
+        if employee_name and worker_code else
+        employee_name or worker_code
+    )
+    worker_id = get_canonical_worker_id(full_name)
+    if not worker_id:
+        return None
+
+    source_date = row.get('Datum', '')
+    source_day_part = row.get('Tageszeit', '')
+    source_date = '' if pd.isna(source_date) else str(source_date).strip()
+    source_day_part = '' if pd.isna(source_day_part) else str(source_day_part).strip()
+
+    return {
+        'worker_id': worker_id,
+        'full_name': full_name or worker_id,
+        'display_name': full_name or worker_id,
+        'employee_name': employee_name,
+        'employee_code': employee_code,
+        'employee_personalnummer': employee_personalnummer,
+        'auto_import_eligible': auto_import_eligible,
+        'source_activity': activity_desc,
+        'source_date': source_date,
+        'source_day_part': source_day_part,
+    }
+
+
+def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Return unique workers found in the CSV that are not already present in the roster.
+
+    The list includes people from any CSV activity row, so it can be used for a
+    manual import picker. Each candidate also reports whether the current auto-import
+    rules would classify at least one of their rows as a shift.
+    """
+    vendor_mapping = config.get('medweb_mapping', {})
+    rules = vendor_mapping.get('rules', [])
+    cols = vendor_mapping.get('columns', {
+        'employee_name': 'Name des Mitarbeiters',
+        'employee_personalnummer': 'Personalnummer',
+        'employee_code': 'Code des Mitarbeiters',
+        'activity': 'Beschreibung der Aktivität',
+    })
+    name_col = cols.get('employee_name', 'Name des Mitarbeiters')
+    personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer')
+    code_col = cols.get('employee_code', 'Code des Mitarbeiters')
+    activity_col = cols.get('activity', 'Beschreibung der Aktivität')
+
+    import os
+    if not os.path.exists(csv_path):
+        selection_logger.info("CSV candidate scan skipped because %s does not exist", csv_path)
+        return []
+
+    csv_df = _load_medweb_csv_dataframe(csv_path)
+    roster = load_worker_skill_json()
+    candidates: Dict[str, Dict[str, Any]] = {}
+
+    for _, row in csv_df.iterrows():
+        candidate = _build_medweb_worker_candidate(
+            row,
+            name_col=name_col,
+            personalnummer_col=personalnummer_col,
+            code_col=code_col,
+            activity_col=activity_col,
+            rules=rules,
+        )
+        if candidate is None:
+            continue
+        worker_id = candidate['worker_id']
+        if worker_id in roster:
+            continue
+        existing = candidates.get(worker_id)
+        if existing is None:
+            candidates[worker_id] = candidate
+            continue
+        if candidate['auto_import_eligible'] and not existing['auto_import_eligible']:
+            existing['auto_import_eligible'] = True
+            existing['source_activity'] = candidate['source_activity']
+            existing['source_date'] = candidate['source_date']
+            existing['source_day_part'] = candidate['source_day_part']
+
+    return sorted(candidates.values(), key=lambda item: (item.get('display_name', '').lower(), item.get('worker_id', '').lower()))
+
+
+def import_csv_worker_to_skill_roster(csv_path: str, config: Dict[str, Any], worker_id: str) -> Dict[str, Any]:
+    """
+    Import a single CSV worker into the skill roster using a passive baseline.
+
+    Returns the imported candidate metadata.
+    """
+    worker_id = '' if worker_id is None else str(worker_id).strip()
+    if not worker_id:
+        raise ValueError("Missing worker_id")
+
+    candidates = get_missing_csv_worker_candidates(csv_path, config)
+    candidate = next((item for item in candidates if item.get('worker_id') == worker_id), None)
+    if candidate is None:
+        raise ValueError(f"Worker {worker_id} not found in CSV candidates")
+
+    roster = load_worker_skill_json()
+    if worker_id in roster:
+        return candidate
+
+    entry = build_passive_worker_entry()
+    if candidate.get('full_name'):
+        entry['full_name'] = candidate['full_name']
+    roster[worker_id] = entry
+    save_worker_skill_json(roster)
+    return candidate
 
 
 def ensure_workers_in_skill_roster(worker_names: Iterable[str]) -> Tuple[int, List[str]]:
@@ -579,10 +748,10 @@ def expand_skill_overrides(rule_overrides: dict) -> dict:
     Expand skill_overrides shortcuts to full skill_modality combinations.
 
     Supports:
-        - Full keys: "mhd_ct": 1 -> {"mhd_ct": 1}
+        - Full keys: "mdh_ct": 1 -> {"mdh_ct": 1}
         - all shortcut: "all": -1 -> all skill_modality combos = -1
-        - Skill shortcut: "mhd": 1 -> mhd_ct, mhd_mr, mhd_xray, mhd_mammo = 1
-        - Modality shortcut: "ct": 1 -> notfall_ct, mhd_ct, privat_ct, etc. = 1
+        - Skill shortcut: "mdh": 1 -> mdh_ct, mdh_mr, mdh_xray, mdh_mammo = 1
+        - Modality shortcut: "ct": 1 -> notfall_ct, mdh_ct, privat_ct, etc. = 1
 
     Args:
         rule_overrides: Raw skill_overrides dict from config
@@ -602,7 +771,7 @@ def expand_skill_overrides(rule_overrides: dict) -> dict:
                     expanded[f"{skill}_{mod}"] = value
             continue
 
-        # Check if key is a skill shortcut (e.g., "mhd")
+        # Check if key is a skill shortcut (e.g., "mdh")
         canonical_skill = skill_columns_map.get(key_lower)
         if canonical_skill:
             for mod in allowed_modalities:
@@ -648,7 +817,7 @@ def apply_skill_overrides(
 
     Args:
         roster_combinations: Worker's baseline skill x modality combinations
-        rule_overrides: CSV rule overrides (e.g., {"mhd_ct": 1, "all": -1})
+        rule_overrides: CSV rule overrides (e.g., {"mdh_ct": 1, "all": -1})
         allow_roster_exclusion_override: Allow overriding roster -1 with 1/w.
         ignore_zero_overrides: Skip overrides with value 0.
         exclude_unprocessed_weighted: Convert unprocessed roster 'w' values to -1.
@@ -709,9 +878,9 @@ def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
 
     Handles all key formats:
     - "all" → all modalities
-    - Skill shortcut (e.g., "mhd") → all modalities
+    - Skill shortcut (e.g., "mdh") → all modalities
     - Modality shortcut (e.g., "ct") → just that modality
-    - Full key (e.g., "mhd_ct") → extract modality from key
+    - Full key (e.g., "mdh_ct") → extract modality from key
 
     Returns list of unique canonical modalities found.
     """
@@ -724,7 +893,7 @@ def extract_modalities_from_skill_overrides(skill_overrides: dict) -> List[str]:
         if key_lower == 'all':
             return list(allowed_modalities)
 
-        # Skill-only shortcut (e.g., "mhd") → all modalities
+        # Skill-only shortcut (e.g., "mdh") → all modalities
         if skill_columns_map.get(key_lower):
             modalities.update(allowed_modalities)
             continue

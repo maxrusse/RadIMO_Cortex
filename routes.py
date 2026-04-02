@@ -76,6 +76,8 @@ from data_manager import (
     build_worker_name_mapping,
     auto_populate_skill_roster,
     auto_populate_skill_roster_from_csv,
+    get_missing_csv_worker_candidates,
+    import_csv_worker_to_skill_roster,
     load_staged_dataframe,
     backup_dataframe,
     persist_live_backup,
@@ -180,7 +182,10 @@ def _maybe_reload_runtime_config(*, manual: bool) -> Optional[str]:
 def _build_rows_from_plan(worker: str, shifts: list, modality: str) -> list:
     rows = []
     for shift in shifts:
-        row_type = shift.get('row_type', 'shift')
+        row_type = shift.get('row_type')
+        if row_type is None and shift.get('is_gap_entry'):
+            row_type = 'gap_segment'
+        row_type = row_type or 'shift_segment'
         is_gap_row = str(row_type).lower() in {'gap', 'gap_segment'}
         if is_gap_row and shift.get('counts_for_hours') is None:
             shift['counts_for_hours'] = False
@@ -1132,12 +1137,14 @@ def skill_roster_api() -> Any:
     
     roster = load_worker_skill_json()
     worker_names = build_worker_name_mapping(roster)
+    csv_candidates = get_missing_csv_worker_candidates(MASTER_CSV_PATH, APP_CONFIG)
     return jsonify({
         'success': True,
         'roster': roster,
         'worker_names': worker_names,
         'skills': SKILL_COLUMNS,
-        'modalities': allowed_modalities
+        'modalities': allowed_modalities,
+        'csv_candidates': csv_candidates,
     })
 
 @routes.route('/api/admin/skill_roster/import_new', methods=['POST'])
@@ -1148,6 +1155,29 @@ def import_new_skill_roster_api() -> Any:
         'success': True,
         'added_count': added_count,
         'added_workers': added_workers
+    })
+
+@routes.route('/api/admin/skill_roster/import_csv_worker', methods=['POST'])
+@admin_required
+def import_csv_skill_roster_worker_api() -> Any:
+    data = request.json or {}
+    worker_id = str(data.get('worker_id', '')).strip()
+    if not worker_id:
+        return jsonify({'error': 'Missing worker_id'}), 400
+
+    try:
+        candidate = import_csv_worker_to_skill_roster(MASTER_CSV_PATH, APP_CONFIG, worker_id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    return jsonify({
+        'success': True,
+        'worker_id': candidate.get('worker_id', worker_id),
+        'display_name': candidate.get('display_name', worker_id),
+        'full_name': candidate.get('full_name', worker_id),
+        'auto_import_eligible': candidate.get('auto_import_eligible', False),
+        'source_activity': candidate.get('source_activity', ''),
+        'source_date': candidate.get('source_date', ''),
     })
 
 @routes.route('/login', methods=['GET', 'POST'])
