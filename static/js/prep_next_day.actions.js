@@ -881,12 +881,9 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
     if (anySuccess) {
       // Preserve form state before re-render
       const formState = saveModalAddFormState();
+      const workerName = group.worker;
       await loadData();
-      if (entriesData[tab] && entriesData[tab][groupIdx]) {
-        currentEditEntry = { tab, groupIdx };
-        renderEditModalContent();
-        restoreModalAddFormState(formState);
-      }
+      reopenEditModalForWorker(tab, workerName, formState);
     } else {
       showMessage('error', 'Failed to update task');
     }
@@ -1003,12 +1000,10 @@ async function updateShiftFromModal(shiftIdx, updates) {
     if (anySuccess) {
       // Preserve form state before re-render
       const formState = saveModalAddFormState();
+      const workerName = group.worker;
       const modalState = captureModalState();
       await loadData();
-      if (entriesData[tab] && entriesData[tab][groupIdx]) {
-        currentEditEntry = { tab, groupIdx };
-        renderEditModalContent();
-        restoreModalAddFormState(formState);
+      if (reopenEditModalForWorker(tab, workerName, formState)) {
         restoreModalState(modalState);
       }
     } else {
@@ -1084,6 +1079,19 @@ function getCurrentModalShift(shiftIdx) {
   if (!group) return null;
   const shifts = getModalShifts(group);
   return shifts?.[shiftIdx] || null;
+}
+
+function reopenEditModalForWorker(tab, workerName, formState = null) {
+  const updatedGroupIdx = entriesData[tab]?.findIndex(entry => entry.worker === workerName);
+  if (updatedGroupIdx === undefined || updatedGroupIdx < 0) {
+    return false;
+  }
+  currentEditEntry = { tab, groupIdx: updatedGroupIdx };
+  renderEditModalContent();
+  if (formState) {
+    restoreModalAddFormState(formState);
+  }
+  return true;
 }
 
 function captureModalState() {
@@ -2289,13 +2297,13 @@ async function confirmBreakDuration() {
   }
 
   const { tab, groupIdx } = currentEditEntry;
+  const workerName = entriesData[tab]?.[groupIdx]?.worker || null;
   // Close popup, add gap (which calls loadData internally)
   closeBreakPopup();
   await onQuickGap30(tab, groupIdx, duration);
   // Re-render modal to show the new gap (data already loaded by onQuickGap30)
-  if (entriesData[tab] && entriesData[tab][groupIdx]) {
-    currentEditEntry = { tab, groupIdx };
-    renderEditModalContent();
+  if (workerName) {
+    reopenEditModalForWorker(tab, workerName);
   }
 }
 

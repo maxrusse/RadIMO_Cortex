@@ -57,26 +57,26 @@ class TestFlowBalanceTracking(unittest.TestCase):
 
     def test_resolve_flow_target_skill_maps_generalist_overflow_back_to_main_skill(self) -> None:
         direct_specialist = routes._resolve_flow_target_skill(
-            {'aou': 1, 'cvt': 1, 'mhd': 0},
+            {'aou': 1, 'cvt': 1, 'mdh': 0},
             assigned_skill='aou',
         )
         self.assertEqual(direct_specialist, 'aou')
 
         overflow_generalist = routes._resolve_flow_target_skill(
-            {'aou': 0, 'cvt': 1, 'mhd': 0},
+            {'aou': 0, 'cvt': 1, 'mdh': 0},
             assigned_skill='aou',
         )
         self.assertEqual(overflow_generalist, 'cvt')
 
         unmapped = routes._resolve_flow_target_skill(
-            {'aou': 0, 'cvt': 0, 'mhd': 0},
+            {'aou': 0, 'cvt': 0, 'mdh': 0},
             assigned_skill='aou',
         )
         self.assertIsNone(unmapped)
 
     def test_flow_balance_payload_aggregates_weighted_skill_links(self) -> None:
         global_worker_data['flow_cross_pool'] = {
-            'aou': {'cvt': 2.5, 'mhd': 1.0},
+            'aou': {'cvt': 2.5, 'mdh': 1.0},
             'cvt_ct': {'aou_ct': 1.5},
         }
         payload = routes._build_flow_balance_payload()
@@ -87,7 +87,7 @@ class TestFlowBalanceTracking(unittest.TestCase):
 
         self.assertEqual(
             payload['out_by_skill']['aou'],
-            [{'to': 'cvt', 'weight': 2.5}, {'to': 'mhd', 'weight': 1.0}],
+            [{'to': 'cvt', 'weight': 2.5}, {'to': 'mdh', 'weight': 1.0}],
         )
         self.assertEqual(
             payload['in_by_skill']['aou'],

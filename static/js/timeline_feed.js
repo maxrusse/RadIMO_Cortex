@@ -242,6 +242,7 @@ const TimelineFeed = (function() {
           counts_for_hours: countsForHours !== false,
           is_manual: Boolean(row.is_manual),
           is_gap_entry: isGapRow,
+          row_type: isGapRow ? 'gap_segment' : 'shift_segment',
           skills: skills.reduce((acc, skill) => {
             const rawVal = row[skill];
             const hasRaw = rawVal !== undefined && rawVal !== '';
@@ -317,7 +318,8 @@ const TimelineFeed = (function() {
             modalities: {},
             timeSegments: [{ start: entry.start_time, end: entry.end_time }],
             is_manual: entry.is_manual,
-            is_gap_entry: entry.is_gap_entry
+            is_gap_entry: entry.is_gap_entry,
+            row_type: entry.row_type
           };
         }
         if (!grouped[workerName].modalShifts[modalShiftKey]) {
@@ -330,7 +332,8 @@ const TimelineFeed = (function() {
             modalities: {},
             timeSegments: [{ start: entry.start_time, end: entry.end_time }],
             is_manual: entry.is_manual,
-            is_gap_entry: entry.is_gap_entry
+            is_gap_entry: entry.is_gap_entry,
+            row_type: entry.row_type
           };
         }
 
@@ -424,7 +427,8 @@ const TimelineFeed = (function() {
             ...shift,
             timeSegments: [{ start: shift.start_time, end: shift.end_time }],
             is_manual: shift.is_manual,
-            is_gap_entry: shift.is_gap_entry
+            is_gap_entry: shift.is_gap_entry,
+            row_type: shift.row_type
           };
         } else {
           mergedShifts.push(currentMerged);
@@ -432,7 +436,8 @@ const TimelineFeed = (function() {
             ...shift,
             timeSegments: [{ start: shift.start_time, end: shift.end_time }],
             is_manual: shift.is_manual,
-            is_gap_entry: shift.is_gap_entry
+            is_gap_entry: shift.is_gap_entry,
+            row_type: shift.row_type
           };
         }
       });
@@ -547,4 +552,3 @@ const TimelineFeed = (function() {
     convertGroupsToTimelineData
   };
 })();
-

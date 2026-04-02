@@ -21,21 +21,23 @@ function isVisibleSkillValue(value, filter) {
 
 function groupHasActiveSkills(group, filter) {
   if (!group) return false;
-  const shifts = getTableShifts(group).filter(s => !s.is_gap_entry && !s.deleted);
-  if (shifts.length === 0) return false;
+  const shifts = getTableShifts(group).filter(s => !s.deleted);
+  const nonGapShifts = shifts.filter(s => !s.is_gap_entry);
+  if (nonGapShifts.length === 0) return false;
+
   const modalityFilter = filter.modality || '';
   const skillFilter = filter.skill || '';
   const modalitiesToCheck = modalityFilter ? [modalityFilter] : MODALITIES.map(m => m.toLowerCase());
 
   if (skillFilter) {
-    return shifts.some(shift => modalitiesToCheck.some(modKey => {
+    return nonGapShifts.some(shift => modalitiesToCheck.some(modKey => {
       const modData = shift.modalities?.[modKey];
       if (!modData) return false;
       return isVisibleSkillValue(modData.skills?.[skillFilter], filter);
     }));
   }
 
-  return shifts.some(shift => modalitiesToCheck.some(modKey => {
+  return nonGapShifts.some(shift => modalitiesToCheck.some(modKey => {
     const modData = shift.modalities?.[modKey];
     if (!modData) return false;
     return SKILLS.some(skill => isVisibleSkillValue(modData.skills?.[skill], filter));
