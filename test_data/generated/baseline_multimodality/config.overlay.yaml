@@ -19,13 +19,13 @@ medweb_mapping:
       default: 08:00-16:00
     skill_overrides:
       privat_mr: 1
-  - match: Baseline XRAY MHD
+  - match: Baseline XRAY MDH
     type: shift
-    label: Baseline XRAY MHD
+    label: Baseline XRAY MDH
     times:
       default: 08:00-16:00
     skill_overrides:
-      mhd_xray: 1
+      mdh_xray: 1
 balancer:
   hours_counting:
     shift_default: true

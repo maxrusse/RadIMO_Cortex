@@ -11,7 +11,7 @@ Verfahrensname / Projekt:
 Beschreibung:
   System zur automatisierten, fairen Zuweisung radiologischer
   Mitarbeitender zu Modalitäten (CT, MR, XRAY, Mammo) und
-  Skills (z.B. Notfall, Privat, Gyn, MHD, CVT).
+  Skills (z.B. Notfall, Privat, Gyn, MDH, CVT).
   Die Zuweisung berücksichtigt Schichtzeiten, Skills,
   Arbeitslast sowie konfigurierbare Regeln und Fallbacks.
 

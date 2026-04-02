@@ -723,8 +723,8 @@ def _normalize_specialist_fallback_routes(raw_routes: Any) -> Dict[str, List[str
 
     Format:
       specialist_fallback_routes:
-        aou: [mhd]
-        mhd: [aou]
+        aou: [mdh]
+        mdh: [aou]
 
     Returns:
       Dict[primary_skill, List[fallback_skill]]

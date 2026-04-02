@@ -10,20 +10,29 @@ Default flow:
 from __future__ import annotations
 
 import argparse
+import http.cookiejar
 import json
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+import yaml
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
+with (ROOT / "config.yaml").open("r", encoding="utf-8") as _config_file:
+    APP_CONFIG = yaml.safe_load(_config_file) or {}
+
+ADMIN_PASSWORD = str(APP_CONFIG.get("admin_password", ""))
+ADMIN_PROTECTION_ENABLED = bool(APP_CONFIG.get("admin_access_protection_enabled", True))
 ASSIGNMENT_CLICK_PLAN = [
     ("/api/ct/notfall", 24),
     ("/api/ct/notfall/strict", 8),
@@ -361,11 +370,16 @@ def _prepare_demo(py_exe: str, target_date: str, preload_date: str | None) -> No
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def _http_request(url: str, method: str = "GET", body: bytes | None = None) -> tuple[int, dict | None]:
+def _http_request(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    method: str = "GET",
+    body: bytes | None = None,
+) -> tuple[int, dict | None]:
     req = urllib.request.Request(url=url, method=method, data=body)
     req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+        with opener.open(req, timeout=10) as resp:
             raw = resp.read()
             data = json.loads(raw.decode("utf-8")) if raw else None
             return resp.status, data
@@ -380,9 +394,24 @@ def _http_request(url: str, method: str = "GET", body: bytes | None = None) -> t
         return e.code, data
 
 
-def _simulate_clicks(base_url: str) -> None:
+def _login_http_session(opener: urllib.request.OpenerDirector, base_url: str) -> None:
+    if not ADMIN_PROTECTION_ENABLED or not ADMIN_PASSWORD:
+        return
+
+    body = urllib.parse.urlencode({"password": ADMIN_PASSWORD}).encode("utf-8")
+    req = urllib.request.Request(
+        url=f"{base_url}/login?modality=ct",
+        method="POST",
+        data=body,
+    )
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    with opener.open(req, timeout=10) as resp:
+        resp.read()
+
+
+def _simulate_clicks(opener: urllib.request.OpenerDirector, base_url: str) -> None:
     # Make runs reproducible for screenshots by resetting usage counters first.
-    reset_status, _ = _http_request(f"{base_url}/api/usage-stats/reset", method="POST")
+    reset_status, _ = _http_request(opener, f"{base_url}/api/usage-stats/reset", method="POST")
     if reset_status not in (200, 204):
         print(f"Warning: usage reset returned {reset_status}")
 
@@ -390,22 +419,23 @@ def _simulate_clicks(base_url: str) -> None:
     failed = 0
     for path, count in ASSIGNMENT_CLICK_PLAN:
         for _ in range(count):
-            status, payload = _http_request(f"{base_url}{path}")
+            status, payload = _http_request(opener, f"{base_url}{path}")
             if status == 200 and payload and payload.get("selected_person"):
                 success += 1
             else:
                 failed += 1
 
-    stats_status, stats_payload = _http_request(f"{base_url}/api/usage-stats/current")
+    stats_status, stats_payload = _http_request(opener, f"{base_url}/api/usage-stats/current")
     print(
         f"Simulated clicks: success={success}, failed={failed}, "
         f"stats_status={stats_status}, has_stats={bool(stats_payload)}"
     )
 
 
-def _load_server_state(base_url: str, preload_date: str) -> None:
-    load_status, load_payload = _http_request(f"{base_url}/load-today-from-master", method="POST")
+def _load_server_state(opener: urllib.request.OpenerDirector, base_url: str, preload_date: str) -> None:
+    load_status, load_payload = _http_request(opener, f"{base_url}/load-today-from-master", method="POST")
     preload_status, preload_payload = _http_request(
+        opener,
         f"{base_url}/preload-from-master",
         method="POST",
         body=json.dumps({"target_date": preload_date}).encode("utf-8"),
@@ -441,31 +471,40 @@ def _run_js_if_available(page: Any, fn_name: str, arg_literal: str | None = None
     return bool(result)
 
 
+def _wait_for_result_text(page: Any, timeout_ms: int = 10_000) -> None:
+    try:
+        page.wait_for_function(
+            """() => {
+                const el = document.querySelector('#result');
+                return Boolean(el && el.textContent && el.textContent.trim().length > 0);
+            }""",
+            timeout=timeout_ms,
+        )
+    except PlaywrightTimeoutError:
+        page.wait_for_timeout(350)
+
+
 def _action_dashboard_assignments(page: Any) -> None:
     _click_if_exists(page, "#skill-btn-notfall")
     _click_if_exists(page, "#skill-btn-privat")
     _click_if_exists(page, "div[data-skill-slug='privat'] .skill-strict-btn")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(500)
+    _wait_for_result_text(page)
 
 
 def _action_dashboard_strict(page: Any) -> None:
     _click_if_exists(page, "div[data-skill-slug='privat'] .skill-strict-btn")
     _click_if_exists(page, "div[data-skill-slug='notfall'] .skill-strict-btn")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(500)
+    _wait_for_result_text(page)
 
 
 def _action_dashboard_assign_notfall_once(page: Any) -> None:
     _click_if_exists(page, "#skill-btn-notfall")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(450)
+    _wait_for_result_text(page)
 
 
 def _action_dashboard_assign_privat_strict_once(page: Any) -> None:
     _click_if_exists(page, "div[data-skill-slug='privat'] .skill-strict-btn")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(450)
+    _wait_for_result_text(page)
 
 
 def _action_by_skill_special_task(page: Any) -> None:
@@ -473,14 +512,12 @@ def _action_by_skill_special_task(page: Any) -> None:
         page.get_by_role("button", name="Organ Seg").first.click(timeout=8_000)
     else:
         _click_if_exists(page, ".modality-button-wrapper .modality-main-btn")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(500)
+    _wait_for_result_text(page)
 
 
 def _action_by_skill_assign_ct_once(page: Any) -> None:
     _click_if_exists(page, "#mod-btn-ct")
-    page.wait_for_selector("#result", timeout=10_000)
-    page.wait_for_timeout(450)
+    _wait_for_result_text(page)
 
 
 def _action_skill_roster_select_worker(page: Any) -> None:
@@ -604,6 +641,14 @@ def _capture_pages(
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": width, "height": height})
         page = context.new_page()
+        if ADMIN_PROTECTION_ENABLED and ADMIN_PASSWORD:
+            page.goto(f"{base_url}/login?modality=ct", wait_until="networkidle", timeout=60_000)
+            password_input = page.locator("input[name='password']")
+            if password_input.count() > 0:
+                password_input.first.fill(ADMIN_PASSWORD)
+                page.locator("button[type='submit']").first.click(timeout=10_000)
+                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(300)
 
         for scene in scenes:
             name = scene["name"]
@@ -650,6 +695,8 @@ def main() -> int:
     out_dir = Path(args.output_dir) if args.output_dir else default_output_dir
     target_dt = date.fromisoformat(args.target_date)
     preload_date = args.preload_date or (target_dt + timedelta(days=1)).isoformat()
+    cookie_jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
 
     if not args.skip_prepare:
         _prepare_demo(
@@ -662,9 +709,10 @@ def main() -> int:
     server_proc = subprocess.Popen(server_cmd, cwd=ROOT)
     try:
         _wait_for_health(base_url=base_url, timeout_sec=args.startup_timeout_sec)
-        _load_server_state(base_url=base_url, preload_date=preload_date)
+        _login_http_session(opener, base_url=base_url)
+        _load_server_state(opener=opener, base_url=base_url, preload_date=preload_date)
         if not args.no_simulate_clicks:
-            _simulate_clicks(base_url=base_url)
+            _simulate_clicks(opener=opener, base_url=base_url)
         _capture_pages(
             scene_profile=args.scene_profile,
             scenes=scenes,

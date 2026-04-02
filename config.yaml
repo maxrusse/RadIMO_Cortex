@@ -820,7 +820,9 @@ vendor_mappings:
       type: "gap"
       day_part: NM
       times:
-        default: "15:45-20:00"
+        default: "15:15-20:00"
+        Freitag:
+          - "15:00-20:00"
       skill_overrides:
         all: -1
 
@@ -994,13 +996,25 @@ vendor_mappings:
       label: "ZGT"
       type: "gap"
       day_parts: [VM, VMNM, NM]
-      times:
-        Mittwoch:
-          - "09:00-15:45"
-        Donnerstag:
-          - "07:30-09:00"
-      skill_overrides:
-        all: -1
+      segments:
+        - label: "ZGT"
+          times:
+            Mittwoch:
+              - "09:00-15:45"
+          skill_overrides:
+            all: -1
+        - label: "ZGT"
+          times:
+            Donnerstag:
+              - "07:30-09:00"
+          skill_overrides:
+            all: -1
+        - label: "ZGT Ausgleich"
+          times:
+            Donnerstag:
+              - "15:30-15:45"
+          skill_overrides:
+            all: -1
 
     - match: "BB (Mi 16 Uhr, am letzten Mi des Monats)"
       label: "Beckenboden-Konferenz"

@@ -57,7 +57,7 @@
           "end": "16:00",
           "tasks": "Privat Specialist Shift",
           "counts_for_hours": true,
-          "skill_signature": "aou:-1|cvt:-1|gyn:-1|mhd:-1|notfall:-1|privat:1"
+          "skill_signature": "aou:-1|cvt:-1|gyn:-1|mdh:-1|notfall:-1|privat:1"
         }
       ]
     },

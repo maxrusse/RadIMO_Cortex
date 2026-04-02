@@ -74,9 +74,9 @@ Admin pages require login with the admin password from `config.yaml` when `admin
 See [CONFIGURATION.md](CONFIGURATION.md#skill-value-hierarchy--overwrite-logic) for detailed overwrite rules.
 
 ### Example: Enable Passive Coverage
-To allow "AM" to help on MHD work without making the roster an active-role source:
+To allow "AM" to help on MDH work without making the roster an active-role source:
 1. Select "AM"
-2. Change MHD column in MR/CT to `0`
+2. Change MDH column in MR/CT to `0`
 3. Click "Save"
 
 ---
