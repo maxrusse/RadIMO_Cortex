@@ -419,6 +419,31 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(worker["global_weight"], 4.0)
         self.assertEqual(worker["global_assignments"]["total"], 2)
 
+    @patch("routes._df_to_api_response", return_value={})
+    @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
+    @patch("routes._ensure_next_workday_preloaded")
+    @patch.dict(
+        "routes.staged_modality_data",
+        {
+            "ct": {
+                "working_hours_df": pd.DataFrame([{"PPL": "Worker One"}]),
+                "last_modified": datetime(2026, 4, 2, 12, 12),
+                "last_prepped_at": "02.04.2026 12:12",
+                "target_date": datetime(2026, 4, 8).date(),
+            }
+        },
+        clear=True,
+    )
+    @patch("routes.allowed_modalities", ["ct"])
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_data_exposes_freshness_status(self, *_mocks) -> None:
+        response = self.client.get("/api/prep-next-day/data")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["prep_loaded_label"], "Mittwoch (08.04.2026)")
+        self.assertEqual(payload["prep_last_edit_label"], "02.04.2026 12:12")
+
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_flow_mode_hides_granular_flow_rows(self, _mock_admin) -> None:
         response = self.client.get("/worker-load?mode=flow")

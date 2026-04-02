@@ -792,6 +792,49 @@
       background: #218838;
     }
 
+    .prep-text-action {
+      background: transparent;
+      border: none;
+      color: #0d6efd;
+      padding: 0;
+      font-size: 0.88rem;
+      font-weight: 700;
+      box-shadow: none;
+      text-decoration: none;
+    }
+
+    .prep-text-action:hover {
+      background: transparent;
+      color: #0a58ca;
+      text-decoration: underline;
+    }
+
+    .prep-inline-save-status {
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+      line-height: 1.2;
+      min-width: 8.5rem;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .prep-inline-save-status:empty {
+      display: none;
+    }
+
+    .prep-inline-save-status.is-success {
+      color: #28a745;
+    }
+
+    .prep-inline-save-status.is-error {
+      color: #dc3545;
+    }
+
+    .prep-inline-save-status.is-info {
+      color: #6c757d;
+    }
+
     .btn-warning {
       background: #ffc107;
       color: #333;
@@ -808,6 +851,50 @@
 
     .btn-danger:hover {
       background: #c82333;
+    }
+
+    .reload-selected-date-btn {
+      background: #e65100;
+      color: white;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0.05rem;
+      padding: 0.5rem 0.9rem;
+      box-shadow: 0 2px 6px rgba(230, 81, 0, 0.18);
+      line-height: 1.05;
+      border: 1px solid #bf360c;
+      width: fit-content;
+      align-self: flex-start;
+    }
+
+    .reload-selected-date-btn:hover {
+      background: #d84315;
+      color: white;
+    }
+
+    .reload-selected-date-btn:disabled {
+      background: #bdbdbd;
+      border-color: #9e9e9e;
+      color: #666;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .reload-btn-line-main {
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .reload-btn-line-sub {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      opacity: 0.95;
+      white-space: nowrap;
     }
 
     .btn-small {
@@ -828,14 +915,113 @@
       cursor: help;
     }
 
-    .prep-status-badge {
-      display: inline-block;
-      background: rgba(0, 0, 0, 0.1);
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      margin-left: 0.5rem;
+    .prep-banner-copy {
+      margin-bottom: 0.25rem;
+    }
+
+    .prep-action-status {
+      font-size: 0.78rem;
+      color: #6c757d;
       font-weight: 600;
+    }
+
+    .prep-date-input {
+      padding: 0.35rem 0.45rem;
+      border: 1px solid #cfd4da;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      min-width: 11rem;
+    }
+
+    .prep-date-input:disabled {
+      background: #f1f3f5;
+      color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .prep-top-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: stretch;
+    }
+
+    .prep-date-card {
+      grid-column: 1 / -1;
+    }
+
+    .prep-panel {
+      background: #f8f9fa;
+      border: 1px solid #dfe3e8;
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .prep-panel-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #212529;
+      margin-bottom: 0.65rem;
+    }
+
+    .prep-panel-copy {
+      margin: 0 0 0.7rem 0;
+      color: #5f6368;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .prep-date-nav {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .prep-step-btn {
+      min-width: 3rem;
+      text-align: center;
+    }
+
+    .prep-status-row {
+      display: flex;
+      gap: 0.35rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      color: #212529;
+    }
+
+    .prep-load-status-row {
+      margin-top: 0.35rem;
+    }
+
+    .prep-status-label {
+      color: #5f6368;
+      font-weight: 700;
+    }
+
+    .prep-actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .prep-action-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .prep-legend {
+      font-size: 0.75rem;
+      color: #666;
     }
 
     /* Message */
@@ -1263,8 +1449,8 @@
     {% set header_title = 'RadIMO Cortex | Change Today' %}
     {% set header_subtitle = "Manage today's schedule (live edits)" %}
   {% elif page_mode == 'tomorrow' %}
-    {% set header_title = 'RadIMO Cortex | Prep Tomorrow' %}
-    {% set header_subtitle = "Prepare tomorrow's schedule (staged edits)" %}
+    {% set header_title = 'RadIMO Cortex | Staging Page - Preparation for Next Day' %}
+    {% set header_subtitle = "Stage the selected day's schedule and manage staged edits" %}
   {% else %}
     {% set header_title = 'RadIMO Cortex | Change Today / Prep Tomorrow' %}
     {% set header_subtitle = "Manage current schedule or prepare tomorrow's schedule" %}
@@ -1281,26 +1467,22 @@
   <div id="content-today" class="tab-content active">
     <div class="today-banner">
       <h2>LIVE CHANGES - Immediate Effect</h2>
-      <p>Changes here apply IMMEDIATELY to today's schedule. <strong>Counters are NOT reset.</strong></p>
-    </div>
-
-    <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-      <button class="btn btn-primary" onclick="openAddWorkerModal('today')" style="margin-left: auto;">+ Add
-        Worker</button>
+      <p>Changes here apply immediately to today's schedule. <strong>Counters are not reset.</strong></p>
     </div>
 
     <div class="card">
 
       <!-- Controls -->
-      <div
-        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="prep-actions-row" style="margin-bottom: 1rem;">
+        <div class="prep-action-group">
           <button class="btn btn-secondary" onclick="toggleEditMode('today')" id="edit-mode-btn-today">Quick
             Edit</button>
           <button class="btn btn-success" onclick="saveInlineChanges('today')" id="save-inline-btn-today"
             style="display: none;">Save Changes</button>
+          <span id="save-status-today" class="prep-inline-save-status" aria-live="polite"></span>
+          <button class="btn btn-primary" onclick="openAddWorkerModal('today')">+ Add Worker</button>
         </div>
-        <div style="font-size: 0.75rem; color: #666;">
+        <div class="prep-legend">
           <span class="skill-val skill-val-1">1</span> Active
           <span class="skill-val skill-val-0">0</span> Passive
           <span class="skill-val skill-val--1">-1</span> Excluded
@@ -1366,35 +1548,58 @@
   {% elif page_mode == 'tomorrow' %}
   <div id="content-tomorrow" class="tab-content active">
     <div class="tomorrow-banner">
-      <h2>STAGING MODE - Prep for Tomorrow</h2>
-      <p>Changes are saved to STAGED area for tomorrow. <strong>Counter reset happens on CSV import.</strong></p>
-      <p>Prep target: <strong id="prep-target-date-label">{{ target_weekday_name }} ({{ target_date_german }})</strong></p>
-      <div style="margin-top: 0.5rem;">
-        <span id="last-prepped-info" class="prep-status-badge">Prüfe Status...</span>
-      </div>
+      <h2>STAGING PAGE - Preparation for Next Day</h2>
+      <p class="prep-banner-copy">Selected day is staged here.</p>
     </div>
 
-    <div class="card" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-      <strong>Load Prep Date from CSV:</strong>
-      <label for="prep-target-date" style="font-size: 0.85rem; color: #444;">Date:</label>
-      <input type="date" id="prep-target-date" value="{{ target_date }}" min="{{ prep_min_date }}" onchange="onPrepDateInputChange()" />
-      <button class="btn btn-warning" onclick="loadFromCSV('next')">Load Selected Date</button>
-      <span id="load-status-tomorrow" style="color: #666;"></span>
-      <button class="btn btn-primary" onclick="openAddWorkerModal('tomorrow')" style="margin-left: auto;">+ Add
-        Worker</button>
+    <div class="prep-top-grid">
+      <div class="card prep-panel prep-date-card">
+        <div class="prep-panel-title">Date Selection</div>
+        <div class="prep-date-nav">
+          <button class="btn btn-secondary prep-step-btn" type="button" data-prep-date-step="-1" onclick="shiftPrepDate(-1)" title="Previous day">&lt;&lt;</button>
+          <input class="prep-date-input" type="date" id="prep-target-date" value="{{ target_date }}" min="{{ prep_min_date }}" onchange="onPrepDateInputChange()" />
+          <button class="btn btn-secondary prep-step-btn" type="button" data-prep-date-step="1" onclick="shiftPrepDate(1)" title="Next day">&gt;&gt;</button>
+        </div>
+      </div>
+
+      <div class="card prep-panel">
+        <div class="prep-panel-title">Data Status</div>
+        <div class="prep-status-row">
+          <span class="prep-status-label">Data loaded:</span>
+          <strong id="prep-data-loaded-label">{{ prep_loaded_label }}</strong>
+        </div>
+        <div class="prep-status-row">
+          <span class="prep-status-label">Last edit:</span>
+          <strong id="prep-last-edit-label">{{ prep_last_edit_label }}</strong>
+        </div>
+        <div class="prep-status-row prep-load-status-row">
+          <span class="prep-status-label">Load status:</span>
+          <span id="load-status-tomorrow" class="prep-action-status"></span>
+        </div>
+      </div>
+
+      <div class="card prep-panel">
+        <div class="prep-panel-title">Reset Day</div>
+        <p class="prep-panel-copy">Reload the selected day from CSV and reset modified shifts.</p>
+        <button class="btn reload-selected-date-btn" onclick="loadFromCSV('next')"
+          title="Reload the selected date from CSV and overwrite the current staged data.">
+          <span class="reload-btn-line-main">Reset Day</span>
+        </button>
+      </div>
     </div>
 
     <div class="card">
       <!-- Controls -->
-      <div
-        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <div class="prep-actions-row" style="margin-bottom: 1rem;">
+        <div class="prep-action-group">
           <button class="btn btn-secondary" onclick="toggleEditMode('tomorrow')" id="edit-mode-btn-tomorrow">Quick
             Edit</button>
           <button class="btn btn-success" onclick="saveInlineChanges('tomorrow')" id="save-inline-btn-tomorrow"
             style="display: none;">Save Changes</button>
+          <span id="save-status-tomorrow" class="prep-inline-save-status" aria-live="polite"></span>
+          <button class="btn btn-primary" onclick="openAddWorkerModal('tomorrow')">+ Add Worker</button>
         </div>
-        <div style="font-size: 0.75rem; color: #666;">
+        <div class="prep-legend">
           <span class="skill-val skill-val-1">1</span> Active
           <span class="skill-val skill-val-0">0</span> Passive
           <span class="skill-val skill-val--1">-1</span> Excluded

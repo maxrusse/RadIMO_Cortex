@@ -597,6 +597,42 @@ def _get_staged_target_date() -> Optional[date]:
     return None
 
 
+def _format_prep_timestamp(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime('%d.%m.%Y %H:%M')
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            return datetime.fromisoformat(candidate).strftime('%d.%m.%Y %H:%M')
+        except ValueError:
+            return candidate
+    return str(value)
+
+
+def _get_prep_last_edit_label() -> str:
+    if not allowed_modalities:
+        return 'none'
+
+    staged = staged_modality_data.get(allowed_modalities[0], {})
+    last_modified = _format_prep_timestamp(staged.get('last_modified'))
+    if last_modified:
+        return last_modified
+
+    last_prepped_at = _format_prep_timestamp(staged.get('last_prepped_at'))
+    if last_prepped_at:
+        return last_prepped_at
+
+    return 'none'
+
+
+def _format_prep_loaded_label(target_date_value: date) -> str:
+    return f"{get_weekday_name_german(target_date_value)} ({target_date_value.strftime('%d.%m.%Y')})"
+
+
 def resolve_modality_from_request() -> str:
     return normalize_modality(request.values.get('modality'))
 
@@ -1773,6 +1809,8 @@ def _render_prep_page(initial_tab: str) -> Any:
     target_date_str = next_day_dt.strftime('%Y-%m-%d')
     target_date_german = next_day_dt.strftime('%d.%m.%Y')
     target_weekday_name = get_weekday_name_german(next_day_dt.date())
+    prep_loaded_label = _format_prep_loaded_label(next_day_dt.date())
+    prep_last_edit_label = _get_prep_last_edit_label()
 
     roster = load_worker_skill_json()
     if roster is None:
@@ -1823,6 +1861,8 @@ def _render_prep_page(initial_tab: str) -> Any:
         target_date_german=target_date_german,
         target_weekday_name=target_weekday_name,
         prep_min_date=prep_min_date.strftime('%Y-%m-%d'),
+        prep_loaded_label=prep_loaded_label,
+        prep_last_edit_label=prep_last_edit_label,
         is_next_day=True,
         initial_tab=initial_tab,
         skills=SKILL_COLUMNS,
@@ -1873,7 +1913,9 @@ def get_prep_data() -> Any:
             result[modality] = _df_to_api_response(df)
 
         last_prepped_at = staged_modality_data[allowed_modalities[0]].get('last_prepped_at')
+        last_modified = staged_modality_data[allowed_modalities[0]].get('last_modified')
         target_date = staged_modality_data[allowed_modalities[0]].get('target_date')
+        prep_last_edit_label = _get_prep_last_edit_label()
 
     target_date_obj = None
     if isinstance(target_date, date):
@@ -1889,6 +1931,9 @@ def get_prep_data() -> Any:
     return jsonify({
         'modalities': result,
         'last_prepped_at': last_prepped_at,
+        'last_modified': _format_prep_timestamp(last_modified),
+        'prep_loaded_label': _format_prep_loaded_label(target_date_obj),
+        'prep_last_edit_label': prep_last_edit_label,
         'target_date': target_date_obj.isoformat(),
         'target_weekday_name': get_weekday_name_german(target_date_obj),
     })

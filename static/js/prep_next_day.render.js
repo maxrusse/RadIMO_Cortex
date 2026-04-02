@@ -97,6 +97,9 @@ function applyEditModeUI(tab) {
     saveBtn.style.display = editMode[tab] ? 'inline-block' : 'none';
   }
   updateSaveButtonCount(tab);
+  if (tab === 'tomorrow' && typeof updatePrepSelectionControls === 'function') {
+    updatePrepSelectionControls();
+  }
 
 }
 

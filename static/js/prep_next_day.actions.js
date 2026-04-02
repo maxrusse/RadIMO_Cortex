@@ -324,7 +324,7 @@ function handleModKeydown(event, el) {
 async function saveInlineChanges(tab) {
   const changes = Object.values(pendingChanges[tab]);
   if (changes.length === 0) {
-    showMessage('error', 'No changes to save');
+    updateSaveInlineStatus(tab, 'No changes to save', 'error');
     return;
   }
 
@@ -421,11 +421,11 @@ async function saveInlineChanges(tab) {
 
   // Show appropriate message based on results
   if (errors.length === 0) {
-    showMessage('success', `Saved ${successCount} change${successCount !== 1 ? 's' : ''}`);
+    updateSaveInlineStatus(tab, `Saved ${successCount} change${successCount !== 1 ? 's' : ''}`, 'success');
   } else if (successCount > 0) {
-    showMessage('error', `Saved ${successCount}, failed ${errors.length}: ${errors[0]}`);
+    updateSaveInlineStatus(tab, `Saved ${successCount}, failed ${errors.length}: ${errors[0]}`, 'error');
   } else {
-    showMessage('error', `All ${errors.length} changes failed: ${errors[0]}`);
+    updateSaveInlineStatus(tab, `All ${errors.length} changes failed: ${errors[0]}`, 'error');
   }
 
   pendingChanges[tab] = {};
@@ -453,8 +453,88 @@ function isTabAvailable(tab) {
   return Boolean(document.getElementById(`content-${tab}`));
 }
 
+function updatePrepLoadedLabel(text) {
+  const loadedEl = document.getElementById('prep-data-loaded-label');
+  if (loadedEl) {
+    loadedEl.textContent = text || '';
+  }
+}
+
+function updatePrepLastEditLabel(text) {
+  const editEl = document.getElementById('prep-last-edit-label');
+  if (editEl) {
+    editEl.textContent = text || 'none';
+  }
+}
+
+const saveStatusTimers = { today: null, tomorrow: null };
+
+function updateSaveInlineStatus(tab, message, kind = 'info') {
+  const statusEl = document.getElementById(`save-status-${tab}`);
+  if (!statusEl) return;
+
+  if (saveStatusTimers[tab]) {
+    clearTimeout(saveStatusTimers[tab]);
+    saveStatusTimers[tab] = null;
+  }
+
+  if (!message) {
+    statusEl.textContent = '';
+    statusEl.className = 'prep-inline-save-status';
+    return;
+  }
+
+  statusEl.textContent = message;
+  statusEl.className = `prep-inline-save-status ${kind === 'success' ? 'is-success' : kind === 'error' ? 'is-error' : 'is-info'}`;
+
+  if (kind !== 'info') {
+    saveStatusTimers[tab] = setTimeout(() => {
+      const currentEl = document.getElementById(`save-status-${tab}`);
+      if (currentEl && currentEl.textContent === message) {
+        currentEl.textContent = '';
+        currentEl.className = 'prep-inline-save-status';
+      }
+      saveStatusTimers[tab] = null;
+    }, 5000);
+  }
+}
+
+function updatePrepSelectionControls() {
+  const locked = Boolean(editMode.tomorrow);
+  const lockMessage = locked
+    ? 'Exit Quick Edit before changing or reloading the selected date.'
+    : 'Select a date to load staged tomorrow data.';
+
+  const inputEl = document.getElementById('prep-target-date');
+  if (inputEl) {
+    inputEl.disabled = locked;
+    inputEl.title = lockMessage;
+  }
+
+  document.querySelectorAll('[data-prep-date-step]').forEach(btn => {
+    btn.disabled = locked;
+    btn.title = lockMessage;
+  });
+
+  const reloadBtn = document.querySelector('.reload-selected-date-btn');
+  if (reloadBtn) {
+    reloadBtn.disabled = locked;
+    reloadBtn.title = lockMessage;
+  }
+}
+
+function formatPrepLoadedLabel(weekdayName, targetDate) {
+  if (weekdayName && targetDate) {
+    const dateObj = new Date(`${targetDate}T00:00:00`);
+    if (!Number.isNaN(dateObj.getTime())) {
+      return `${weekdayName} (${dateObj.toLocaleDateString('de-DE')})`;
+    }
+  }
+  return targetDate || weekdayName || '';
+}
+
 function updatePrepTargetUI() {
-  const labelEl = document.getElementById('prep-target-date-label');
+  const labelEl = document.getElementById('prep-data-loaded-label');
   if (labelEl && prepTargetWeekday && prepTargetDateGerman) {
     labelEl.textContent = `${prepTargetWeekday} (${prepTargetDateGerman})`;
   }
@@ -467,13 +547,49 @@ function updatePrepTargetUI() {
       inputEl.value = prepTargetDate;
     }
   }
+  updatePrepSelectionControls();
+}
+
+function shiftPrepDate(offsetDays) {
+  if (editMode.tomorrow) {
+    showMessage('error', 'Exit Quick Edit before changing the selected date.');
+    updatePrepSelectionControls();
+    return;
+  }
+
+  const inputEl = document.getElementById('prep-target-date');
+  if (!inputEl || !inputEl.value) return;
+
+  const currentDate = new Date(`${inputEl.value}T00:00:00`);
+  if (Number.isNaN(currentDate.getTime())) return;
+
+  currentDate.setDate(currentDate.getDate() + offsetDays);
+  const yyyy = currentDate.getFullYear();
+  const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(currentDate.getDate()).padStart(2, '0');
+  const nextValue = `${yyyy}-${mm}-${dd}`;
+
+  if (prepMinDate && nextValue < prepMinDate) {
+    showMessage('error', `Prep-Datum muss ab ${prepMinDate} liegen.`);
+    return;
+  }
+
+  inputEl.value = nextValue;
+  onPrepDateInputChange();
 }
 
 function onPrepDateInputChange() {
   const inputEl = document.getElementById('prep-target-date');
   if (!inputEl) return;
+  if (editMode.tomorrow) {
+    showMessage('error', 'Exit Quick Edit before changing the selected date.');
+    updatePrepSelectionControls();
+    inputEl.value = prepTargetDate || inputEl.value;
+    return;
+  }
   const value = inputEl.value;
   if (!value) return;
+  const previousDate = prepTargetDate;
   if (prepMinDate && value < prepMinDate) {
     showMessage('error', `Prep-Datum muss ab ${prepMinDate} liegen.`);
     inputEl.value = prepMinDate;
@@ -483,6 +599,16 @@ function onPrepDateInputChange() {
   }
   setPrepTargetMeta({ dateValue: value });
   updatePrepTargetUI();
+  const hasPendingChanges = Object.keys(pendingChanges.tomorrow || {}).length > 0;
+  if (hasPendingChanges) {
+    const message = `Changing the selected date will overwrite unsaved Quick Edit changes and reload the staged tomorrow data for ${value}. Continue?`;
+    if (!window.confirm(message)) {
+      setPrepTargetMeta({ dateValue: previousDate });
+      updatePrepTargetUI();
+      return;
+    }
+  }
+  loadFromCSV('next', { confirm: false });
 }
 
 // Load data for a specific tab (lazy loading)
@@ -534,19 +660,15 @@ async function loadTabData(tab) {
     dataLoaded[tab] = true;
 
     if (tab === 'tomorrow') {
-      if (respData.target_date || respData.target_weekday_name) {
-        setPrepTargetMeta({
-          dateValue: respData.target_date,
-          weekdayName: respData.target_weekday_name,
-        });
-        updatePrepTargetUI();
+    if (respData.target_date || respData.target_weekday_name) {
+      setPrepTargetMeta({
+        dateValue: respData.target_date,
+        weekdayName: respData.target_weekday_name,
+      });
+      updatePrepTargetUI();
       }
-      const infoEl = document.getElementById('last-prepped-info');
-      if (respData.last_prepped_at) {
-        if (infoEl) infoEl.innerHTML = `Vorbereitet am: <strong>${respData.last_prepped_at}</strong>`;
-      } else if (infoEl) {
-        infoEl.textContent = 'Noch nicht vorbereitet';
-      }
+      updatePrepLoadedLabel(respData.prep_loaded_label || formatPrepLoadedLabel(respData.target_weekday_name, respData.target_date));
+      updatePrepLastEditLabel(respData.prep_last_edit_label || respData.last_modified || respData.last_prepped_at || 'none');
     }
 
     renderTable(tab);
@@ -2313,13 +2435,29 @@ async function confirmBreakDuration() {
 
 
 // Load from CSV
-async function loadFromCSV(mode) {
+async function loadFromCSV(mode, options = {}) {
+  const targetDate = mode === 'today' ? null : (document.getElementById('prep-target-date')?.value || prepTargetDate);
+  const shouldConfirm = options.confirm !== false;
+
   if (mode === 'today') {
     const hasPendingChanges = Object.keys(pendingChanges.today || {}).length > 0;
     const message = hasPendingChanges
       ? 'HARD RELOAD TODAY will discard unsaved Quick Edit changes and reset today from the Master CSV. Continue?'
       : 'HARD RELOAD TODAY will reset today from the Master CSV. Continue?';
-    if (!window.confirm(message)) {
+    if (shouldConfirm && !window.confirm(message)) {
+      return;
+    }
+  } else {
+    if (editMode.tomorrow) {
+      showMessage('error', 'Exit Quick Edit before reloading the selected date.');
+      return;
+    }
+    const hasPendingChanges = Object.keys(pendingChanges.tomorrow || {}).length > 0;
+    const targetLabel = targetDate ? ` for ${targetDate}` : '';
+    const message = hasPendingChanges
+      ? `HARD RELOAD SELECTED DATE${targetLabel} will overwrite the current staged tomorrow changes and discard unsaved Quick Edit edits. Continue?`
+      : `HARD RELOAD SELECTED DATE${targetLabel} will overwrite the current staged tomorrow data from the Master CSV. Continue?`;
+    if (shouldConfirm && !window.confirm(message)) {
       return;
     }
   }
@@ -2329,7 +2467,6 @@ async function loadFromCSV(mode) {
   loadStatus.textContent = 'Loading...';
 
   const endpoint = mode === 'today' ? '/load-today-from-master' : '/preload-from-master';
-  const targetDate = mode === 'today' ? null : (document.getElementById('prep-target-date')?.value || prepTargetDate);
   const payload = targetDate ? { target_date: targetDate } : null;
 
   try {
