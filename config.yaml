@@ -202,7 +202,8 @@ synthetic_shifts:
     label: "Gynarzt-shift"
     weekdays: [workdays]
     times:
-      default: "07:30-15:45"
+      default: "07:30-15:30"
+      Freitag: "07:30-15:15"
     skill_overrides:
       gyn_ct: 1
       gyn_mr: 1
@@ -211,7 +212,8 @@ synthetic_shifts:
     label: "Notfallarzt-shift"
     weekdays: [workdays]
     times:
-      default: "07:30-15:45"
+      default: "07:30-15:30"
+      Freitag: "07:30-15:15"
     skill_overrides:
       notfall_ct: 1
       notfall_mr: 1
@@ -493,7 +495,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       skill_overrides:
         all: -1
@@ -530,7 +532,8 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
+        Freitag: "07:30-15:15"
       skill_overrides:
         notfall_ct: 1
         notfall_mr: 1
@@ -554,7 +557,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:45"
+        default: "12:00-15:30"
+        Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: -1
@@ -566,7 +570,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:45"
+        default: "12:00-15:30"
+        Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: -1
@@ -578,7 +583,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:45"
+        default: "12:00-15:30"
+        Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: -1
@@ -605,7 +611,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       skill_overrides:
         aou_ct: 1
@@ -625,7 +631,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       skill_overrides:
         cvt_ct: 1
@@ -645,7 +651,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       skill_overrides:
         mdh_ct: 1
@@ -666,7 +672,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:45"
+        default: "12:00-15:30"
+        Freitag: "12:00-15:15"
       modifier: 1.2
       skill_overrides:
         all: -1
@@ -682,7 +689,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:45"
+        default: "12:00-15:30"
+        Freitag: "12:00-15:15"
       modifier: 1.2
       skill_overrides:
         all: -1
@@ -697,7 +705,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       modifier: 1.2
       skill_overrides:
@@ -713,7 +721,7 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "07:30-15:45"
+        default: "07:30-15:30"
         Freitag: "07:30-15:15"
       modifier: 1.2
       skill_overrides:
@@ -729,7 +737,8 @@ vendor_mappings:
       type: "shift"
       day_parts: [VM, VMNM]
       times:
-        default: "14:00-15:45"
+        default: "14:00-15:30"
+        Freitag: "14:00-15:15"
       skill_overrides:
         aou_ct: 1
         aou_mr: 1
@@ -748,7 +757,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-20:00"
+        default: "12:00-19:45"
+        Freitag: "12:00-19:30"
       skill_overrides:
         all: 0
         notfall: -1
@@ -760,11 +770,13 @@ vendor_mappings:
         privat_xray: -1
       segments:
         - times:
-            default: "12:00-15:45"
+            default: "12:00-15:30"
+            Freitag: "12:00-15:15"
           skill_overrides:
             gyn: -1
         - times:
-            default: "15:45-20:00"
+            default: "15:30-19:45"
+            Freitag: "15:15-19:30"
           skill_overrides:
             aou_ct: 1
             aou_mr: 1
@@ -1012,7 +1024,7 @@ vendor_mappings:
         - label: "ZGT Ausgleich"
           times:
             Donnerstag:
-              - "15:30-15:45"
+              - "15:15-15:30"
           skill_overrides:
             all: -1
 
