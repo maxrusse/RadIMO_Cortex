@@ -712,6 +712,19 @@ def _get_snapshot_version(use_staged: bool, target_date: Optional[date] = None) 
     return _get_snapshot_version_from_path(_resolve_snapshot_path(use_staged, target_date))
 
 
+def _ensure_snapshot_file(use_staged: bool, *, target_date: Optional[date] = None) -> Optional[str]:
+    snapshot_version = _get_snapshot_version(use_staged, target_date)
+    if snapshot_version is not None:
+        return snapshot_version
+
+    data_store = staged_modality_data if use_staged else modality_data
+    for modality in allowed_modalities:
+        if data_store.get(modality, {}).get('working_hours_df') is not None:
+            backup_dataframe(modality, use_staged=use_staged)
+            return _get_snapshot_version(use_staged, target_date)
+    return None
+
+
 def _check_snapshot_version(expected_version: Any, use_staged: bool, *, target_date: Optional[date] = None) -> Optional[Any]:
     expected = str(expected_version).strip() if expected_version not in (None, '') else None
     if expected is None:
@@ -2096,7 +2109,7 @@ def get_prep_data() -> Any:
         'prep_loaded_label': _format_prep_loaded_label(target_date_obj),
         'prep_last_edit_label': prep_last_edit_label,
         'prep_load_source': global_worker_data.get('last_preload_source'),
-        'snapshot_version': _get_snapshot_version(True, target_date_obj),
+        'snapshot_version': _ensure_snapshot_file(True, target_date=target_date_obj),
         'target_date': target_date_obj.isoformat(),
         'target_weekday_name': get_weekday_name_german(target_date_obj),
     })
@@ -2131,7 +2144,7 @@ def get_live_data() -> Any:
         result[modality] = _df_to_api_response(df)
     return jsonify({
         'modalities': result,
-        'snapshot_version': _get_snapshot_version(False),
+        'snapshot_version': _ensure_snapshot_file(False),
     })
 
 @routes.route('/api/live-schedule/update-row', methods=['POST'])
