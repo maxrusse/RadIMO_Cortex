@@ -95,7 +95,6 @@ from data_manager import (
     update_gap_in_schedule,
     preload_next_workday,
     extract_modalities_from_skill_overrides,
-    load_unified_scheduled_into_staged,
 )
 from state_manager import StateManager
 from balancer import (
@@ -249,7 +248,14 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
         if log_message:
             selection_logger.info(log_message.format(modality=modality, row_index=row_index))
         # result is {'reindexed': bool} on success
-        return jsonify({'success': True, 'schedule_reindexed': result.get('reindexed', False)})
+        return jsonify({
+            'success': True,
+            'schedule_reindexed': result.get('reindexed', False),
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=_get_staged_target_date() if use_staged else None,
+            ),
+        })
     return jsonify({'error': result}), 400
 
 
@@ -278,7 +284,13 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
 
     if errors:
         return jsonify({'error': '; '.join(errors)}), 400
-    return jsonify({'success': True})
+    return jsonify({
+        'success': True,
+        'snapshot_version': _get_snapshot_version(
+            use_staged,
+            target_date=_get_staged_target_date() if use_staged else None,
+        ),
+    })
 
 
 def _handle_add_worker(
@@ -312,6 +324,11 @@ def _handle_add_worker(
             'success': True,
             'row_index': result.get('row_index'),
             'schedule_reindexed': result.get('reindexed', False)
+            ,
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=_get_staged_target_date() if use_staged else None,
+            ),
         })
     return jsonify({'error': error}), 400
 
@@ -341,7 +358,13 @@ def _handle_delete_worker(use_staged: bool, log_message: Optional[str] = None) -
     if success:
         if log_message:
             selection_logger.info(log_message.format(modality=modality, worker_name=worker_name))
-        return jsonify({'success': True})
+        return jsonify({
+            'success': True,
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=_get_staged_target_date() if use_staged else None,
+            ),
+        })
     return jsonify({'error': error}), 400
 
 
@@ -661,14 +684,9 @@ def _resolve_snapshot_path(use_staged: bool, target_date: Optional[date] = None)
     state = StateManager.get_instance()
     if use_staged:
         scheduled_path = Path(state.unified_schedule_paths['scheduled'])
-        candidates = []
-        if target_date is not None:
-            candidates.append(scheduled_path.parent / 'staged_days' / f'Cortex_ALL_staged_{target_date.isoformat()}.json')
-        candidates.append(scheduled_path)
-        for candidate in candidates:
-            if candidate.exists():
-                return str(candidate)
-        return str(candidates[0]) if candidates else None
+        resolved_target = target_date or _get_staged_target_date() or get_next_workday().date()
+        staged_path = scheduled_path.parent / 'staged_days' / f'Cortex_ALL_staged_{resolved_target.isoformat()}.json'
+        return str(staged_path)
 
     live_path = Path(state.unified_schedule_paths['live'])
     return str(live_path) if live_path.exists() else str(live_path)
@@ -1587,11 +1605,12 @@ def preload_from_master() -> Any:
         earliest_allowed = get_next_workday().date()
         if parsed_target_date < earliest_allowed:
             return jsonify({"error": f"Prep-Datum muss ab {earliest_allowed.isoformat()} liegen."}), 400
+    requested_date = parsed_target_date or _get_staged_target_date() or get_next_workday().date()
 
     if not force_csv:
         loaded_saved_staged = False
         with lock:
-            loaded_saved_staged = reload_staged_data_from_disk(target_date=parsed_target_date)
+            loaded_saved_staged = reload_staged_data_from_disk(target_date=requested_date)
 
         if loaded_saved_staged:
             staged_target_date = _get_staged_target_date()
@@ -1611,22 +1630,12 @@ def preload_from_master() -> Any:
 
     with lock:
         reload_info = _maybe_reload_runtime_config(manual=True)
-    result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=target_date)
+    result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=requested_date)
 
     if result['success']:
-        state = StateManager.get_instance()
-        scheduled_path = state.unified_schedule_paths['scheduled']
-        if os.path.exists(scheduled_path):
-            try:
-                if load_unified_scheduled_into_staged(scheduled_path):
-                    for modality in allowed_modalities:
-                        backup_dataframe(modality, use_staged=True)
-                    selection_logger.info("Staged data updated from unified scheduled file after preload")
-            except Exception as e:
-                selection_logger.error(f"Error loading staged data from unified schedule after preload: {e}")
 
         with lock:
-            target_date_obj = parsed_target_date or get_next_workday().date()
+            target_date_obj = requested_date
             global_worker_data['last_preload_date'] = target_date_obj
             global_worker_data['last_preload_source'] = 'csv'
             save_state()
@@ -2031,10 +2040,16 @@ def get_prep_data() -> Any:
 
     # Acquire lock to prevent race conditions when reading/writing staged data
     with lock:
+        staged_rebuilt = False
         for modality in allowed_modalities:
             if staged_modality_data[modality]['working_hours_df'] is None:
                 if not load_staged_dataframe(modality, target_date=staged_target_date):
-                    if modality_data[modality]['working_hours_df'] is not None:
+                    if staged_target_date is not None and not staged_rebuilt:
+                        preload_result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=staged_target_date)
+                        staged_rebuilt = bool(preload_result.get('success'))
+                        if staged_rebuilt:
+                            load_staged_dataframe(modality, target_date=staged_target_date)
+                    elif modality_data[modality]['working_hours_df'] is not None:
                         staged_modality_data[modality]['working_hours_df'] = modality_data[modality]['working_hours_df'].copy()
                         staged_modality_data[modality]['info_texts'] = modality_data[modality]['info_texts'].copy()
                         backup_dataframe(modality, use_staged=True)
@@ -2170,7 +2185,11 @@ def add_live_gap() -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(False),
+        })
     return jsonify({'error': error}), 400
 
 
@@ -2201,7 +2220,11 @@ def add_live_gap_batch() -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(False),
+        })
     return jsonify({'error': error}), 400
 
 @routes.route('/api/prep-next-day/add-gap', methods=['POST'])
@@ -2238,7 +2261,11 @@ def add_staged_gap() -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(True, target_date=_get_staged_target_date()),
+        })
     return jsonify({'error': error}), 400
 
 
@@ -2273,7 +2300,11 @@ def add_staged_gap_batch() -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(True, target_date=_get_staged_target_date()),
+        })
     return jsonify({'error': error}), 400
 
 
@@ -2311,7 +2342,14 @@ def _handle_remove_gap(use_staged: bool) -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=_get_staged_target_date() if use_staged else None,
+            ),
+        })
     return jsonify({'error': error}), 400
 
 
@@ -2357,7 +2395,14 @@ def _handle_update_gap(use_staged: bool) -> Any:
     )
 
     if success:
-        return jsonify({'success': True, 'action': action})
+        return jsonify({
+            'success': True,
+            'action': action,
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=_get_staged_target_date() if use_staged else None,
+            ),
+        })
     return jsonify({'error': error}), 400
 
 

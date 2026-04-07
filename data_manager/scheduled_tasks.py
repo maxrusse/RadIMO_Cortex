@@ -90,7 +90,7 @@ def check_and_perform_daily_reset() -> None:
     This is ONE global reset (not per-modality) that:
     1. Resets global weighted counts
     2. Resets all modality counters
-    3. Loads scheduled files for all modalities
+    3. Loads the dated staged snapshot for the day becoming live
     """
     # Import here to avoid circular imports
     from data_manager.worker_management import invalidate_work_hours_cache
@@ -140,24 +140,36 @@ def check_and_perform_daily_reset() -> None:
             global_worker_data['assignments_per_mod'][mod] = {}
             d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
 
-        scheduled_path = _state.unified_schedule_paths['scheduled']
-
         try:
-            if os.path.exists(scheduled_path):
-                if initialize_data_from_unified(scheduled_path, context="daily reset unified"):
-                    backup_dir = os.path.join(UPLOAD_FOLDER, "backups")
-                    os.makedirs(backup_dir, exist_ok=True)
-                    backup_file = _state.unified_schedule_paths['scheduled_backup']
-                    try:
-                        shutil.move(scheduled_path, backup_file)
-                        selection_logger.info("Unified scheduled file loaded and moved to backup.")
-                    except OSError as exc:
-                        selection_logger.warning("Scheduled Datei %s konnte nicht verschoben werden: %s", scheduled_path, exc)
-                    backup_dataframe(allowed_modalities[0])
-                else:
-                    selection_logger.warning("Unified scheduled file was invalid and was not loaded.")
+            staged_day_path = os.path.join(
+                UPLOAD_FOLDER,
+                "backups",
+                "staged_days",
+                f"Cortex_ALL_staged_{today.isoformat()}.json",
+            )
+
+            loaded_today = False
+            if os.path.exists(staged_day_path):
+                loaded_today = initialize_data_from_unified(
+                    staged_day_path,
+                    context="daily reset staged snapshot",
+                )
+
+            if not loaded_today and os.path.exists(MASTER_CSV_PATH):
+                preload_result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=today)
+                if preload_result.get('success') and os.path.exists(staged_day_path):
+                    loaded_today = initialize_data_from_unified(
+                        staged_day_path,
+                        context="daily reset staged snapshot after CSV preload",
+                    )
+
+            if loaded_today:
+                backup_dataframe(allowed_modalities[0])
             else:
-                selection_logger.debug("No unified scheduled file found. Skipping schedule reload.")
+                selection_logger.warning(
+                    "No staged snapshot available for daily reset on %s",
+                    today.isoformat(),
+                )
         except Exception as exc:
             selection_logger.error("Error during daily reset for unified schedule: %s", exc)
 
@@ -186,7 +198,11 @@ def preload_next_workday(csv_path: str, config: dict, target_date: Optional[Unio
     """Load data from master CSV for the target date and save to scheduled files."""
     # Import here to avoid circular imports
     from data_manager.csv_parser import build_working_hours_from_medweb
-    from data_manager.file_ops import write_unified_scheduled_file
+    from data_manager.file_ops import (
+        backup_dataframe,
+        load_unified_scheduled_into_staged,
+        write_unified_scheduled_file,
+    )
 
     try:
         resolved_date = _parse_target_date(target_date) or get_next_workday().date()
@@ -224,6 +240,19 @@ def preload_next_workday(csv_path: str, config: dict, target_date: Optional[Unio
                 total_workers += len(df['PPL'].unique())
 
             write_unified_scheduled_file(modality_dfs, target_date=resolved_date)
+
+            staged_day_path = os.path.join(
+                UPLOAD_FOLDER,
+                "backups",
+                "staged_days",
+                f"Cortex_ALL_staged_{date_str}.json",
+            )
+            if not load_unified_scheduled_into_staged(unified_scheduled_path):
+                raise RuntimeError("Unified scheduled file could not be materialized into staged state")
+            for modality in allowed_modalities:
+                backup_dataframe(modality, use_staged=True)
+            if not os.path.exists(staged_day_path):
+                raise RuntimeError(f"Staged day snapshot was not written: {staged_day_path}")
         except Exception as exc:
             selection_logger.error("Failed to save unified scheduled file: %s", exc)
             save_error = str(exc)

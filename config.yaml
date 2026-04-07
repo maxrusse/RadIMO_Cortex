@@ -217,7 +217,7 @@ synthetic_shifts:
     skill_overrides:
       notfall_ct: 1
       notfall_mr: 1
-      notfall_xray: 1
+      notfall_xray: -1
       gyn: -1
 
 # =============================================================================
@@ -265,7 +265,7 @@ worker_roster:
     mdh_xray: -1
     notfall_ct: 1
     notfall_mr: 1
-    xray_notfall: 1  # Alias; normalizes to notfall_xray
+    xray_notfall: -1  # Alias; normalizes to notfall_xray
     privat_ct: 0
     privat_mr: -1
     privat_xray: -1
@@ -523,6 +523,7 @@ vendor_mappings:
         aou_xray: 1
         cvt_xray: 1
         mdh_xray: 1
+        notfall_xray: 1
 
     # =========================================================================
     # NOTFALL SHIFTS (emergency coverage across modalities)
@@ -538,7 +539,7 @@ vendor_mappings:
       skill_overrides:
         notfall_ct: 1
         notfall_mr: 1
-        notfall_xray: 1
+        notfall_xray: -1
 
     # - match: "UNZ Assistent"
     #   type: "shift"

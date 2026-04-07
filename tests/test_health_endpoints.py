@@ -618,6 +618,81 @@ class TestHealthEndpoints(unittest.TestCase):
                     "Target Worker",
                 )
 
+    def test_reload_staged_data_does_not_fall_back_to_generic_snapshot(self) -> None:
+        target_date = datetime(2026, 4, 8).date()
+        other_date = datetime(2026, 4, 9).date()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backups_dir = f"{tmpdir}/backups"
+            staged_days_dir = f"{backups_dir}/staged_days"
+            os.makedirs(staged_days_dir, exist_ok=True)
+
+            generic_path = f"{backups_dir}/Cortex_ALL_staged.json"
+            target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
+
+            with open(generic_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "working_hours": [
+                            {
+                                "modality": "ct",
+                                "PPL": "Wrong Worker",
+                                "TIME": "07:30-15:30",
+                                "Modifier": 1.0,
+                            }
+                        ],
+                        "info_texts": {},
+                        "info_texts_by_skill": {},
+                        "metadata": {"ct": {"target_date": other_date.isoformat()}},
+                    },
+                    f,
+                )
+
+            staged_state = {
+                "ct": {
+                    "working_hours_df": pd.DataFrame([{"PPL": "Stale Worker"}]),
+                    "info_texts": ["stale"],
+                    "info_texts_by_skill": {},
+                    "total_work_hours": {},
+                    "worker_modifiers": {},
+                    "last_modified": datetime(2026, 4, 1, 10, 0),
+                    "last_prepped_at": "01.04.2026 10:00",
+                    "last_prepped_by": None,
+                    "target_date": None,
+                }
+            }
+
+            with patch.object(file_ops, "UPLOAD_FOLDER", tmpdir), patch.object(
+                file_ops,
+                "allowed_modalities",
+                ["ct"],
+            ), patch.object(
+                file_ops,
+                "modality_data",
+                {"ct": {}},
+            ), patch.object(
+                file_ops,
+                "staged_modality_data",
+                staged_state,
+            ), patch.object(
+                file_ops,
+                "unified_schedule_paths",
+                {
+                    "staged": generic_path,
+                    "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                    "live": f"{backups_dir}/Cortex_ALL_live.json",
+                    "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                },
+            ), patch.object(
+                file_ops,
+                "_unified_load_state",
+                {"live": False, "staged": False, "scheduled": False},
+            ):
+                loaded = file_ops.reload_staged_data_from_disk(target_date=target_date)
+                self.assertFalse(loaded)
+                self.assertIsNone(file_ops.staged_modality_data["ct"]["working_hours_df"])
+                self.assertEqual(file_ops.staged_modality_data["ct"]["target_date"], None)
+
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_flow_mode_hides_granular_flow_rows(self, _mock_admin) -> None:
         response = self.client.get("/worker-load?mode=flow")

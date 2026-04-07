@@ -166,6 +166,35 @@ class TestDayPlanIntegration(unittest.TestCase):
         finally:
             os.unlink(csv_path)
 
+    def test_add_worker_training_off_excludes_weighted_skills(self) -> None:
+        weighted_skill = SKILL_COLUMNS[0]
+        worker_name = "Training Worker"
+
+        worker_data = {
+            "PPL": worker_name,
+            "start_time": "08:00",
+            "end_time": "12:00",
+            "tasks": "Shift A",
+            "Modifier": 1.0,
+            "row_type": "shift",
+            "counts_for_hours": True,
+            "training": False,
+        }
+        for skill in SKILL_COLUMNS:
+            worker_data[skill] = "w" if skill == weighted_skill else 0
+
+        with patch.object(schedule_crud, "backup_dataframe"):
+            success, _, error = schedule_crud._add_worker_to_schedule(
+                self.modality,
+                worker_data,
+                use_staged=False,
+            )
+
+        self.assertTrue(success, msg=error)
+        df = schedule_crud.modality_data[self.modality]["working_hours_df"]
+        self.assertEqual(df.iloc[0][weighted_skill], -1)
+        self.assertFalse(bool(df.iloc[0]["training"]))
+
     def test_missing_roster_worker_stays_excluded(self) -> None:
         target_date = datetime(2026, 1, 23)
         skill_key = SKILL_COLUMNS[0]

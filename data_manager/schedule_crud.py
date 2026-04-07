@@ -19,6 +19,7 @@ from config import (
 )
 from lib.utils import (
     TIME_FORMAT,
+    is_weighted_skill,
     normalize_skill_value,
     get_next_workday,
     subtract_intervals,
@@ -147,6 +148,8 @@ def build_day_plan_rows(rows: List[dict], target_date: date) -> List[dict]:
                 continue
             if skill in normalized:
                 normalized[skill] = normalize_skill_value(normalized[skill])
+                if not normalized['training'] and is_weighted_skill(normalized[skill]):
+                    normalized[skill] = -1
             else:
                 normalized[skill] = 0
 

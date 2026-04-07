@@ -531,18 +531,13 @@ def persist_live_backup() -> None:
 
 def load_staged_dataframe(modality: str, target_date: Optional[date] = None) -> bool:
     """
-    Load staged or scheduled dataframe for a modality from JSON.
+    Load a staged dataframe for a modality from the dated staged snapshot.
 
     Uses try/except instead of os.path.exists to prevent TOCTOU race conditions
     (file could be deleted between check and open).
     """
     if target_date is not None:
         if reload_staged_data_from_disk(target_date=target_date):
-            return staged_modality_data[modality].get('working_hours_df') is not None
-
-    if not _unified_load_state['scheduled']:
-        if _load_unified_scheduled_into_staged(unified_schedule_paths['scheduled']):
-            _unified_load_state['scheduled'] = True
             return staged_modality_data[modality].get('working_hours_df') is not None
 
     return False
@@ -556,10 +551,10 @@ def reload_staged_data_from_disk(target_date: Optional[date] = None) -> bool:
     """
     _clear_staged_data_state()
 
-    candidate_paths = []
-    if target_date is not None:
-        candidate_paths.append(_get_staged_day_snapshot_path(target_date))
-    candidate_paths.append(unified_schedule_paths['scheduled'])
+    if target_date is None:
+        return False
+
+    candidate_paths = [_get_staged_day_snapshot_path(target_date)]
 
     for candidate_path in candidate_paths:
         try:

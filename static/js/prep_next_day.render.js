@@ -510,7 +510,7 @@ function renderEditModalContent() {
   const group = entriesData[tab][groupIdx];
   if (!group) return;
   setEditPlanDraftFromGroup(group);
-  const isEditable = modalEditMode;
+  const isEditable = true;
 
   let html = '';
 
@@ -531,9 +531,7 @@ function renderEditModalContent() {
         <strong>${escapedWorker}</strong> ${duplicateBadge}
       </div>
       <div style="margin-top: 0.4rem; font-size: 0.75rem; color: #666;">
-        ${isEditable
-    ? 'Changes are saved only when you click <strong>Save Edits</strong>.'
-    : 'View mode enabled. Click <strong>Edit Mode</strong> to make changes.'}
+        Changes are saved only when you click <strong>Save Edits</strong>.
       </div>
     </div>
   </div>`;
@@ -846,6 +844,14 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
           <label class="hours-toggle" title="Checked = hours count towards load balancing. Unchecked = hours do NOT count.">
             <input type="checkbox" onchange="updateAddWorkerTask(${idx}, 'counts_for_hours', this.checked); updateHoursToggleLabel(this)" ${task.counts_for_hours !== false ? 'checked' : ''}>
             <span class="hours-toggle-label ${task.counts_for_hours !== false ? 'counts' : 'no-count'}">${task.counts_for_hours !== false ? 'Counts' : 'No count'}</span>
+          </label>
+        </div>
+
+        <div style="min-width: 115px;">
+          <label style="font-size: 0.75rem; color: #666; display: block;">Training</label>
+          <label class="hours-toggle" title="Checked = weighted skills stay as configured. Unchecked = weighted skills on this task become -1.">
+            <input type="checkbox" id="add-worker-training-${idx}" onchange="updateAddWorkerTask(${idx}, 'training', this.checked); updateTrainingToggleLabel(this)" ${task.training !== false ? 'checked' : ''} ${isGapTask(task.task) ? 'disabled' : ''}>
+            <span class="hours-toggle-label ${task.training !== false ? 'counts' : 'no-count'}" data-role="training-label">${task.training !== false ? 'Training on' : 'Training off'}</span>
           </label>
         </div>
       </div>

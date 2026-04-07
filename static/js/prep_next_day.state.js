@@ -14,7 +14,6 @@ let tableFilters = { today: { modality: '', skill: '', hideZero: true }, tomorro
 let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
 let sortState = { today: { column: 'shift', direction: 'asc' }, tomorrow: { column: 'shift', direction: 'asc' } };
 let modalMode = 'edit';
-let modalEditMode = true;
 let lastAddedShiftMeta = null;
 let loadRequestId = { today: 0, tomorrow: 0 };
 const GERMAN_WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
