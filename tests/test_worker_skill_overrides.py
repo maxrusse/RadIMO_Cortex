@@ -17,12 +17,36 @@ class TestWorkerSkillOverrides(unittest.TestCase):
         )
         self.assertEqual(result[self.key], 'w')
 
+    def test_weighted_roster_with_shift_one_becomes_excluded_when_not_training(self) -> None:
+        result = apply_skill_overrides(
+            {self.key: 'w'},
+            {self.key: 1},
+            training=False,
+        )
+        self.assertEqual(result[self.key], '-1')
+
     def test_weighted_roster_with_shift_weighted_stays_weighted(self) -> None:
         result = apply_skill_overrides(
             {self.key: 'w'},
             {self.key: 'w'},
         )
         self.assertEqual(result[self.key], 'w')
+
+    def test_plain_one_stays_plain_one_when_not_training(self) -> None:
+        result = apply_skill_overrides(
+            {self.key: 1},
+            {self.key: 1},
+            training=False,
+        )
+        self.assertEqual(result[self.key], '1')
+
+    def test_weighted_override_is_blocked_when_not_training(self) -> None:
+        result = apply_skill_overrides(
+            {self.key: 1},
+            {self.key: 'w'},
+            training=False,
+        )
+        self.assertEqual(result[self.key], '-1')
 
     def test_weighted_roster_with_shift_zero_becomes_excluded(self) -> None:
         result = apply_skill_overrides(

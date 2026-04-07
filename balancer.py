@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 # Standard library imports
 from datetime import datetime
 from typing import Optional
@@ -40,8 +43,7 @@ def get_global_weighted_count(canonical_id: str) -> float:
 
 
 def get_modality_weighted_count(canonical_id: str, modality: str) -> float:
-    """
-    Compute weighted count for a worker in a specific modality.
+    """Compute weighted count for a worker in a specific modality.
 
     Calculated from assignments_per_mod using skill×modality weights.
     This replaces the broken WeightedCounts structure that was never populated.

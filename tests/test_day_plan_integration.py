@@ -175,6 +175,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             "medweb_mapping": {
                 "columns": {
                     "date": "Datum",
+                    "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
@@ -204,9 +205,10 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
                         "Code des Mitarbeiters",
+                        "Tageszeit",
                     ]
                 )
-                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1", "VM"])
 
             worker_management.worker_skill_json_roster.clear()
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
@@ -561,6 +563,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             "medweb_mapping": {
                 "columns": {
                     "date": "Datum",
+                    "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
@@ -631,6 +634,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             "medweb_mapping": {
                 "columns": {
                     "date": "Datum",
+                    "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
@@ -704,6 +708,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertEqual(rule.get("type"), "shift")
             self.assertEqual(rule.get("times", {}).get("default"), "07:30-12:00")
             self.assertFalse(bool(rule.get("counts_for_hours", False)))
+            self.assertTrue(bool(rule.get("training", True)))
             self.assertEqual(rule.get("skill_overrides", {}).get("all"), -1)
         gyn_rule = labels["Gyn Spät"]
         self.assertEqual(gyn_rule.get("skill_overrides", {}).get("gyn_ct"), 1)
@@ -977,10 +982,16 @@ class TestDayPlanIntegration(unittest.TestCase):
 
     def test_real_medweb_config_has_nm_only_specialty_shift_variants(self) -> None:
         rules = APP_CONFIG["medweb_mapping"]["rules"]
+        spaet_rule = next(rule for rule in rules if rule["match"] == "SBZ: Spätdienst")
+        self.assertEqual(spaet_rule["times"]["default"], "15:30-19:45")
+        self.assertEqual(spaet_rule["times"]["Freitag"], "15:15-19:30")
+        self.assertFalse(bool(spaet_rule.get("training", True)))
+        self.assertFalse(spaet_rule.get("segments"))
+        self.assertEqual(spaet_rule["skill_overrides"]["all"], 0)
         expected = [
-            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "12:00-15:45"),
-            ("SBZ: Cardio/Vask/Thorax", "SBZ: Cardio/Vask/Thorax NM", "12:00-15:45"),
-            ("SBZ: Muskel-Skelett/Hals/Derma", "SBZ: Muskel-Skelett/Hals/Derma NM", "12:00-15:45"),
+            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "12:00-15:30"),
+            ("SBZ: Cardio/Vask/Thorax", "SBZ: Cardio/Vask/Thorax NM", "12:00-15:30"),
+            ("SBZ: Muskel-Skelett/Hals/Derma", "SBZ: Muskel-Skelett/Hals/Derma NM", "12:00-15:30"),
         ]
 
         for activity, expected_label, expected_time in expected:
@@ -991,16 +1002,21 @@ class TestDayPlanIntegration(unittest.TestCase):
                 self.assertEqual(nm_rule["day_part"], "NM")
                 self.assertEqual(nm_rule["times"]["default"], expected_time)
                 self.assertAlmostEqual(float(nm_rule.get("modifier", 1.0)), 1.0)
+                self.assertEqual(nm_rule["skill_overrides"]["all"], 0)
+                self.assertEqual(nm_rule["skill_overrides"]["gyn_ct"], -1)
+                self.assertEqual(nm_rule["skill_overrides"]["notfall_ct"], -1)
+                self.assertEqual(nm_rule["skill_overrides"]["aou_xray"], -1)
 
                 base_rule = match_mapping_rule(activity, rules, day_part="VM")
                 self.assertIsNotNone(base_rule)
-                self.assertEqual(base_rule["times"]["default"], "07:30-15:45")
+                self.assertEqual(base_rule["times"]["default"], "07:30-15:30")
                 self.assertAlmostEqual(float(base_rule.get("modifier", 1.0)), 1.0)
                 self.assertIn("VMNM", base_rule.get("day_parts", []))
+                self.assertTrue(bool(base_rule.get("training", True)))
 
                 vmnm_rule = match_mapping_rule(activity, rules, day_part="VMNM")
                 self.assertIsNotNone(vmnm_rule)
-                self.assertEqual(vmnm_rule["times"]["default"], "07:30-15:45")
+                self.assertEqual(vmnm_rule["times"]["default"], "07:30-15:30")
 
     def test_vm_nm_pair_collapses_to_single_base_shift(self) -> None:
         target_date = datetime(2026, 4, 1)
@@ -1084,6 +1100,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             "medweb_mapping": {
                 "columns": {
                     "date": "Datum",
+                    "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_code": "Code des Mitarbeiters",
@@ -1134,10 +1151,11 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
                         "Code des Mitarbeiters",
+                        "Tageszeit",
                     ]
                 )
-                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1"])
-                writer.writerow(["23.01.2026", "Board", "Alice", "A1"])
+                writer.writerow(["23.01.2026", "Shift A", "Alice", "A1", "VM"])
+                writer.writerow(["23.01.2026", "Board", "Alice", "A1", "VM"])
 
             worker_management.worker_skill_json_roster.clear()
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):

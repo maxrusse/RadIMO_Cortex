@@ -24,6 +24,7 @@ from lib.utils import (
     subtract_intervals,
     merge_intervals,
     strip_builder_fields,
+    coerce_bool,
 )
 from state_manager import StateManager
 from data_manager.file_ops import _calculate_total_work_hours, backup_dataframe
@@ -106,6 +107,8 @@ def build_day_plan_rows(rows: List[dict], target_date: date) -> List[dict]:
         normalized['PPL'] = normalized.get('PPL', '')
         normalized['start_time'] = _coerce_time_value(normalized.get('start_time'))
         normalized['end_time'] = _coerce_time_value(normalized.get('end_time'))
+        training = coerce_bool(normalized.get('training'))
+        normalized['training'] = False if normalized['row_type'] == 'gap' else (training if training is not None else True)
 
         if normalized.get('_order') is None:
             if normalized.get('start_time') is not None:
@@ -493,10 +496,19 @@ def _update_schedule_row(modality: str, row_index: int, updates: dict, use_stage
                 elif col == 'counts_for_hours':
                     coerced = _coerce_bool(value)
                     row['counts_for_hours'] = coerced if coerced is not None else False
+                elif col == 'training':
+                    coerced = _coerce_bool(value)
+                    row['training'] = coerced if coerced is not None else (not _is_gap_row_type(row.get('row_type')))
+                    if _is_gap_row_type(row.get('row_type')):
+                        row['training'] = False
                 elif col == 'row_type':
                     row['row_type'] = value
                     if _is_gap_row_type(value) and 'counts_for_hours' not in updates:
                         row['counts_for_hours'] = False
+                    if _is_gap_row_type(value):
+                        row['training'] = False
+                    elif 'training' not in updates:
+                        row['training'] = True
             break
 
         target_date = _get_staged_target_date() if use_staged else datetime.today().date()
@@ -557,12 +569,14 @@ def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) 
         row_type = worker_data.get('row_type', 'shift')
         if _is_gap_row_type(row_type):
             row_type = 'gap'
+        training = _coerce_bool(worker_data.get('training'))
         new_row = {
             'PPL': ppl_name,
             'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), TIME_FORMAT).time(),
             'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), TIME_FORMAT).time(),
             'Modifier': float(worker_data.get('Modifier', 1.0)),
             'row_type': row_type,
+            'training': False if row_type == 'gap' else (training if training is not None else True),
         }
 
         # Only add TIME if the existing df has TIME column (for consistency)
@@ -648,44 +662,64 @@ def _replace_worker_schedule(
     df = data_dict['working_hours_df']
 
     try:
-        current_df = df if df is not None else pd.DataFrame()
-        original_worker_count = 0 if current_df.empty else len(current_df[current_df['PPL'] == worker_name])
-
-        if current_df.empty:
-            df = pd.DataFrame()
-        else:
-            df = current_df[current_df['PPL'] != worker_name].reset_index(drop=True)
-
-        target_date = target_date or (_get_staged_target_date() if use_staged else datetime.today().date())
-        raw_rows = []
-        for worker_data in rows:
-            row_copy = strip_builder_fields(worker_data)
-            row_copy['PPL'] = worker_name
-            raw_rows.append(row_copy)
-        plan_rows = build_day_plan_rows(raw_rows, target_date)
-
-        if plan_rows:
-            new_df = pd.DataFrame(plan_rows)
-            df = pd.concat([df, new_df], ignore_index=True)
-
-        if use_staged:
-            if 'is_manual' not in df.columns:
-                df['is_manual'] = False
-            df.loc[df['PPL'] == worker_name, 'is_manual'] = True
-
+        df, info = _build_replaced_worker_schedule_df(
+            modality,
+            worker_name,
+            rows,
+            use_staged,
+            target_date=target_date,
+        )
         data_dict['working_hours_df'] = df
 
         if not use_staged:
             reconcile_live_worker_tracking(modality)
 
         backup_dataframe(modality, use_staged=use_staged)
-        reindexed = original_worker_count != len(plan_rows)
-        return True, {'reindexed': reindexed}, None
+        return True, info, None
 
     except ValueError as e:
         return False, None, f'Invalid time format: {e}'
     except Exception as e:
         return False, None, str(e)
+
+
+def _build_replaced_worker_schedule_df(
+    modality: str,
+    worker_name: str,
+    rows: list,
+    use_staged: bool,
+    target_date: Optional[date] = None,
+) -> Tuple[pd.DataFrame, dict]:
+    """Build a replacement schedule DataFrame for a worker without persisting it."""
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+    current_df = data_dict['working_hours_df']
+    current_df = current_df if current_df is not None else pd.DataFrame()
+    original_worker_count = 0 if current_df.empty else len(current_df[current_df['PPL'] == worker_name])
+
+    if current_df.empty:
+        df = pd.DataFrame()
+    else:
+        df = current_df[current_df['PPL'] != worker_name].reset_index(drop=True)
+
+    target_date = target_date or (_get_staged_target_date() if use_staged else datetime.today().date())
+    raw_rows = []
+    for worker_data in rows:
+        row_copy = strip_builder_fields(worker_data)
+        row_copy['PPL'] = worker_name
+        raw_rows.append(row_copy)
+    plan_rows = build_day_plan_rows(raw_rows, target_date)
+
+    if plan_rows:
+        new_df = pd.DataFrame(plan_rows)
+        df = pd.concat([df, new_df], ignore_index=True)
+
+    if use_staged:
+        if 'is_manual' not in df.columns:
+            df['is_manual'] = False
+        df.loc[df['PPL'] == worker_name, 'is_manual'] = True
+
+    reindexed = original_worker_count != len(plan_rows)
+    return df, {'reindexed': reindexed}
 
 
 def replace_worker_schedule(modality: str, worker_name: str, rows: list, use_staged: bool) -> tuple:
@@ -823,6 +857,123 @@ def add_gap_to_schedule(
         use_staged,
         gap_counts_for_hours=gap_counts_for_hours,
     )
+
+
+def add_gap_to_schedule_batch(
+    row_index_map: dict,
+    gap_type: str,
+    gap_start: str,
+    gap_end: str,
+    use_staged: bool,
+    gap_counts_for_hours: Optional[bool] = None,
+) -> tuple:
+    """Public wrapper for adding a gap to multiple modality rows atomically."""
+    return _add_gap_to_schedule_batch(
+        row_index_map,
+        gap_type,
+        gap_start,
+        gap_end,
+        use_staged,
+        gap_counts_for_hours=gap_counts_for_hours,
+    )
+
+
+def _add_gap_to_schedule_batch(
+    row_index_map: dict,
+    gap_type: str,
+    gap_start: str,
+    gap_end: str,
+    use_staged: bool,
+    gap_counts_for_hours: Optional[bool] = None,
+) -> tuple:
+    """Add a gap intent row for a worker across multiple modalities atomically."""
+    if not row_index_map:
+        return False, None, 'No schedule rows provided'
+
+    try:
+        gap_start_time = datetime.strptime(gap_start, TIME_FORMAT).time()
+        gap_end_time = datetime.strptime(gap_end, TIME_FORMAT).time()
+
+        if gap_start_time >= gap_end_time:
+            return False, None, 'Gap start time must be before gap end time'
+
+        normalized_gap_counts = _coerce_bool(gap_counts_for_hours)
+        if normalized_gap_counts is None:
+            normalized_gap_counts = False
+
+        worker_name = None
+        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
+        pending_updates = []
+        data_dicts = {
+            str(mod).lower(): _get_schedule_data_dict(str(mod).lower(), use_staged)
+            for mod in row_index_map.keys()
+        }
+
+        for modality, row_index in row_index_map.items():
+            modality_key = str(modality or '').lower()
+            if modality_key not in data_dicts:
+                return False, None, f'Invalid modality: {modality}'
+            data_dict = data_dicts[modality_key]
+            df = data_dict['working_hours_df']
+
+            try:
+                row_index_int = int(row_index)
+            except (TypeError, ValueError):
+                return False, None, 'Invalid row index'
+
+            if not _validate_row_index(df, row_index_int):
+                return False, None, 'Invalid row index'
+
+            row_worker = df.loc[row_index_int, 'PPL']
+            if worker_name is None:
+                worker_name = row_worker
+            elif str(row_worker) != str(worker_name):
+                return False, None, 'Row mismatch across modalities'
+
+            gap_row = {
+                'PPL': worker_name,
+                'start_time': gap_start_time,
+                'end_time': gap_end_time,
+                'Modifier': 1.0,
+                'tasks': gap_type,
+                'counts_for_hours': normalized_gap_counts,
+                'row_type': 'gap',
+            }
+            for skill in SKILL_COLUMNS:
+                gap_row[skill] = -1
+
+            existing_rows = df[df['PPL'] == worker_name].to_dict('records')
+            raw_rows = existing_rows + [gap_row]
+            new_df, info = _build_replaced_worker_schedule_df(
+                modality,
+                worker_name,
+                raw_rows,
+                use_staged,
+                target_date=target_date,
+            )
+            pending_updates.append((modality_key, new_df, info))
+
+        for modality, new_df, _info in pending_updates:
+            data_dict = _get_schedule_data_dict(modality, use_staged)
+            data_dict['working_hours_df'] = new_df
+
+        if not use_staged:
+            for modality, _, _info in pending_updates:
+                reconcile_live_worker_tracking(modality)
+
+        for modality, _, _info in pending_updates:
+            backup_dataframe(modality, use_staged=use_staged)
+
+        log_prefix = "STAGED: " if use_staged else ""
+        selection_logger.info(
+            f"{log_prefix}Added gap ({gap_type}) for {worker_name} {gap_start}-{gap_end} across {len(pending_updates)} modalities"
+        )
+        return True, {'reindexed': any(info.get('reindexed') for _, _, info in pending_updates)}, None
+
+    except ValueError as e:
+        return False, None, f'Invalid time format: {e}'
+    except Exception as e:
+        return False, None, str(e)
 
 
 def _remove_gap_from_schedule(

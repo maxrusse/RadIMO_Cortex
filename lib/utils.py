@@ -27,6 +27,31 @@ def coerce_int(value: Any, default: int = 0) -> int:
     except (TypeError, ValueError):
         return default
 
+def coerce_bool(value: Any) -> Optional[bool]:
+    """Convert common truthy/falsey inputs to a bool, or None if unknown."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if cleaned in {'true', '1', 'yes', 'y', 'on'}:
+            return True
+        if cleaned in {'false', '0', 'no', 'n', 'off'}:
+            return False
+        return None
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+    return bool(value)
+
 # -----------------------------------------------------------
 # TIME / DATE HELPERS
 # -----------------------------------------------------------

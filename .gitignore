@@ -52,3 +52,9 @@ aggregation_summary.txt
 Mappe1_formatted_updated_week_*.csv
 Mappe1_formatted_updated_week_*.csv.bak*
 test_data/demo/master_medweb_upload_demo_*.csv
+
+# Local handover notes with internal hostnames
+docs/HANDOVER.txt
+docs/HANDOVER_DE.txt
+docs/UPDATE_CODE_PATH.txt
+docs/UPDATE_CODE_PATH_DE.txt

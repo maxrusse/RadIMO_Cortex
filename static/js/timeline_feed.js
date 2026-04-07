@@ -197,6 +197,9 @@ const TimelineFeed = (function() {
         const rowType = row.row_type || 'shift';
         const normalizedRowType = rowType.toString().toLowerCase();
         const isGapRow = normalizedRowType === 'gap' || normalizedRowType === 'gap_segment';
+        const training = row.training === undefined || row.training === null
+          ? !isGapRow
+          : !(row.training === false || row.training === 0 || row.training === '0' || String(row.training).trim().toLowerCase() === 'false');
 
         let roleConfig = taskRoles.find(task => task.name === taskStr);
         if (isGapRow && !roleConfig && taskParts.length > 0) {
@@ -243,6 +246,7 @@ const TimelineFeed = (function() {
           is_manual: Boolean(row.is_manual),
           is_gap_entry: isGapRow,
           row_type: isGapRow ? 'gap_segment' : 'shift_segment',
+          training,
           skills: skills.reduce((acc, skill) => {
             const rawVal = row[skill];
             const hasRaw = rawVal !== undefined && rawVal !== '';
@@ -498,6 +502,7 @@ const TimelineFeed = (function() {
           TIME: `${shift.start_time}-${shift.end_time}`,
           modalities: [],
           row_type: isGapRow ? 'gap_segment' : 'shift_segment',
+          training: shift.training !== false,
           tasks: shift.task ? [shift.task] : [],
           activeSkillsByModality: {},
           explicitSkillsByModality: {},

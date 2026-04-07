@@ -31,7 +31,8 @@ def save_state():
                 'assignments_per_mod': global_worker_data['assignments_per_mod'],
                 'flow_cross_pool': global_worker_data.get('flow_cross_pool', {}),
                 'last_reset_date': global_worker_data['last_reset_date'].isoformat() if global_worker_data['last_reset_date'] else None,
-                'last_preload_date': global_worker_data['last_preload_date'].isoformat() if global_worker_data['last_preload_date'] else None
+                'last_preload_date': global_worker_data['last_preload_date'].isoformat() if global_worker_data['last_preload_date'] else None,
+                'last_preload_source': global_worker_data.get('last_preload_source'),
             },
             'modality_data': {}
         }
@@ -79,6 +80,7 @@ def load_state():
             last_preload_str = gwd.get('last_preload_date')
             if last_preload_str:
                 global_worker_data['last_preload_date'] = datetime.fromisoformat(last_preload_str).date()
+            global_worker_data['last_preload_source'] = gwd.get('last_preload_source')
 
         if 'modality_data' in state:
             for mod in allowed_modalities:

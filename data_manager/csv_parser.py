@@ -21,6 +21,7 @@ from config import (
 from lib.utils import (
     TIME_FORMAT,
     get_weekday_name_german,
+    coerce_bool,
 )
 from data_manager.worker_management import (
     get_canonical_worker_id,
@@ -743,7 +744,14 @@ def build_working_hours_from_medweb(
             workers_with_shifts.add(canonical_id)
 
             roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
-            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
+            training = coerce_bool(effective_rule.get('training'))
+            if training is None:
+                training = True
+            final_combinations = apply_skill_overrides(
+                roster_combinations,
+                skill_overrides,
+                training=training,
+            )
 
             time_ranges = compute_time_ranges(row, effective_rule, target_date, config)
 
@@ -807,6 +815,7 @@ def build_working_hours_from_medweb(
                         'tasks': task_label,
                         'counts_for_hours': counts_for_hours,
                         'row_type': 'shift',
+                        'training': training,
                         **modality_skills
                     }
                     merge_key = str(effective_rule.get('match', '')).strip().lower()
@@ -863,7 +872,14 @@ def build_working_hours_from_medweb(
 
             canonical_id = get_canonical_worker_id(worker_name)
             roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
-            final_combinations = apply_skill_overrides(roster_combinations, skill_overrides)
+            training = coerce_bool(entry.get('training'))
+            if training is None:
+                training = True
+            final_combinations = apply_skill_overrides(
+                roster_combinations,
+                skill_overrides,
+                training=training,
+            )
 
             time_ranges = _compute_synthetic_time_ranges(entry, weekday_name)
             task_label = str(entry.get('label') or entry.get('task') or worker_name)
@@ -921,6 +937,7 @@ def build_working_hours_from_medweb(
                         'tasks': task_label,
                         'counts_for_hours': counts_for_hours,
                         'row_type': 'shift',
+                        'training': training,
                         **modality_skills,
                     })
                     workers_with_shifts_by_modality[modality].add(canonical_id)

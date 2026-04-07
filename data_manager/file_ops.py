@@ -12,7 +12,7 @@ import json
 import shutil
 from datetime import datetime, date
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -33,6 +33,7 @@ from lib.utils import (
     calculate_shift_duration_hours,
     validate_excel_structure,
     normalize_skill_value,
+    coerce_bool,
 )
 from data_manager.worker_management import (
     apply_skill_overrides,
@@ -57,6 +58,51 @@ _unified_load_state = {
 }
 
 
+def _clear_staged_data_state() -> None:
+    """Reset in-memory staged state before loading a snapshot from disk."""
+    _unified_load_state['staged'] = False
+    _unified_load_state['scheduled'] = False
+
+    for mod in allowed_modalities:
+        d = staged_modality_data[mod]
+        d['working_hours_df'] = None
+        d['total_work_hours'] = {}
+        d['info_texts'] = []
+        d['info_texts_by_skill'] = {}
+        d['last_modified'] = None
+        d['last_prepped_at'] = None
+        d['last_prepped_by'] = None
+        d['target_date'] = None
+
+
+def _get_staged_target_date() -> Optional[date]:
+    """Return the currently staged target date if all or one modality has it."""
+    for mod in allowed_modalities:
+        target_date = staged_modality_data.get(mod, {}).get('target_date')
+        if isinstance(target_date, date):
+            return target_date
+        if isinstance(target_date, str):
+            try:
+                return date.fromisoformat(target_date)
+            except ValueError:
+                continue
+    return None
+
+
+def _get_staged_day_snapshot_path(target_date: date) -> str:
+    """Return the per-day staged snapshot path for a prep date."""
+    backup_dir = os.path.join(UPLOAD_FOLDER, "backups", "staged_days")
+    return os.path.join(backup_dir, f"Cortex_ALL_staged_{target_date.isoformat()}.json")
+
+
+def _write_payload_to_path(payload: dict, target_path: str, mode_label: str) -> None:
+    """Write a unified backup payload to the requested path."""
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    with open(target_path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+    selection_logger.info("Unified %s backup updated at %s", mode_label, target_path)
+
+
 def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.DataFrame:
     """Reapply roster skill constraints to a schedule DataFrame."""
     if df is None or df.empty or 'PPL' not in df.columns:
@@ -75,6 +121,11 @@ def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.Da
         canonical_id = get_canonical_worker_id(row.get('PPL'))
         roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
         overrides = {}
+        training = coerce_bool(row.get('training'))
+        if row.get('row_type') in {'gap', 'gap_segment'}:
+            training = False
+        elif training is None:
+            training = True
 
         for skill in skill_columns:
             normalized = normalize_skill_value(row.get(skill))
@@ -84,6 +135,7 @@ def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.Da
         final_combinations = apply_skill_overrides(
             roster_combinations,
             overrides,
+            training=training,
             ignore_zero_overrides=True,
             exclude_unprocessed_weighted=False,
         )
@@ -96,7 +148,7 @@ def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.Da
     return df
 
 
-def _calculate_total_work_hours(df: pd.DataFrame) -> dict[str, float]:
+def _calculate_total_work_hours(df: pd.DataFrame) -> Dict[str, float]:
     """Calculate total work hours per worker from DataFrame."""
     if df is None or df.empty:
         return {}
@@ -143,13 +195,18 @@ def _load_dataframe_from_backup_payload(data: dict) -> pd.DataFrame:
 
     if 'row_type' not in df.columns:
         df['row_type'] = 'shift_segment'
+    if 'training' not in df.columns:
+        df['training'] = True
+    df['training'] = df['training'].apply(coerce_bool)
+    df.loc[df['training'].isna(), 'training'] = True
     gap_mask = gap_row_mask(df)
     df.loc[gap_mask, 'shift_duration'] = 0.0
+    df.loc[gap_mask, 'training'] = False
 
     return df
 
 
-def _build_dataframe_from_records(records: list[dict], modality: str, *, validate: bool) -> pd.DataFrame:
+def _build_dataframe_from_records(records: List[dict], modality: str, *, validate: bool) -> pd.DataFrame:
     """Build a schedule DataFrame from raw records."""
     df = pd.DataFrame(records)
 
@@ -189,10 +246,15 @@ def _build_dataframe_from_records(records: list[dict], modality: str, *, validat
 
     if 'row_type' not in df.columns:
         df['row_type'] = 'shift_segment'
+    if 'training' not in df.columns:
+        df['training'] = True
+    df['training'] = df['training'].apply(coerce_bool)
+    df.loc[df['training'].isna(), 'training'] = True
     gap_mask = gap_row_mask(df)
+    df.loc[gap_mask, 'training'] = False
     df.loc[gap_mask, 'shift_duration'] = 0.0
 
-    col_order = ['PPL', 'row_type', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks', 'counts_for_hours', 'is_manual']
+    col_order = ['PPL', 'row_type', 'training', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks', 'counts_for_hours', 'is_manual']
     skill_cols = [skill for skill in SKILL_COLUMNS if skill in df.columns]
     col_order = col_order[:4] + skill_cols + col_order[4:]
 
@@ -311,16 +373,10 @@ def _build_unified_payload(use_staged: bool) -> dict:
 
 def _write_unified_backup(use_staged: bool) -> None:
     """Write unified schedule backup for all modalities."""
-    backup_dir = os.path.join(UPLOAD_FOLDER, "backups")
-    os.makedirs(backup_dir, exist_ok=True)
     target_path = unified_schedule_paths['staged' if use_staged else 'live']
-
     payload = _build_unified_payload(use_staged)
-    with open(target_path, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-
     mode_label = "staged" if use_staged else "live"
-    selection_logger.info("Unified %s backup updated at %s", mode_label, target_path)
+    _write_payload_to_path(payload, target_path, mode_label)
 
 
 def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
@@ -450,7 +506,16 @@ def backup_dataframe(modality: str, use_staged: bool = False) -> None:
             if use_staged:
                 d['last_modified'] = get_local_now()
                 d['last_prepped_at'] = d['last_modified'].strftime('%d.%m.%Y %H:%M')
-            _write_unified_backup(use_staged)
+
+            payload = _build_unified_payload(use_staged)
+            if use_staged:
+                staged_target_date = _get_staged_target_date()
+                if staged_target_date is not None:
+                    day_target_path = _get_staged_day_snapshot_path(staged_target_date)
+                    _write_payload_to_path(payload, day_target_path, "staged day snapshot")
+            else:
+                target_path = unified_schedule_paths['live']
+                _write_payload_to_path(payload, target_path, "live")
         except Exception as e:
             mode_label = "staged" if use_staged else "live"
             selection_logger.error(f"Error backing up {mode_label} DataFrame for modality {modality}: {e}")
@@ -464,23 +529,54 @@ def persist_live_backup() -> None:
         selection_logger.error("Error persisting unified live backup: %s", exc)
 
 
-def load_staged_dataframe(modality: str) -> bool:
+def load_staged_dataframe(modality: str, target_date: Optional[date] = None) -> bool:
     """
     Load staged or scheduled dataframe for a modality from JSON.
 
     Uses try/except instead of os.path.exists to prevent TOCTOU race conditions
     (file could be deleted between check and open).
     """
-    if not _unified_load_state['staged']:
-        if _load_unified_backup(unified_schedule_paths['staged'], use_staged=True):
-            _unified_load_state['staged'] = True
-    if _unified_load_state['staged']:
-        return staged_modality_data[modality].get('working_hours_df') is not None
+    if target_date is not None:
+        if reload_staged_data_from_disk(target_date=target_date):
+            return staged_modality_data[modality].get('working_hours_df') is not None
 
     if not _unified_load_state['scheduled']:
         if _load_unified_scheduled_into_staged(unified_schedule_paths['scheduled']):
             _unified_load_state['scheduled'] = True
             return staged_modality_data[modality].get('working_hours_df') is not None
+
+    return False
+
+
+def reload_staged_data_from_disk(target_date: Optional[date] = None) -> bool:
+    """Force a reload of staged schedule data from disk.
+
+    Clears the in-memory staged state first so callers can prefer the persisted
+    staged backup over any stale process-local cache.
+    """
+    _clear_staged_data_state()
+
+    candidate_paths = []
+    if target_date is not None:
+        candidate_paths.append(_get_staged_day_snapshot_path(target_date))
+    candidate_paths.append(unified_schedule_paths['scheduled'])
+
+    for candidate_path in candidate_paths:
+        try:
+            if not _load_unified_backup(candidate_path, use_staged=True):
+                continue
+        except Exception:
+            continue
+
+        if target_date is not None:
+            loaded_target = _get_staged_target_date()
+            if loaded_target != target_date:
+                _clear_staged_data_state()
+                continue
+
+        if target_date is not None:
+            global_worker_data['last_preload_source'] = 'snapshot'
+        return True
 
     return False
 

@@ -185,7 +185,7 @@ function onInlineModifierChange(tab, modKey, rowIndex, value, groupIdx, shiftIdx
 
 // Valid skill values for quick edit validation
 const VALID_SKILL_VALUES = ['-1', '0', '1', 'w', 'W'];
-const VALID_MODIFIER_VALUES = [0.3, 0.5, 0.75, 1, 1.0, 1.25, 1.5];
+const VALID_MODIFIER_VALUES = [0.3, 0.5, 0.75, 0.9, 1, 1.0, 1.1, 1.2, 1.25];
 
 // Validate and save skill input on blur
 function validateAndSaveSkill(el) {
@@ -254,10 +254,10 @@ function validateAndSaveModifier(el) {
 
   // Validate - clamp to valid range
   if (isNaN(parsed) || parsed < 0.3) parsed = 0.3;
-  else if (parsed > 1.5) parsed = 1.5;
+  else if (parsed > 1.25) parsed = 1.25;
 
   // Round to nearest valid value
-  const validValues = [0.3, 0.5, 0.75, 1.0, 1.25, 1.5];
+  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
   parsed = validValues.reduce((prev, curr) =>
     Math.abs(curr - parsed) < Math.abs(prev - parsed) ? curr : prev
   );
@@ -275,10 +275,10 @@ function validateAndSaveShiftModifier(el) {
 
   // Validate - clamp to valid range
   if (isNaN(parsed) || parsed < 0.3) parsed = 0.3;
-  else if (parsed > 1.5) parsed = 1.5;
+  else if (parsed > 1.25) parsed = 1.25;
 
   // Round to nearest valid value
-  const validValues = [0.3, 0.5, 0.75, 1.0, 1.25, 1.5];
+  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
   parsed = validValues.reduce((prev, curr) =>
     Math.abs(curr - parsed) < Math.abs(prev - parsed) ? curr : prev
   );
@@ -303,7 +303,7 @@ function handleModKeydown(event, el) {
     event.preventDefault();
   } else if (event.key === 'ArrowUp') {
     const val = parseFloat(el.value) || 1.0;
-    const validValues = [0.3, 0.5, 0.75, 1.0, 1.25, 1.5];
+    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
     const idx = validValues.indexOf(val);
     const next = idx < validValues.length - 1 ? validValues[idx + 1] : validValues[validValues.length - 1];
     el.value = next;
@@ -311,7 +311,7 @@ function handleModKeydown(event, el) {
     event.preventDefault();
   } else if (event.key === 'ArrowDown') {
     const val = parseFloat(el.value) || 1.0;
-    const validValues = [0.3, 0.5, 0.75, 1.0, 1.25, 1.5];
+    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
     const idx = validValues.indexOf(val);
     const next = idx > 0 ? validValues[idx - 1] : validValues[0];
     el.value = next;
@@ -325,6 +325,10 @@ async function saveInlineChanges(tab) {
   const changes = Object.values(pendingChanges[tab]);
   if (changes.length === 0) {
     updateSaveInlineStatus(tab, 'No changes to save', 'error');
+    return;
+  }
+  if (!getSnapshotVersion(tab)) {
+    updateSaveInlineStatus(tab, 'Reload data first before saving', 'error');
     return;
   }
 
@@ -343,6 +347,7 @@ async function saveInlineChanges(tab) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            snapshot_version: getSnapshotVersion(tab),
             modality: change.modality,
             row_index: change.row_index,
             verify_ppl: change.verify_ppl
@@ -390,7 +395,7 @@ async function saveInlineChanges(tab) {
         const response = await fetch(addEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modality: change.modality, worker_data: workerData })
+          body: JSON.stringify(withSnapshotVersion(tab, { modality: change.modality, worker_data: workerData }))
         });
 
         if (!response.ok) {
@@ -404,7 +409,7 @@ async function saveInlineChanges(tab) {
         const response = await fetch(updateEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(change)
+          body: JSON.stringify(withSnapshotVersion(tab, change))
         });
 
         if (!response.ok) {
@@ -449,6 +454,21 @@ function updateHoursToggleLabel(checkbox) {
   }
 }
 
+function updateTrainingToggleLabel(checkbox) {
+  const label = checkbox.nextElementSibling;
+  if (label && label.dataset?.role === 'training-label') {
+    if (checkbox.checked) {
+      label.textContent = 'Training on';
+      label.classList.remove('no-count');
+      label.classList.add('counts');
+    } else {
+      label.textContent = 'Training off';
+      label.classList.remove('counts');
+      label.classList.add('no-count');
+    }
+  }
+}
+
 function isTabAvailable(tab) {
   return Boolean(document.getElementById(`content-${tab}`));
 }
@@ -463,8 +483,31 @@ function updatePrepLoadedLabel(text) {
 function updatePrepLastEditLabel(text) {
   const editEl = document.getElementById('prep-last-edit-label');
   if (editEl) {
-    editEl.textContent = text || 'none';
+    editEl.textContent = text || '';
   }
+}
+
+function updatePrepLoadResultLabel(text, kind = 'info') {
+  const statusEl = document.getElementById('load-status-tomorrow');
+  if (!statusEl) return;
+
+  statusEl.textContent = text || '';
+  statusEl.style.color = kind === 'error' ? '#dc3545' : kind === 'success' ? '#28a745' : '';
+}
+
+function setSnapshotVersion(tab, value) {
+  snapshotVersions[tab] = value || null;
+}
+
+function getSnapshotVersion(tab) {
+  return snapshotVersions[tab] || null;
+}
+
+function withSnapshotVersion(tab, payload) {
+  return {
+    ...payload,
+    snapshot_version: getSnapshotVersion(tab),
+  };
 }
 
 const saveStatusTimers = { today: null, tomorrow: null };
@@ -608,7 +651,7 @@ function onPrepDateInputChange() {
       return;
     }
   }
-  loadFromCSV('next', { confirm: false });
+  loadFromCSV('next', { confirm: false, forceCsv: false });
 }
 
 // Load data for a specific tab (lazy loading)
@@ -617,6 +660,7 @@ async function loadTabData(tab) {
     return;
   }
   const requestId = ++loadRequestId[tab];
+  setSnapshotVersion(tab, null);
   try {
     const endpoint = tab === 'today' ? '/api/live-schedule/data' : '/api/prep-next-day/data';
     const response = await fetch(endpoint);
@@ -658,6 +702,7 @@ async function loadTabData(tab) {
     entriesData[tab] = result.entries;
     workerCounts[tab] = result.counts;
     dataLoaded[tab] = true;
+    setSnapshotVersion(tab, respData.snapshot_version || null);
 
     if (tab === 'tomorrow') {
     if (respData.target_date || respData.target_weekday_name) {
@@ -668,7 +713,10 @@ async function loadTabData(tab) {
       updatePrepTargetUI();
       }
       updatePrepLoadedLabel(respData.prep_loaded_label || formatPrepLoadedLabel(respData.target_weekday_name, respData.target_date));
-      updatePrepLastEditLabel(respData.prep_last_edit_label || respData.last_modified || respData.last_prepped_at || 'none');
+      updatePrepLastEditLabel(respData.prep_last_edit_label || respData.last_modified || respData.last_prepped_at || '');
+      if (respData.prep_load_source === 'snapshot') {
+        updatePrepLoadResultLabel('');
+      }
     }
 
     renderTable(tab);
@@ -779,7 +827,11 @@ async function deleteWorkerEntries(tab, groupIdx) {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index, verify_ppl: entry.worker })
+        body: JSON.stringify(withSnapshotVersion(tab, {
+          modality: entry.modality,
+          row_index: entry.row_index,
+          verify_ppl: entry.worker,
+        }))
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -808,7 +860,11 @@ async function deleteEntry(tab, groupIdx, entryIdx) {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modality: entry.modality, row_index: entry.row_index, verify_ppl: entry.worker })
+      body: JSON.stringify(withSnapshotVersion(tab, {
+        modality: entry.modality,
+        row_index: entry.row_index,
+        verify_ppl: entry.worker,
+      }))
     });
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -835,12 +891,16 @@ function openEditModal(tab, groupIdx) {
 }
 
 // Handle task change in existing shift (edit modal) - live update
-async function onEditShiftTaskChange(shiftIdx, taskName) {
+async function onEditShiftTaskChange(shiftIdx, taskName, options = {}) {
   const taskConfig = TASK_ROLES.find(t => t.name === taskName);
   if (!taskConfig) return;
 
   const isGap = taskConfig.type === 'gap';
   const { tab, groupIdx } = currentEditEntry || {};
+  const currentShift = getModalShifts(entriesData[tab]?.[groupIdx])[shiftIdx];
+  const trainingEnabled = isGap
+    ? false
+    : (options.trainingEnabled !== undefined ? Boolean(options.trainingEnabled) : (currentShift?.training !== false));
 
   // Prepare updates for API call
   const updates = { tasks: taskName };
@@ -862,12 +922,19 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
     updates.Modifier = 1.0;
     updates.row_type = 'gap';
     updates.counts_for_hours = getGapCountsForHours(taskName);
+    updates.training = false;
     const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
     if (modifierEl) modifierEl.value = '1.0';
     const countsEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
     if (countsEl) {
       countsEl.checked = updates.counts_for_hours === true;
       updateHoursToggleLabel(countsEl);
+    }
+    const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
+    if (trainingEl) {
+      trainingEl.checked = false;
+      trainingEl.disabled = true;
+      updateTrainingToggleLabel(trainingEl);
     }
 
     // Set ALL skills to -1 for gaps across modalities
@@ -878,6 +945,7 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
         if (skillSelect) skillSelect.value = '-1';
         if (!skillUpdates[modKey]) skillUpdates[modKey] = {};
         skillUpdates[modKey][skill] = -1;
+        updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, -1, false);
       });
     });
   } else {
@@ -900,10 +968,17 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
 
     // Also update counts_for_hours based on task config
     updates.counts_for_hours = taskConfig.counts_for_hours !== false;
+    updates.training = trainingEnabled;
     const countsEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
     if (countsEl) {
       countsEl.checked = taskConfig.counts_for_hours !== false;
       updateHoursToggleLabel(countsEl);
+    }
+    const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
+    if (trainingEl) {
+      trainingEl.checked = trainingEnabled;
+      trainingEl.disabled = false;
+      updateTrainingToggleLabel(trainingEl);
     }
 
     // Preload skills from task's skill_overrides (supports "Skill_modality" format like CSV loading)
@@ -923,10 +998,12 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
         } else if (overrides['all'] !== undefined) {
           val = overrides['all'];
         }
+        const rawVal = normalizeSkillValueJS(val);
+        const effectiveVal = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, rawVal, trainingEnabled);
         if (skillSelect) {
-          skillSelect.value = val.toString();
+          skillSelect.value = displaySkillValue(effectiveVal);
         }
-        skillUpdates[modKey][skill] = normalizeSkillValueJS(val);
+        skillUpdates[modKey][skill] = effectiveVal;
       });
     });
 
@@ -943,7 +1020,7 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
             const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
             if (modalityRoster[skill] === -1) {
               if (skillSelect) skillSelect.value = '-1';
-              skillUpdates[modKey][skill] = -1;  // Roster -1 always wins
+              skillUpdates[modKey][skill] = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, -1, trainingEnabled);  // Roster -1 always wins
             }
           });
         });
@@ -989,11 +1066,11 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify(withSnapshotVersion(tab, {
             modality: modKey,
             row_index: modData.row_index,
             updates: modUpdates
-          })
+          }))
         });
         if (response.ok) {
           anySuccess = true;
@@ -1012,6 +1089,41 @@ async function onEditShiftTaskChange(shiftIdx, taskName) {
   } catch (error) {
     showMessage('error', error.message);
   }
+}
+
+async function onEditShiftTrainingChange(shiftIdx, trainingEnabled) {
+  const { tab, groupIdx } = currentEditEntry || {};
+  const group = entriesData[tab]?.[groupIdx];
+  if (!group) return;
+
+  const shift = getModalShifts(group)[shiftIdx];
+  if (!shift) return;
+
+  const taskName = document.getElementById(`edit-shift-${shiftIdx}-task`)?.value || shift.task;
+  if (!taskName) return;
+
+  if (modalMode === 'edit-plan') {
+    const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
+    if (trainingEl) {
+      trainingEl.checked = trainingEnabled;
+      updateTrainingToggleLabel(trainingEl);
+    }
+    updateEditPlanDraftShift(shiftIdx, { training: trainingEnabled });
+    applyEditPlanDraftShiftTraining(shiftIdx, trainingEnabled);
+
+    const draftShift = getModalShifts(group)[shiftIdx];
+    Object.entries(draftShift.modalities || {}).forEach(([modKey, modData]) => {
+      SKILLS.forEach(skill => {
+        const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+        if (skillSelect) {
+          skillSelect.value = displaySkillValue(modData.skills?.[skill] ?? 0);
+        }
+      });
+    });
+    return;
+  }
+
+  await onEditShiftTaskChange(shiftIdx, taskName, { trainingEnabled });
 }
 
 // Delete shift from edit modal
@@ -1054,7 +1166,7 @@ async function deleteShiftFromModal(shiftIdx) {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ worker: group.worker, shifts: updatedShifts })
+      body: JSON.stringify(withSnapshotVersion(tab, { worker: group.worker, shifts: updatedShifts }))
     });
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
@@ -1108,11 +1220,11 @@ async function updateShiftFromModal(shiftIdx, updates) {
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify(withSnapshotVersion(tab, {
             modality: modKey,
             row_index: modData.row_index,
             updates
-          })
+          }))
         });
         if (response.ok) {
           anySuccess = true;
@@ -1155,17 +1267,24 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
     const skillUpdates = {};
     const normalizedValue = normalizeSkillValueJS(value);
     skillUpdates[skill] = normalizedValue;
-    updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: normalizedValue } });
-    if (modalMode === 'edit-plan') return;
+    const effectiveValue = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, normalizedValue);
+    const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+    if (skillSelect && effectiveValue !== null && effectiveValue !== undefined) {
+      skillSelect.value = displaySkillValue(effectiveValue);
+    }
+    if (modalMode === 'edit-plan') {
+      updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: effectiveValue } });
+      return;
+    }
 
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify(withSnapshotVersion(tab, {
         modality: modKey,
         row_index: modData.row_index,
         updates: skillUpdates
-      })
+      }))
     });
 
     if (!response.ok) {
@@ -1287,6 +1406,7 @@ function onModalTaskChange() {
   const taskName = option.value;
   const taskConfig = TASK_ROLES.find(t => t.name === taskName);
   const isGap = option.dataset.type === 'gap';
+  const trainingEnabled = isGap ? false : (taskConfig?.training !== false);
   const { tab, groupIdx } = currentEditEntry || {};
 
   // Set times - use target day based on current tab (today vs tomorrow)
@@ -1481,6 +1601,8 @@ async function addShiftFromModal() {
   const countsHoursEl = document.getElementById('modal-add-counts-hours');
   const countsForHours = countsHoursEl ? countsHoursEl.checked : true;
   const isGap = isGapTask(taskName);
+  const taskConfig = TASK_ROLES.find(t => t.name === taskName);
+  const trainingEnabled = isGap ? false : (taskConfig?.training !== false);
   const taskKey = (taskName || '').trim();
   const addedShiftKey = `${startTime}-${endTime}-${isGap ? 'gap' : 'shift'}-${taskKey}`;
 
@@ -1491,29 +1613,35 @@ async function addShiftFromModal() {
     }
     const modalities = {};
     selectedModalities.forEach(modKey => {
+      const baseSkills = {};
       const skills = {};
       SKILLS.forEach(skill => {
         if (isGap) {
+          baseSkills[skill] = -1;
           skills[skill] = -1;
           return;
         }
         const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
-        skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
+        const rawValue = normalizeSkillValueJS(el ? el.value : 0);
+        baseSkills[skill] = rawValue;
+        skills[skill] = applyTrainingToSkillValue(rawValue, trainingEnabled);
       });
       modalities[modKey] = {
         skills,
+        baseSkills,
         row_index: -1,
         modifier
       };
     });
 
-    editPlanDraft.shifts = [
-      ...(editPlanDraft.shifts || []),
-      {
+      editPlanDraft.shifts = [
+        ...(editPlanDraft.shifts || []),
+        {
         start_time: startTime,
         end_time: endTime,
         modifier,
         counts_for_hours: countsForHours,
+        training: trainingEnabled,
         task: taskName,
         row_type: isGap ? 'gap' : 'shift',
         is_gap_entry: isGap,
@@ -1549,14 +1677,14 @@ async function addShiftFromModal() {
         fetch(addGapEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify(withSnapshotVersion(tab, {
             modality,
             row_index: rowIndex,
             gap_type: taskName,
             gap_start: startTime,
             gap_end: endTime,
             gap_counts_for_hours: countsForHours
-          })
+          }))
         })
       ));
       const responses = await Promise.all(gapPayloads);
@@ -1575,7 +1703,7 @@ async function addShiftFromModal() {
         const response = await fetch(addWorkerEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify(withSnapshotVersion(tab, {
             modality: modKey,
             worker_data: {
               PPL: group.worker,
@@ -1583,11 +1711,12 @@ async function addShiftFromModal() {
               end_time: endTime,
               Modifier: modifier,
               counts_for_hours: countsForHours,
+              training: trainingEnabled,
               tasks: taskName,
               row_type: 'shift',
               ...skills
             }
-          })
+          }))
         });
 
         if (!response.ok) {
@@ -1809,7 +1938,7 @@ async function saveModalChanges() {
       const response = await fetch(applyEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worker: editPlanDraft.worker, shifts: editPlanDraft.shifts || [] })
+        body: JSON.stringify(withSnapshotVersion(tab, { worker: editPlanDraft.worker, shifts: editPlanDraft.shifts || [] }))
       });
       if (!response.ok) {
         const result = await response.json();
@@ -1834,11 +1963,13 @@ async function saveModalChanges() {
       const shiftStartEl = document.getElementById(`edit-shift-${shiftIdx}-start`);
       const shiftEndEl = document.getElementById(`edit-shift-${shiftIdx}-end`);
       const shiftModifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
+      const shiftTrainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
 
       const shiftTask = shiftTaskEl ? shiftTaskEl.value : shift.task;
       const shiftStart = shiftStartEl ? shiftStartEl.value : shift.start_time;
       const shiftEnd = shiftEndEl ? shiftEndEl.value : shift.end_time;
       const shiftModifier = shiftModifierEl ? parseFloat(shiftModifierEl.value) || 1.0 : shift.modifier || 1.0;
+      const shiftTraining = shiftTrainingEl ? shiftTrainingEl.checked : (shift.training !== false);
 
       // Get counts_for_hours checkbox value
       const countsHoursEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
@@ -1865,13 +1996,14 @@ async function saveModalChanges() {
           end_time: shiftEnd,
           Modifier: shiftModifier,
           counts_for_hours: countsForHours,
+          training: shiftTraining,
           tasks: shiftTask,
           ...skillUpdates
         };
         const response = await fetch(updateEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modality: modKey, row_index: rowIndex, updates })
+          body: JSON.stringify(withSnapshotVersion(tab, { modality: modKey, row_index: rowIndex, updates }))
         });
         if (!response.ok) {
           const result = await response.json();
@@ -1904,6 +2036,8 @@ function syncEditPlanDraftFromModal() {
     if (endEl && isValidTimeValue(endEl.value)) updates.end_time = endEl.value;
     const modifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
     if (modifierEl) updates.Modifier = parseFloat(modifierEl.value) || 1.0;
+    const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
+    if (trainingEl) updates.training = trainingEl.checked;
     const countsEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
     if (countsEl) updates.counts_for_hours = countsEl.checked;
     if (Object.keys(updates).length) {
@@ -2107,22 +2241,25 @@ function updateAddWorkerTask(idx, field, value) {
         MODALITIES.forEach(mod => {
           const modKey = mod.toLowerCase();
           if (!task.skillsByModality[modKey]) task.skillsByModality[modKey] = {};
-          SKILLS.forEach(skill => {
-            // Check for skill_modality format (e.g., "notfall_ct") first
-            const skillModKey = `${skill}_${modKey}`;
-            if (overrides[skillModKey] !== undefined) {
-              task.skillsByModality[modKey][skill] = overrides[skillModKey];
+        SKILLS.forEach(skill => {
+          // Check for skill_modality format (e.g., "notfall_ct") first
+          const skillModKey = `${skill}_${modKey}`;
+          if (overrides[skillModKey] !== undefined) {
+            task.skillsByModality[modKey][skill] = overrides[skillModKey];
             } else if (overrides[skill] !== undefined) {
               // Skill-only override applies to all modalities
               task.skillsByModality[modKey][skill] = overrides[skill];
             } else if (overrides['all'] !== undefined) {
               // "all" shortcut
               task.skillsByModality[modKey][skill] = overrides['all'];
-            } else {
-              task.skillsByModality[modKey][skill] = 0;  // Default to passive
-            }
-          });
+          } else {
+            task.skillsByModality[modKey][skill] = 0;  // Default to passive
+          }
+          if (!trainingEnabled && isWeightedSkill(normalizeSkillValueJS(task.skillsByModality[modKey][skill]))) {
+            task.skillsByModality[modKey][skill] = -1;
+          }
         });
+      });
 
         // Apply worker roster exclusions (-1) - roster -1 always wins
         const workerInput = document.getElementById('add-worker-name-input');
@@ -2209,6 +2346,8 @@ async function saveAddWorkerModal() {
   try {
     const shifts = tasks.map(task => {
       const isGap = isGapTask(task.task);
+      const taskConfig = TASK_ROLES.find(t => t.name === task.task);
+      const trainingEnabled = isGap ? false : (taskConfig?.training !== false);
       const modalities = {};
       const skillsByModality = task.skillsByModality || {};
 
@@ -2223,6 +2362,7 @@ async function saveAddWorkerModal() {
         end_time: task.end_time,
         modifier: task.modifier,
         counts_for_hours: isGap ? task.counts_for_hours === true : task.counts_for_hours !== false,
+        training: trainingEnabled,
         task: task.task,
         row_type: isGap ? 'gap' : 'shift',
         modalities
@@ -2232,10 +2372,10 @@ async function saveAddWorkerModal() {
     const response = await fetch(workerEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify(withSnapshotVersion(tab, {
         worker: workerLabel,
         shifts
-      })
+      }))
     });
 
     if (!response.ok) {
@@ -2278,6 +2418,10 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
     showMessage('error', 'Break NOW actions are disabled in prep mode.');
     return;
   }
+  if (editMode[tab] || Object.keys(pendingChanges[tab] || {}).length > 0) {
+    showMessage('error', 'Exit Quick Edit before adding a break.');
+    return;
+  }
   const group = entriesData[tab][gIdx];
   if (!group) {
     showMessage('error', 'Invalid worker group');
@@ -2299,8 +2443,8 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
   }
 
   try {
-    // Create standalone gap intent rows via add-gap API per modality row_index.
-    const addEndpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
+    // Create standalone gap intent rows atomically across modalities.
+    const addEndpoint = tab === 'today' ? '/api/live-schedule/add-gap-batch' : '/api/prep-next-day/add-gap-batch';
     const rowIndexByModality = new Map();
     group.allEntries.forEach(entry => {
       if (entry.row_index !== undefined && entry.row_index !== null && entry.row_index >= 0) {
@@ -2314,25 +2458,20 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
       throw new Error('No existing row index found for this worker; reload and try again.');
     }
 
-    const gapPayloads = Array.from(rowIndexByModality.entries()).map(([modality, rowIndex]) => (
-      fetch(addEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modality,
-          row_index: rowIndex,
-          gap_type: gapType,
-          gap_start: gapStart,
-          gap_end: gapEnd,
-          gap_counts_for_hours: getGapCountsForHours(gapType)
-        })
-      })
-    ));
+    const response = await fetch(addEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withSnapshotVersion(tab, {
+        row_index_map: Object.fromEntries(rowIndexByModality.entries()),
+        gap_type: gapType,
+        gap_start: gapStart,
+        gap_end: gapEnd,
+        gap_counts_for_hours: getGapCountsForHours(gapType)
+      }))
+    });
 
-    const responses = await Promise.all(gapPayloads);
-    const failedResponse = responses.find(response => !response.ok);
-    if (failedResponse) {
-      const errData = await failedResponse.json().catch(() => ({}));
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
       throw new Error(errData.error || 'Failed to create gap');
     }
 
@@ -2438,6 +2577,7 @@ async function confirmBreakDuration() {
 async function loadFromCSV(mode, options = {}) {
   const targetDate = mode === 'today' ? null : (document.getElementById('prep-target-date')?.value || prepTargetDate);
   const shouldConfirm = options.confirm !== false;
+  const forceCsv = options.forceCsv !== false;
 
   if (mode === 'today') {
     const hasPendingChanges = Object.keys(pendingChanges.today || {}).length > 0;
@@ -2468,6 +2608,9 @@ async function loadFromCSV(mode, options = {}) {
 
   const endpoint = mode === 'today' ? '/load-today-from-master' : '/preload-from-master';
   const payload = targetDate ? { target_date: targetDate } : null;
+  if (payload && mode !== 'today') {
+    payload.force_csv = forceCsv;
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -2477,24 +2620,19 @@ async function loadFromCSV(mode, options = {}) {
     });
     const result = await response.json();
 
-    if (response.ok) {
-      loadStatus.textContent = result.message || 'Loaded!';
-      loadStatus.style.color = '#28a745';
+  if (response.ok) {
+      updatePrepLoadResultLabel(result.message || 'Loaded!', 'success');
       if (mode === 'next' && result.target_date) {
         setPrepTargetMeta({ dateValue: result.target_date });
         updatePrepTargetUI();
       }
       await loadData();
     } else {
-      loadStatus.textContent = result.error || 'Error';
-      loadStatus.style.color = '#dc3545';
+      updatePrepLoadResultLabel(result.error || 'Error', 'error');
     }
   } catch (error) {
-    loadStatus.textContent = 'Error: ' + error.message;
-    loadStatus.style.color = '#dc3545';
+    updatePrepLoadResultLabel('Error: ' + error.message, 'error');
   }
-
-  setTimeout(() => { loadStatus.textContent = ''; }, 5000);
 }
 
 // Show message (XSS-safe)

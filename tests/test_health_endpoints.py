@@ -1,3 +1,6 @@
+import os
+import json
+import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -7,7 +10,9 @@ import pandas as pd
 
 from config import allowed_modalities
 from routes import routes
+import routes as routes_module
 from data_manager import global_worker_data
+import data_manager.file_ops as file_ops
 
 
 class TestHealthEndpoints(unittest.TestCase):
@@ -443,6 +448,175 @@ class TestHealthEndpoints(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["prep_loaded_label"], "Mittwoch (08.04.2026)")
         self.assertEqual(payload["prep_last_edit_label"], "02.04.2026 12:12")
+
+    @patch("routes.save_state")
+    @patch("routes.preload_next_workday")
+    @patch("routes.reload_staged_data_from_disk", return_value=True)
+    @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
+    @patch("routes._maybe_reload_runtime_config")
+    @patch("routes.os.path.exists", return_value=True)
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_preload_prefers_saved_staged_data_when_not_forced(
+        self,
+        _mock_admin,
+        _mock_exists,
+        _mock_reload_runtime,
+        mock_get_staged_date,
+        mock_reload_staged,
+        mock_preload,
+        mock_save_state,
+    ) -> None:
+        response = self.client.post(
+            "/preload-from-master",
+            json={"target_date": "2026-04-08", "force_csv": False},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["target_date"], "2026-04-08")
+        self.assertIn("Gespeicherte Staging-Daten", payload["message"])
+        mock_reload_staged.assert_called_once_with(target_date=datetime(2026, 4, 8).date())
+        mock_preload.assert_not_called()
+        mock_save_state.assert_called_once()
+
+    @patch("routes.save_state")
+    @patch("routes.reload_staged_data_from_disk", return_value=True)
+    @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
+    @patch("routes.get_next_workday", return_value=datetime(2026, 4, 8))
+    def test_ensure_next_workday_preloaded_restores_snapshot_after_restart(
+        self,
+        _mock_next_workday,
+        _mock_get_staged_date,
+        mock_reload_staged,
+        mock_save_state,
+    ) -> None:
+        next_day = datetime(2026, 4, 8).date()
+
+        with patch.dict(
+            "routes.global_worker_data",
+            {"last_preload_date": next_day, "last_preload_source": "csv"},
+            clear=False,
+        ):
+            routes_module._ensure_next_workday_preloaded()
+            mock_reload_staged.assert_called_once_with(target_date=next_day)
+            mock_save_state.assert_called_once()
+            self.assertEqual(routes_module.global_worker_data["last_preload_date"], next_day)
+            self.assertEqual(routes_module.global_worker_data["last_preload_source"], "snapshot")
+
+    @patch("routes.render_template", return_value="rendered")
+    @patch("routes._ensure_next_workday_preloaded")
+    @patch("routes._get_staged_target_date", side_effect=[None, datetime(2026, 4, 8).date()])
+    @patch("routes.get_next_workday", return_value=datetime(2026, 4, 8))
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_tomorrow_refreshes_staged_target_after_preload(
+        self,
+        _mock_admin,
+        _mock_next_workday,
+        _mock_get_staged_date,
+        _mock_ensure,
+        mock_render_template,
+    ) -> None:
+        routes_module._render_prep_page("tomorrow")
+
+        self.assertTrue(mock_render_template.called)
+        self.assertEqual(mock_render_template.call_args.kwargs["target_date"], "2026-04-08")
+
+    def test_reload_staged_data_prefers_day_snapshot_over_generic_snapshot(self) -> None:
+        target_date = datetime(2026, 4, 8).date()
+        other_date = datetime(2026, 4, 9).date()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backups_dir = f"{tmpdir}/backups"
+            staged_days_dir = f"{backups_dir}/staged_days"
+            os.makedirs(staged_days_dir, exist_ok=True)
+
+            generic_path = f"{backups_dir}/Cortex_ALL_staged.json"
+            target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
+
+            with open(generic_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "working_hours": [
+                            {
+                                "modality": "ct",
+                                "PPL": "Wrong Worker",
+                                "TIME": "07:30-15:30",
+                                "Modifier": 1.0,
+                            }
+                        ],
+                        "info_texts": {},
+                        "info_texts_by_skill": {},
+                        "metadata": {"ct": {"target_date": other_date.isoformat()}},
+                    },
+                    f,
+                )
+
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "working_hours": [
+                            {
+                                "modality": "ct",
+                                "PPL": "Target Worker",
+                                "TIME": "07:30-15:30",
+                                "Modifier": 1.0,
+                            }
+                        ],
+                        "info_texts": {},
+                        "info_texts_by_skill": {},
+                        "metadata": {"ct": {"target_date": target_date.isoformat()}},
+                    },
+                    f,
+                )
+
+            staged_state = {
+                "ct": {
+                    "working_hours_df": None,
+                    "info_texts": [],
+                    "info_texts_by_skill": {},
+                    "total_work_hours": {},
+                    "worker_modifiers": {},
+                    "last_modified": None,
+                    "last_prepped_at": None,
+                    "last_prepped_by": None,
+                    "target_date": None,
+                }
+            }
+
+            with patch.object(file_ops, "UPLOAD_FOLDER", tmpdir), patch.object(
+                file_ops,
+                "allowed_modalities",
+                ["ct"],
+            ), patch.object(
+                file_ops,
+                "modality_data",
+                {"ct": {}},
+            ), patch.object(
+                file_ops,
+                "staged_modality_data",
+                staged_state,
+            ), patch.object(
+                file_ops,
+                "unified_schedule_paths",
+                {
+                    "staged": generic_path,
+                    "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                    "live": f"{backups_dir}/Cortex_ALL_live.json",
+                    "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                },
+            ), patch.object(
+                file_ops,
+                "_unified_load_state",
+                {"live": False, "staged": False, "scheduled": False},
+            ):
+                loaded = file_ops.reload_staged_data_from_disk(target_date=target_date)
+                self.assertTrue(loaded)
+                self.assertEqual(file_ops.staged_modality_data["ct"]["target_date"], target_date)
+                self.assertEqual(
+                    file_ops.staged_modality_data["ct"]["working_hours_df"].iloc[0]["PPL"],
+                    "Target Worker",
+                )
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_flow_mode_hides_granular_flow_rows(self, _mock_admin) -> None:

@@ -796,6 +796,7 @@ def apply_skill_overrides(
     roster_combinations: dict,
     rule_overrides: dict,
     *,
+    training: bool = True,
     allow_roster_exclusion_override: bool = False,
     ignore_zero_overrides: bool = False,
     exclude_unprocessed_weighted: bool = True,
@@ -809,7 +810,7 @@ def apply_skill_overrides(
     - Roster -1 (hard exclude) always wins and cannot be overridden unless
       allow_roster_exclusion_override=True and override value is 1 or w.
     - Roster 'w' (weighted/training):
-      - Override 1 or w → 'w' (worker stays weighted)
+      - Override 1 or w → 'w' if training=True, otherwise '-1'
       - Override 0 → -1 (not assigned to team, excluded) unless ignore_zero_overrides=True
       - Override -1 → -1 (explicit exclusion)
       - No override → -1 (not on any shift, excluded) unless exclude_unprocessed_weighted=False
@@ -826,6 +827,7 @@ def apply_skill_overrides(
         Final skill x modality combinations
     """
     final = roster_combinations.copy()
+    training = bool(training)
 
     # Expand shortcuts first
     expanded_overrides = expand_skill_overrides(rule_overrides)
@@ -851,8 +853,8 @@ def apply_skill_overrides(
             # Roster 'w' (weighted/training) special handling
             if is_weighted_skill(roster_value):
                 if override_value in {'1', 'w'}:
-                    # CSV assigns as specialist/weighted → keep as weighted
-                    final[key] = 'w'
+                    # CSV assigns as specialist/weighted → keep weighted only on training rows
+                    final[key] = 'w' if training else '-1'
                 else:
                     # CSV assigns as 0 (helper) or -1 (exclude) → exclude
                     # Weighted workers are only included when explicitly assigned
@@ -860,7 +862,10 @@ def apply_skill_overrides(
                 continue
 
             # Normal override for roster 1 or 0
-            final[key] = override_value
+            if not training and override_value == 'w':
+                final[key] = '-1'
+            else:
+                final[key] = override_value
 
     # Handle roster 'w' values that were NOT processed by any override
     # These workers are not on any shift for this skill → exclude them

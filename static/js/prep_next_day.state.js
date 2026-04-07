@@ -9,6 +9,7 @@ let editPlanDraft = null;
 let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have been loaded
 let editMode = { today: false, tomorrow: false };  // Inline edit mode defaults to OFF - user decides which edit mode to use
 let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
+let snapshotVersions = { today: null, tomorrow: null };  // Optimistic-lock token per tab
 let tableFilters = { today: { modality: '', skill: '', hideZero: true }, tomorrow: { modality: '', skill: '', hideZero: true } };
 let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
 let sortState = { today: { column: 'shift', direction: 'asc' }, tomorrow: { column: 'shift', direction: 'asc' } };
@@ -185,10 +186,45 @@ function setEditPlanDraftFromGroup(group, options = {}) {
     worker: group.worker,
     shifts: JSON.parse(JSON.stringify(sourceShifts))
   };
+  ensureEditPlanDraftBaseSkills();
 }
 
 function clearEditPlanDraft() {
   editPlanDraft = null;
+}
+
+function cloneSkillMap(skillMap) {
+  return JSON.parse(JSON.stringify(skillMap || {}));
+}
+
+function applyTrainingToSkillValue(value, trainingEnabled) {
+  const normalized = normalizeSkillValueJS(value);
+  if (normalized === -1) return -1;
+  if (!trainingEnabled && isWeightedSkill(normalized)) return -1;
+  return normalized;
+}
+
+function applyTrainingToSkillMap(skillMap, trainingEnabled) {
+  const transformed = {};
+  Object.entries(skillMap || {}).forEach(([skill, value]) => {
+    transformed[skill] = applyTrainingToSkillValue(value, trainingEnabled);
+  });
+  return transformed;
+}
+
+function ensureEditPlanDraftBaseSkills() {
+  if (!editPlanDraft || !Array.isArray(editPlanDraft.shifts)) return;
+  editPlanDraft.shifts.forEach(shift => {
+    Object.entries(shift.modalities || {}).forEach(([modKey, modData]) => {
+      if (!modData) return;
+      if (!modData.baseSkills) {
+        modData.baseSkills = cloneSkillMap(modData.skills || {});
+      }
+      if (!modData.skills) {
+        modData.skills = cloneSkillMap(modData.baseSkills);
+      }
+    });
+  });
 }
 
 function updateEditPlanDraftShift(shiftIdx, updates) {
@@ -200,6 +236,7 @@ function updateEditPlanDraftShift(shiftIdx, updates) {
   if (updates.Modifier !== undefined) shift.modifier = updates.Modifier;
   if (updates.counts_for_hours !== undefined) shift.counts_for_hours = updates.counts_for_hours;
   if (updates.tasks !== undefined) shift.task = updates.tasks;
+  if (updates.training !== undefined) shift.training = Boolean(updates.training);
   if (updates.row_type !== undefined) {
     shift.row_type = updates.row_type;
     shift.is_gap_entry = String(updates.row_type).toLowerCase().includes('gap');
@@ -222,6 +259,36 @@ function updateEditPlanDraftShiftSkills(shiftIdx, skillUpdatesByMod) {
       shift.modalities[modKey].skills[skill] = value;
     });
   });
+}
+
+function updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, value, trainingEnabled = null) {
+  if (!editPlanDraft || !editPlanDraft.shifts) return null;
+  const shift = editPlanDraft.shifts[shiftIdx];
+  if (!shift || !shift.modalities || !shift.modalities[modKey]) return null;
+  const modData = shift.modalities[modKey];
+  if (!modData.baseSkills) {
+    modData.baseSkills = cloneSkillMap(modData.skills || {});
+  }
+  modData.baseSkills[skill] = value;
+  const training = trainingEnabled === null ? shift.training !== false : Boolean(trainingEnabled);
+  const effectiveValue = applyTrainingToSkillValue(value, training);
+  modData.skills[skill] = effectiveValue;
+  return effectiveValue;
+}
+
+function applyEditPlanDraftShiftTraining(shiftIdx, trainingEnabled) {
+  if (!editPlanDraft || !editPlanDraft.shifts) return null;
+  const shift = editPlanDraft.shifts[shiftIdx];
+  if (!shift || !shift.modalities) return null;
+  shift.training = Boolean(trainingEnabled);
+  Object.entries(shift.modalities).forEach(([modKey, modData]) => {
+    if (!modData) return;
+    if (!modData.baseSkills) {
+      modData.baseSkills = cloneSkillMap(modData.skills || {});
+    }
+    modData.skills = applyTrainingToSkillMap(modData.baseSkills, shift.training);
+  });
+  return shift;
 }
 
 function displaySkillValue(value) {

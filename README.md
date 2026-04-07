@@ -209,6 +209,7 @@ RadIMO_Cortex/
 | [API.md](docs/API.md) | REST API endpoints |
 | [ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Admin pages and skill roster |
 | [INSTALL_UBUNTU.md](docs/INSTALL_UBUNTU.md) | Ubuntu server installation and intranet deployment guide |
+| [HANDOVER.txt](docs/HANDOVER.txt) | Operational handover, restart, reset, and incident response notes |
 | [USAGE_LOGGING.md](docs/USAGE_LOGGING.md) | Usage statistics and export workflow |
 | [TEST_DATA.md](docs/TEST_DATA.md) | Scenario-based generated test data workflow |
 | [SCREENSHOTS.md](docs/SCREENSHOTS.md) | Training screenshot workflow and scene catalog |

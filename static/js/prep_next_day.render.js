@@ -337,6 +337,7 @@ function renderTable(tab) {
     shiftsToRender.forEach((shift, shiftIdx) => {
       const tr = document.createElement('tr');
       const modKeysToShow = MODALITIES.map(m => m.toLowerCase());
+      const quickBreakDisabled = tab === 'today' && editMode[tab];
 
       if (shift.is_manual) {
         tr.classList.add('row-manual');
@@ -347,7 +348,7 @@ function renderTable(tab) {
         let workerHtml = `<span class="worker-name ${isDuplicate ? 'duplicate' : ''}"${warningTitle}>${escapedWorker}</span>${duplicateBadge}`;
         // Add quick break button at worker level (today tab only)
         if (tab === 'today') {
-          workerHtml += `<button type="button" class="btn-quick-gap" onclick="onQuickGap30('${tab}', ${gIdx})" title="Add ${QUICK_BREAK.duration_minutes}-min break NOW">☕</button>`;
+          workerHtml += `<button type="button" class="btn-quick-gap" onclick="onQuickGap30('${tab}', ${gIdx})" title="${quickBreakDisabled ? 'Exit Quick Edit before adding a break' : `Add ${QUICK_BREAK.duration_minutes}-min break NOW`}" ${quickBreakDisabled ? 'disabled' : ''}>☕</button>`;
         }
         tr.innerHTML += `<td rowspan="${totalRows}" style="vertical-align: middle;">${workerHtml}</td>`;
       }
@@ -609,8 +610,8 @@ function renderEditModalContent() {
       <option value="0.9" ${shift.modifier === 0.9 ? 'selected' : ''}>0.9x</option>
       <option value="1.0" ${!shift.modifier || shift.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
       <option value="1.1" ${shift.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
+      <option value="1.2" ${shift.modifier === 1.2 ? 'selected' : ''}>1.2x</option>
       <option value="1.25" ${shift.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
-      <option value="1.5" ${shift.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
     </select>
   </div>
 
@@ -619,6 +620,14 @@ function renderEditModalContent() {
     <label class="hours-toggle" title="Checked = hours count towards load balancing. Unchecked = hours do NOT count.">
       <input type="checkbox" id="edit-shift-${shiftIdx}-counts-hours" ${shift.counts_for_hours !== false ? 'checked' : ''} onchange="updateHoursToggleLabel(this); updateShiftFromModal(${shiftIdx}, { counts_for_hours: this.checked })" ${isEditable ? '' : 'disabled'}>
       <span class="hours-toggle-label ${shift.counts_for_hours !== false ? 'counts' : 'no-count'}">${shift.counts_for_hours !== false ? 'Counts' : 'No count'}</span>
+    </label>
+  </div>
+
+  <div style="min-width: 115px;">
+    <label style="font-size: 0.75rem; color: #666; display: block;">Training</label>
+    <label class="hours-toggle" title="Checked = weighted skills stay as configured. Unchecked = weighted skills on this row become -1.">
+      <input type="checkbox" id="edit-shift-${shiftIdx}-training" ${shift.training !== false ? 'checked' : ''} onchange="onEditShiftTrainingChange(${shiftIdx}, this.checked)" ${isEditable && !isGapEntry ? '' : 'disabled'}>
+      <span class="hours-toggle-label ${shift.training !== false ? 'counts' : 'no-count'}" data-role="training-label">${shift.training !== false ? 'Training on' : 'Training off'}</span>
     </label>
   </div>
 
@@ -711,8 +720,8 @@ function renderEditModalContent() {
     <option value="0.9">0.9x</option>
     <option value="1.0" selected>1.0x</option>
     <option value="1.1">1.1x</option>
+    <option value="1.2">1.2x</option>
     <option value="1.25">1.25x</option>
-    <option value="1.5">1.5x</option>
   </select>
 </div>
 <div style="min-width: 100px;">
@@ -827,8 +836,8 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
             <option value="0.9" ${task.modifier === 0.9 ? 'selected' : ''}>0.9x</option>
             <option value="1.0" ${!task.modifier || task.modifier === 1.0 ? 'selected' : ''}>1.0x</option>
             <option value="1.1" ${task.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
+            <option value="1.2" ${task.modifier === 1.2 ? 'selected' : ''}>1.2x</option>
             <option value="1.25" ${task.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
-            <option value="1.5" ${task.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
           </select>
         </div>
 

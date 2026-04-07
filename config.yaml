@@ -434,6 +434,7 @@ balancer:
 # SHIFT RULES:
 #   - match: "Activity Name"           # Substring to match in CSV activity
 #     type: "shift"
+#     training: true|false             # OPTIONAL: weighted/training rows enabled by default
 #     times:                           # REQUIRED: Day-specific times
 #       default: "07:30-15:45"         # Default time (Mon-Thu unless overridden)
 #       Montag: "08:00-16:00"          # Optional: Monday override
@@ -561,9 +562,19 @@ vendor_mappings:
         Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
-        all: -1
+        all: 0
         aou_ct: 1
         aou_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_xray: -1
 
     - match: "SBZ: Cardio/Vask/Thorax"
       label: "SBZ: Cardio/Vask/Thorax NM"
@@ -574,9 +585,19 @@ vendor_mappings:
         Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
-        all: -1
+        all: 0
         cvt_ct: 1
         cvt_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_xray: -1
 
     - match: "SBZ: Muskel-Skelett/Hals/Derma"
       label: "SBZ: Muskel-Skelett/Hals/Derma NM"
@@ -587,9 +608,19 @@ vendor_mappings:
         Freitag: "12:00-15:15"
       modifier: 1.0
       skill_overrides:
-        all: -1
+        all: 0
         mdh_ct: 1
         mdh_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_xray: -1
 
     # - match: "Assistent Gyn"
     #   type: "shift"
@@ -757,8 +788,9 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-19:45"
-        Freitag: "12:00-19:30"
+        default: "15:30-19:45"
+        Freitag: "15:15-19:30"
+      training: false
       skill_overrides:
         all: 0
         notfall: -1
@@ -768,26 +800,16 @@ vendor_mappings:
         mdh_xray: -1
         notfall_xray: -1
         privat_xray: -1
-      segments:
-        - times:
-            default: "12:00-15:30"
-            Freitag: "12:00-15:15"
-          skill_overrides:
-            gyn: -1
-        - times:
-            default: "15:30-19:45"
-            Freitag: "15:15-19:30"
-          skill_overrides:
-            aou_ct: 1
-            aou_mr: 1
-            cvt_ct: 1
-            cvt_mr: 1
-            mdh_ct: 1
-            mdh_mr: 1
-            gyn_ct: 1
-            gyn_mr: 1
-            privat_ct: 1
-            privat_mr: 1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 1
+        cvt_mr: 1
+        mdh_ct: 1
+        mdh_mr: 1
+        gyn_ct: 1
+        gyn_mr: 1
+        privat_ct: 1
+        privat_mr: 1
 
     - match: "3. Dienst"
       label: "Röntgendienst"

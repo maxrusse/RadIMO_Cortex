@@ -24,6 +24,8 @@ class TestGapCrud(unittest.TestCase):
         for skill in SKILL_COLUMNS:
             base_row[skill] = 0
         schedule_crud.modality_data[self.modality]["working_hours_df"] = pd.DataFrame([base_row])
+        self.other_modality = allowed_modalities[1]
+        schedule_crud.modality_data[self.other_modality]["working_hours_df"] = pd.DataFrame([base_row])
 
     def test_add_update_remove_gap_row(self) -> None:
         with patch.object(schedule_crud, "backup_dataframe") as backup_mock:
@@ -101,6 +103,37 @@ class TestGapCrud(unittest.TestCase):
             self.assertEqual(row["shift_duration"], 0.0)
             for skill in SKILL_COLUMNS:
                 self.assertEqual(row[skill], -1)
+
+    def test_add_gap_batch_updates_all_modalities_atomically(self) -> None:
+        with patch.object(schedule_crud, "backup_dataframe"), patch.object(schedule_crud, "reconcile_live_worker_tracking"):
+            success, _, error = schedule_crud.add_gap_to_schedule_batch(
+                {
+                    self.modality: 0,
+                    self.other_modality: 0,
+                },
+                gap_type="Break",
+                gap_start="09:00",
+                gap_end="10:00",
+                use_staged=False,
+            )
+            self.assertTrue(success, msg=error)
+
+        for modality in (self.modality, self.other_modality):
+            df = schedule_crud.modality_data[modality]["working_hours_df"]
+            gap_rows = df[df["row_type"] == "gap_segment"]
+            self.assertEqual(len(gap_rows), 1)
+            gap_row = gap_rows.iloc[0]
+            self.assertEqual(gap_row["tasks"], "Break")
+            self.assertFalse(gap_row["counts_for_hours"])
+            for skill in SKILL_COLUMNS:
+                self.assertEqual(gap_row[skill], -1)
+
+            shift_rows = df[df["row_type"] == "shift_segment"].sort_values(by=["start_time"]).reset_index(drop=True)
+            self.assertEqual(len(shift_rows), 2)
+            self.assertEqual(shift_rows.iloc[0]["start_time"], time(8, 0))
+            self.assertEqual(shift_rows.iloc[0]["end_time"], time(9, 0))
+            self.assertEqual(shift_rows.iloc[1]["start_time"], time(10, 0))
+            self.assertEqual(shift_rows.iloc[1]["end_time"], time(12, 0))
 
 
 if __name__ == "__main__":
