@@ -150,6 +150,19 @@ def _modality_has_active_skills(mod_data: dict) -> bool:
     return False
 
 
+def _plan_modality_should_materialize(shift: dict, mod_data: dict, row_index: Any) -> bool:
+    try:
+        if row_index is not None and int(row_index) >= 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    explicit = coerce_bool((mod_data or {}).get('materialize'))
+    if explicit is not None:
+        return explicit
+    explicit = coerce_bool((shift or {}).get('materialize'))
+    return explicit is True
+
+
 def _validate_modality(modality: str, data_store: dict) -> Optional[Any]:
     if modality not in data_store:
         return jsonify({'error': 'Invalid modality'}), 400
@@ -204,7 +217,10 @@ def _build_rows_from_plan(worker: str, shifts: list, modality: str) -> list:
             mod_key = (mod_key or '').lower()
             if mod_key and mod_key != modality:
                 continue
-            if mod_data and not is_gap_row and not _modality_has_active_skills(mod_data):
+            row_index = mod_data.get('row_index') if isinstance(mod_data, dict) else None
+            if mod_data and not is_gap_row and not _modality_has_active_skills(mod_data) and not (
+                _plan_modality_should_materialize(shift, mod_data, row_index)
+            ):
                 continue
             skills = mod_data.get('skills', {}) or {}
             if is_gap_row:

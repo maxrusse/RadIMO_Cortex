@@ -1318,6 +1318,99 @@ class TestDayPlanIntegration(unittest.TestCase):
         shift_rows = worker_rows[worker_rows["row_type"] == "shift_segment"].reset_index(drop=True)
         self.assertEqual(len(shift_rows), 3)
 
+    def test_apply_worker_plan_preserves_existing_all_negative_rows(self) -> None:
+        worker_name = "Alice (A1)"
+        blocking_skills = {skill: -1 for skill in SKILL_COLUMNS}
+
+        shifts = [
+            {
+                "start_time": "08:00",
+                "end_time": "16:00",
+                "modifier": 1.0,
+                "counts_for_hours": True,
+                "task": "Shift A",
+                "row_type": "shift",
+                "modalities": {
+                    self.modality: {
+                        "row_index": 12,
+                        "skills": blocking_skills,
+                    }
+                },
+            }
+        ]
+
+        rows = routes._build_rows_from_plan(worker_name, shifts, self.modality)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["row_type"], "shift")
+        self.assertTrue(all(rows[0][skill] == -1 for skill in SKILL_COLUMNS))
+
+        with patch.object(schedule_crud, "backup_dataframe"):
+            success, _, error = schedule_crud.replace_worker_schedule(
+                self.modality,
+                worker_name,
+                rows,
+                use_staged=False,
+            )
+
+        self.assertTrue(success, msg=error)
+
+        df = schedule_crud.modality_data[self.modality]["working_hours_df"]
+        self.assertIsNotNone(df)
+        worker_rows = df[df["PPL"] == worker_name].reset_index(drop=True)
+        self.assertEqual(len(worker_rows), 1)
+        self.assertEqual(worker_rows.iloc[0]["row_type"], "shift_segment")
+        self.assertTrue(all(str(worker_rows.iloc[0][skill]) == "-1" for skill in SKILL_COLUMNS))
+
+    def test_apply_worker_plan_preserves_materialized_all_negative_rows(self) -> None:
+        worker_name = "Alice (A1)"
+        blocking_skills = {skill: -1 for skill in SKILL_COLUMNS}
+
+        shifts = [
+            {
+                "start_time": "08:00",
+                "end_time": "16:00",
+                "modifier": 1.0,
+                "counts_for_hours": True,
+                "task": "Blocker",
+                "row_type": "shift",
+                "modalities": {
+                    self.modality: {
+                        "row_index": -1,
+                        "materialize": True,
+                        "skills": blocking_skills,
+                    }
+                },
+            }
+        ]
+
+        rows = routes._build_rows_from_plan(worker_name, shifts, self.modality)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(all(rows[0][skill] == -1 for skill in SKILL_COLUMNS))
+
+    def test_apply_worker_plan_skips_unmaterialized_all_negative_placeholders(self) -> None:
+        worker_name = "Alice (A1)"
+        blocking_skills = {skill: -1 for skill in SKILL_COLUMNS}
+
+        shifts = [
+            {
+                "start_time": "08:00",
+                "end_time": "16:00",
+                "modifier": 1.0,
+                "counts_for_hours": True,
+                "task": "Placeholder",
+                "row_type": "shift",
+                "modalities": {
+                    self.modality: {
+                        "row_index": -1,
+                        "skills": blocking_skills,
+                    }
+                },
+            }
+        ]
+
+        rows = routes._build_rows_from_plan(worker_name, shifts, self.modality)
+        self.assertEqual(rows, [])
+
 
 if __name__ == "__main__":
     unittest.main()

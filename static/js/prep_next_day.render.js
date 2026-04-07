@@ -729,6 +729,13 @@ function renderEditModalContent() {
     <span class="hours-toggle-label counts">Counts</span>
   </label>
 </div>
+<div style="min-width: 115px;">
+  <label style="font-size: 0.75rem; color: #666; display: block;">Training</label>
+  <label class="hours-toggle" title="Checked = weighted skills stay as configured. Unchecked = weighted skills on this added shift become -1.">
+    <input type="checkbox" id="modal-add-training" checked onchange="onModalAddTrainingChange(this.checked); updateTrainingToggleLabel(this)">
+    <span class="hours-toggle-label counts" data-role="training-label">Training on</span>
+  </label>
+</div>
   </div>
   <div style="margin-bottom:0.35rem; display:flex; justify-content: space-between; align-items:center;">
 <label style="font-size:0.8rem; font-weight:600;">Skills per modality</label>
@@ -754,7 +761,7 @@ function renderEditModalContent() {
       <td class="modality-header" style="color:${navColor}; font-weight:600;">${mod.toUpperCase()}</td>`;
     SKILLS.forEach(skill => {
       const selectId = `modal-add-${modKey}-skill-${skill}`;
-      html += `<td>${renderSkillSelect(selectId, 0)}</td>`;
+      html += `<td>${renderSkillSelect(selectId, 0, 'onModalAddSkillChange(this)')}</td>`;
     });
     html += `</tr>`;
   });
