@@ -245,10 +245,15 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
     modality = data.get('modality')
     row_index = data.get('row_index')
     updates = data.get('updates', {})
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -269,7 +274,7 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
             'schedule_reindexed': result.get('reindexed', False),
             'snapshot_version': _get_snapshot_version(
                 use_staged,
-                target_date=_get_staged_target_date() if use_staged else None,
+                target_date=target_date if use_staged else None,
             ),
         })
     return jsonify({'error': result}), 400
@@ -279,10 +284,15 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
     data = request.json or {}
     worker = data.get('worker')
     shifts = data.get('shifts', [])
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -304,7 +314,7 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
         'success': True,
         'snapshot_version': _get_snapshot_version(
             use_staged,
-            target_date=_get_staged_target_date() if use_staged else None,
+            target_date=target_date if use_staged else None,
         ),
     })
 
@@ -316,10 +326,15 @@ def _handle_add_worker(
     data = request.json
     modality = data.get('modality')
     worker_data = data.get('worker_data', {})
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -343,7 +358,7 @@ def _handle_add_worker(
             ,
             'snapshot_version': _get_snapshot_version(
                 use_staged,
-                target_date=_get_staged_target_date() if use_staged else None,
+                target_date=target_date if use_staged else None,
             ),
         })
     return jsonify({'error': error}), 400
@@ -354,10 +369,15 @@ def _handle_delete_worker(use_staged: bool, log_message: Optional[str] = None) -
     modality = data.get('modality')
     row_index = data.get('row_index')
     verify_ppl = data.get('verify_ppl')
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -378,7 +398,7 @@ def _handle_delete_worker(use_staged: bool, log_message: Optional[str] = None) -
             'success': True,
             'snapshot_version': _get_snapshot_version(
                 use_staged,
-                target_date=_get_staged_target_date() if use_staged else None,
+                target_date=target_date if use_staged else None,
             ),
         })
     return jsonify({'error': error}), 400
@@ -725,12 +745,44 @@ def _ensure_snapshot_file(use_staged: bool, *, target_date: Optional[date] = Non
     return None
 
 
+def _parse_request_target_date(data: dict) -> tuple[Optional[date], Optional[Any]]:
+    raw_target_date = (data or {}).get('target_date')
+    if raw_target_date in (None, ''):
+        return None, None
+    try:
+        return date.fromisoformat(str(raw_target_date)), None
+    except ValueError:
+        return None, (jsonify({'error': 'Invalid target_date. Use YYYY-MM-DD.'}), 400)
+
+
+def _prepare_staged_mutation(data: dict) -> tuple[Optional[date], Optional[Any]]:
+    target_date, error = _parse_request_target_date(data)
+    if error:
+        return None, error
+    if target_date is None:
+        target_date = _get_staged_target_date()
+    if target_date is None:
+        return None, None
+
+    current_target = _get_staged_target_date()
+    if current_target == target_date:
+        return target_date, None
+    if reload_staged_data_from_disk(target_date=target_date):
+        return target_date, None
+    return target_date, (
+        jsonify({'error': f'Staged schedule for {target_date.isoformat()} is not loaded. Reload the selected date before saving.'}),
+        409,
+    )
+
+
 def _check_snapshot_version(expected_version: Any, use_staged: bool, *, target_date: Optional[date] = None) -> Optional[Any]:
     expected = str(expected_version).strip() if expected_version not in (None, '') else None
-    if expected is None:
-        return jsonify({'error': 'Snapshot token missing. Reload the schedule before saving.'}), 409
-
     current_version = _get_snapshot_version(use_staged, target_date)
+    if expected is None:
+        if current_version is None:
+            _ensure_snapshot_file(use_staged, target_date=target_date)
+        return None
+
     if current_version is not None and expected != current_version:
         return jsonify({
             'error': 'This schedule was updated in another session. Reload before saving.',
@@ -2062,13 +2114,22 @@ def prep_tomorrow() -> Any:
 @admin_required
 def get_prep_data() -> Any:
     result = {}
-    staged_target_date = _get_staged_target_date()
+    requested_target_date = None
+    raw_target_date = request.args.get('target_date')
+    if raw_target_date:
+        try:
+            requested_target_date = date.fromisoformat(raw_target_date)
+        except ValueError:
+            return jsonify({'error': 'Invalid target_date. Use YYYY-MM-DD.'}), 400
+    staged_target_date = requested_target_date or _get_staged_target_date()
     if staged_target_date is None:
         _ensure_next_workday_preloaded()
         staged_target_date = _get_staged_target_date()
 
     # Acquire lock to prevent race conditions when reading/writing staged data
     with lock:
+        if requested_target_date is not None and _get_staged_target_date() != requested_target_date:
+            load_staged_dataframe(allowed_modalities[0], target_date=requested_target_date)
         staged_rebuilt = False
         for modality in allowed_modalities:
             if staged_modality_data[modality]['working_hours_df'] is None:
@@ -2266,10 +2327,13 @@ def add_staged_gap() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    target_date, staged_error = _prepare_staged_mutation(data)
+    if staged_error:
+        return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         True,
-        target_date=_get_staged_target_date(),
+        target_date=target_date,
     )
 
     if snapshot_error:
@@ -2293,7 +2357,7 @@ def add_staged_gap() -> Any:
         return jsonify({
             'success': True,
             'action': action,
-            'snapshot_version': _get_snapshot_version(True, target_date=_get_staged_target_date()),
+            'snapshot_version': _get_snapshot_version(True, target_date=target_date),
         })
     return jsonify({'error': error}), 400
 
@@ -2307,10 +2371,13 @@ def add_staged_gap_batch() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    target_date, staged_error = _prepare_staged_mutation(data)
+    if staged_error:
+        return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         True,
-        target_date=_get_staged_target_date(),
+        target_date=target_date,
     )
 
     if snapshot_error:
@@ -2332,7 +2399,7 @@ def add_staged_gap_batch() -> Any:
         return jsonify({
             'success': True,
             'action': action,
-            'snapshot_version': _get_snapshot_version(True, target_date=_get_staged_target_date()),
+            'snapshot_version': _get_snapshot_version(True, target_date=target_date),
         })
     return jsonify({'error': error}), 400
 
@@ -2345,10 +2412,15 @@ def _handle_remove_gap(use_staged: bool) -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_activity = data.get('gap_activity')
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -2376,7 +2448,7 @@ def _handle_remove_gap(use_staged: bool) -> Any:
             'action': action,
             'snapshot_version': _get_snapshot_version(
                 use_staged,
-                target_date=_get_staged_target_date() if use_staged else None,
+                target_date=target_date if use_staged else None,
             ),
         })
     return jsonify({'error': error}), 400
@@ -2394,10 +2466,15 @@ def _handle_update_gap(use_staged: bool) -> Any:
     new_end = data.get('new_end')
     new_activity = data.get('new_activity')
     new_counts_for_hours = data.get('new_counts_for_hours')
+    target_date = None
+    if use_staged:
+        target_date, staged_error = _prepare_staged_mutation(data)
+        if staged_error:
+            return staged_error
     snapshot_error = _check_snapshot_version(
         data.get('snapshot_version'),
         use_staged,
-        target_date=_get_staged_target_date() if use_staged else None,
+        target_date=target_date if use_staged else None,
     )
     if snapshot_error:
         return snapshot_error
@@ -2429,7 +2506,7 @@ def _handle_update_gap(use_staged: bool) -> Any:
             'action': action,
             'snapshot_version': _get_snapshot_version(
                 use_staged,
-                target_date=_get_staged_target_date() if use_staged else None,
+                target_date=target_date if use_staged else None,
             ),
         })
     return jsonify({'error': error}), 400

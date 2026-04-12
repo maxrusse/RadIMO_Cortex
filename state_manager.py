@@ -142,7 +142,6 @@ class StateManager:
 
             self._unified_schedule_paths = {
                 'scheduled': os.path.join(upload_folder, "Cortex_ALL_scheduled.json"),
-                'staged': os.path.join(upload_folder, "backups", "Cortex_ALL_staged.json"),
                 'live': os.path.join(upload_folder, "backups", "Cortex_ALL_live.json"),
                 'scheduled_backup': os.path.join(upload_folder, "backups", "Cortex_ALL_scheduled.json"),
             }

@@ -25,6 +25,7 @@ from lib.utils import (
     skill_value_to_numeric,
     is_weighted_skill,
     gap_row_mask,
+    merge_intervals,
 )
 from data_manager import (
     get_canonical_worker_id,
@@ -238,18 +239,61 @@ def calculate_global_work_hours_now(current_dt: datetime) -> dict[str, float]:
     """
     Calculate cumulative work hours for all workers across ALL modalities up to current_dt.
 
-    This aggregates hours from all modalities to provide a consistent basis for
-    comparing against global weighted counts. Uses caching via calculate_work_hours_now.
+    Unlike modality-local hours, global hours must reflect real person time. If a
+    worker appears in multiple modalities during the same wall-clock interval, that
+    overlap only counts once in the global denominator used for fairness.
 
-    Returns dict: {canonical_id: total_hours_across_all_modalities}
+    Returns dict: {canonical_id: total_real_person_hours}
     """
-    global_hours = {}
+    cache_minute = current_dt.replace(second=0, microsecond=0)
+    cache_key = f"global_work_hours:{cache_minute.isoformat()}"
+
+    state = get_state()
+    cached = state.work_hours_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    intervals_by_canonical: dict[str, list[tuple[datetime, datetime]]] = {}
 
     for mod in modality_data.keys():
-        mod_hours = calculate_work_hours_now(current_dt, mod)
-        for canonical_id, hours in mod_hours.items():
-            global_hours[canonical_id] = global_hours.get(canonical_id, 0.0) + hours
+        d = modality_data[mod]
+        df = d.get('working_hours_df')
+        if df is None or df.empty:
+            continue
 
+        gap_mask = gap_row_mask(df)
+        if 'counts_for_hours' in df.columns:
+            hours_mask = df['counts_for_hours'].fillna(True).astype(bool)
+            df_filtered = df.loc[hours_mask & ~gap_mask]
+        else:
+            df_filtered = df.loc[~gap_mask]
+
+        if df_filtered.empty:
+            continue
+
+        for _, row in df_filtered.iterrows():
+            worker = row.get('PPL')
+            if pd.isna(worker):
+                continue
+
+            start_dt, end_dt = compute_shift_window(row['start_time'], row['end_time'], current_dt)
+            if current_dt <= start_dt:
+                continue
+
+            effective_end = min(current_dt, end_dt)
+            if effective_end <= start_dt:
+                continue
+
+            canonical_id = get_canonical_worker_id(worker)
+            intervals_by_canonical.setdefault(canonical_id, []).append((start_dt, effective_end))
+
+    global_hours: dict[str, float] = {}
+    for canonical_id, intervals in intervals_by_canonical.items():
+        merged = merge_intervals(intervals)
+        total_hours = sum((end - start).total_seconds() / 3600.0 for start, end in merged)
+        global_hours[canonical_id] = total_hours
+
+    state.work_hours_cache.set(cache_key, global_hours)
     return global_hours
 
 

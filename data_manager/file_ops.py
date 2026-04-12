@@ -373,9 +373,16 @@ def _build_unified_payload(use_staged: bool) -> dict:
 
 def _write_unified_backup(use_staged: bool) -> None:
     """Write unified schedule backup for all modalities."""
-    target_path = unified_schedule_paths['staged' if use_staged else 'live']
     payload = _build_unified_payload(use_staged)
-    mode_label = "staged" if use_staged else "live"
+    if use_staged:
+        staged_target_date = _get_staged_target_date()
+        if staged_target_date is None:
+            raise ValueError("Cannot write staged backup without a target date")
+        target_path = _get_staged_day_snapshot_path(staged_target_date)
+        mode_label = "staged day snapshot"
+    else:
+        target_path = unified_schedule_paths['live']
+        mode_label = "live"
     _write_payload_to_path(payload, target_path, mode_label)
 
 
@@ -391,9 +398,17 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
     info_texts = data.get('info_texts', {})
     info_texts_by_skill = data.get('info_texts_by_skill', {})
     metadata = data.get('metadata', {})
+    top_level_target_date = None
+    if isinstance(metadata, dict):
+        raw_top_level_target_date = metadata.get('target_date')
+        if raw_top_level_target_date:
+            try:
+                top_level_target_date = date.fromisoformat(raw_top_level_target_date)
+            except ValueError:
+                top_level_target_date = None
     df = pd.DataFrame(records)
 
-    if df.empty and not info_texts:
+    if df.empty and not info_texts and top_level_target_date is None:
         return False
 
     if 'modality' not in df.columns and not df.empty:
@@ -412,6 +427,8 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
             mod_df = _load_dataframe_from_backup_payload({'working_hours': mod_df.to_dict(orient='records')})
         if use_staged:
             mod_metadata = metadata.get(mod, {}) if isinstance(metadata, dict) else {}
+            if not isinstance(mod_metadata, dict):
+                mod_metadata = {}
             mod_last_modified = mod_metadata.get('last_modified')
             parsed_modified = last_modified
             if mod_last_modified:
@@ -419,13 +436,13 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
                     parsed_modified = datetime.fromisoformat(mod_last_modified)
                 except ValueError:
                     parsed_modified = last_modified
-            target_date = None
+            target_date = top_level_target_date
             raw_target_date = mod_metadata.get('target_date')
             if raw_target_date:
                 try:
                     target_date = date.fromisoformat(raw_target_date)
                 except ValueError:
-                    target_date = None
+                    target_date = top_level_target_date
             _set_staged_modality_data(
                 mod,
                 mod_df,

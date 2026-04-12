@@ -449,10 +449,82 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(payload["prep_loaded_label"], "Mittwoch (08.04.2026)")
         self.assertEqual(payload["prep_last_edit_label"], "02.04.2026 12:12")
 
+    @patch("routes.update_schedule_row", return_value=(True, {"reindexed": False}))
+    @patch("routes._validate_modality", return_value=None)
+    @patch("routes._get_snapshot_version", return_value="token-1")
+    @patch("routes.reload_staged_data_from_disk", return_value=True)
+    @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_update_row_uses_request_target_date(
+        self,
+        _mock_admin,
+        _mock_get_staged_date,
+        mock_reload_staged,
+        mock_get_snapshot,
+        _mock_validate,
+        _mock_update,
+    ) -> None:
+        target_date = datetime(2026, 4, 20).date()
+
+        response = self.client.post(
+            "/api/prep-next-day/update-row",
+            json={
+                "target_date": target_date.isoformat(),
+                "snapshot_version": "token-1",
+                "modality": "ct",
+                "row_index": 0,
+                "updates": {"Modifier": 1.1},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mock_reload_staged.assert_called_once_with(target_date=target_date)
+        self.assertTrue(
+            any(
+                kwargs.get("target_date") == target_date
+                for _args, kwargs in mock_get_snapshot.call_args_list
+            )
+        )
+
+    @patch("routes.update_schedule_row", return_value=(True, {"reindexed": False}))
+    @patch("routes._validate_modality", return_value=None)
+    @patch("routes._get_snapshot_version", return_value="token-current")
+    @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 20).date())
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_update_row_allows_missing_snapshot_token_for_current_target(
+        self,
+        _mock_admin,
+        _mock_get_staged_date,
+        mock_get_snapshot,
+        _mock_validate,
+        _mock_update,
+    ) -> None:
+        target_date = datetime(2026, 4, 20).date()
+
+        response = self.client.post(
+            "/api/prep-next-day/update-row",
+            json={
+                "target_date": target_date.isoformat(),
+                "modality": "ct",
+                "row_index": 0,
+                "updates": {"Modifier": 1.1},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["snapshot_version"], "token-current")
+        self.assertTrue(
+            any(
+                kwargs.get("target_date") == target_date
+                for _args, kwargs in mock_get_snapshot.call_args_list
+            )
+        )
+
     @patch("routes.save_state")
     @patch("routes.preload_next_workday")
     @patch("routes.reload_staged_data_from_disk", return_value=True)
     @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
+    @patch("routes.get_next_workday", return_value=datetime(2026, 4, 8))
     @patch("routes._maybe_reload_runtime_config")
     @patch("routes.os.path.exists", return_value=True)
     @patch("routes.has_admin_access", return_value=True)
@@ -461,6 +533,7 @@ class TestHealthEndpoints(unittest.TestCase):
         _mock_admin,
         _mock_exists,
         _mock_reload_runtime,
+        _mock_next_workday,
         mock_get_staged_date,
         mock_reload_staged,
         mock_preload,
@@ -600,7 +673,6 @@ class TestHealthEndpoints(unittest.TestCase):
                 file_ops,
                 "unified_schedule_paths",
                 {
-                    "staged": generic_path,
                     "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
                     "live": f"{backups_dir}/Cortex_ALL_live.json",
                     "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",
@@ -617,6 +689,144 @@ class TestHealthEndpoints(unittest.TestCase):
                     file_ops.staged_modality_data["ct"]["working_hours_df"].iloc[0]["PPL"],
                     "Target Worker",
                 )
+
+    def test_reload_staged_data_accepts_top_level_target_date_metadata(self) -> None:
+        target_date = datetime(2026, 4, 20).date()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backups_dir = f"{tmpdir}/backups"
+            staged_days_dir = f"{backups_dir}/staged_days"
+            os.makedirs(staged_days_dir, exist_ok=True)
+
+            target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "working_hours": [
+                            {
+                                "modality": "ct",
+                                "PPL": "Future Worker",
+                                "TIME": "07:30-15:30",
+                                "Modifier": 1.0,
+                            }
+                        ],
+                        "info_texts": {},
+                        "info_texts_by_skill": {},
+                        "metadata": {"target_date": target_date.isoformat()},
+                    },
+                    f,
+                )
+
+            staged_state = {
+                "ct": {
+                    "working_hours_df": None,
+                    "info_texts": [],
+                    "info_texts_by_skill": {},
+                    "total_work_hours": {},
+                    "worker_modifiers": {},
+                    "last_modified": None,
+                    "last_prepped_at": None,
+                    "last_prepped_by": None,
+                    "target_date": None,
+                }
+            }
+
+            with patch.object(file_ops, "UPLOAD_FOLDER", tmpdir), patch.object(
+                file_ops,
+                "allowed_modalities",
+                ["ct"],
+            ), patch.object(
+                file_ops,
+                "modality_data",
+                {"ct": {}},
+            ), patch.object(
+                file_ops,
+                "staged_modality_data",
+                staged_state,
+            ), patch.object(
+                file_ops,
+                "unified_schedule_paths",
+                {
+                    "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                    "live": f"{backups_dir}/Cortex_ALL_live.json",
+                    "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                },
+            ), patch.object(
+                file_ops,
+                "_unified_load_state",
+                {"live": False, "staged": False, "scheduled": False},
+            ):
+                loaded = file_ops.reload_staged_data_from_disk(target_date=target_date)
+                self.assertTrue(loaded)
+                self.assertEqual(file_ops.staged_modality_data["ct"]["target_date"], target_date)
+                self.assertEqual(
+                    file_ops.staged_modality_data["ct"]["working_hours_df"].iloc[0]["PPL"],
+                    "Future Worker",
+                )
+
+    def test_reload_staged_data_accepts_empty_top_level_target_date_snapshot(self) -> None:
+        target_date = datetime(2026, 4, 21).date()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backups_dir = f"{tmpdir}/backups"
+            staged_days_dir = f"{backups_dir}/staged_days"
+            os.makedirs(staged_days_dir, exist_ok=True)
+
+            target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "working_hours": [],
+                        "info_texts": {},
+                        "info_texts_by_skill": {},
+                        "metadata": {"target_date": target_date.isoformat()},
+                    },
+                    f,
+                )
+
+            staged_state = {
+                "ct": {
+                    "working_hours_df": None,
+                    "info_texts": [],
+                    "info_texts_by_skill": {},
+                    "total_work_hours": {},
+                    "worker_modifiers": {},
+                    "last_modified": None,
+                    "last_prepped_at": None,
+                    "last_prepped_by": None,
+                    "target_date": None,
+                }
+            }
+
+            with patch.object(file_ops, "UPLOAD_FOLDER", tmpdir), patch.object(
+                file_ops,
+                "allowed_modalities",
+                ["ct"],
+            ), patch.object(
+                file_ops,
+                "modality_data",
+                {"ct": {}},
+            ), patch.object(
+                file_ops,
+                "staged_modality_data",
+                staged_state,
+            ), patch.object(
+                file_ops,
+                "unified_schedule_paths",
+                {
+                    "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                    "live": f"{backups_dir}/Cortex_ALL_live.json",
+                    "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",
+                },
+            ), patch.object(
+                file_ops,
+                "_unified_load_state",
+                {"live": False, "staged": False, "scheduled": False},
+            ):
+                loaded = file_ops.reload_staged_data_from_disk(target_date=target_date)
+                self.assertTrue(loaded)
+                self.assertEqual(file_ops.staged_modality_data["ct"]["target_date"], target_date)
+                self.assertTrue(file_ops.staged_modality_data["ct"]["working_hours_df"].empty)
 
     def test_reload_staged_data_does_not_fall_back_to_generic_snapshot(self) -> None:
         target_date = datetime(2026, 4, 8).date()
@@ -678,7 +888,6 @@ class TestHealthEndpoints(unittest.TestCase):
                 file_ops,
                 "unified_schedule_paths",
                 {
-                    "staged": generic_path,
                     "scheduled": f"{backups_dir}/Cortex_ALL_scheduled.json",
                     "live": f"{backups_dir}/Cortex_ALL_live.json",
                     "scheduled_backup": f"{backups_dir}/Cortex_ALL_scheduled.json",

@@ -327,11 +327,6 @@ async function saveInlineChanges(tab) {
     updateSaveInlineStatus(tab, 'No changes to save', 'error');
     return;
   }
-  if (!getSnapshotVersion(tab)) {
-    updateSaveInlineStatus(tab, 'Reload data first before saving', 'error');
-    return;
-  }
-
   const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
   const addEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
   const deleteEndpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
@@ -347,12 +342,11 @@ async function saveInlineChanges(tab) {
         const response = await fetch(deleteEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            snapshot_version: getSnapshotVersion(tab),
+          body: JSON.stringify(withSnapshotVersion(tab, {
             modality: change.modality,
             row_index: change.row_index,
             verify_ppl: change.verify_ppl
-          })
+          }))
         });
 
         if (!response.ok) {
@@ -524,10 +518,14 @@ function getSnapshotVersion(tab) {
 }
 
 function withSnapshotVersion(tab, payload) {
-  return {
+  const snapshotPayload = {
     ...payload,
     snapshot_version: getSnapshotVersion(tab),
   };
+  if (tab === 'tomorrow' && prepTargetDate) {
+    snapshotPayload.target_date = prepTargetDate;
+  }
+  return snapshotPayload;
 }
 
 function updateSnapshotVersionFromResponse(tab, result) {
@@ -707,7 +705,9 @@ async function loadTabData(tab) {
   const requestId = ++loadRequestId[tab];
   const hadLoadedData = Boolean(dataLoaded[tab]);
   try {
-    const endpoint = tab === 'today' ? '/api/live-schedule/data' : '/api/prep-next-day/data';
+    const endpoint = tab === 'today'
+      ? '/api/live-schedule/data'
+      : `/api/prep-next-day/data${prepTargetDate ? `?target_date=${encodeURIComponent(prepTargetDate)}` : ''}`;
     const response = await fetch(endpoint);
 
     if (requestId !== loadRequestId[tab]) {
