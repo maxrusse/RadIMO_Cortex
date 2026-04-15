@@ -7,7 +7,7 @@
     {% set header_links = header_nav.links %}
 
   active_page options: 'dashboard', 'balance', 'skill_matrix', 'button_weights',
-                       'change_today', 'prep_tomorrow', 'upload', 'files', 'timetable'
+                       'change_today', 'prep_tomorrow', 'upload', 'timetable'
 
   For prep pages, use page_mode instead:
     {% set header_nav = namespace(links=[]) %}
@@ -32,7 +32,6 @@
     {'href': url_for('routes.prep_today'), 'label': 'Change Today', 'active': _change_today_active},
     {'href': url_for('routes.prep_tomorrow'), 'label': 'Prep Tomorrow', 'active': _prep_tomorrow_active},
     {'href': url_for('routes.upload_file'), 'label': 'Upload', 'active': active_page == 'upload'},
-    {'href': url_for('routes.admin_files_page'), 'label': 'Files', 'active': active_page == 'files'},
     {'href': url_for('routes.timetable', modality='all'), 'label': 'Timetable', 'active': active_page == 'timetable'},
     {'href': url_for('routes.index', modality=_mod), 'label': 'Dashboard', 'active': active_page == 'dashboard'}
   ] %}

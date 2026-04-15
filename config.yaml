@@ -219,7 +219,7 @@ synthetic_shifts:
       notfall_mr: 1
       notfall_xray: -1
       gyn: -1
-  - worker_name: "Notfallarzt Spätdienst (NDOC-SD)"
+  - worker_name: "Notfallarzt (NDOC)"
     label: "Notfallarzt-Spätdienst"
     weekdays: [workdays]
     times:
@@ -899,7 +899,7 @@ vendor_mappings:
         all: -1
 
     - match: "Gyn Spät"
-      label: "Gyn Spät"
+      label: "Gyn kommt spät"
       type: "shift"
       times:
         default: "07:30-12:00"
@@ -908,6 +908,18 @@ vendor_mappings:
         all: -1
         gyn_ct: 1
         gyn_mr: 1
+
+    - match: "Notfall Spätdienst"
+      label: "Notfall Spätdienst"
+      type: "shift"
+      times:
+        default: "15:30-19:45"
+        Freitag: "15:15-19:30"
+      counts_for_hours: false
+      skill_overrides:
+        all: -1
+        notfall_ct: 1
+        notfall_mr: 1
 
     - match: "Notfall spät"
       label: "Notfall kommt spät"
