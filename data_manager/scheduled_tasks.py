@@ -95,6 +95,8 @@ def check_and_perform_daily_reset() -> None:
     # Import here to avoid circular imports
     from data_manager.worker_management import invalidate_work_hours_cache
     from data_manager.file_ops import (
+        archive_live_day_snapshot,
+        archive_staged_day_snapshot,
         backup_dataframe,
         initialize_data_from_unified,
     )
@@ -125,6 +127,7 @@ def check_and_perform_daily_reset() -> None:
 
         day_closed = global_worker_data.get('last_reset_date') or today
         _snapshot_flow_counters(day_closed)
+        archive_live_day_snapshot(day_closed, suffix='eod')
 
         # Mark reset date FIRST (atomic check-and-set pattern)
         # This prevents other threads from entering even if we fail midway
@@ -150,24 +153,17 @@ def check_and_perform_daily_reset() -> None:
 
             loaded_today = False
             if os.path.exists(staged_day_path):
+                archive_staged_day_snapshot(today, suffix='bod')
                 loaded_today = initialize_data_from_unified(
                     staged_day_path,
                     context="daily reset staged snapshot",
                 )
 
-            if not loaded_today and os.path.exists(MASTER_CSV_PATH):
-                preload_result = preload_next_workday(MASTER_CSV_PATH, APP_CONFIG, target_date=today)
-                if preload_result.get('success') and os.path.exists(staged_day_path):
-                    loaded_today = initialize_data_from_unified(
-                        staged_day_path,
-                        context="daily reset staged snapshot after CSV preload",
-                    )
-
             if loaded_today:
                 backup_dataframe(allowed_modalities[0])
             else:
-                selection_logger.warning(
-                    "No staged snapshot available for daily reset on %s",
+                selection_logger.error(
+                    "Daily reset aborted live schedule activation for %s because the staged snapshot was missing or could not be loaded",
                     today.isoformat(),
                 )
         except Exception as exc:

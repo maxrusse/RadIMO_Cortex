@@ -95,12 +95,56 @@ def _get_staged_day_snapshot_path(target_date: date) -> str:
     return os.path.join(backup_dir, f"Cortex_ALL_staged_{target_date.isoformat()}.json")
 
 
+def _get_staged_day_archive_path(target_date: date, suffix: str) -> str:
+    """Return an archive copy path for a staged day snapshot."""
+    backup_dir = os.path.join(UPLOAD_FOLDER, "backups", "staged_days")
+    normalized_suffix = str(suffix or '').strip()
+    if normalized_suffix and not normalized_suffix.startswith('_'):
+        normalized_suffix = f"_{normalized_suffix}"
+    return os.path.join(
+        backup_dir,
+        f"Cortex_ALL_staged_{target_date.isoformat()}{normalized_suffix}.json",
+    )
+
+
 def _write_payload_to_path(payload: dict, target_path: str, mode_label: str) -> None:
     """Write a unified backup payload to the requested path."""
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
     with open(target_path, 'w', encoding='utf-8') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
     selection_logger.info("Unified %s backup updated at %s", mode_label, target_path)
+
+
+def archive_staged_day_snapshot(target_date: date, *, suffix: str = 'eod') -> Optional[str]:
+    """Copy the dated staged snapshot to an archive path for later comparison."""
+    source_path = _get_staged_day_snapshot_path(target_date)
+    if not os.path.exists(source_path):
+        return None
+    archive_path = _get_staged_day_archive_path(target_date, suffix)
+    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+    shutil.copy2(source_path, archive_path)
+    selection_logger.info(
+        "Archived staged day snapshot from %s to %s",
+        source_path,
+        archive_path,
+    )
+    return archive_path
+
+
+def archive_live_day_snapshot(target_date: date, *, suffix: str = 'eod') -> Optional[str]:
+    """Copy the current live unified schedule to a dated archive path."""
+    source_path = unified_schedule_paths.get('live')
+    if not source_path or not os.path.exists(source_path):
+        return None
+    archive_path = _get_staged_day_archive_path(target_date, suffix)
+    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+    shutil.copy2(source_path, archive_path)
+    selection_logger.info(
+        "Archived live day snapshot from %s to %s",
+        source_path,
+        archive_path,
+    )
+    return archive_path
 
 
 def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.DataFrame:

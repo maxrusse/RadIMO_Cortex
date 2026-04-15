@@ -10,6 +10,7 @@ let dataLoaded = { today: false, tomorrow: false };  // Track which tabs have be
 let editMode = { today: false, tomorrow: false };  // Inline edit mode defaults to OFF - user decides which edit mode to use
 let pendingChanges = { today: {}, tomorrow: {} };  // Track unsaved inline changes
 let snapshotVersions = { today: null, tomorrow: null };  // Optimistic-lock token per tab
+let workerRevisions = { today: {}, tomorrow: {} };  // Worker-scoped optimistic-lock token for modal editing
 let tableFilters = { today: { modality: '', skill: '', hideZero: true }, tomorrow: { modality: '', skill: '', hideZero: true } };
 let displayOrder = 'modality-first';  // 'modality-first' or 'skill-first'
 let sortState = { today: { column: 'shift', direction: 'asc' }, tomorrow: { column: 'shift', direction: 'asc' } };
@@ -190,6 +191,10 @@ function setEditPlanDraftFromGroup(group, options = {}) {
 
 function clearEditPlanDraft() {
   editPlanDraft = null;
+}
+
+function getWorkerRevision(tab, workerName) {
+  return workerRevisions[tab]?.[workerName] || null;
 }
 
 function cloneSkillMap(skillMap) {

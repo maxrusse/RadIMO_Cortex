@@ -219,6 +219,16 @@ synthetic_shifts:
       notfall_mr: 1
       notfall_xray: -1
       gyn: -1
+  - worker_name: "Notfallarzt Spätdienst (NDOC-SD)"
+    label: "Notfallarzt-Spätdienst"
+    weekdays: [workdays]
+    times:
+      default: "15:30-19:45"
+      Freitag: "15:15-19:30"
+    skill_overrides:
+      all: -1
+      notfall_ct: 1
+      notfall_mr: 1
 
 # =============================================================================
 # WORKER ROSTER BASELINES
@@ -435,6 +445,9 @@ balancer:
 #   - match: "Activity Name"           # Substring to match in CSV activity
 #     type: "shift"
 #     training: true|false             # OPTIONAL: weighted/training rows enabled by default
+#     exclude_gruppe:                  # OPTIONAL: skip rows whose CSV "Gruppe" contains any value
+#       - "Oberarzt"
+#     allow_roster_exclusion_override: true   # OPTIONAL: let rule 1/w override roster -1
 #     times:                           # REQUIRED: Day-specific times
 #       default: "07:30-15:45"         # Default time (Mon-Thu unless overridden)
 #       Montag: "08:00-16:00"          # Optional: Monday override
@@ -577,8 +590,8 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
-    - match: "SBZ: Cardio/Vask/Thorax"
-      label: "SBZ: Cardio/Vask/Thorax NM"
+    - match: "SBZ: Cardio/Vaskulär/Thorax"
+      label: "SBZ: Cardio/Vaskulär/Thorax NM"
       type: "shift"
       day_part: NM
       times:
@@ -600,8 +613,8 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
-    - match: "SBZ: Muskel-Skelett/Hals/Derma"
-      label: "SBZ: Muskel-Skelett/Hals/Derma NM"
+    - match: "SBZ: MSK/Derma/HNO"
+      label: "SBZ: MSK/Derma/HNO NM"
       type: "shift"
       day_part: NM
       times:
@@ -659,7 +672,7 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
-    - match: "SBZ: Cardio/Vask/Thorax"
+    - match: "SBZ: Cardio/Vaskulär/Thorax"
       type: "shift"
       day_parts: [VM, VMNM]
       times:
@@ -679,7 +692,7 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
-    - match: "SBZ: Muskel-Skelett/Hals/Derma"
+    - match: "SBZ: MSK/Derma/HNO"
       type: "shift"
       day_parts: [VM, VMNM]
       times:
@@ -699,8 +712,8 @@ vendor_mappings:
         mdh_xray: -1
         privat_xray: -1
 
-    - match: "SBZ: FA"
-      label: "SBZ: FA NM"
+    - match: "SBZ: FÄ"
+      label: "SBZ: FÄ NM"
       type: "shift"
       day_part: NM
       times:
@@ -733,7 +746,7 @@ vendor_mappings:
         mdh_ct: 1
         mdh_mr: 1
 
-    - match: "SBZ: FA"
+    - match: "SBZ: FÄ"
       type: "shift"
       day_parts: [VM, VMNM]
       times:
@@ -778,6 +791,18 @@ vendor_mappings:
         cvt_mr: 1
         mdh_ct: 1
         mdh_mr: 1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_ct: -1
+        privat_mr: -1
+        privat_xray: -1
         xray: -1
 
     # =========================================================================
@@ -788,6 +813,9 @@ vendor_mappings:
     - match: "SBZ: Spätdienst"
       type: "shift"
       day_part: NM
+      exclude_gruppe:
+        - "Oberarzt"
+      allow_roster_exclusion_override: true
       times:
         default: "15:30-19:45"
         Freitag: "15:15-19:30"
@@ -882,7 +910,7 @@ vendor_mappings:
         gyn_mr: 1
 
     - match: "Notfall spät"
-      label: "Notfall spät"
+      label: "Notfall kommt spät"
       type: "shift"
       times:
         default: "07:30-12:00"

@@ -309,7 +309,38 @@ def _rule_matches_day_part(rule: dict, row_day_part: Optional[str]) -> bool:
     return bool(allowed_day_parts.intersection(row_day_parts))
 
 
-def match_mapping_rule(activity_desc: str, rules: List[dict], *, day_part: Optional[str] = None) -> Optional[dict]:
+def _normalize_rule_text_filters(raw_value: Any) -> List[str]:
+    if raw_value is None:
+        return []
+    if isinstance(raw_value, (list, tuple, set)):
+        values = raw_value
+    else:
+        values = [raw_value]
+    normalized: List[str] = []
+    for value in values:
+        text = str(value).strip().lower()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _rule_matches_gruppe(rule: dict, gruppe: Optional[str]) -> bool:
+    exclude_filters = _normalize_rule_text_filters(rule.get('exclude_gruppe'))
+    if not exclude_filters:
+        return True
+    gruppe_lower = str(gruppe or '').strip().lower()
+    if not gruppe_lower:
+        return True
+    return not any(excluded in gruppe_lower for excluded in exclude_filters)
+
+
+def match_mapping_rule(
+    activity_desc: str,
+    rules: List[dict],
+    *,
+    day_part: Optional[str] = None,
+    gruppe: Optional[str] = None,
+) -> Optional[dict]:
     """Match activity description against mapping rules.
 
     When rules declare `day_part`/`day_parts`, the CSV row must match that
@@ -321,7 +352,11 @@ def match_mapping_rule(activity_desc: str, rules: List[dict], *, day_part: Optio
     activity_lower = activity_desc.lower()
     for rule in rules:
         match_str = rule.get('match', '')
-        if match_str.lower() in activity_lower and _rule_matches_day_part(rule, day_part):
+        if (
+            match_str.lower() in activity_lower
+            and _rule_matches_day_part(rule, day_part)
+            and _rule_matches_gruppe(rule, gruppe)
+        ):
             return rule
     return None
 
@@ -669,7 +704,13 @@ def build_working_hours_from_medweb(
     for _, row in day_df.iterrows():
         activity_desc = str(row.get(cols.get('activity', 'Beschreibung der Aktivität'), ''))
         row_day_part = _extract_row_day_part(row, cols)
-        rule = match_mapping_rule(activity_desc, mapping_rules, day_part=row_day_part)
+        row_gruppe = row.get('Gruppe', '')
+        rule = match_mapping_rule(
+            activity_desc,
+            mapping_rules,
+            day_part=row_day_part,
+            gruppe=row_gruppe,
+        )
         if not rule:
             unmatched_activities.append(activity_desc)
             continue
@@ -747,10 +788,16 @@ def build_working_hours_from_medweb(
             training = coerce_bool(effective_rule.get('training'))
             if training is None:
                 training = True
+            allow_roster_exclusion_override = coerce_bool(
+                effective_rule.get('allow_roster_exclusion_override')
+            )
+            if allow_roster_exclusion_override is None:
+                allow_roster_exclusion_override = False
             final_combinations = apply_skill_overrides(
                 roster_combinations,
                 skill_overrides,
                 training=training,
+                allow_roster_exclusion_override=allow_roster_exclusion_override,
             )
 
             time_ranges = compute_time_ranges(row, effective_rule, target_date, config)

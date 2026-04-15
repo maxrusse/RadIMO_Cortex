@@ -4,15 +4,18 @@ from __future__ import annotations
 
 # Standard library imports
 import io
+import hashlib
 import json
 import os
 import re
+import shutil
 from datetime import date, datetime
 from functools import wraps
 from pathlib import Path
 from collections import deque
 from typing import Any, Callable, Optional
 import zipfile
+import yaml
 
 # Third-party imports
 from flask import (
@@ -41,6 +44,8 @@ from config import (
     get_skill_modality_weight,
     modality_labels,
     MASTER_CSV_PATH,
+    UPLOAD_FOLDER,
+    WORKER_SKILL_ROSTER_PATH,
     selection_logger,
     SKILL_ROSTER_AUTO_IMPORT,
     normalize_modality,
@@ -85,6 +90,7 @@ from data_manager import (
     reload_staged_data_from_disk,
     backup_dataframe,
     persist_live_backup,
+    initialize_data_from_unified,
     update_schedule_row,
     add_worker_to_schedule,
     delete_worker_from_schedule,
@@ -135,10 +141,239 @@ LOG_SOURCE_ALIASES = {
 }
 DEFAULT_LOG_SOURCES = ('gunicorn', 'selection')
 MAX_LOG_TAIL_LINES = 50_000
+ADMIN_FILE_BACKUP_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'admin_files'
+STAGED_DAY_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'staged_days'
+CONFIG_FILE_PATH = Path('config.yaml')
+STAGED_DAY_FILENAME_RE = re.compile(
+    r'^Cortex_ALL_staged_(?P<target_date>\d{4}-\d{2}-\d{2})(?P<suffix>(?:_[A-Za-z0-9-]+)*)\.json$'
+)
 
 # -----------------------------------------------------------
 # Helpers for Routes
 # -----------------------------------------------------------
+
+def _file_stat_payload(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    stat_result = path.stat() if exists else None
+    modified = None
+    if exists and stat_result is not None:
+        modified = datetime.fromtimestamp(stat_result.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+    return {
+        'path': str(path),
+        'exists': exists,
+        'size_bytes': stat_result.st_size if stat_result is not None else None,
+        'modified': modified,
+    }
+
+
+def _get_current_staged_target_date() -> Optional[date]:
+    for mod in allowed_modalities:
+        raw_target = staged_modality_data.get(mod, {}).get('target_date')
+        if isinstance(raw_target, date):
+            return raw_target
+        if isinstance(raw_target, str):
+            try:
+                return date.fromisoformat(raw_target)
+            except ValueError:
+                continue
+    return None
+
+
+def _parse_staged_day_filename(filename: str) -> dict[str, Any]:
+    match = STAGED_DAY_FILENAME_RE.match(filename or '')
+    if not match:
+        raise ValueError('Invalid staged day filename')
+    target_date = match.group('target_date')
+    suffix = match.group('suffix') or ''
+    return {
+        'target_date': target_date,
+        'suffix': suffix[1:] if suffix.startswith('_') else suffix,
+        'is_canonical': suffix == '',
+    }
+
+
+def _list_staged_day_files() -> list[dict[str, Any]]:
+    if not STAGED_DAY_DIR.exists():
+        return []
+
+    current_target = _get_current_staged_target_date()
+    entries: list[dict[str, Any]] = []
+    for path in sorted(STAGED_DAY_DIR.glob('Cortex_ALL_staged_*.json'), reverse=True):
+        try:
+            parsed = _parse_staged_day_filename(path.name)
+        except ValueError:
+            continue
+        entries.append({
+            'name': path.name,
+            'target_date': parsed['target_date'],
+            'suffix': parsed['suffix'],
+            'is_canonical': parsed['is_canonical'],
+            'is_current_target': bool(current_target and current_target.isoformat() == parsed['target_date']),
+            'download_url': url_for('routes.admin_files_download', target='staged_day', name=path.name),
+            **_file_stat_payload(path),
+        })
+    return entries
+
+
+def _build_admin_files_manifest() -> dict[str, Any]:
+    state = StateManager.get_instance()
+    live_backup_path = Path(state.unified_schedule_paths['live'])
+    staged_current_target = _get_current_staged_target_date()
+
+    targets = [
+        {
+            'key': 'config',
+            'label': 'Config YAML',
+            'filename': CONFIG_FILE_PATH.name,
+            'download_url': url_for('routes.admin_files_download', target='config'),
+            **_file_stat_payload(CONFIG_FILE_PATH),
+        },
+        {
+            'key': 'skill_roster',
+            'label': 'Skill Roster JSON',
+            'filename': Path(WORKER_SKILL_ROSTER_PATH).name,
+            'download_url': url_for('routes.admin_files_download', target='skill_roster'),
+            **_file_stat_payload(Path(WORKER_SKILL_ROSTER_PATH)),
+        },
+        {
+            'key': 'live_backup',
+            'label': 'Live Unified Backup',
+            'filename': live_backup_path.name,
+            'download_url': url_for('routes.admin_files_download', target='live_backup'),
+            **_file_stat_payload(live_backup_path),
+        },
+    ]
+
+    return {
+        'targets': targets,
+        'staged_days': _list_staged_day_files(),
+        'current_staged_target_date': staged_current_target.isoformat() if staged_current_target else None,
+    }
+
+
+def _ensure_admin_file_backup_dir() -> None:
+    ADMIN_FILE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _backup_existing_file(target_path: Path, *, label: Optional[str] = None) -> Optional[Path]:
+    if not target_path.exists():
+        return None
+    _ensure_admin_file_backup_dir()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_label = label or target_path.stem
+    backup_path = ADMIN_FILE_BACKUP_DIR / f'{backup_label}_{timestamp}{target_path.suffix}'
+    shutil.copy2(target_path, backup_path)
+    return backup_path
+
+
+def _validate_yaml_payload(raw_bytes: bytes) -> dict[str, Any]:
+    try:
+        parsed = yaml.safe_load(raw_bytes.decode('utf-8'))
+    except Exception as exc:
+        raise ValueError(f'Invalid YAML: {exc}') from exc
+    if not isinstance(parsed, dict):
+        raise ValueError('Config upload must contain a YAML mapping/object')
+    return parsed
+
+
+def _validate_skill_roster_payload(raw_bytes: bytes) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw_bytes.decode('utf-8'))
+    except Exception as exc:
+        raise ValueError(f'Invalid JSON: {exc}') from exc
+    if not isinstance(parsed, dict):
+        raise ValueError('Skill roster upload must contain a JSON object')
+    return parsed
+
+
+def _validate_unified_backup_payload(raw_bytes: bytes) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw_bytes.decode('utf-8'))
+    except Exception as exc:
+        raise ValueError(f'Invalid JSON: {exc}') from exc
+    if not isinstance(parsed, dict):
+        raise ValueError('Unified backup upload must contain a JSON object')
+    working_hours = parsed.get('working_hours')
+    if not isinstance(working_hours, list):
+        raise ValueError("Unified backup must contain a 'working_hours' list")
+    if working_hours and not all(isinstance(row, dict) for row in working_hours):
+        raise ValueError('Unified backup working_hours must contain objects')
+    if working_hours and any('modality' not in row for row in working_hours):
+        raise ValueError("Unified backup working_hours rows must contain 'modality'")
+    return parsed
+
+
+def _replace_config_file(raw_bytes: bytes) -> dict[str, Any]:
+    _validate_yaml_payload(raw_bytes)
+    backup_path = _backup_existing_file(CONFIG_FILE_PATH, label='config')
+    CONFIG_FILE_PATH.write_bytes(raw_bytes)
+    reload_result = reload_runtime_config()
+    return {
+        'message': 'Config file replaced',
+        'backup_path': str(backup_path) if backup_path else None,
+        'reload': reload_result,
+    }
+
+
+def _replace_skill_roster_file(raw_bytes: bytes) -> dict[str, Any]:
+    payload = _validate_skill_roster_payload(raw_bytes)
+    if not save_worker_skill_json(payload, create_backup=True):
+        raise ValueError('Failed to save skill roster')
+    return {
+        'message': 'Skill roster replaced',
+    }
+
+
+def _replace_live_backup_file(raw_bytes: bytes) -> dict[str, Any]:
+    state = StateManager.get_instance()
+    live_path = Path(state.unified_schedule_paths['live'])
+    _validate_unified_backup_payload(raw_bytes)
+    backup_path = _backup_existing_file(live_path, label='live_backup')
+    live_path.parent.mkdir(parents=True, exist_ok=True)
+    live_path.write_bytes(raw_bytes)
+    if not initialize_data_from_unified(str(live_path), context='admin_file_upload'):
+        raise ValueError('Live backup file replaced, but runtime reload failed')
+    return {
+        'message': 'Live backup replaced and reloaded',
+        'backup_path': str(backup_path) if backup_path else None,
+    }
+
+
+def _replace_staged_day_file(raw_bytes: bytes, target_date_str: str) -> dict[str, Any]:
+    parsed_target = date.fromisoformat(target_date_str)
+    target_path = STAGED_DAY_DIR / f'Cortex_ALL_staged_{parsed_target.isoformat()}.json'
+    _validate_unified_backup_payload(raw_bytes)
+    backup_path = _backup_existing_file(target_path, label=f'staged_{parsed_target.isoformat()}')
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(raw_bytes)
+    reloaded = False
+    current_target = _get_current_staged_target_date()
+    if current_target == parsed_target:
+        reloaded = reload_staged_data_from_disk(target_date=parsed_target)
+    return {
+        'message': f'Staged day {parsed_target.isoformat()} replaced',
+        'backup_path': str(backup_path) if backup_path else None,
+        'reloaded': reloaded,
+    }
+
+
+def _restore_staged_day_file(source_name: str) -> dict[str, Any]:
+    source_path = STAGED_DAY_DIR / Path(source_name).name
+    if not source_path.exists():
+        raise ValueError('Selected staged day snapshot does not exist')
+    parsed = _parse_staged_day_filename(source_path.name)
+    target_path = STAGED_DAY_DIR / f"Cortex_ALL_staged_{parsed['target_date']}.json"
+    backup_path = _backup_existing_file(target_path, label=f"staged_{parsed['target_date']}")
+    shutil.copy2(source_path, target_path)
+    parsed_target = date.fromisoformat(parsed['target_date'])
+    reloaded = False
+    if _get_current_staged_target_date() == parsed_target:
+        reloaded = reload_staged_data_from_disk(target_date=parsed_target)
+    return {
+        'message': f"Restored {source_path.name} to active staged snapshot for {parsed['target_date']}",
+        'backup_path': str(backup_path) if backup_path else None,
+        'reloaded': reloaded,
+    }
 
 def _modality_has_active_skills(mod_data: dict) -> bool:
     skills = (mod_data or {}).get('skills', {}) or {}
@@ -289,16 +524,26 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
         target_date, staged_error = _prepare_staged_mutation(data)
         if staged_error:
             return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
+    if not worker:
+        return jsonify({'error': 'Missing worker'}), 400
+
+    worker_revision_error = _check_worker_revision(
+        data.get('worker_revision'),
+        worker,
         use_staged,
         target_date=target_date if use_staged else None,
     )
-    if snapshot_error:
-        return snapshot_error
+    if worker_revision_error:
+        return worker_revision_error
 
-    if not worker:
-        return jsonify({'error': 'Missing worker'}), 400
+    if data.get('worker_revision') in (None, ''):
+        snapshot_error = _check_snapshot_version(
+            data.get('snapshot_version'),
+            use_staged,
+            target_date=target_date if use_staged else None,
+        )
+        if snapshot_error:
+            return snapshot_error
 
     errors = []
     for modality in allowed_modalities:
@@ -312,6 +557,7 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
         return jsonify({'error': '; '.join(errors)}), 400
     return jsonify({
         'success': True,
+        'worker_revision': _get_worker_revision(worker, use_staged),
         'snapshot_version': _get_snapshot_version(
             use_staged,
             target_date=target_date if use_staged else None,
@@ -430,6 +676,7 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
     has_counts_for_hours = 'counts_for_hours' in columns
     has_manual = 'is_manual' in columns
     has_row_type = 'row_type' in columns
+    has_training = 'training' in columns
     for idx, row in df.iterrows():
         worker_data = {
             'row_index': int(idx),
@@ -445,6 +692,10 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
         worker_data['tasks'] = _parse_tasks(row.get('tasks', ''))
         worker_data['counts_for_hours'] = _get_counts_for_hours(row, has_counts_for_hours)
         worker_data['row_type'] = row.get('row_type', 'shift') if has_row_type else 'shift'
+        if has_training:
+            training_value = coerce_bool(row.get('training'))
+            if training_value is not None:
+                worker_data['training'] = training_value
 
         if has_manual:
             worker_data['is_manual'] = bool(row.get('is_manual', False))
@@ -732,6 +983,71 @@ def _get_snapshot_version(use_staged: bool, target_date: Optional[date] = None) 
     return _get_snapshot_version_from_path(_resolve_snapshot_path(use_staged, target_date))
 
 
+def _iter_worker_revision_rows(use_staged: bool) -> list[dict[str, Any]]:
+    data_store = staged_modality_data if use_staged else modality_data
+    rows: list[dict[str, Any]] = []
+    for modality in allowed_modalities:
+        df = data_store.get(modality, {}).get('working_hours_df')
+        if df is None or df.empty or 'PPL' not in df.columns:
+            continue
+        columns = df.columns
+        has_counts_for_hours = 'counts_for_hours' in columns
+        has_row_type = 'row_type' in columns
+        has_training = 'training' in columns
+        has_manual = 'is_manual' in columns
+
+        for _, row in df.iterrows():
+            worker_name = str(row.get('PPL', '')).strip()
+            if not worker_name:
+                continue
+            row_type = row.get('row_type', 'shift') if has_row_type else 'shift'
+            normalized_row_type = str(row_type or 'shift').strip().lower()
+            is_gap_row = normalized_row_type == 'gap'
+            training_value = coerce_bool(row.get('training')) if has_training else None
+            if training_value is None:
+                training_value = not is_gap_row
+            revision_row = {
+                'worker': worker_name,
+                'modality': modality,
+                'start_time': format_time_value(row.get('start_time')),
+                'end_time': format_time_value(row.get('end_time')),
+                'Modifier': float(row.get('Modifier', 1.0)) if pd.notnull(row.get('Modifier')) else 1.0,
+                'tasks': _parse_tasks(row.get('tasks', '')),
+                'counts_for_hours': _get_counts_for_hours(row, has_counts_for_hours),
+                'row_type': row_type,
+                'training': training_value,
+                'is_manual': bool(row.get('is_manual', False)) if has_manual else False,
+            }
+            for skill in SKILL_COLUMNS:
+                revision_row[skill] = skill_value_to_display(row.get(skill, None))
+            rows.append(revision_row)
+    return rows
+
+
+def _build_worker_revision_map(use_staged: bool) -> dict[str, str]:
+    rows_by_worker: dict[str, list[dict[str, Any]]] = {}
+    for row in _iter_worker_revision_rows(use_staged):
+        worker = row.pop('worker')
+        rows_by_worker.setdefault(worker, []).append(row)
+
+    revisions: dict[str, str] = {}
+    for worker, rows in rows_by_worker.items():
+        canonical_rows = sorted(
+            rows,
+            key=lambda item: json.dumps(item, sort_keys=True, ensure_ascii=True),
+        )
+        payload = json.dumps(canonical_rows, sort_keys=True, ensure_ascii=True, separators=(',', ':'))
+        revisions[worker] = hashlib.sha1(payload.encode('utf-8')).hexdigest()
+    return revisions
+
+
+def _get_worker_revision(worker: str, use_staged: bool) -> str:
+    worker_name = str(worker or '').strip()
+    if not worker_name:
+        return ''
+    return _build_worker_revision_map(use_staged).get(worker_name, hashlib.sha1(b'[]').hexdigest())
+
+
 def _ensure_snapshot_file(use_staged: bool, *, target_date: Optional[date] = None) -> Optional[str]:
     snapshot_version = _get_snapshot_version(use_staged, target_date)
     if snapshot_version is not None:
@@ -787,6 +1103,22 @@ def _check_snapshot_version(expected_version: Any, use_staged: bool, *, target_d
         return jsonify({
             'error': 'This schedule was updated in another session. Reload before saving.',
             'snapshot_version': current_version,
+        }), 409
+    return None
+
+
+def _check_worker_revision(expected_revision: Any, worker: str, use_staged: bool, *, target_date: Optional[date] = None) -> Optional[Any]:
+    expected = str(expected_revision).strip() if expected_revision not in (None, '') else None
+    if expected is None:
+        return None
+
+    current_revision = _get_worker_revision(worker, use_staged)
+    if expected != current_revision:
+        return jsonify({
+            'error': f'{worker} was updated in another session. Reload before saving.',
+            'worker_revision': current_revision,
+            'worker': worker,
+            'snapshot_version': _get_snapshot_version(use_staged, target_date),
         }), 409
     return None
 
@@ -955,6 +1287,7 @@ def _build_readiness_payload(context: str = 'readyz', include_results: bool = Tr
 def _build_probe_badge_context() -> dict[str, Any]:
     admin_template_endpoints = {
         'routes.upload_file',
+        'routes.admin_files_page',
         'routes.skill_roster_page',
         'routes.button_weights_page',
         'routes.prep_today',
@@ -1583,6 +1916,128 @@ def download_logs() -> Any:
     )
 
 
+@routes.route('/admin/files')
+@admin_required
+def admin_files_page() -> Any:
+    return render_template(
+        'admin_files.html',
+        manifest=_build_admin_files_manifest(),
+        is_admin=True,
+        active_page='files',
+    )
+
+
+@routes.route('/api/admin/files/manifest', methods=['GET'])
+@admin_required
+def admin_files_manifest() -> Any:
+    return jsonify({
+        'success': True,
+        'manifest': _build_admin_files_manifest(),
+    })
+
+
+@routes.route('/api/admin/files/download', methods=['GET'])
+@admin_required
+def admin_files_download() -> Any:
+    target = (request.args.get('target') or '').strip().lower()
+    if target == 'config':
+        file_path = CONFIG_FILE_PATH
+    elif target == 'skill_roster':
+        file_path = Path(WORKER_SKILL_ROSTER_PATH)
+    elif target == 'live_backup':
+        file_path = Path(StateManager.get_instance().unified_schedule_paths['live'])
+    elif target == 'staged_day':
+        file_name = Path(request.args.get('name') or '').name
+        if not file_name:
+            return jsonify({'success': False, 'error': 'Missing staged day file name'}), 400
+        file_path = STAGED_DAY_DIR / file_name
+    else:
+        return jsonify({'success': False, 'error': 'Unknown download target'}), 400
+
+    if not file_path.exists():
+        return jsonify({'success': False, 'error': 'Requested file does not exist'}), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=file_path.name,
+        max_age=0,
+    )
+
+
+@routes.route('/api/admin/files/upload', methods=['POST'])
+@admin_required
+def admin_files_upload() -> Any:
+    target = (request.form.get('target') or '').strip().lower()
+    uploaded_file = request.files.get('file')
+    if uploaded_file is None or not uploaded_file.filename:
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+
+    raw_bytes = uploaded_file.read()
+    if not raw_bytes:
+        return jsonify({'success': False, 'error': 'Uploaded file is empty'}), 400
+
+    try:
+        if target == 'config':
+            result = _replace_config_file(raw_bytes)
+        elif target == 'skill_roster':
+            result = _replace_skill_roster_file(raw_bytes)
+        elif target == 'live_backup':
+            result = _replace_live_backup_file(raw_bytes)
+        elif target == 'staged_day':
+            target_date_str = (request.form.get('target_date') or '').strip()
+            if not target_date_str:
+                return jsonify({'success': False, 'error': 'Missing target_date for staged day upload'}), 400
+            result = _replace_staged_day_file(raw_bytes, target_date_str)
+        else:
+            return jsonify({'success': False, 'error': 'Unknown upload target'}), 400
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        selection_logger.error("Admin file upload failed for %s: %s", target, exc)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+    return jsonify({
+        'success': True,
+        **result,
+        'manifest': _build_admin_files_manifest(),
+    })
+
+
+@routes.route('/api/admin/files/restore', methods=['POST'])
+@admin_required
+def admin_files_restore() -> Any:
+    data = request.get_json(silent=True) or {}
+    target = str(data.get('target', '')).strip().lower()
+
+    try:
+        if target == 'staged_day':
+            source_name = str(data.get('name', '')).strip()
+            if not source_name:
+                return jsonify({'success': False, 'error': 'Missing staged day file name'}), 400
+            result = _restore_staged_day_file(source_name)
+        elif target == 'live_backup':
+            live_path = Path(StateManager.get_instance().unified_schedule_paths['live'])
+            if not live_path.exists():
+                return jsonify({'success': False, 'error': 'Live backup file does not exist'}), 404
+            if not initialize_data_from_unified(str(live_path), context='admin_file_restore'):
+                raise ValueError('Failed to reload live state from current live backup')
+            result = {'message': 'Live state reloaded from current live backup'}
+        else:
+            return jsonify({'success': False, 'error': 'Unknown restore target'}), 400
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        selection_logger.error("Admin file restore failed for %s: %s", target, exc)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+    return jsonify({
+        'success': True,
+        **result,
+        'manifest': _build_admin_files_manifest(),
+    })
+
+
 @routes.route('/api/edit_info', methods=['POST'])
 @admin_required
 def edit_info() -> Any:
@@ -2171,6 +2626,7 @@ def get_prep_data() -> Any:
         'prep_last_edit_label': prep_last_edit_label,
         'prep_load_source': global_worker_data.get('last_preload_source'),
         'snapshot_version': _ensure_snapshot_file(True, target_date=target_date_obj),
+        'worker_revisions': _build_worker_revision_map(True),
         'target_date': target_date_obj.isoformat(),
         'target_weekday_name': get_weekday_name_german(target_date_obj),
     })
@@ -2206,6 +2662,7 @@ def get_live_data() -> Any:
     return jsonify({
         'modalities': result,
         'snapshot_version': _ensure_snapshot_file(False),
+        'worker_revisions': _build_worker_revision_map(False),
     })
 
 @routes.route('/api/live-schedule/update-row', methods=['POST'])

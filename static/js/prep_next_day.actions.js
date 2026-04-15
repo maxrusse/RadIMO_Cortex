@@ -339,28 +339,15 @@ async function saveInlineChanges(tab) {
   for (const [changeKey, change] of changeEntries) {
     try {
       if (change.isDelete) {
-        const response = await fetch(deleteEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, {
-            modality: change.modality,
-            row_index: change.row_index,
-            verify_ppl: change.verify_ppl
-          }))
+        await postJsonWithSnapshot(tab, deleteEndpoint, {
+          modality: change.modality,
+          row_index: change.row_index,
+          verify_ppl: change.verify_ppl
+        }, {
+          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          errors.push(`Delete ${change.modality}: ${result.error || 'Unknown error'}`);
-          if (response.status === 409) {
-            break;
-          }
-        } else {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-          successCount++;
-          succeededKeys.add(changeKey);
-        }
+        successCount++;
+        succeededKeys.add(changeKey);
       } else if (change.isNew) {
         // New modality addition - need to add via add-worker endpoint
         const group = entriesData[tab][change.groupIdx];
@@ -390,47 +377,27 @@ async function saveInlineChanges(tab) {
           }
         });
 
-        const response = await fetch(addEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, { modality: change.modality, worker_data: workerData }))
+        await postJsonWithSnapshot(tab, addEndpoint, {
+          modality: change.modality,
+          worker_data: workerData
+        }, {
+          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          errors.push(`Add ${change.modality}: ${result.error || 'Unknown error'}`);
-          if (response.status === 409) {
-            break;
-          }
-        } else {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-          successCount++;
-          succeededKeys.add(changeKey);
-        }
+        successCount++;
+        succeededKeys.add(changeKey);
       } else {
         // Existing entry update
-        const response = await fetch(updateEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, change))
+        await postJsonWithSnapshot(tab, updateEndpoint, change, {
+          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          errors.push(`Update ${change.modality}: ${result.error || 'Unknown error'}`);
-          if (response.status === 409) {
-            break;
-          }
-        } else {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-          successCount++;
-          succeededKeys.add(changeKey);
-        }
+        successCount++;
+        succeededKeys.add(changeKey);
       }
     } catch (fetchError) {
-      errors.push(`Network error: ${fetchError.message}`);
+      errors.push(fetchError.message || 'Unknown error');
+      if (fetchError.isConflict) {
+        break;
+      }
     }
   }
 
@@ -517,15 +484,20 @@ function getSnapshotVersion(tab) {
   return snapshotVersions[tab] || null;
 }
 
-function withSnapshotVersion(tab, payload) {
-  const snapshotPayload = {
+function buildMutationPayload(tab, payload, options = {}) {
+  const {
+    includeSnapshotVersion = true,
+  } = options;
+  const requestPayload = {
     ...payload,
-    snapshot_version: getSnapshotVersion(tab),
   };
-  if (tab === 'tomorrow' && prepTargetDate) {
-    snapshotPayload.target_date = prepTargetDate;
+  if (includeSnapshotVersion) {
+    requestPayload.snapshot_version = getSnapshotVersion(tab);
   }
-  return snapshotPayload;
+  if (tab === 'tomorrow' && prepTargetDate) {
+    requestPayload.target_date = prepTargetDate;
+  }
+  return requestPayload;
 }
 
 function updateSnapshotVersionFromResponse(tab, result) {
@@ -583,6 +555,45 @@ function updateSaveInlineStatus(tab, message, kind = 'info') {
       saveStatusTimers[tab] = null;
     }, 5000);
   }
+}
+
+function getSnapshotConflictMessage(result) {
+  return result?.error || 'Schedule changed in the background. Latest version was reloaded. Please review your edit.';
+}
+
+async function postJsonWithSnapshot(tab, endpoint, payload, options = {}) {
+  const {
+    reloadOnConflict = false,
+    conflictMessage = null,
+    includeSnapshotVersion = true,
+  } = options;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildMutationPayload(tab, payload, { includeSnapshotVersion })),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  updateSnapshotVersionFromResponse(tab, result);
+
+  if (response.status === 409) {
+    const message = conflictMessage || getSnapshotConflictMessage(result);
+    updateSaveInlineStatus(tab, message, 'error');
+    if (reloadOnConflict) {
+      await loadData();
+    }
+    const error = new Error(message);
+    error.isConflict = true;
+    error.result = result;
+    throw error;
+  }
+
+  if (!response.ok) {
+    throw new Error(result.error || 'Request failed');
+  }
+
+  return result;
 }
 
 function updatePrepSelectionControls() {
@@ -743,6 +754,7 @@ async function loadTabData(tab) {
     if (requestId !== loadRequestId[tab]) {
       return;
     }
+    workerRevisions[tab] = respData.worker_revisions || {};
     const result = buildEntriesByWorker(respData.modalities || respData, tab);
     entriesData[tab] = result.entries;
     workerCounts[tab] = result.counts;
@@ -803,6 +815,10 @@ function buildEntriesByWorker(data, tab = 'today') {
     normalizeSkillValue: normalizeSkillValueJS,
     lastAddedShiftMeta
   });
+  result.entries = (result.entries || []).map(group => ({
+    ...group,
+    worker_revision: getWorkerRevision(tab, group.worker),
+  }));
   if (lastAddedShiftMeta) {
     lastAddedShiftMeta = null;
   }
@@ -870,27 +886,20 @@ async function deleteWorkerEntries(tab, groupIdx) {
     // Sort by row_index descending to delete from end first
     const sortedEntries = [...allEntries].sort((a, b) => b.row_index - a.row_index);
     for (const entry of sortedEntries) {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(withSnapshotVersion(tab, {
-          modality: entry.modality,
-          row_index: entry.row_index,
-          verify_ppl: entry.worker,
-        }))
+      await postJsonWithSnapshot(tab, endpoint, {
+        modality: entry.modality,
+        row_index: entry.row_index,
+        verify_ppl: entry.worker,
+      }, {
+        reloadOnConflict: true,
       });
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Failed to delete ${entry.modality} entry for ${entry.worker}`);
-        }
-        {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-        }
-      }
+    }
     showMessage('success', `Deleted all entries for ${group.worker}`);
     await loadData();
   } catch (error) {
+    if (error.isConflict) {
+      return;
+    }
     showMessage('error', error.message);
   }
 }
@@ -907,26 +916,19 @@ async function deleteEntry(tab, groupIdx, entryIdx) {
   const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withSnapshotVersion(tab, {
-        modality: entry.modality,
-        row_index: entry.row_index,
-        verify_ppl: entry.worker,
-      }))
+    await postJsonWithSnapshot(tab, endpoint, {
+      modality: entry.modality,
+      row_index: entry.row_index,
+      verify_ppl: entry.worker,
+    }, {
+      reloadOnConflict: true,
     });
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || `Failed to delete entry for ${entry.worker}`);
-    }
-    {
-      const result = await response.json().catch(() => ({}));
-      updateSnapshotVersionFromResponse(tab, result);
-    }
     showMessage('success', `Deleted entry for ${entry.worker}`);
     await loadData();
   } catch (error) {
+    if (error.isConflict) {
+      return;
+    }
     showMessage('error', error.message);
   }
 }
@@ -936,14 +938,19 @@ function openEditModal(tab, groupIdx) {
   const group = entriesData[tab][groupIdx];
   if (!group) return;
 
-  currentEditEntry = { tab, groupIdx };
+  currentEditEntry = {
+    tab,
+    groupIdx,
+    worker: group.worker,
+    openedWorkerRevision: group.worker_revision || getWorkerRevision(tab, group.worker),
+  };
   setEditPlanDraftFromGroup(group, { force: true });
   setModalMode('edit-plan');
   renderEditModalContent();
   document.getElementById('edit-modal').classList.add('show');
 }
 
-// Handle task change in existing shift (edit modal) - live update
+// Handle task change in existing shift (edit modal draft only)
 function getTaskConfigByName(taskName) {
   return taskName ? TASK_ROLES.find(t => t.name === taskName) : null;
 }
@@ -1035,116 +1042,35 @@ async function onEditShiftTaskChange(shiftIdx, taskName, options = {}) {
       updateTrainingToggleLabel(trainingEl);
     }
 
-    // Preload skills from task's skill_overrides (supports "Skill_modality" format like CSV loading)
-    const overrides = taskConfig.skill_overrides || {};
+    const group = entriesData[tab]?.[groupIdx];
+    const workerId = group?.worker || null;
+    const { skillsByModality } = resolveTaskSkillsByModality(taskConfig, trainingEnabled, workerId);
     MODALITIES.forEach(mod => {
       const modKey = mod.toLowerCase();
       if (!skillUpdates[modKey]) skillUpdates[modKey] = {};
       SKILLS.forEach(skill => {
         const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-        // Check for skill_modality format (e.g., "notfall_ct") first, then skill-only
-        const skillModKey = `${skill}_${modKey}`;
-        let val = 0;  // Default to passive
-        if (overrides[skillModKey] !== undefined) {
-          val = overrides[skillModKey];
-        } else if (overrides[skill] !== undefined) {
-          val = overrides[skill];
-        } else if (overrides['all'] !== undefined) {
-          val = overrides['all'];
-        }
-        const rawVal = normalizeSkillValueJS(val);
-        const effectiveVal = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, rawVal, trainingEnabled);
+        const resolvedValue = skillsByModality[modKey]?.[skill];
+        const effectiveVal = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, resolvedValue, trainingEnabled);
         if (skillSelect) {
           skillSelect.value = displaySkillValue(effectiveVal);
         }
         skillUpdates[modKey][skill] = effectiveVal;
       });
     });
-
-    // Apply worker roster exclusions (-1) - roster -1 always wins
-    // Roster structure is modality-scoped: { modality: { skill: value } }
-    const group = entriesData[tab]?.[groupIdx];
-    if (group) {
-      const workerRoster = WORKER_SKILLS[group.worker];
-      if (workerRoster) {
-        MODALITIES.forEach(mod => {
-          const modKey = mod.toLowerCase();
-          const modalityRoster = workerRoster[modKey] || {};
-          SKILLS.forEach(skill => {
-            const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-            if (modalityRoster[skill] === -1) {
-              if (skillSelect) skillSelect.value = '-1';
-              skillUpdates[modKey][skill] = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, -1, trainingEnabled);  // Roster -1 always wins
-            }
-          });
-        });
-      }
-    }
   }
 
   updateEditPlanDraftShift(shiftIdx, updates);
   updateEditPlanDraftShiftSkills(shiftIdx, skillUpdates);
   markDraftShiftMaterialized(shiftIdx);
-  if (modalMode === 'edit-plan') {
-    // All DOM updates already done above - no need for full re-render
-    // Just update the visual GAP indicator if row type changed
-    const shiftContainer = document.getElementById(`edit-shift-${shiftIdx}-task`)?.closest('[style*="margin-bottom: 1rem"]');
-    if (shiftContainer) {
-      const headerSpan = shiftContainer.querySelector('span[style*="font-weight: 600"]');
-      if (headerSpan) {
-        const isGap = updates.row_type === 'gap';
-        const gapBadge = isGap ? ' <span style="background:#f8d7da;color:#721c24;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">GAP</span>' : '';
-        headerSpan.innerHTML = `Shift ${shiftIdx + 1}${gapBadge}`;
-      }
+  const shiftContainer = document.getElementById(`edit-shift-${shiftIdx}-task`)?.closest('[style*="margin-bottom: 1rem"]');
+  if (shiftContainer) {
+    const headerSpan = shiftContainer.querySelector('span[style*="font-weight: 600"]');
+    if (headerSpan) {
+      const isGap = updates.row_type === 'gap';
+      const gapBadge = isGap ? ' <span style="background:#f8d7da;color:#721c24;padding:0.1rem 0.3rem;border-radius:3px;font-size:0.7rem;">GAP</span>' : '';
+      headerSpan.innerHTML = `Shift ${shiftIdx + 1}${gapBadge}`;
     }
-    return;
-  }
-
-  // Live save to backend
-  const group = entriesData[tab]?.[groupIdx];
-  if (!group) return;
-  const shifts = getModalShifts(group);
-  const shift = shifts[shiftIdx];
-  if (!shift) return;
-
-  const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-
-  try {
-    let anySuccess = false;
-    for (const [modKey, modData] of Object.entries(shift.modalities)) {
-      if (modData.row_index !== undefined && modData.row_index >= 0) {
-        // Combine base updates with modality-specific skill updates
-        const modUpdates = { ...updates };
-        if (skillUpdates[modKey]) {
-          Object.assign(modUpdates, skillUpdates[modKey]);
-        }
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, {
-            modality: modKey,
-            row_index: modData.row_index,
-            updates: modUpdates
-          }))
-        });
-        if (response.ok) {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-          anySuccess = true;
-        }
-      }
-    }
-    if (anySuccess) {
-      // Preserve form state before re-render
-      const formState = saveModalAddFormState();
-      const workerName = group.worker;
-      await loadData();
-      reopenEditModalForWorker(tab, workerName, formState);
-    } else {
-      showMessage('error', 'Failed to update task');
-    }
-  } catch (error) {
-    showMessage('error', error.message);
   }
 }
 
@@ -1159,29 +1085,24 @@ async function onEditShiftTrainingChange(shiftIdx, trainingEnabled) {
   const taskName = document.getElementById(`edit-shift-${shiftIdx}-task`)?.value || shift.task;
   if (!taskName) return;
 
-  if (modalMode === 'edit-plan') {
-    const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
-    if (trainingEl) {
-      trainingEl.checked = trainingEnabled;
-      updateTrainingToggleLabel(trainingEl);
-    }
-    updateEditPlanDraftShift(shiftIdx, { training: trainingEnabled });
-    applyEditPlanDraftShiftTraining(shiftIdx, trainingEnabled);
-    markDraftShiftMaterialized(shiftIdx);
-
-    const draftShift = getModalShifts(group)[shiftIdx];
-    Object.entries(draftShift.modalities || {}).forEach(([modKey, modData]) => {
-      SKILLS.forEach(skill => {
-        const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-        if (skillSelect) {
-          skillSelect.value = displaySkillValue(modData.skills?.[skill] ?? 0);
-        }
-      });
-    });
-    return;
+  const trainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
+  if (trainingEl) {
+    trainingEl.checked = trainingEnabled;
+    updateTrainingToggleLabel(trainingEl);
   }
+  updateEditPlanDraftShift(shiftIdx, { training: trainingEnabled });
+  applyEditPlanDraftShiftTraining(shiftIdx, trainingEnabled);
+  markDraftShiftMaterialized(shiftIdx);
 
-  await onEditShiftTaskChange(shiftIdx, taskName, { trainingEnabled });
+  const draftShift = getModalShifts(group)[shiftIdx];
+  Object.entries(draftShift.modalities || {}).forEach(([modKey, modData]) => {
+    SKILLS.forEach(skill => {
+      const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+      if (skillSelect) {
+        skillSelect.value = displaySkillValue(modData.skills?.[skill] ?? 0);
+      }
+    });
+  });
 }
 
 // Delete shift from edit modal
@@ -1202,116 +1123,26 @@ async function deleteShiftFromModal(shiftIdx) {
 
   if (!confirm(confirmMessage)) return;
 
-  if (modalMode === 'edit-plan') {
-    const updatedShifts = [...shifts];
-    updatedShifts.splice(shiftIdx, 1);
-    if (editPlanDraft) {
-      editPlanDraft.shifts = updatedShifts;
-    }
-    renderEditModalContent();
-    return;
+  const updatedShifts = [...shifts];
+  updatedShifts.splice(shiftIdx, 1);
+  if (editPlanDraft) {
+    editPlanDraft.shifts = updatedShifts;
   }
-
-  const endpoint = tab === 'today' ? '/api/live-schedule/apply-worker-plan' : '/api/prep-next-day/apply-worker-plan';
-  const workerName = group.worker;
-
-  try {
-    const updatedShifts = [...shifts];
-    updatedShifts.splice(shiftIdx, 1);
-    if (editPlanDraft) {
-      editPlanDraft.shifts = updatedShifts;
-    }
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withSnapshotVersion(tab, { worker: group.worker, shifts: updatedShifts }))
-    });
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || 'Failed to delete shift');
-    }
-    {
-      const result = await response.json().catch(() => ({}));
-      updateSnapshotVersionFromResponse(tab, result);
-    }
-    showMessage('success', 'Shift deleted');
-
-    if (isLastShift) {
-      // Worker removed - close modal
-      closeModal();
-      await loadData();
-    } else {
-      // More shifts remain - reload and re-render modal
-      const formState = saveModalAddFormState();
-      await loadData();
-      const updatedGroupIdx = entriesData[tab]?.findIndex(entry => entry.worker === workerName);
-      if (updatedGroupIdx !== undefined && updatedGroupIdx >= 0) {
-        currentEditEntry = { tab, groupIdx: updatedGroupIdx };
-        renderEditModalContent();
-        restoreModalAddFormState(formState);
-        return;
-      }
-      // Worker no longer exists (edge case) - close modal
-      closeModal();
-    }
-  } catch (error) {
-    showMessage('error', error.message);
-  }
+  renderEditModalContent();
 }
 
 
 
-// Live update shift fields from edit modal (no Save button needed)
+// Update shift fields in the modal draft
 async function updateShiftFromModal(shiftIdx, updates) {
   const { tab, groupIdx } = currentEditEntry || {};
   const group = entriesData[tab]?.[groupIdx];
   if (!group) return;
-
-  const shifts = getModalShifts(group);
-  const shift = shifts[shiftIdx];
-  if (!shift) return;
-
-  const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-
-  try {
-    let anySuccess = false;
-    updateEditPlanDraftShift(shiftIdx, updates);
-    markDraftShiftMaterialized(shiftIdx);
-    if (modalMode === 'edit-plan') return;
-    for (const [modKey, modData] of Object.entries(shift.modalities)) {
-      if (modData.row_index !== undefined && modData.row_index >= 0) {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, {
-            modality: modKey,
-            row_index: modData.row_index,
-            updates
-          }))
-        });
-        if (response.ok) {
-          anySuccess = true;
-        }
-      }
-    }
-    if (anySuccess) {
-      // Preserve form state before re-render
-      const formState = saveModalAddFormState();
-      const workerName = group.worker;
-      const modalState = captureModalState();
-      await loadData();
-      if (reopenEditModalForWorker(tab, workerName, formState)) {
-        restoreModalState(modalState);
-      }
-    } else {
-      showMessage('error', 'Failed to update shift');
-    }
-  } catch (error) {
-    showMessage('error', error.message);
-  }
+  updateEditPlanDraftShift(shiftIdx, updates);
+  markDraftShiftMaterialized(shiftIdx);
 }
 
-// Live update a single skill from edit modal
+// Update a single skill in the modal draft
 async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
   const { tab, groupIdx } = currentEditEntry || {};
   const group = entriesData[tab]?.[groupIdx];
@@ -1323,46 +1154,14 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
 
   const modData = shift.modalities[modKey];
   if (!modData) return;
-
-  try {
-    const skillUpdates = {};
-    const normalizedValue = normalizeSkillValueJS(value);
-    skillUpdates[skill] = normalizedValue;
-    const effectiveValue = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, normalizedValue);
-    markDraftModalityMaterialized(shiftIdx, modKey);
-    const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-    if (skillSelect && effectiveValue !== null && effectiveValue !== undefined) {
-      skillSelect.value = displaySkillValue(effectiveValue);
-    }
-    if (modalMode === 'edit-plan') {
-      updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: effectiveValue } });
-      return;
-    }
-
-    if (modData.row_index === undefined || modData.row_index < 0) return;
-
-    const endpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withSnapshotVersion(tab, {
-        modality: modKey,
-        row_index: modData.row_index,
-        updates: skillUpdates
-      }))
-    });
-
-    if (!response.ok) {
-      showMessage('error', `Failed to update ${skill} skill`);
-    } else {
-      const result = await response.json().catch(() => ({}));
-      updateSnapshotVersionFromResponse(tab, result);
-    }
-    // No re-render needed for skill changes - they're local to the row
-  } catch (error) {
-    showMessage('error', error.message);
+  const normalizedValue = normalizeSkillValueJS(value);
+  const effectiveValue = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, normalizedValue);
+  markDraftModalityMaterialized(shiftIdx, modKey);
+  const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
+  if (skillSelect && effectiveValue !== null && effectiveValue !== undefined) {
+    skillSelect.value = displaySkillValue(effectiveValue);
   }
+  updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: effectiveValue } });
 }
 
 function isValidTimeValue(value) {
@@ -1396,7 +1195,15 @@ function reopenEditModalForWorker(tab, workerName, formState = null) {
   if (updatedGroupIdx === undefined || updatedGroupIdx < 0) {
     return false;
   }
-  currentEditEntry = { tab, groupIdx: updatedGroupIdx };
+  const updatedGroup = entriesData[tab]?.[updatedGroupIdx];
+  clearEditPlanDraft();
+  setEditPlanDraftFromGroup(updatedGroup, { force: true });
+  currentEditEntry = {
+    tab,
+    groupIdx: updatedGroupIdx,
+    worker: workerName,
+    openedWorkerRevision: updatedGroup?.worker_revision || getWorkerRevision(tab, workerName),
+  };
   renderEditModalContent();
   if (formState) {
     restoreModalAddFormState(formState);
@@ -1797,24 +1604,16 @@ async function addShiftFromModal() {
       }
 
       for (const [modality, rowIndex] of rowIndexByModality.entries()) {
-        const response = await fetch(addGapEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, {
-            modality,
-            row_index: rowIndex,
-            gap_type: taskName,
-            gap_start: startTime,
-            gap_end: endTime,
-            gap_counts_for_hours: countsForHours
-          }))
+        await postJsonWithSnapshot(tab, addGapEndpoint, {
+          modality,
+          row_index: rowIndex,
+          gap_type: taskName,
+          gap_start: startTime,
+          gap_end: endTime,
+          gap_counts_for_hours: countsForHours
+        }, {
+          reloadOnConflict: true,
         });
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Failed to add gap for ${group.worker}`);
-        }
-        const result = await response.json().catch(() => ({}));
-        updateSnapshotVersionFromResponse(tab, result);
       }
     } else {
       for (const modKey of selectedModalities) {
@@ -1823,34 +1622,23 @@ async function addShiftFromModal() {
           const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
           skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
         });
-        const response = await fetch(addWorkerEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, {
-            modality: modKey,
-            worker_data: {
-              PPL: group.worker,
-              start_time: startTime,
-              end_time: endTime,
-              Modifier: modifier,
-              counts_for_hours: countsForHours,
-              training: trainingEnabled,
-              tasks: taskName,
-              row_type: 'shift',
-              materialize: true,
-              ...skills
-            }
-          }))
+        await postJsonWithSnapshot(tab, addWorkerEndpoint, {
+          modality: modKey,
+          worker_data: {
+            PPL: group.worker,
+            start_time: startTime,
+            end_time: endTime,
+            Modifier: modifier,
+            counts_for_hours: countsForHours,
+            training: trainingEnabled,
+            tasks: taskName,
+            row_type: 'shift',
+            materialize: true,
+            ...skills
+          }
+        }, {
+          reloadOnConflict: true,
         });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Failed to add shift for ${modKey.toUpperCase()}`);
-        }
-        {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-        }
       }
     }
     showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${group.worker}`);
@@ -1860,6 +1648,9 @@ async function addShiftFromModal() {
     // Re-render modal to show updated shifts instead of closing
     renderEditModalContent();
   } catch (error) {
+    if (error.isConflict) {
+      return;
+    }
     showMessage('error', error.message);
   }
 }
@@ -1960,32 +1751,22 @@ function applyPresetToShift(shiftIdx, taskName) {
     return;
   }
 
-  const overrides = task.skill_overrides || {};
   const { tab, groupIdx } = currentEditEntry || {};
   const group = entriesData[tab]?.[groupIdx];
   if (!group) return;
 
   const shift = getModalShifts(group)[shiftIdx];
   if (!shift) return;
+  const trainingEnabled = shift.training !== false;
+  const { skillsByModality } = resolveTaskSkillsByModality(task, trainingEnabled, group.worker);
 
   // Apply skills to all modalities in this shift
-  // Config uses skill×modality format: { "notfall_ct": 1, "privat_mr": 0 }
-  // Also supports shortcuts: { "all": -1 }, { "mdh": 1 }
   Object.keys(shift.modalities).forEach(modKey => {
     SKILLS.forEach(skill => {
       const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
       if (el) {
-        // Check skill×modality format first, then skill shortcut, then "all" shortcut
-        const skillModKey = `${skill}_${modKey}`;
-        let val = 0;  // Default to passive
-        if (overrides[skillModKey] !== undefined) {
-          val = overrides[skillModKey];
-        } else if (overrides[skill] !== undefined) {
-          val = overrides[skill];  // Skill shortcut applies to all modalities
-        } else if (overrides['all'] !== undefined) {
-          val = overrides['all'];
-        }
-        el.value = val.toString();
+        const value = skillsByModality[modKey]?.[skill];
+        el.value = value !== undefined ? displaySkillValue(value) : '-1';
       }
     });
   });
@@ -2046,107 +1827,41 @@ async function saveModalChanges() {
   const group = entriesData[tab][groupIdx];
   if (!group) return;
 
-  const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-  const shifts = getModalShifts(group);
-
-  if (modalMode === 'edit-plan') {
-    if (!editPlanDraft || !editPlanDraft.worker) {
-      showMessage('error', 'No edit plan available');
-      return;
-    }
-    const applyEndpoint = tab === 'today'
-      ? '/api/live-schedule/apply-worker-plan'
-      : '/api/prep-next-day/apply-worker-plan';
-    try {
-      syncEditPlanDraftFromModal();
-      const response = await fetch(applyEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(withSnapshotVersion(tab, { worker: editPlanDraft.worker, shifts: editPlanDraft.shifts || [] }))
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || 'Failed to apply worker plan');
-      }
-      {
-        const result = await response.json().catch(() => ({}));
-        updateSnapshotVersionFromResponse(tab, result);
-      }
-      clearEditPlanDraft();
-      closeModal();
-      showMessage('success', 'Worker entries updated');
-      await loadData();
-      return;
-    } catch (error) {
-      showMessage('error', error.message);
-      return;
-    }
+  if (modalMode !== 'edit-plan') {
+    showMessage('error', 'Unexpected modal mode. Reopen the edit dialog and try again.');
+    return;
   }
-
+  if (!editPlanDraft || !editPlanDraft.worker) {
+    showMessage('error', 'No edit plan available');
+    return;
+  }
+  const applyEndpoint = tab === 'today'
+    ? '/api/live-schedule/apply-worker-plan'
+    : '/api/prep-next-day/apply-worker-plan';
+  const formState = saveModalAddFormState();
+  const modalState = captureModalState();
   try {
-    for (let shiftIdx = 0; shiftIdx < shifts.length; shiftIdx++) {
-      const shift = shifts[shiftIdx];
-
-      const shiftTaskEl = document.getElementById(`edit-shift-${shiftIdx}-task`);
-      const shiftStartEl = document.getElementById(`edit-shift-${shiftIdx}-start`);
-      const shiftEndEl = document.getElementById(`edit-shift-${shiftIdx}-end`);
-      const shiftModifierEl = document.getElementById(`edit-shift-${shiftIdx}-modifier`);
-      const shiftTrainingEl = document.getElementById(`edit-shift-${shiftIdx}-training`);
-
-      const shiftTask = shiftTaskEl ? shiftTaskEl.value : shift.task;
-      const shiftStart = shiftStartEl ? shiftStartEl.value : shift.start_time;
-      const shiftEnd = shiftEndEl ? shiftEndEl.value : shift.end_time;
-      const shiftModifier = shiftModifierEl ? parseFloat(shiftModifierEl.value) || 1.0 : shift.modifier || 1.0;
-      const shiftTraining = shiftTrainingEl ? shiftTrainingEl.checked : (shift.training !== false);
-
-      // Get counts_for_hours checkbox value
-      const countsHoursEl = document.getElementById(`edit-shift-${shiftIdx}-counts-hours`);
-      const countsForHours = countsHoursEl ? countsHoursEl.checked : (shift.counts_for_hours !== false);
-
-      for (const [modKey, modData] of Object.entries(shift.modalities)) {
-        const rowIndexEl = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-rowindex`);
-        const rowIndex = rowIndexEl ? parseInt(rowIndexEl.value) : modData.row_index;
-
-        // Only update existing entries (rowIndex >= 0)
-        // Modal no longer has modality enable/disable checkboxes
-        if (rowIndex < 0) continue;
-
-        const skillUpdates = {};
-        SKILLS.forEach(skill => {
-          const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-          if (el) {
-            skillUpdates[skill] = normalizeSkillValueJS(el.value);
-          }
-        });
-
-        const updates = {
-          start_time: shiftStart,
-          end_time: shiftEnd,
-          Modifier: shiftModifier,
-          counts_for_hours: countsForHours,
-          training: shiftTraining,
-          tasks: shiftTask,
-          ...skillUpdates
-        };
-        const response = await fetch(updateEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withSnapshotVersion(tab, { modality: modKey, row_index: rowIndex, updates }))
-        });
-        if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error || `Failed to update ${modKey.toUpperCase()} entry`);
-        } else {
-          const result = await response.json().catch(() => ({}));
-          updateSnapshotVersionFromResponse(tab, result);
-        }
-      }
-    }
-
+    syncEditPlanDraftFromModal();
+    await postJsonWithSnapshot(tab, applyEndpoint, {
+      worker: editPlanDraft.worker,
+      shifts: editPlanDraft.shifts || [],
+      worker_revision: currentEditEntry?.openedWorkerRevision || getWorkerRevision(tab, editPlanDraft.worker),
+    }, {
+      reloadOnConflict: true,
+      includeSnapshotVersion: false,
+    });
+    clearEditPlanDraft();
     closeModal();
     showMessage('success', 'Worker entries updated');
     await loadData();
   } catch (error) {
+    if (error.isConflict) {
+      const workerName = editPlanDraft?.worker || group.worker;
+      if (reopenEditModalForWorker(tab, workerName, formState)) {
+        restoreModalState(modalState);
+      }
+      return;
+    }
     showMessage('error', error.message);
   }
 }
@@ -2411,44 +2126,54 @@ function rebuildAddWorkerTaskSkills(task) {
   task.skillsByModality = skillsByModality;
 }
 
-function buildAddWorkerTaskState(taskConfig, targetDay) {
+function getTaskOverrideValue(overrides, skill, modKey, defaultValue = -1) {
+  const skillModKey = `${skill}_${modKey}`;
+  if (overrides[skillModKey] !== undefined) return overrides[skillModKey];
+  if (overrides[skill] !== undefined) return overrides[skill];
+  if (overrides.all !== undefined) return overrides.all;
+  return defaultValue;
+}
+
+function resolveTaskSkillsByModality(taskConfig, trainingEnabled, workerId = null) {
   const config = taskConfig || {};
   const isGap = config.type === 'gap';
-  const trainingEnabled = isGap ? false : (config.training !== false);
-  const countsForHours = isGap ? false : (config.counts_for_hours !== false);
-  const modifier = config.modifier || 1.0;
   const overrides = config.skill_overrides || {};
   const baseSkillsByModality = {};
   const skillsByModality = {};
-
-  const times = isGap
-    ? (getGapTimeRange(config, targetDay) || ['12:00', '13:00'])
-    : getShiftTimes(config, targetDay);
 
   MODALITIES.forEach(mod => {
     const modKey = mod.toLowerCase();
     baseSkillsByModality[modKey] = {};
     skillsByModality[modKey] = {};
     SKILLS.forEach(skill => {
-      if (isGap) {
-        baseSkillsByModality[modKey][skill] = -1;
-        skillsByModality[modKey][skill] = -1;
-        return;
-      }
-      const skillModKey = `${skill}_${modKey}`;
-      let rawValue = 0;
-      if (overrides[skillModKey] !== undefined) {
-        rawValue = overrides[skillModKey];
-      } else if (overrides[skill] !== undefined) {
-        rawValue = overrides[skill];
-      } else if (overrides['all'] !== undefined) {
-        rawValue = overrides['all'];
-      }
-      const normalized = normalizeSkillValueJS(rawValue);
+      const normalized = isGap
+        ? -1
+        : normalizeSkillValueJS(getTaskOverrideValue(overrides, skill, modKey, -1));
       baseSkillsByModality[modKey][skill] = normalized;
-      skillsByModality[modKey][skill] = applyTrainingToSkillValue(normalized, trainingEnabled);
+      skillsByModality[modKey][skill] = isGap
+        ? -1
+        : applyTrainingToSkillValue(normalized, trainingEnabled);
     });
   });
+
+  if (workerId && WORKER_SKILLS[workerId]) {
+    applyRosterToSkillsByModality(skillsByModality, workerId, baseSkillsByModality);
+  }
+
+  return { baseSkillsByModality, skillsByModality };
+}
+
+function buildAddWorkerTaskState(taskConfig, targetDay) {
+  const config = taskConfig || {};
+  const isGap = config.type === 'gap';
+  const trainingEnabled = isGap ? false : (config.training !== false);
+  const countsForHours = isGap ? false : (config.counts_for_hours !== false);
+  const modifier = config.modifier || 1.0;
+  const { baseSkillsByModality, skillsByModality } = resolveTaskSkillsByModality(config, trainingEnabled);
+
+  const times = isGap
+    ? (getGapTimeRange(config, targetDay) || ['12:00', '13:00'])
+    : getShiftTimes(config, targetDay);
 
   return {
     start_time: times.start,
@@ -2530,28 +2255,20 @@ async function saveAddWorkerModal() {
       };
     });
 
-    const response = await fetch(workerEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withSnapshotVersion(tab, {
-        worker: workerLabel,
-        shifts
-      }))
+    await postJsonWithSnapshot(tab, workerEndpoint, {
+      worker: workerLabel,
+      shifts
+    }, {
+      reloadOnConflict: true,
     });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || 'Failed to add worker plan');
-    }
-    {
-      const result = await response.json().catch(() => ({}));
-      updateSnapshotVersionFromResponse(tab, result);
-    }
 
     closeModal();
     showMessage('success', `${getWorkerDisplayName(workerId)} added/updated`);
     await loadData();
   } catch (error) {
+    if (error.isConflict) {
+      return;
+    }
     showMessage('error', error.message);
   }
 }
@@ -2623,30 +2340,22 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
       throw new Error('No existing row index found for this worker; reload and try again.');
     }
 
-    const response = await fetch(addEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(withSnapshotVersion(tab, {
-        row_index_map: Object.fromEntries(rowIndexByModality.entries()),
-        gap_type: gapType,
-        gap_start: gapStart,
-        gap_end: gapEnd,
-        gap_counts_for_hours: getGapCountsForHours(gapType)
-      }))
+    await postJsonWithSnapshot(tab, addEndpoint, {
+      row_index_map: Object.fromEntries(rowIndexByModality.entries()),
+      gap_type: gapType,
+      gap_start: gapStart,
+      gap_end: gapEnd,
+      gap_counts_for_hours: getGapCountsForHours(gapType)
+    }, {
+      reloadOnConflict: true,
     });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || 'Failed to create gap');
-    }
-    {
-      const result = await response.json().catch(() => ({}));
-      updateSnapshotVersionFromResponse(tab, result);
-    }
 
     showMessage('success', `Added break (${gapStart}-${gapEnd}) for ${group.worker}`);
     await loadData();
   } catch (error) {
+    if (error.isConflict) {
+      return;
+    }
     showMessage('error', error.message || 'Failed to add break');
   }
 }
