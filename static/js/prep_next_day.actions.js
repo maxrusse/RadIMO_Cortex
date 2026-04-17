@@ -2095,14 +2095,16 @@ function buildAddWorkerTaskState(taskConfig, targetDay) {
   const modifier = config.modifier || 1.0;
   const baseSkillsByModality = createNeutralSkillsByModality(isGap ? -1 : 0);
   const skillsByModality = cloneSkillMap(baseSkillsByModality);
-
-  const times = isGap
+  const [startTime, endTime] = isGap
     ? (getGapTimeRange(config, targetDay) || ['12:00', '13:00'])
-    : getShiftTimes(config, targetDay);
+    : (() => {
+        const times = getShiftTimes(config, targetDay);
+        return [times.start, times.end];
+      })();
 
   return {
-    start_time: times.start,
-    end_time: times.end,
+    start_time: startTime,
+    end_time: endTime,
     modifier,
     counts_for_hours: countsForHours,
     training: trainingEnabled,
@@ -2156,7 +2158,6 @@ async function saveAddWorkerModal() {
   try {
     const shifts = tasks.map(task => {
       const isGap = isGapTask(task.task);
-      const taskConfig = TASK_ROLES.find(t => t.name === task.task);
       const trainingEnabled = isGap ? false : (task.training !== false);
       const modalities = {};
       const skillsByModality = task.skillsByModality || {};
