@@ -806,30 +806,25 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "times": {"default": "12:00-15:45"},
                         "modifier": 1.2,
                         "skill_overrides": {
-                            "all": -1,
+                            "all": 0,
                             "aou_ct": 1,
                             "aou_mr": 1,
                             "cvt_ct": 1,
                             "cvt_mr": 1,
                             "mdh_ct": 1,
                             "mdh_mr": 1,
-                        },
-                    },
-                    {
-                        "match": "FA/Fellow SBZ",
-                        "label": "FA/Fellow SBZ NM",
-                        "type": "shift",
-                        "day_part": "NM",
-                        "times": {"default": "12:00-15:45"},
-                        "modifier": 1.2,
-                        "skill_overrides": {
-                            "all": -1,
-                            "aou_ct": 1,
-                            "aou_mr": 1,
-                            "cvt_ct": 1,
-                            "cvt_mr": 1,
-                            "mdh_ct": 1,
-                            "mdh_mr": 1,
+                            "privat_ct": -1,
+                            "privat_mr": -1,
+                            "gyn_ct": -1,
+                            "gyn_mr": -1,
+                            "gyn_xray": -1,
+                            "notfall_ct": -1,
+                            "notfall_mr": -1,
+                            "notfall_xray": -1,
+                            "aou_xray": -1,
+                            "cvt_xray": -1,
+                            "mdh_xray": -1,
+                            "privat_xray": -1,
                         },
                     },
                     {
@@ -839,29 +834,25 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "times": {"default": "07:30-15:45", "Freitag": "07:30-15:15"},
                         "modifier": 1.2,
                         "skill_overrides": {
-                            "all": -1,
+                            "all": 0,
                             "aou_ct": 1,
                             "aou_mr": 1,
                             "cvt_ct": 1,
                             "cvt_mr": 1,
                             "mdh_ct": 1,
                             "mdh_mr": 1,
-                        },
-                    },
-                    {
-                        "match": "FA/Fellow SBZ",
-                        "type": "shift",
-                        "day_parts": ["VM", "VMNM"],
-                        "times": {"default": "07:30-15:45", "Freitag": "07:30-15:15"},
-                        "modifier": 1.2,
-                        "skill_overrides": {
-                            "all": -1,
-                            "aou_ct": 1,
-                            "aou_mr": 1,
-                            "cvt_ct": 1,
-                            "cvt_mr": 1,
-                            "mdh_ct": 1,
-                            "mdh_mr": 1,
+                            "privat_ct": -1,
+                            "privat_mr": -1,
+                            "gyn_ct": -1,
+                            "gyn_mr": -1,
+                            "gyn_xray": -1,
+                            "notfall_ct": -1,
+                            "notfall_mr": -1,
+                            "notfall_xray": -1,
+                            "aou_xray": -1,
+                            "cvt_xray": -1,
+                            "mdh_xray": -1,
+                            "privat_xray": -1,
                         },
                     },
                 ],
@@ -870,17 +861,26 @@ class TestDayPlanIntegration(unittest.TestCase):
 
         rules = config["medweb_mapping"]["rules"]
         self.assertEqual(len([rule for rule in rules if rule["match"] == "SBZ: FA"]), 2)
-        self.assertEqual(len([rule for rule in rules if rule["match"] == "FA/Fellow SBZ"]), 2)
+        self.assertEqual(len([rule for rule in rules if rule["match"] == "FA/Fellow SBZ"]), 0)
 
-        renamed_nm = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_part") == "NM")
-        legacy_nm = next(rule for rule in rules if rule["match"] == "FA/Fellow SBZ" and rule.get("day_part") == "NM")
-        renamed_base = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_parts") == ["VM", "VMNM"])
-        legacy_base = next(rule for rule in rules if rule["match"] == "FA/Fellow SBZ" and rule.get("day_parts") == ["VM", "VMNM"])
+        nm_rule = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_part") == "NM")
+        base_rule = next(rule for rule in rules if rule["match"] == "SBZ: FA" and rule.get("day_parts") == ["VM", "VMNM"])
 
-        self.assertEqual(renamed_nm["times"], legacy_nm["times"])
-        self.assertEqual(renamed_nm["skill_overrides"], legacy_nm["skill_overrides"])
-        self.assertEqual(renamed_base["times"], legacy_base["times"])
-        self.assertEqual(renamed_base["skill_overrides"], legacy_base["skill_overrides"])
+        self.assertEqual(nm_rule["times"], {"default": "12:00-15:45"})
+        self.assertEqual(base_rule["times"], {"default": "07:30-15:45", "Freitag": "07:30-15:15"})
+        self.assertEqual(nm_rule["skill_overrides"]["all"], 0)
+        self.assertEqual(base_rule["skill_overrides"]["all"], 0)
+        for rule in (nm_rule, base_rule):
+            for key in ("aou_ct", "aou_mr", "cvt_ct", "cvt_mr", "mdh_ct", "mdh_mr"):
+                self.assertEqual(rule["skill_overrides"][key], 1)
+        for key in (
+            "privat_ct", "privat_mr", "privat_xray",
+            "gyn_ct", "gyn_mr", "gyn_xray",
+            "notfall_ct", "notfall_mr", "notfall_xray",
+            "aou_xray", "cvt_xray", "mdh_xray",
+        ):
+            self.assertEqual(nm_rule["skill_overrides"][key], -1)
+            self.assertEqual(base_rule["skill_overrides"][key], -1)
 
     def test_day_part_filters_use_medweb_tageszeit(self) -> None:
         target_date = datetime(2026, 1, 23)

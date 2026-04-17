@@ -579,6 +579,8 @@ vendor_mappings:
         all: 0
         aou_ct: 1
         aou_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -602,6 +604,8 @@ vendor_mappings:
         all: 0
         cvt_ct: 1
         cvt_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -625,6 +629,8 @@ vendor_mappings:
         all: 0
         mdh_ct: 1
         mdh_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -661,6 +667,8 @@ vendor_mappings:
       skill_overrides:
         aou_ct: 1
         aou_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -681,6 +689,8 @@ vendor_mappings:
       skill_overrides:
         cvt_ct: 1
         cvt_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -701,6 +711,8 @@ vendor_mappings:
       skill_overrides:
         mdh_ct: 1
         mdh_mr: 1
+        privat_ct: -1
+        privat_mr: -1
         gyn_ct: -1
         gyn_mr: -1
         gyn_xray: -1
@@ -721,30 +733,25 @@ vendor_mappings:
         Freitag: "12:00-15:15"
       modifier: 1.2
       skill_overrides:
-        all: -1
+        all: 0
         aou_ct: 1
         aou_mr: 1
         cvt_ct: 1
         cvt_mr: 1
         mdh_ct: 1
         mdh_mr: 1
-
-    - match: "FA/Fellow SBZ"
-      label: "FA/Fellow SBZ NM"
-      type: "shift"
-      day_part: NM
-      times:
-        default: "12:00-15:30"
-        Freitag: "12:00-15:15"
-      modifier: 1.2
-      skill_overrides:
-        all: -1
-        aou_ct: 1
-        aou_mr: 1
-        cvt_ct: 1
-        cvt_mr: 1
-        mdh_ct: 1
-        mdh_mr: 1
+        privat_ct: -1
+        privat_mr: -1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_xray: -1
 
     - match: "SBZ: FÄ"
       type: "shift"
@@ -754,29 +761,25 @@ vendor_mappings:
         Freitag: "07:30-15:15"
       modifier: 1.2
       skill_overrides:
-        all: -1
+        all: 0
         aou_ct: 1
         aou_mr: 1
         cvt_ct: 1
         cvt_mr: 1
         mdh_ct: 1
         mdh_mr: 1
-
-    - match: "FA/Fellow SBZ"
-      type: "shift"
-      day_parts: [VM, VMNM]
-      times:
-        default: "07:30-15:30"
-        Freitag: "07:30-15:15"
-      modifier: 1.2
-      skill_overrides:
-        all: -1
-        aou_ct: 1
-        aou_mr: 1
-        cvt_ct: 1
-        cvt_mr: 1
-        mdh_ct: 1
-        mdh_mr: 1
+        privat_ct: -1
+        privat_mr: -1
+        gyn_ct: -1
+        gyn_mr: -1
+        gyn_xray: -1
+        notfall_ct: -1
+        notfall_mr: -1
+        notfall_xray: -1
+        aou_xray: -1
+        cvt_xray: -1
+        mdh_xray: -1
+        privat_xray: -1
 
     - match: "OA-HELP"
       type: "shift"
