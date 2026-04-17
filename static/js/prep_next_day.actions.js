@@ -1356,29 +1356,9 @@ async function onModalTaskChange() {
 
   const taskName = option.value;
   const taskConfig = TASK_ROLES.find(t => t.name === taskName);
-  const isGap = option.dataset.type === 'gap';
-  const trainingEnabled = isGap ? false : (taskConfig?.training !== false);
-  const { tab, groupIdx } = currentEditEntry || {};
-
   try {
     await refreshModalAddFormPreview();
   } catch (error) {
-    const defaultTime = isGap ? '12:00-13:00' : '07:00-15:00';
-    const [startTime, endTime] = defaultTime.split('-');
-    document.getElementById('modal-add-start').value = startTime;
-    document.getElementById('modal-add-end').value = endTime;
-    document.getElementById('modal-add-modifier').value = option.dataset.modifier || '1.0';
-    const countsEl = document.getElementById('modal-add-counts-hours');
-    if (countsEl) {
-      countsEl.checked = taskConfig?.counts_for_hours !== false;
-      updateHoursToggleLabel(countsEl);
-    }
-    const trainingEl = document.getElementById('modal-add-training');
-    if (trainingEl) {
-      trainingEl.checked = trainingEnabled;
-      trainingEl.disabled = isGap;
-      updateTrainingToggleLabel(trainingEl);
-    }
     showMessage('error', error.message);
   }
 }
@@ -2021,11 +2001,7 @@ async function updateAddWorkerTask(idx, field, value) {
     try {
       await refreshAddWorkerTaskPreview(idx);
     } catch (error) {
-      if (workerId && WORKER_SKILLS[workerId]) {
-        applyRosterToSkillsByModality(task.skillsByModality, workerId, task.baseSkillsByModality);
-      } else {
-        showMessage('error', error.message);
-      }
+      showMessage('error', error.message);
     }
   } else if (workerId && WORKER_SKILLS[workerId]) {
     applyRosterToSkillsByModality(task.skillsByModality, workerId, task.baseSkillsByModality);
@@ -2099,14 +2075,6 @@ function rebuildAddWorkerTaskSkills(task) {
   task.skillsByModality = skillsByModality;
 }
 
-function getTaskOverrideValue(overrides, skill, modKey, defaultValue = -1) {
-  const skillModKey = `${skill}_${modKey}`;
-  if (overrides[skillModKey] !== undefined) return overrides[skillModKey];
-  if (overrides[skill] !== undefined) return overrides[skill];
-  if (overrides.all !== undefined) return overrides.all;
-  return defaultValue;
-}
-
 function createNeutralSkillsByModality(defaultValue = 0) {
   const result = {};
   MODALITIES.forEach(mod => {
@@ -2117,35 +2085,6 @@ function createNeutralSkillsByModality(defaultValue = 0) {
     });
   });
   return result;
-}
-
-function resolveTaskSkillsByModality(taskConfig, trainingEnabled, workerId = null) {
-  const config = taskConfig || {};
-  const isGap = config.type === 'gap';
-  const overrides = config.skill_overrides || {};
-  const baseSkillsByModality = {};
-  const skillsByModality = {};
-
-  MODALITIES.forEach(mod => {
-    const modKey = mod.toLowerCase();
-    baseSkillsByModality[modKey] = {};
-    skillsByModality[modKey] = {};
-    SKILLS.forEach(skill => {
-      const normalized = isGap
-        ? -1
-        : normalizeSkillValueJS(getTaskOverrideValue(overrides, skill, modKey, -1));
-      baseSkillsByModality[modKey][skill] = normalized;
-      skillsByModality[modKey][skill] = isGap
-        ? -1
-        : applyTrainingToSkillValue(normalized, trainingEnabled);
-    });
-  });
-
-  if (workerId && WORKER_SKILLS[workerId]) {
-    applyRosterToSkillsByModality(skillsByModality, workerId, baseSkillsByModality);
-  }
-
-  return { baseSkillsByModality, skillsByModality };
 }
 
 function buildAddWorkerTaskState(taskConfig, targetDay) {
@@ -2177,7 +2116,7 @@ async function onAddWorkerNameChange() {
   const inputValue = workerInput ? workerInput.value.trim() : '';
 
   // Parse "Full Name (ID)" format to extract the worker ID
-  const { id: workerId, fullName } = parseWorkerInput(inputValue);
+  const { fullName, id: workerId } = parseWorkerInput(inputValue);
 
   if (!(fullName || workerId)) return;
 
@@ -2187,16 +2126,7 @@ async function onAddWorkerNameChange() {
     }
     renderAddWorkerModalContent();
   } catch (error) {
-    if (workerId && WORKER_SKILLS[workerId]) {
-      addWorkerModalState.tasks.forEach(task => {
-        if (task.skillsByModality) {
-          applyRosterToSkillsByModality(task.skillsByModality, workerId, task.baseSkillsByModality);
-        }
-      });
-      renderAddWorkerModalContent();
-    } else {
-      showMessage('error', error.message);
-    }
+    showMessage('error', error.message);
   }
 }
 

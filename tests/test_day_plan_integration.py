@@ -731,7 +731,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         rules = APP_CONFIG.get("medweb_mapping", {}).get("rules", [])
         labels = {str(rule.get("label", "")).strip(): rule for rule in rules}
 
-        for label in ("Gyn Spät", "Notfall spät"):
+        for label in ("Gyn kommt spät", "Notfall kommt spät"):
             self.assertIn(label, labels)
             rule = labels[label]
             self.assertEqual(rule.get("type"), "shift")
@@ -739,10 +739,10 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertFalse(bool(rule.get("counts_for_hours", False)))
             self.assertTrue(bool(rule.get("training", True)))
             self.assertEqual(rule.get("skill_overrides", {}).get("all"), -1)
-        gyn_rule = labels["Gyn Spät"]
+        gyn_rule = labels["Gyn kommt spät"]
         self.assertEqual(gyn_rule.get("skill_overrides", {}).get("gyn_ct"), 1)
         self.assertEqual(gyn_rule.get("skill_overrides", {}).get("gyn_mr"), 1)
-        notfall_rule = labels["Notfall spät"]
+        notfall_rule = labels["Notfall kommt spät"]
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_ct"), 1)
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_mr"), 1)
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_xray"), 1)
@@ -1019,8 +1019,8 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(spaet_rule["skill_overrides"]["all"], 0)
         expected = [
             ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "12:00-15:30"),
-            ("SBZ: Cardio/Vask/Thorax", "SBZ: Cardio/Vask/Thorax NM", "12:00-15:30"),
-            ("SBZ: Muskel-Skelett/Hals/Derma", "SBZ: Muskel-Skelett/Hals/Derma NM", "12:00-15:30"),
+            ("SBZ: Cardio/Vaskulär/Thorax", "SBZ: Cardio/Vaskulär/Thorax NM", "12:00-15:30"),
+            ("SBZ: MSK/Derma/HNO", "SBZ: MSK/Derma/HNO NM", "12:00-15:30"),
         ]
 
         for activity, expected_label, expected_time in expected:
