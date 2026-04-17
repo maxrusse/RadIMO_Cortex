@@ -65,6 +65,7 @@ from lib.utils import (
     get_weekday_name_german,
     format_time_value,
     build_worker_sort_key,
+    normalize_skill_value,
     skill_value_to_numeric,
     skill_value_to_display,
     strip_builder_fields,
@@ -101,6 +102,12 @@ from data_manager import (
     update_gap_in_schedule,
     preload_next_workday,
     extract_modalities_from_skill_overrides,
+)
+from data_manager.csv_parser import compute_time_ranges, parse_gap_times
+from data_manager.worker_management import (
+    apply_skill_overrides,
+    expand_skill_overrides,
+    get_worker_skill_mod_combinations,
 )
 from state_manager import StateManager
 from balancer import (
@@ -139,6 +146,227 @@ LOG_SOURCE_ALIASES = {
     'selection-log': 'selection',
     'flow-log': 'flow',
 }
+
+
+def _build_task_roles() -> list[dict[str, Any]]:
+    medweb_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
+    task_roles = []
+    for rule in medweb_rules:
+        rule_type = rule.get('type', 'shift')
+        hours_counting_config = APP_CONFIG.get('balancer', {}).get('hours_counting', {})
+        if 'counts_for_hours' in rule:
+            counts_for_hours = rule['counts_for_hours']
+        elif rule_type == 'gap':
+            counts_for_hours = hours_counting_config.get('gap_default', False)
+        else:
+            counts_for_hours = hours_counting_config.get('shift_default', True)
+
+        skill_overrides = rule.get('skill_overrides', {})
+        modalities_list = extract_modalities_from_skill_overrides(skill_overrides)
+        task_roles.append({
+            'name': rule.get('label', rule.get('match', '')),
+            'type': rule_type,
+            'modalities': modalities_list,
+            'times': rule.get('times', {}),
+            'gaps': rule.get('gaps', {}),
+            'skill_overrides': skill_overrides,
+            'modifier': rule.get('modifier', 1.0),
+            'counts_for_hours': counts_for_hours,
+            'allow_roster_exclusion_override': bool(rule.get('allow_roster_exclusion_override', False)),
+        })
+    return task_roles
+
+
+def _get_task_role_by_name(task_name: str) -> Optional[dict[str, Any]]:
+    normalized_name = str(task_name or '').strip()
+    if not normalized_name:
+        return None
+    for task_role in _build_task_roles():
+        if str(task_role.get('name', '')).strip() == normalized_name:
+            return task_role
+    return None
+
+
+def _resolve_preview_target_date(use_staged: bool, payload: dict[str, Any]) -> date:
+    if not use_staged:
+        return get_local_now().date()
+
+    raw_target_date = payload.get('target_date')
+    if raw_target_date not in (None, ''):
+        return date.fromisoformat(str(raw_target_date))
+
+    current_target = _get_staged_target_date()
+    if current_target is not None:
+        return current_target
+    return get_next_workday().date()
+
+
+def _build_shift_skill_combinations(current_shift: dict[str, Any]) -> Optional[dict[str, Any]]:
+    modalities_payload = (current_shift or {}).get('modalities') or {}
+    if not isinstance(modalities_payload, dict) or not modalities_payload:
+        return None
+
+    combinations: dict[str, Any] = {}
+    found_any = False
+    for modality in allowed_modalities:
+        mod_payload = modalities_payload.get(modality, {}) or {}
+        skill_payload = mod_payload.get('skills', {}) or {}
+        for skill in SKILL_COLUMNS:
+            combo_key = f"{skill}_{modality}"
+            if skill in skill_payload:
+                combinations[combo_key] = normalize_skill_value(skill_payload.get(skill))
+                found_any = True
+    return combinations if found_any else None
+
+
+def _combinations_to_modalities(combinations: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for modality in allowed_modalities:
+        result[modality] = {}
+        for skill in SKILL_COLUMNS:
+            result[modality][skill] = skill_value_to_display(
+                combinations.get(f"{skill}_{modality}", 0)
+            )
+    return result
+
+
+def _resolve_task_preview(
+    *,
+    worker: str,
+    task_name: str,
+    training: Optional[bool],
+    use_staged: bool,
+    target_date: date,
+    mode: str = 'new',
+    current_shift: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    task_role = _get_task_role_by_name(task_name)
+    if task_role is None:
+        raise ValueError(f"Unknown task: {task_name}")
+
+    is_gap = str(task_role.get('type', 'shift')).strip().lower() == 'gap'
+    resolved_training = False if is_gap else bool(training if training is not None else True)
+    modifier = 1.0 if is_gap else float(task_role.get('modifier', 1.0) or 1.0)
+    counts_for_hours = bool(task_role.get('counts_for_hours', False if is_gap else True))
+
+    if is_gap:
+        gap_times = parse_gap_times(task_role.get('times', {}), get_weekday_name_german(target_date))
+        start_time, end_time = gap_times[0] if gap_times else ('12:00', '13:00')
+        if not gap_times:
+            start_str, end_str = start_time, end_time
+        else:
+            start_str = start_time.strftime('%H:%M')
+            end_str = end_time.strftime('%H:%M')
+        excluded = {
+            f"{skill}_{modality}": -1
+            for modality in allowed_modalities
+            for skill in SKILL_COLUMNS
+        }
+        skills_by_modality = _combinations_to_modalities(excluded)
+        return {
+            'task': task_name,
+            'row_type': 'gap',
+            'training': False,
+            'modifier': modifier,
+            'counts_for_hours': counts_for_hours,
+            'start_time': start_str,
+            'end_time': end_str,
+            'base_skills_by_modality': skills_by_modality,
+            'skills_by_modality': skills_by_modality,
+        }
+
+    roster = load_worker_skill_json() or {}
+    canonical_id = get_canonical_worker_id(worker)
+    roster_base = get_worker_skill_mod_combinations(canonical_id, roster)
+    shift_base = _build_shift_skill_combinations(current_shift or {}) if mode == 'edit' else None
+    base_combinations = dict(roster_base)
+    if shift_base:
+        base_combinations.update(shift_base)
+
+    skill_overrides = task_role.get('skill_overrides', {}) or {}
+    if not skill_overrides:
+        raise ValueError(f"Task '{task_name}' has no skill_overrides configured")
+
+    final_combinations = apply_skill_overrides(
+        base_combinations,
+        skill_overrides,
+        training=resolved_training,
+        allow_roster_exclusion_override=bool(task_role.get('allow_roster_exclusion_override', False)),
+        exclude_unprocessed_weighted=mode != 'edit',
+    )
+
+    time_ranges = compute_time_ranges(
+        pd.Series(dtype='object'),
+        task_role,
+        datetime.combine(target_date, datetime.min.time()),
+        APP_CONFIG,
+    )
+    if time_ranges:
+        start_time, end_time = time_ranges[0]
+        start_str = start_time.strftime('%H:%M')
+        end_str = end_time.strftime('%H:%M')
+    else:
+        start_str = '07:00'
+        end_str = '15:00'
+
+    expanded_overrides = expand_skill_overrides(skill_overrides)
+    task_controlled_keys_by_modality: dict[str, list[str]] = {}
+    for modality in allowed_modalities:
+        task_controlled_keys_by_modality[modality] = sorted([
+            key.split('_', 1)[0]
+            for key in expanded_overrides
+            if key.endswith(f"_{modality}")
+        ])
+
+    return {
+        'task': task_name,
+        'row_type': 'shift',
+        'training': resolved_training,
+        'modifier': modifier,
+        'counts_for_hours': counts_for_hours,
+        'start_time': start_str,
+        'end_time': end_str,
+        'base_skills_by_modality': _combinations_to_modalities(base_combinations),
+        'skills_by_modality': _combinations_to_modalities(final_combinations),
+        'task_controlled_keys_by_modality': task_controlled_keys_by_modality,
+    }
+
+
+def _handle_task_preview(use_staged: bool) -> Any:
+    payload = request.get_json(silent=True) or {}
+    worker = str(payload.get('worker') or '').strip()
+    task_name = str(payload.get('task') or '').strip()
+    mode = str(payload.get('mode') or 'new').strip().lower()
+    if not worker:
+        return jsonify({'error': 'Missing worker'}), 400
+    if not task_name:
+        return jsonify({'error': 'Missing task'}), 400
+
+    target_date = None
+    if use_staged:
+        try:
+            target_date = _resolve_preview_target_date(True, payload)
+        except ValueError:
+            return jsonify({'error': 'Invalid target_date. Use YYYY-MM-DD.'}), 400
+    else:
+        target_date = get_local_now().date()
+
+    try:
+        result = _resolve_task_preview(
+            worker=worker,
+            task_name=task_name,
+            training=coerce_bool(payload.get('training')),
+            use_staged=use_staged,
+            target_date=target_date,
+            mode=mode if mode in {'new', 'edit'} else 'new',
+            current_shift=payload.get('current_shift') if isinstance(payload.get('current_shift'), dict) else None,
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    if use_staged:
+        result['target_date'] = target_date.isoformat()
+    return jsonify(result)
 DEFAULT_LOG_SOURCES = ('gunicorn', 'selection')
 MAX_LOG_TAIL_LINES = 50_000
 ADMIN_FILE_BACKUP_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'admin_files'
@@ -1605,27 +1833,7 @@ def timetable() -> Any:
         else:
             data_by_modality[mod] = []
 
-    medweb_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
-    task_roles = []
-    for rule in medweb_rules:
-        rule_type = rule.get('type', 'shift')
-        hours_counting_config = APP_CONFIG.get('balancer', {}).get('hours_counting', {})
-        if 'counts_for_hours' in rule:
-            counts_for_hours = rule['counts_for_hours']
-        elif rule_type == 'gap':
-            counts_for_hours = hours_counting_config.get('gap_default', False)
-        else:
-            counts_for_hours = hours_counting_config.get('shift_default', True)
-
-        task_roles.append({
-            'name': rule.get('label', rule.get('match', '')),
-            'type': rule_type,
-            'times': rule.get('times', {}),
-            'gaps': rule.get('gaps', {}),
-            'skill_overrides': rule.get('skill_overrides', {}),
-            'modifier': rule.get('modifier', 1.0),
-            'counts_for_hours': counts_for_hours,
-        })
+    task_roles = _build_task_roles()
 
     worker_skills = load_worker_skill_json()
     target_weekday_name = get_weekday_name_german(datetime.now().date())
@@ -2492,33 +2700,7 @@ def _render_prep_page(initial_tab: str) -> Any:
     worker_list = list(roster.keys())
     worker_names = build_worker_name_mapping(roster)
 
-    medweb_rules = APP_CONFIG.get('medweb_mapping', {}).get('rules', [])
-    task_roles = []
-    for rule in medweb_rules:
-        rule_type = rule.get('type', 'shift')
-        hours_counting_config = APP_CONFIG.get('balancer', {}).get('hours_counting', {})
-        if 'counts_for_hours' in rule:
-            counts_for_hours = rule['counts_for_hours']
-        elif rule_type == 'gap':
-            counts_for_hours = hours_counting_config.get('gap_default', False)
-        else:
-            counts_for_hours = hours_counting_config.get('shift_default', True)
-
-        # Extract modalities from skill_overrides using shared helper
-        skill_overrides = rule.get('skill_overrides', {})
-        modalities_list = extract_modalities_from_skill_overrides(skill_overrides)
-
-        task_role = {
-            'name': rule.get('label', rule.get('match', '')),
-            'type': rule_type,
-            'modalities': modalities_list,
-            'times': rule.get('times', {}),
-            'gaps': rule.get('gaps', {}),
-            'skill_overrides': skill_overrides,
-            'modifier': rule.get('modifier', 1.0),
-            'counts_for_hours': counts_for_hours,
-        }
-        task_roles.append(task_role)
+    task_roles = _build_task_roles()
 
     worker_skills = load_worker_skill_json()
 
@@ -2642,6 +2824,11 @@ def update_prep_row() -> Any:
 def apply_prep_worker_plan() -> Any:
     return _handle_apply_worker_plan(use_staged=True)
 
+@routes.route('/api/prep-next-day/resolve-task-preview', methods=['POST'])
+@admin_required
+def resolve_prep_task_preview() -> Any:
+    return _handle_task_preview(use_staged=True)
+
 @routes.route('/api/prep-next-day/add-worker', methods=['POST'])
 @admin_required
 def add_prep_worker() -> Any:
@@ -2678,6 +2865,11 @@ def update_live_row() -> Any:
 @admin_required
 def apply_live_worker_plan() -> Any:
     return _handle_apply_worker_plan(use_staged=False)
+
+@routes.route('/api/live-schedule/resolve-task-preview', methods=['POST'])
+@admin_required
+def resolve_live_task_preview() -> Any:
+    return _handle_task_preview(use_staged=False)
 
 @routes.route('/api/live-schedule/add-worker', methods=['POST'])
 @admin_required
