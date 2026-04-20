@@ -172,8 +172,6 @@ function renderLeaderSections(workerPayload, flowPayload) {
   const workers = workerPayload.workers || [];
   const skills = computeSkillMetrics(workers);
   const modalities = computeModalityMetrics(workers);
-  const topSkills = skills.slice(0, 5);
-  const topModalities = modalities.slice(0, 5);
   const overflowSkills = getRequestedSkillOverflowMetrics(flowPayload)
     .filter(function(item) { return item.overflowWeight > 0; })
     .sort(function(a, b) {
@@ -186,12 +184,6 @@ function renderLeaderSections(workerPayload, flowPayload) {
     .sort(function(a, b) { return Number(b.weight || 0) - Number(a.weight || 0); })
     .slice(0, 5);
 
-  renderLeaderList('leaders-skills', topSkills, function(item) {
-    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightPerHour, 2)}</strong> /h`;
-  });
-  renderLeaderList('leaders-modalities', topModalities, function(item) {
-    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightPerHour, 2)}</strong> /h`;
-  });
   renderLeaderList('leaders-skill-total', skills.sort(function(a, b) {
     return b.weightTotal - a.weightTotal;
   }), function(item) {

@@ -401,6 +401,8 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
         self.assertIn(b'id="leaders-overflow"', response.data)
+        self.assertNotIn(b"Top Skills / Hour", response.data)
+        self.assertNotIn(b"Top Modalities / Hour", response.data)
         self.assertIn(b'js/balance_summary.js', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
