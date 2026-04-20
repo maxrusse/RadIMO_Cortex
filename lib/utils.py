@@ -161,7 +161,11 @@ def format_worker_display_name(
 ) -> str:
     raw = '' if name is None else str(name).strip()
     cleaned, embedded_id = _extract_worker_label_and_id(name)
-    resolved_id = '' if worker_id is None else str(worker_id).strip()
+    if worker_id is None:
+        resolved_id = ''
+    else:
+        _, explicit_id = _extract_worker_label_and_id(worker_id)
+        resolved_id = explicit_id or str(worker_id).strip()
     if not resolved_id:
         resolved_id = embedded_id
 

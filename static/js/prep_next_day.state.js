@@ -58,15 +58,45 @@ function buildWorkerSortKey(name) {
  * Parse worker input like "Dr. Name (ID)" or just "ID".
  * Returns { id, fullName } where id is the canonical worker ID.
  */
+function findKnownWorkerIdByLabel(inputValue) {
+  const normalizedInput = String(inputValue || '').trim().toLowerCase();
+  if (!normalizedInput) return null;
+
+  const workerIds = new Set([
+    ...Object.keys(WORKER_NAMES || {}),
+    ...Object.keys(WORKER_SKILLS || {}),
+  ]);
+
+  for (const workerId of workerIds) {
+    const candidates = new Set([
+      String(workerId || '').trim(),
+      String(getWorkerDisplayName(workerId) || '').trim(),
+      String(WORKER_NAMES?.[workerId] || '').trim(),
+      String(WORKER_SKILLS?.[workerId]?.full_name || '').trim(),
+    ]);
+    for (const candidate of candidates) {
+      if (candidate && candidate.toLowerCase() === normalizedInput) {
+        return workerId;
+      }
+    }
+  }
+
+  return null;
+}
+
 function parseWorkerInput(inputValue) {
   const trimmed = (inputValue || '').trim();
   // Match pattern: "anything (ID)" where ID is inside parentheses
   const match = trimmed.match(/^(.+?)\s*\(([^)]+)\)$/);
   if (match) {
-    return { id: match[2].trim(), fullName: trimmed };
+    return { id: match[2].trim(), fullName: trimmed, matchedExisting: true };
+  }
+  const knownWorkerId = findKnownWorkerIdByLabel(trimmed);
+  if (knownWorkerId) {
+    return { id: knownWorkerId, fullName: null, matchedExisting: true };
   }
   // No parentheses - treat as plain ID
-  return { id: trimmed, fullName: null };
+  return { id: trimmed, fullName: null, matchedExisting: false };
 }
 
 /**

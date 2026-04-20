@@ -799,7 +799,7 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
     <div class="form-group" style="margin-bottom: 0;">
       <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Worker Name</label>
       <input type="text" id="add-worker-name-input" value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Müller, Anna (AM)"
-             list="worker-list-datalist" autocomplete="off" onchange="onAddWorkerNameChange()" oninput="onAddWorkerNameChange()"
+             list="worker-list-datalist" autocomplete="off" onchange="onAddWorkerNameChange()"
              style="width: 100%; max-width: 300px; padding: 0.5rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px;">
       <div style="margin-top: 0.4rem; font-size: 0.75rem; color: #666;">
         Bitte Medweb-Schreibweise bzw. Medweb-ID verwenden, sonst kann ein separater Worker-Eintrag entstehen.

@@ -3805,12 +3805,12 @@ def get_flow_balance_data() -> Any:
 
 
 # =============================================================================
-# BALANCE SUMMARY
+# PERFORMANCE SUMMARY
 # =============================================================================
 
-@routes.route('/balance-summary')
+@routes.route('/performance')
 @admin_required
-def balance_summary_page() -> Any:
+def performance_page() -> Any:
     load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
     modality = resolve_modality_from_request()
     return render_template(
@@ -3824,6 +3824,13 @@ def balance_summary_page() -> Any:
         ui_colors=APP_CONFIG.get('ui_colors', {}),
         is_admin=True,
     )
+
+
+@routes.route('/balance-summary')
+@admin_required
+def balance_summary_page() -> Any:
+    params = request.args.to_dict(flat=True)
+    return redirect(url_for('routes.performance_page', **params))
 
 
 # =============================================================================

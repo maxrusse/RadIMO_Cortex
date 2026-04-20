@@ -371,13 +371,23 @@ class TestHealthEndpoints(unittest.TestCase):
 
     @patch("routes.has_admin_access", return_value=True)
     def test_balance_summary_page_renders_management_sections(self, _mock_admin) -> None:
-        response = self.client.get("/balance-summary")
+        response = self.client.get("/performance")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Performance", response.data)
+        self.assertIn(b"Global Drivers", response.data)
+        self.assertIn(b"Load So Far", response.data)
         self.assertIn(b'id="summary-overview"', response.data)
+        self.assertIn(b'id="leaders-skill-total"', response.data)
         self.assertIn(b'id="leaders-overflow"', response.data)
         self.assertIn(b'js/balance_summary.js', response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_balance_summary_route_redirects_to_performance(self, _mock_admin) -> None:
+        response = self.client.get("/balance-summary?modality=mr")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/performance?modality=mr", response.location)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_simple_mode_renders_global_table_without_extra_summary_blocks(self, _mock_admin) -> None:

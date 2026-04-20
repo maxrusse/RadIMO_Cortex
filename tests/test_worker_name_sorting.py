@@ -44,6 +44,14 @@ class TestWorkerNameSorting(unittest.TestCase):
         formatted = format_worker_display_name("Anna Müller (AM)", "AM", style="raw")
         self.assertEqual(formatted, "Anna Müller (AM)")
 
+    def test_format_worker_display_name_normalizes_nested_worker_id_labels(self) -> None:
+        formatted = format_worker_display_name(
+            "Sascha Klaus (KLSA)",
+            "Sascha Klaus (KLSA)",
+            style="last_first_id",
+        )
+        self.assertEqual(formatted, "Klaus, Sascha (KLSA)")
+
 
 if __name__ == "__main__":
     unittest.main()

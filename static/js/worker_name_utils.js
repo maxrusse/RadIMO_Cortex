@@ -52,7 +52,8 @@
 
   function formatDisplayName(name, workerId = '') {
     const { raw, cleaned, workerId: embeddedId } = extractLabelAndId(name);
-    const resolvedId = String(workerId || embeddedId || '').trim();
+    const explicitId = extractLabelAndId(workerId).workerId || String(workerId || '').trim();
+    const resolvedId = String(explicitId || embeddedId || '').trim();
     const { surname, given } = splitNameParts(cleaned || name);
     const style = getDisplayStyle();
     let base;

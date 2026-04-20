@@ -2186,11 +2186,12 @@ function buildAddWorkerTaskState(taskConfig, targetDay) {
 async function onAddWorkerNameChange() {
   const workerInput = document.getElementById('add-worker-name-input');
   const inputValue = workerInput ? workerInput.value.trim() : '';
+  if (!inputValue) return;
 
-  // Parse "Full Name (ID)" format to extract the worker ID
-  const { fullName, id: workerId } = parseWorkerInput(inputValue);
+  // Parse display label / raw full name / ID and only refresh once the value resolves.
+  const { fullName, id: workerId, matchedExisting } = parseWorkerInput(inputValue);
 
-  if (!(fullName || workerId)) return;
+  if (!(fullName || matchedExisting || (workerId && WORKER_SKILLS[workerId]))) return;
 
   try {
     for (let idx = 0; idx < addWorkerModalState.tasks.length; idx += 1) {

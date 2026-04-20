@@ -1798,16 +1798,12 @@
     </div>
   </div>
 
-  <!-- Worker list datalist for autocomplete with display and raw-name aliases -->
+  <!-- Worker list datalist for autocomplete -->
   <datalist id="worker-list-datalist">
     {% for worker in worker_list %}
     {% set display_name = worker_names.get(worker, worker) if worker_names else worker %}
-    {% set raw_full_name = worker_skills.get(worker, {}).get('full_name', '') if worker_skills else '' %}
     {% set display_option = display_name if display_name == worker or ('(' ~ worker ~ ')') in display_name else display_name ~ ' (' ~ worker ~ ')' %}
     <option value="{{ display_option }}"></option>
-    {% if raw_full_name and raw_full_name != display_option %}
-    <option value="{{ raw_full_name }}"></option>
-    {% endif %}
     {% endfor %}
   </datalist>
 

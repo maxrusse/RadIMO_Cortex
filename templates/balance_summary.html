@@ -138,6 +138,10 @@
     gap: 0.85rem;
   }
 
+  .leaders-grid-compact {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+
   .leaders-card {
     border: 1px solid #dbe4ee;
     border-radius: 8px;
@@ -166,7 +170,7 @@
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Performance' %}
-  {% set header_subtitle = 'Leadership view on current system performance and overflow pressure' %}
+  {% set header_subtitle = 'Global view on full-day load, drivers, and overflow support' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'balance_summary' %}
   {% set header_nav = namespace(links=[]) %}
@@ -186,14 +190,10 @@
 </script>
 
 <div class="card">
-  <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
-
-  <div class="summary-grid summary-grid-secondary" id="summary-secondary"></div>
-
   <div class="section-divider">
     <h3>Global Drivers</h3>
   </div>
-  <div class="leaders-grid">
+  <div class="leaders-grid leaders-grid-compact">
     <div class="leaders-card">
       <h4>Top Skills / Hour</h4>
       <ol class="leaders-list" id="leaders-skills"></ol>
@@ -202,6 +202,28 @@
       <h4>Top Modalities / Hour</h4>
       <ol class="leaders-list" id="leaders-modalities"></ol>
     </div>
+  </div>
+
+  <div class="section-divider">
+    <h3>Load So Far</h3>
+  </div>
+  <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
+
+  <div class="leaders-grid leaders-grid-compact">
+    <div class="leaders-card">
+      <h4>Load by Skill</h4>
+      <ol class="leaders-list" id="leaders-skill-total"></ol>
+    </div>
+    <div class="leaders-card">
+      <h4>Load by Modality</h4>
+      <ol class="leaders-list" id="leaders-modality-total"></ol>
+    </div>
+  </div>
+
+  <div class="section-divider">
+    <h3>Overflow Support</h3>
+  </div>
+  <div class="leaders-grid">
     <div class="leaders-card">
       <h4>Requested Skill Overflow</h4>
       <ol class="leaders-list" id="leaders-overflow-skills"></ol>

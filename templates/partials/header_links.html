@@ -26,7 +26,7 @@
 {% if is_admin %}
   {% set header_nav.links = [
     {'href': url_for('routes.logout', modality=_mod), 'label': 'Logout', 'accent': True},
-    {'href': url_for('routes.balance_summary_page', modality=_mod), 'label': 'Performance', 'active': active_page == 'balance_summary'},
+    {'href': url_for('routes.performance_page', modality=_mod), 'label': 'Performance', 'active': active_page == 'balance_summary'},
     {'href': url_for('routes.worker_load_monitor', modality=_mod), 'label': 'Balance', 'active': active_page == 'balance_detail'},
     {'href': url_for('routes.skill_roster_page', modality=_mod), 'label': 'Skill Matrix', 'active': active_page == 'skill_matrix'},
     {'href': url_for('routes.button_weights_page', modality=_mod), 'label': 'Weight Matrix', 'active': active_page == 'button_weights'},
