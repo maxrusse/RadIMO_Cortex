@@ -44,8 +44,7 @@ const QUICK_BREAK = CONFIG.quick_break || { duration_minutes: 30, gap_type: 'Bre
     css += `.skill-header-${slug} { background: ${btnColor}; color: ${textColor}; }\n`;
     css += `.skill-btn-${slug} { background: ${btnColor}; color: ${textColor}; border: none; }\n`;
   }
-  // Skill VALUE colors - only highlight 1 (active) and w (weighted)
-  // 0 and -1 are neutral/subdued - use config colors
+  // Skill VALUE colors for text display
   const activeColor = SKILL_VALUE_COLORS.active?.color || '#28a745';
   const weightedColor = SKILL_VALUE_COLORS.weighted?.color || '#17a2b8';
   const passiveColor = SKILL_VALUE_COLORS.passive?.color || '#999';
@@ -54,6 +53,11 @@ const QUICK_BREAK = CONFIG.quick_break || { duration_minutes: 30, gap_type: 'Bre
   css += `.skill-val-0 { color: ${passiveColor}; font-weight: 400; }\n`;
   css += `.skill-val--1 { color: ${excludedColor}; font-weight: 400; }\n`;
   css += `.skill-val-w { color: ${weightedColor}; font-weight: 700; }\n`;
+  // Compact border cues for edit controls: -1 red, 0 orange, w yellow, 1 green
+  css += `.skill-border--1 { border-color: #c43d2c !important; box-shadow: inset 0 0 0 1px #c43d2c; }\n`;
+  css += `.skill-border-0 { border-color: #d97a1f !important; box-shadow: inset 0 0 0 1px #d97a1f; }\n`;
+  css += `.skill-border-w { border-color: #c8a11a !important; box-shadow: inset 0 0 0 1px #c8a11a; }\n`;
+  css += `.skill-border-1 { border-color: #2f9b57 !important; box-shadow: inset 0 0 0 1px #2f9b57; }\n`;
   css += `.modifier-high { background: ${weightedColor}; color: white; }\n`;
   css += `.agg-has-weighted { color: ${weightedColor}; font-weight: bold; }\n`;
   // UI theme colors

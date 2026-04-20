@@ -142,6 +142,11 @@
       font-weight: 600;
     }
 
+    .grid-input.skill-value-input {
+      background: #fff;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
     /* Timeline shift display with gaps */
     .shift-timeline {
       display: flex;
@@ -441,6 +446,11 @@
       width: 44px;
     }
 
+    .skill-value-select {
+      background: #fff;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
     /* Worker Skill Table (modal) - rows=modalities, cols=skills */
     .worker-skill-table {
       width: 100%;
@@ -481,6 +491,26 @@
     .worker-skill-table td select:focus {
       outline: 2px solid #007bff;
       outline-offset: -1px;
+    }
+
+    .skill-value-select.skill-border--1,
+    .grid-input.skill-border--1 {
+      border-color: #c43d2c;
+    }
+
+    .skill-value-select.skill-border-0,
+    .grid-input.skill-border-0 {
+      border-color: #d97a1f;
+    }
+
+    .skill-value-select.skill-border-w,
+    .grid-input.skill-border-w {
+      border-color: #c8a11a;
+    }
+
+    .skill-value-select.skill-border-1,
+    .grid-input.skill-border-1 {
+      border-color: #2f9b57;
     }
 
     .worker-skill-table tr:nth-child(even) {

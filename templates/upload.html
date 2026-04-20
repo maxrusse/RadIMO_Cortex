@@ -122,21 +122,22 @@
       background: #f5f6f8;
       border: 1px solid #d8dce3;
       border-radius: 8px;
-      padding: 1rem;
+      padding: 1rem 1.1rem;
     }
 
     .workflow-steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
     }
 
     .step {
-      background: #ffffff;
-      border: 1px solid #e2e6ec;
-      padding: 1rem;
-      border-radius: 4px;
-      text-align: center;
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: start;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid #e2e6ec;
     }
 
     .step-num {
@@ -149,17 +150,32 @@
       align-items: center;
       justify-content: center;
       font-weight: bold;
-      margin-bottom: 0.5rem;
+      margin-top: 0.05rem;
     }
 
     .step-title {
       font-weight: 600;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.2rem;
     }
 
     .step-desc {
       font-size: 0.85rem;
       color: #666;
+    }
+
+    .step:last-child {
+      border-bottom: none;
+    }
+
+    .workflow-note {
+      margin-top: 0.85rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 6px;
+      border: 1px solid #e7b4ae;
+      background: #fff4f2;
+      color: #8b3028;
+      font-size: 0.84rem;
+      line-height: 1.45;
     }
 
     .upload-area {
@@ -178,26 +194,51 @@
     .status-strip {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       gap: 1rem;
       flex-wrap: wrap;
+    }
+
+    .status-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .secondary-action-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .secondary-action-copy {
+      color: #5f6b7a;
+      font-size: 0.84rem;
     }
 
     .upload-form-stack {
       display: flex;
       flex-direction: column;
-      gap: 0.9rem;
+      gap: 1rem;
     }
 
-    .upload-actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 0.75rem;
-      align-items: stretch;
+    .upload-main-action {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+
+    .upload-divider {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(0, 72, 146, 0.16), rgba(0, 72, 146, 0.02));
+      margin: 0.15rem 0 0.1rem;
     }
 
     .reset-box {
-      max-width: 420px;
+      max-width: 460px;
       background: #fff4f2;
       border: 1px solid #e7b4ae;
       border-radius: 8px;
@@ -226,11 +267,6 @@
       color: #8b3028;
     }
 
-    .upload-actions .btn {
-      width: 100%;
-      justify-content: center;
-    }
-
     .upload-note {
       font-size: 0.85rem;
       color: #5f6b7a;
@@ -249,8 +285,8 @@
       border: 1px solid #b8c8d8;
       border-radius: 4px;
       background: #ffffff;
-      min-height: 48px;
-      padding: 0.75rem 1rem;
+      min-height: 42px;
+      padding: 0.6rem 0.95rem;
       transition: background 0.2s, border-color 0.2s, color 0.2s;
     }
 
@@ -259,6 +295,22 @@
       border-color: #7aa3c8;
       color: #003670;
       text-decoration: none;
+    }
+
+    .primary-upload-btn {
+      width: 100%;
+      justify-content: center;
+      min-height: 50px;
+      font-weight: 700;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
+    }
+
+    .danger-zone-label {
+      font-size: 0.77rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #8b3028;
+      text-transform: uppercase;
     }
 
     .admin-footer {
@@ -433,6 +485,25 @@
       color: #203040;
     }
 
+    @media (max-width: 760px) {
+      .upload-area {
+        padding: 1rem;
+      }
+
+      .status-actions {
+        width: 100%;
+      }
+
+      .secondary-action-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .status-actions .external-action-link {
+        width: 100%;
+      }
+    }
+
     .stats-table {
       width: 100%;
       border-collapse: collapse;
@@ -480,29 +551,35 @@
           <div class="workflow-steps">
             <div class="step">
               <div class="step-num">1</div>
-              <div class="step-title">Master CSV</div>
-              <div class="step-desc">Gesamten Dienstplan als CSV hochladen.</div>
+              <div>
+                <div class="step-title">Master CSV</div>
+                <div class="step-desc">Gesamten Dienstplan als CSV hochladen.</div>
+              </div>
             </div>
             <div class="step">
               <div class="step-num">2</div>
-              <div class="step-title">Prep Tomorrow</div>
-              <div class="step-desc">Vorbereitung für morgen (Staging).</div>
+              <div>
+                <div class="step-title">Prep Tomorrow</div>
+                <div class="step-desc">Vorbereitung für morgen (Staging).</div>
+              </div>
             </div>
             <div class="step">
               <div class="step-num">3</div>
-              <div class="step-title">Auto-Live</div>
-              <div class="step-desc">Staged → Live erfolgt automatisch um {{ scheduler_config.daily_reset_time }} Uhr.</div>
+              <div>
+                <div class="step-title">Auto-Live</div>
+                <div class="step-desc">Staged → Live erfolgt automatisch um {{ scheduler_config.daily_reset_time }} Uhr.</div>
+              </div>
             </div>
             <div class="step">
               <div class="step-num">4</div>
-              <div class="step-title">Change Today</div>
-              <div class="step-desc">In-Day Anpassungen ohne Reset der Zähler durchführen.</div>
+              <div>
+                <div class="step-title">Change Today</div>
+                <div class="step-desc">In-Day Anpassungen ohne Reset der Zähler durchführen.</div>
+              </div>
             </div>
-            <div class="step">
-              <div class="step-num">!</div>
-              <div class="step-title">Hard Reload Today</div>
-              <div class="step-desc">Auf dieser Seite verwenden: lädt den heutigen Stand neu aus dem Master und setzt die Zähler zurück.</div>
-            </div>
+          </div>
+          <div class="workflow-note">
+            <strong>Hard Reload Today</strong> bleibt bewusst separat rechts als Reset-Aktion. Nur verwenden, wenn der heutige Plan komplett auf den Master-Stand zurückgesetzt werden soll.
           </div>
         </div>
       </div>
@@ -525,19 +602,24 @@
             </div>
             <form id="master-upload-form" enctype="multipart/form-data">
               <div class="upload-form-stack">
+                <div class="secondary-action-row">
+                  <div class="secondary-action-copy">1. Export in MedSpace öffnen und die aktuelle CSV erzeugen.</div>
+                  <div class="status-actions">
+                    <a
+                      class="external-action-link"
+                      href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
+                      target="_blank"
+                      rel="noopener noreferrer">
+                      MedSpace CSV Export
+                    </a>
+                  </div>
+                </div>
                 <div class="form-group">
                   <label>Medweb CSV</label>
                   <input type="file" id="master-csv-file" name="file" accept=".csv" required>
                 </div>
-                <div class="upload-actions">
-                  <a
-                    class="external-action-link"
-                    href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
-                    target="_blank"
-                    rel="noopener noreferrer">
-                    MedSpace CSV Export
-                  </a>
-                  <button type="submit" class="btn btn-primary" id="master-upload-btn">
+                <div class="upload-main-action">
+                  <button type="submit" class="btn btn-primary primary-upload-btn" id="master-upload-btn">
                     Upload Master CSV
                   </button>
                 </div>
@@ -546,7 +628,9 @@
                   Eine bereits vorbereitete <strong>Prep Tomorrow</strong>-Planung bleibt bestehen, bis du
                   <strong>Prep Tomorrow</strong> für das gewünschte Datum erneut lädst.
                 </div>
+                <div class="upload-divider"></div>
                 <div class="reset-box">
+                  <div class="danger-zone-label">Nur bei echtem Tages-Reset</div>
                   <div class="reset-box-title">HARD RELOAD TODAY</div>
                   <button class="btn btn-danger" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
                     HARD RELOAD TODAY

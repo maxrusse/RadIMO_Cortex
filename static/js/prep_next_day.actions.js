@@ -110,6 +110,18 @@ function getGapTimeRange(taskConfig, targetDay) {
   return parseDayTimes(dayTimes);
 }
 
+function syncSkillValueControlClass(el, value = null) {
+  if (!el) return;
+  const borderClasses = ['skill-border--1', 'skill-border-0', 'skill-border-w', 'skill-border-1'];
+  el.classList.remove(...borderClasses);
+  const resolvedValue = value === null ? el.value : value;
+  const borderClass = getSkillBorderClass(resolvedValue);
+  if (borderClass) {
+    el.classList.add(borderClass);
+  }
+  el.dataset.skillValue = displaySkillValue(normalizeSkillValueJS(resolvedValue));
+}
+
 // Toggle inline edit mode
 async function toggleEditMode(tab) {
   const wasActive = editMode[tab];
@@ -205,9 +217,7 @@ function validateAndSaveSkill(el) {
 
   // Update display
   el.value = displaySkillValue(normalized);
-  const color = getSkillColor(normalized);
-  el.style.backgroundColor = color + '20';
-  el.style.borderColor = color;
+  syncSkillValueControlClass(el, normalized);
 
   // Trigger change tracking
   const { tab, mod, row, skill, gidx, sidx } = el.dataset;
@@ -1215,6 +1225,7 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
   const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
   if (skillSelect && effectiveValue !== null && effectiveValue !== undefined) {
     skillSelect.value = displaySkillValue(effectiveValue);
+    syncSkillValueControlClass(skillSelect, effectiveValue);
   }
   updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: effectiveValue } });
 }
@@ -1331,7 +1342,9 @@ function setModalAddSkillValue(selectEl, rawValue, trainingEnabled) {
   if (!selectEl) return;
   const normalized = normalizeSkillValueJS(rawValue);
   selectEl.dataset.baseValue = normalized.toString();
-  selectEl.value = applyTrainingToSkillValue(normalized, trainingEnabled).toString();
+  const effectiveValue = applyTrainingToSkillValue(normalized, trainingEnabled);
+  selectEl.value = displaySkillValue(effectiveValue);
+  syncSkillValueControlClass(selectEl, effectiveValue);
 }
 
 function onModalAddSkillChange(selectEl) {
@@ -1440,6 +1453,7 @@ function restoreModalAddFormState(formState) {
             el.value = saved;
             el.dataset.baseValue = saved;
           }
+          syncSkillValueControlClass(el);
         }
       });
     });
@@ -1680,7 +1694,9 @@ function applyWorkerSkillPresetForModality(workerName, modKey) {
     if (el && modalitySkills[skill] !== undefined) {
       // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
       const val = modalitySkills[skill];
-      el.value = (val > 0 ? 0 : val).toString();
+      const effectiveValue = val > 0 ? 0 : val;
+      el.value = displaySkillValue(effectiveValue);
+      syncSkillValueControlClass(el, effectiveValue);
     }
   });
 }
@@ -1704,7 +1720,9 @@ function applyWorkerSkillPresetForShiftModality(groupIdx, shiftIdx, modKey) {
     if (el && modalitySkills[skill] !== undefined) {
       // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
       const val = modalitySkills[skill];
-      el.value = (val > 0 ? 0 : val).toString();
+      const effectiveValue = val > 0 ? 0 : val;
+      el.value = displaySkillValue(effectiveValue);
+      syncSkillValueControlClass(el, effectiveValue);
     }
   });
 }
@@ -1757,7 +1775,9 @@ function applyWorkerRosterToShift(shiftIdx) {
       if (el && modalitySkills[skill] !== undefined) {
         // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
         const val = modalitySkills[skill];
-        el.value = (val > 0 ? 0 : val).toString();
+        const effectiveValue = val > 0 ? 0 : val;
+        el.value = displaySkillValue(effectiveValue);
+        syncSkillValueControlClass(el, effectiveValue);
       }
     });
   });

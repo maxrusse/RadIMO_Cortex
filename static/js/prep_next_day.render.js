@@ -2,9 +2,13 @@
 function renderSkillSelect(id, value, onchangeHandler, options = {}) {
   const val = normalizeSkillValueJS(value);
   const idAttr = id ? ` id="${id}"` : '';
-  const changeAttr = onchangeHandler ? ` onchange="${onchangeHandler}"` : '';
+  const changeStatements = [];
+  if (onchangeHandler) changeStatements.push(onchangeHandler);
+  changeStatements.push('syncSkillValueControlClass(this)');
+  const changeAttr = ` onchange="${changeStatements.join('; ')}"`;
   const disabledAttr = options.disabled ? ' disabled' : '';
-  return `<select${idAttr}${changeAttr}${disabledAttr}>
+  const borderClass = getSkillBorderClass(val);
+  return `<select${idAttr} class="skill-value-select ${borderClass}" data-skill-value="${displaySkillValue(val)}"${changeAttr}${disabledAttr}>
     <option value="-1" ${val === -1 ? 'selected' : ''}>-1</option>
     <option value="0" ${val === 0 ? 'selected' : ''}>0</option>
     <option value="1" ${val === 1 ? 'selected' : ''}>1</option>
@@ -427,14 +431,14 @@ function renderTable(tab) {
 
         const displayVal = displaySkillValue(val);
         const skillClass = getSkillClass(val);
-        const skillColor = getSkillColor(val);
+        const borderClass = getSkillBorderClass(val);
         if (isEditMode) {
           return `<td class="${cellClass}" style="background:${cellBg};">
-            <input type="text" class="grid-input" value="${displayVal}"
+            <input type="text" class="grid-input skill-value-input ${borderClass}" value="${displayVal}"
               data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
               data-skill="${skill}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
-              onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)"
-              style="background:${skillColor}20;">
+              data-skill-value="${displayVal}"
+              onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)">
           </td>`;
         } else {
           return `<td class="${cellClass}" style="background:${cellBg};"><span class="grid-badge skill-val ${skillClass}">${displayVal}</span></td>`;

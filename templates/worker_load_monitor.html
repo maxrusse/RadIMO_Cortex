@@ -653,10 +653,10 @@
   <div class="controls-bar">
     <div class="mode-toggle">
       <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
-      <button class="mode-btn" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Advanced Weight</button>
-      <button class="mode-btn" data-mode="advanced-count" onclick="setMode('advanced-count')">Advanced Count</button>
-      <button class="mode-btn" data-mode="flow" onclick="setMode('flow')">Flow</button>
-      <button class="mode-btn" data-mode="recent" onclick="setMode('recent')">Recent</button>
+      <button class="mode-btn" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Weighted Matrix</button>
+      <button class="mode-btn" data-mode="advanced-count" onclick="setMode('advanced-count')">Count Matrix</button>
+      <button class="mode-btn" data-mode="flow" onclick="setMode('flow')">Flow Analysis</button>
+      <button class="mode-btn" data-mode="recent" onclick="setMode('recent')">Recent Events</button>
     </div>
 
     <div class="color-toggle">
@@ -676,26 +676,10 @@
   <div class="kpi-strip">
     <div class="kpi-section">
       <div class="kpi-section-header">
-        <h4>Overview</h4>
+        <h4>Current State</h4>
         <span class="kpi-section-note" id="kpi-threshold-note">Workers below 1.0h are ignored for min/max and load benchmark.</span>
       </div>
       <div class="summary-grid" id="summary-overview"></div>
-    </div>
-
-    <div class="kpi-section">
-      <div class="kpi-section-header">
-        <h4>Skills / Hour</h4>
-        <span class="kpi-section-note">Exposure metric based on active worker hours in each skill.</span>
-      </div>
-      <div class="kpi-grid-compact" id="summary-skill-hour"></div>
-    </div>
-
-    <div class="kpi-section">
-      <div class="kpi-section-header">
-        <h4>Modalities / Hour</h4>
-        <span class="kpi-section-note">Exposure metric based on active worker hours in each modality.</span>
-      </div>
-      <div class="kpi-grid-compact" id="summary-modality-hour"></div>
     </div>
   </div>
 
@@ -745,14 +729,26 @@
     </div>
 
     <div class="section-divider">
-      <h3>Per Modality / Hour</h3>
+      <h3>Modality Load / Hour</h3>
+    </div>
+    <div class="table-container">
+      <div class="kpi-section-header">
+        <span class="kpi-section-note">Exposure metric based on active worker hours in each modality.</span>
+      </div>
+      <div class="kpi-grid-compact" id="summary-modality-hour"></div>
     </div>
     <div class="table-container">
       <div class="summary-grid" id="summary-modality"></div>
     </div>
 
     <div class="section-divider">
-      <h3>Per Skill / Hour</h3>
+      <h3>Skill Load / Hour</h3>
+    </div>
+    <div class="table-container">
+      <div class="kpi-section-header">
+        <span class="kpi-section-note">Exposure metric based on active worker hours in each skill.</span>
+      </div>
+      <div class="kpi-grid-compact" id="summary-skill-hour"></div>
     </div>
     <div class="table-container">
       <div class="summary-grid" id="summary-skill"></div>
@@ -761,10 +757,10 @@
 
   <div class="advanced-only">
     <div class="section-divider">
-      <h3>Advanced Matrix (Modality × Skill)</h3>
+      <h3>Detailed Matrix (Modality × Skill)</h3>
     </div>
     <div class="advanced-panel advanced-weight-panel">
-      <p class="section-note">Derived weight view using assignment count × configured skill-modality weight from the current config.</p>
+      <p class="section-note">Derived load view using assignment count × configured skill-modality weight from the current config.</p>
       <div class="table-container" style="overflow-x: auto;">
         <table class="load-table compact-grid" id="table-advanced-weight">
           <thead id="thead-advanced-weight"></thead>
@@ -773,7 +769,7 @@
       </div>
     </div>
     <div class="advanced-panel advanced-count-panel">
-      <p class="section-note">Raw assignment counts. Useful as debug view when tiny modalities like X-ray would distort weighted comparisons.</p>
+      <p class="section-note">Raw assignment counts for auditing. Useful when tiny modalities like X-ray would distort weighted comparisons.</p>
       <div class="table-container" style="overflow-x: auto;">
         <table class="load-table compact-grid" id="table-advanced-count">
           <thead id="thead-advanced-count"></thead>
@@ -785,7 +781,7 @@
 
   <div class="recent-only">
     <div class="section-divider">
-      <h3>Recent Distributions</h3>
+      <h3>Recent Assignment Events</h3>
     </div>
     <p class="section-note">Last assignment events recorded in the backend tracking stream.</p>
     <div class="table-container" style="overflow-x: auto;">

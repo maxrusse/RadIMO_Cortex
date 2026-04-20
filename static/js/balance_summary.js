@@ -150,8 +150,9 @@ function computeModalityMetrics(workers) {
 }
 
 function renderOverviewCards(workerPayload, flowPayload) {
-  const container = document.getElementById('summary-overview');
-  if (!container) return;
+  const primaryContainer = document.getElementById('summary-overview');
+  const secondaryContainer = document.getElementById('summary-secondary');
+  if (!primaryContainer) return;
 
   const workers = workerPayload.workers || [];
   const bandStats = computeBandStats(workerPayload);
@@ -168,12 +169,13 @@ function renderOverviewCards(workerPayload, flowPayload) {
     });
   const overflowSummary = flowPayload.summary || {};
 
-  const cards = [
+  const primaryCards = [
     {
       title: 'System Status',
       badge: status.label,
       color: status.color,
       main: status.note,
+      className: 'summary-card-primary summary-card-status',
       rows: [
         { left: 'Valid baseline', right: `${bandStats.validWorkers.length} workers` },
         { left: 'Threshold', right: `${formatValue(bandStats.threshold, 1)} h` },
@@ -184,11 +186,26 @@ function renderOverviewCards(workerPayload, flowPayload) {
       badge: `${bandStats.validWorkers.length} valid`,
       color: '#3b6ea5',
       main: formatValue(globalPerHour, 2),
+      className: 'summary-card-primary',
       rows: [
         { left: 'Total weight', right: formatValue(totalWeight) },
         { left: 'Total hours', right: formatValue(totalHours) },
       ],
     },
+    {
+      title: 'Overflow Pressure',
+      badge: formatPercent(overflowSummary.overflow_quote || 0),
+      color: '#856404',
+      main: formatValue(overflowSummary.overflow_weight_total || 0, 1),
+      className: 'summary-card-primary',
+      rows: [
+        { left: 'Request inflow', right: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
+        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
+      ],
+    },
+  ];
+
+  const secondaryCards = [
     {
       title: 'Load Spread',
       badge: minWorker?.name || '-',
@@ -197,16 +214,6 @@ function renderOverviewCards(workerPayload, flowPayload) {
       rows: [
         { left: 'Max / hour', right: maxWorker ? formatValue(maxWorker.weight_per_hour, 2) : '-' },
         { left: 'Min / hour', right: minWorker ? formatValue(minWorker.weight_per_hour, 2) : '-' },
-      ],
-    },
-    {
-      title: 'Overflow Pressure',
-      badge: formatPercent(overflowSummary.overflow_quote || 0),
-      color: '#856404',
-      main: formatValue(overflowSummary.overflow_weight_total || 0, 1),
-      rows: [
-        { left: 'Request inflow', right: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
-        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
       ],
     },
     {
@@ -221,8 +228,10 @@ function renderOverviewCards(workerPayload, flowPayload) {
     },
   ];
 
-  container.innerHTML = cards.map(function(card) {
-    return `<div class="summary-card">
+  function renderCards(cards) {
+    return cards.map(function(card) {
+      const cardClass = card.className ? `summary-card ${card.className}` : 'summary-card';
+      return `<div class="${cardClass}">
       <div class="summary-card-header">
         <span class="summary-card-title">${escapeHtml(card.title)}</span>
         <span class="summary-card-badge" style="background:${card.color};">${escapeHtml(card.badge)}</span>
@@ -232,7 +241,13 @@ function renderOverviewCards(workerPayload, flowPayload) {
         return `<div class="summary-card-sub"><span>${escapeHtml(row.left)}</span><span>${escapeHtml(row.right)}</span></div>`;
       }).join('')}
     </div>`;
-  }).join('');
+    }).join('');
+  }
+
+  primaryContainer.innerHTML = renderCards(primaryCards);
+  if (secondaryContainer) {
+    secondaryContainer.innerHTML = renderCards(secondaryCards);
+  }
 
   const strip = document.getElementById('signal-strip');
   if (strip) {
@@ -240,7 +255,7 @@ function renderOverviewCards(workerPayload, flowPayload) {
       { label: 'Above band', value: `${bandStats.overBandWorkers.length}` },
       { label: 'Below band', value: `${bandStats.underBandWorkers.length}` },
       { label: 'Peak worker', value: maxWorker ? `${maxWorker.name} ${formatValue(maxWorker.weight_per_hour, 2)}` : '-' },
-      { label: 'Top overflow skill', value: overflowSkills[0] ? `${overflowSkills[0].label} ${formatPercent(overflowSkills[0].overflowQuote)}` : '-' },
+      { label: 'Top overflow', value: overflowSkills[0] ? `${overflowSkills[0].label} ${formatPercent(overflowSkills[0].overflowQuote)}` : '-' },
       { label: 'In band', value: `${bandStats.inBandCount}` },
     ];
     strip.innerHTML = signals.map(function(signal) {

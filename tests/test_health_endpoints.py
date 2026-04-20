@@ -390,9 +390,9 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="summary-modality"', response.data)
         self.assertIn(b'id="summary-skill"', response.data)
         self.assertIn(b'id="summary-overview"', response.data)
-        self.assertIn(b"Advanced Weight", response.data)
-        self.assertIn(b"Advanced Count", response.data)
-        self.assertIn(b"Recent", response.data)
+        self.assertIn(b"Weighted Matrix", response.data)
+        self.assertIn(b"Count Matrix", response.data)
+        self.assertIn(b"Recent Events", response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_weight_mode_renders_derived_weight_matrix(self, _mock_admin) -> None:
@@ -400,7 +400,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-advanced-weight"', response.data)
-        self.assertIn(b'Derived weight view using assignment count', response.data)
+        self.assertIn(b'Derived load view using assignment count', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_count_mode_renders_count_matrix(self, _mock_admin) -> None:
@@ -416,7 +416,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-recent"', response.data)
-        self.assertIn(b'Recent Distributions', response.data)
+        self.assertIn(b'Recent Assignment Events', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes.allowed_modalities", ["ct"])

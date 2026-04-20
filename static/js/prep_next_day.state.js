@@ -564,6 +564,17 @@ function getSkillClass(value) {
   }
 }
 
+function getSkillBorderClass(value) {
+  const v = normalizeSkillValueJS(value);
+  switch (v) {
+    case 1: return 'skill-border-1';
+    case 0: return 'skill-border-0';
+    case -1: return 'skill-border--1';
+    case 'w': return 'skill-border-w';
+    default: return '';
+  }
+}
+
 // Get color for skill value - only 1 and w get strong colors, 0/-1 are neutral (from config)
 function getSkillColor(value) {
   const v = normalizeSkillValueJS(value);

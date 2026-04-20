@@ -762,10 +762,10 @@ function renderRecentTable() {
 function renderWorkerLoadPanels() {
   const filteredWorkers = getFilteredWorkers();
   renderOverviewCards(filteredWorkers);
-  renderSkillCards(filteredWorkers, 'summary-skill-hour', 'No skill hour metrics for the current filter.', true);
-  renderModalityCards(filteredWorkers, 'summary-modality-hour', 'No modality hour metrics for the current filter.', true);
 
   if (currentMode === 'simple') {
+    renderModalityCards(filteredWorkers, 'summary-modality-hour', 'No modality hour metrics for the current filter.', true);
+    renderSkillCards(filteredWorkers, 'summary-skill-hour', 'No skill hour metrics for the current filter.', true);
     renderGlobalTable();
     renderModalityCards(filteredWorkers, 'summary-modality', 'No modality activity for the current filter.');
     renderSkillCards(filteredWorkers, 'summary-skill', 'No skill activity for the current filter.');
