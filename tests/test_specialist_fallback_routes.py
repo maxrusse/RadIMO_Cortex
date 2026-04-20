@@ -4,7 +4,6 @@ from unittest.mock import patch
 from app import app
 import routes
 from config import SKILL_COLUMNS, get_specialist_fallback_targets
-from data_manager import modality_data
 
 
 class TestSpecialistFallbackRoutes(unittest.TestCase):
@@ -15,7 +14,6 @@ class TestSpecialistFallbackRoutes(unittest.TestCase):
                 self.assertEqual(targets, [])
 
     def test_assign_without_fallback_route_keeps_normal_overflow(self) -> None:
-        modality_data["ct"]["skill_counts"] = {"aou": {}}
         candidate = {
             "PPL": "Dr. AOU",
             "Modifier": 1.0,
@@ -38,7 +36,6 @@ class TestSpecialistFallbackRoutes(unittest.TestCase):
         self.assertIsNone(kwargs["target_skill_modalities"])
 
     def test_assign_strict_without_fallback_route_stays_strict(self) -> None:
-        modality_data["ct"]["skill_counts"] = {"aou": {}}
         candidate = {
             "PPL": "Dr. Strict AOU",
             "Modifier": 1.0,

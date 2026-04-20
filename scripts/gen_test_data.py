@@ -144,11 +144,6 @@ def _prepare_balancer_state(modality_dfs: dict[str, pd.DataFrame]) -> None:
         if df is None:
             df = pd.DataFrame()
         modality_data[mod]["working_hours_df"] = df.copy()
-        modality_data[mod]["skill_counts"] = {skill: {} for skill in SKILL_COLUMNS}
-        if not df.empty and "PPL" in df.columns:
-            for worker in sorted(set(df["PPL"].dropna().astype(str).tolist())):
-                for skill in SKILL_COLUMNS:
-                    modality_data[mod]["skill_counts"][skill][worker] = 0
 
     global_worker_data["weighted_counts"] = {}
     for mod in allowed_modalities:

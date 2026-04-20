@@ -320,14 +320,6 @@ def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list, i
     d['worker_modifiers'] = df.groupby('PPL')['Modifier'].first().to_dict() if not df.empty else {}
     d['total_work_hours'] = _calculate_total_work_hours(df)
 
-    unique_workers = df['PPL'].unique() if not df.empty else []
-    d['skill_counts'] = {}
-    for skill in SKILL_COLUMNS:
-        if skill in df.columns:
-            d['skill_counts'][skill] = {w: 0 for w in unique_workers}
-        else:
-            d['skill_counts'][skill] = {}
-
     d['info_texts'] = info_texts or []
     d['info_texts_by_skill'] = info_texts_by_skill or {}
 
@@ -675,7 +667,6 @@ def initialize_data(file_path: str, modality: str) -> None:
     )
 
     d = modality_data[modality]
-    d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
     global_worker_data['assignments_per_mod'][modality] = {}
 
     with lock:
@@ -693,14 +684,6 @@ def initialize_data(file_path: str, modality: str) -> None:
             invalidate_work_hours_cache(modality)
             d['worker_modifiers'] = df.groupby('PPL')['Modifier'].first().to_dict() if not df.empty else {}
             d['total_work_hours'] = _calculate_total_work_hours(df)
-            unique_workers = df['PPL'].unique() if not df.empty else []
-
-            d['skill_counts'] = {}
-            for skill in SKILL_COLUMNS:
-                if skill in df.columns:
-                    d['skill_counts'][skill] = {w: 0 for w in unique_workers}
-                else:
-                    d['skill_counts'][skill] = {}
 
             d['info_texts'] = data.get('info_texts', [])
             d['info_texts_by_skill'] = data.get('info_texts_by_skill', {})

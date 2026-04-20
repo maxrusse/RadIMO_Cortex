@@ -9,7 +9,6 @@ from datetime import datetime
 
 from config import (
     allowed_modalities,
-    SKILL_COLUMNS,
     STATE_FILE_PATH,
     selection_logger,
 )
@@ -40,7 +39,6 @@ def save_state():
         for mod in allowed_modalities:
             d = modality_data[mod]
             state['modality_data'][mod] = {
-                'skill_counts': d['skill_counts'],
                 'last_reset_date': d['last_reset_date'].isoformat() if d['last_reset_date'] else None
             }
 
@@ -86,8 +84,6 @@ def load_state():
             for mod in allowed_modalities:
                 if mod in state['modality_data']:
                     mod_state = state['modality_data'][mod]
-                    modality_data[mod]['skill_counts'] = mod_state.get('skill_counts', {skill: {} for skill in SKILL_COLUMNS})
-
                     last_reset_str = mod_state.get('last_reset_date')
                     if last_reset_str:
                         modality_data[mod]['last_reset_date'] = datetime.fromisoformat(last_reset_str).date()

@@ -18,7 +18,6 @@ class TestFlowBalanceTracking(unittest.TestCase):
         self.prev_assignments_per_mod = copy.deepcopy(global_worker_data.get('assignments_per_mod', {}))
         self.prev_modality_state = {
             mod: {
-                'skill_counts': copy.deepcopy(modality_data[mod].get('skill_counts', {})),
                 'last_reset_date': modality_data[mod].get('last_reset_date'),
             }
             for mod in allowed_modalities
@@ -30,7 +29,6 @@ class TestFlowBalanceTracking(unittest.TestCase):
         global_worker_data['weighted_counts'] = self.prev_weighted_counts
         global_worker_data['assignments_per_mod'] = self.prev_assignments_per_mod
         for mod in allowed_modalities:
-            modality_data[mod]['skill_counts'] = self.prev_modality_state[mod]['skill_counts']
             modality_data[mod]['last_reset_date'] = self.prev_modality_state[mod]['last_reset_date']
 
     def test_record_cross_pool_flow_only_on_skill_mismatch(self) -> None:
@@ -55,6 +53,21 @@ class TestFlowBalanceTracking(unittest.TestCase):
             {'aou': {'cvt': 2.5}},
         )
 
+    def test_record_cross_pool_flow_uses_unresolved_bucket_for_missing_target(self) -> None:
+        global_worker_data['flow_cross_pool'] = {}
+
+        recorded = routes._record_cross_pool_flow(
+            requested_skill='aou',
+            target_skill=None,
+            amount=1.25,
+        )
+
+        self.assertTrue(recorded)
+        self.assertEqual(
+            global_worker_data['flow_cross_pool'],
+            {'aou': {routes.FLOW_UNRESOLVED_TARGET: 1.25}},
+        )
+
     def test_resolve_flow_target_skill_maps_generalist_overflow_back_to_main_skill(self) -> None:
         direct_specialist = routes._resolve_flow_target_skill(
             {'aou': 1, 'cvt': 1, 'mdh': 0},
@@ -76,7 +89,7 @@ class TestFlowBalanceTracking(unittest.TestCase):
 
     def test_flow_balance_payload_aggregates_weighted_skill_links(self) -> None:
         global_worker_data['flow_cross_pool'] = {
-            'aou': {'cvt': 2.5, 'mdh': 1.0},
+            'aou': {'cvt': 2.5, 'mdh': 1.0, routes.FLOW_UNRESOLVED_TARGET: 0.75},
             'cvt_ct': {'aou_ct': 1.5},
         }
         payload = routes._build_flow_balance_payload()
@@ -84,26 +97,38 @@ class TestFlowBalanceTracking(unittest.TestCase):
         self.assertTrue(payload['success'])
         self.assertIn('aou', payload['skills'])
         self.assertIn('cvt', payload['skills'])
+        self.assertIn(routes.FLOW_UNRESOLVED_TARGET, payload['skills'])
+        self.assertEqual(
+            payload['skill_labels'][routes.FLOW_UNRESOLVED_TARGET],
+            routes.FLOW_UNRESOLVED_LABEL,
+        )
 
         self.assertEqual(
             payload['out_by_skill']['aou'],
-            [{'to': 'cvt', 'weight': 2.5}, {'to': 'mdh', 'weight': 1.0}],
+            [
+                {'to': 'cvt', 'weight': 2.5},
+                {'to': 'mdh', 'weight': 1.0},
+                {'to': routes.FLOW_UNRESOLVED_TARGET, 'weight': 0.75},
+            ],
         )
         self.assertEqual(
             payload['in_by_skill']['aou'],
             [{'from': 'cvt', 'weight': 1.5}],
         )
-        self.assertEqual(payload['totals']['aou']['out_total'], 3.5)
+        self.assertEqual(
+            payload['in_by_skill'][routes.FLOW_UNRESOLVED_TARGET],
+            [{'from': 'aou', 'weight': 0.75}],
+        )
+        self.assertEqual(payload['totals']['aou']['out_total'], 4.25)
         self.assertEqual(payload['totals']['aou']['in_total'], 1.5)
-        self.assertEqual(payload['grand_totals']['cross_pool_total'], 5.0)
+        self.assertEqual(payload['totals'][routes.FLOW_UNRESOLVED_TARGET]['in_total'], 0.75)
+        self.assertEqual(payload['grand_totals']['cross_pool_total'], 5.75)
 
     def test_daily_reset_snapshots_and_clears_flow_counters(self) -> None:
         global_worker_data['flow_cross_pool'] = {'aou': {'cvt': 3.5}}
         global_worker_data['last_reset_date'] = date(2026, 3, 1)
         global_worker_data['weighted_counts'] = {'AOU': 1.2}
         global_worker_data['assignments_per_mod'] = {mod: {} for mod in allowed_modalities}
-        for mod in allowed_modalities:
-            modality_data[mod]['skill_counts'] = {}
 
         with patch('data_manager.scheduled_tasks.get_local_now', return_value=datetime(2026, 3, 2, 8, 0, 0)), \
              patch('data_manager.worker_management.invalidate_work_hours_cache'), \

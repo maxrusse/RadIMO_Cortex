@@ -298,6 +298,9 @@ def _extract_row_day_part(row: pd.Series, cols: Optional[dict]) -> Optional[str]
 
 
 def _rule_matches_day_part(rule: dict, row_day_part: Optional[str]) -> bool:
+    if rule.get("day_parts", rule.get("day_part")) is None:
+        return True
+
     allowed_day_parts = _normalize_rule_day_parts(rule)
     if not allowed_day_parts:
         return True

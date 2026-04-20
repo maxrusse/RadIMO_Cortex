@@ -996,6 +996,21 @@ class TestDayPlanIntegration(unittest.TestCase):
             {"VM", "VMNM", "NM"},
         )
 
+    def test_rule_without_day_part_matches_row_without_day_part(self) -> None:
+        rules = [
+            {
+                "match": "Example Shift",
+                "type": "shift",
+                "label": "Example Shift",
+                "times": {"default": "08:00-16:00"},
+                "skill_overrides": {f"{SKILL_COLUMNS[0]}_{self.modality}": 1},
+            }
+        ]
+
+        rule = match_mapping_rule("Example Shift", rules, day_part=None)
+        self.assertIsNotNone(rule)
+        self.assertEqual(rule["label"], "Example Shift")
+
     def test_real_medweb_config_matches_late_geraeteassistenz_before_generic_rule(self) -> None:
         rules = APP_CONFIG["medweb_mapping"]["rules"]
 

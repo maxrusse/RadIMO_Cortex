@@ -628,8 +628,8 @@ function getSkillColor(skillKey) {
   return SKILL_SETTINGS[skillKey]?.button_color || '#5b7ea6';
 }
 
-function dataSkillLabel(skillKey) {
-  return SKILL_SETTINGS[skillKey]?.label || skillKey;
+function dataSkillLabel(skillKey, data) {
+  return data?.skill_labels?.[skillKey] || SKILL_SETTINGS[skillKey]?.label || skillKey;
 }
 
 function escapeAttribute(text) {
@@ -692,7 +692,7 @@ function renderFlowDiagram(data) {
         centerY: cursorY + (rowHeight / 2),
         total: total,
         color: getSkillColor(skill),
-        label: dataSkillLabel(skill)
+        label: dataSkillLabel(skill, data)
       });
       cursorY += rowHeight + rowGap;
     });
@@ -765,7 +765,7 @@ function renderFlowDiagram(data) {
   svg.innerHTML = `
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
     <text x="${leftX}" y="22" font-size="13" font-weight="700" fill="#004892">Requested Skill</text>
-    <text x="${rightX + nodeWidth}" y="22" font-size="13" font-weight="700" text-anchor="end" fill="#004892">Absorbing Main Skill</text>
+    <text x="${rightX + nodeWidth}" y="22" font-size="13" font-weight="700" text-anchor="end" fill="#004892">Absorbing Target Skill</text>
     ${linkSvg}
     ${renderNodes(leftLayout.nodes, leftX, 'left')}
     ${renderNodes(rightLayout.nodes, rightX, 'right')}

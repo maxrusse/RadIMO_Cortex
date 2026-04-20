@@ -26,10 +26,8 @@ class TestWarmStartOverflowMode(unittest.TestCase):
     def _reset_state(self) -> None:
         for mod in list(modality_data.keys()):
             modality_data[mod]["working_hours_df"] = pd.DataFrame()
-            modality_data[mod]["skill_counts"] = {self.skill: {}}
 
         modality_data[self.modality]["working_hours_df"] = self.df.copy()
-        modality_data[self.modality]["skill_counts"] = {self.skill: {"S1": 0, "S2": 0, "G1": 0}}
 
         global_worker_data["weighted_counts"] = {}
         for mod in list(global_worker_data["assignments_per_mod"].keys()):
@@ -126,4 +124,3 @@ class TestWarmStartOverflowMode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

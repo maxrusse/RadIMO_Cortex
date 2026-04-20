@@ -405,8 +405,8 @@ def reconcile_live_worker_tracking(modality: Optional[str] = None) -> None:
     """
     Reconcile live worker tracking data after edits/deletions.
 
-    Ensures skill_counts, weighted counts, and global assignment tracking
-    only include workers currently present in the live schedules.
+    Ensures canonical assignment tracking only includes workers currently
+    present in the live schedules.
     """
     # Import here to avoid circular imports
     from data_manager.worker_management import get_canonical_worker_id
@@ -427,14 +427,7 @@ def reconcile_live_worker_tracking(modality: Optional[str] = None) -> None:
 
     for mod in modalities_to_reconcile:
         d = modality_data[mod]
-        active_workers = active_workers_by_mod.get(mod, set())
         df = d.get('working_hours_df')
-
-        new_skill_counts = {}
-        for skill in SKILL_COLUMNS:
-            counts = d['skill_counts'].get(skill, {})
-            new_skill_counts[skill] = {name: counts.get(name, 0) for name in active_workers}
-        d['skill_counts'] = new_skill_counts
         if df is None or df.empty:
             d['worker_modifiers'] = {}
             d['total_work_hours'] = {}

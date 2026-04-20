@@ -398,7 +398,6 @@ class TestHealthEndpoints(unittest.TestCase):
                         }
                     ]
                 ),
-                "skill_counts": {},
             }
         },
         clear=True,

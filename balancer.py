@@ -379,24 +379,25 @@ def _apply_minimum_balancer(filtered_df: pd.DataFrame, column: str, modality: st
     if min_required <= 0:
         return filtered_df
 
-    skill_counts = modality_data[modality]['skill_counts'].get(column, {})
-    if not skill_counts:
-        return filtered_df
-
     working_hours_df = modality_data[modality].get('working_hours_df')
     if working_hours_df is None or column not in working_hours_df.columns:
         return filtered_df
 
+    specialist_workers = (
+        working_hours_df.loc[
+            working_hours_df[column].apply(skill_value_to_numeric) >= 1,
+            'PPL',
+        ]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+    if not specialist_workers:
+        return filtered_df
+
     any_below_minimum = False
-    for worker in skill_counts.keys():
-        worker_rows = working_hours_df[working_hours_df['PPL'] == worker]
-        if worker_rows.empty:
-            continue
-
-        skill_value = skill_value_to_numeric(worker_rows[column].iloc[0])
-        if skill_value < 1:
-            continue
-
+    for worker in specialist_workers:
         count = _get_effective_assignment_load(worker, column, modality)
         if count < min_required:
             any_below_minimum = True

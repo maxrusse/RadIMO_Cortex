@@ -226,7 +226,6 @@ def _clear_runtime_state(config_module: Any, worker_management_module: Any, file
 
     for mod in config_module.allowed_modalities:
         d = file_ops_module.modality_data[mod]
-        d["skill_counts"] = {skill: {} for skill in config_module.SKILL_COLUMNS}
         d["last_reset_date"] = None
 
 

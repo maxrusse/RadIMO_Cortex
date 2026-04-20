@@ -107,6 +107,7 @@ from data_manager.csv_parser import compute_time_ranges, parse_gap_times
 from data_manager.worker_management import (
     apply_skill_overrides,
     expand_skill_overrides,
+    get_all_workers_by_canonical_id,
     get_worker_skill_mod_combinations,
 )
 from state_manager import StateManager
@@ -146,6 +147,8 @@ LOG_SOURCE_ALIASES = {
     'selection-log': 'selection',
     'flow-log': 'flow',
 }
+FLOW_UNRESOLVED_TARGET = '__unresolved__'
+FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
 
 
 def _build_task_roles() -> list[dict[str, Any]]:
@@ -961,6 +964,68 @@ def _get_visible_skill_modality_keys() -> list[str]:
     return keys
 
 
+def _get_preferred_display_name(
+    canonical_id: str,
+    preferred_names: Optional[set[str]] = None,
+) -> str:
+    candidate_names = set(preferred_names or set())
+    candidate_names.update(get_all_workers_by_canonical_id().get(canonical_id, []))
+    if candidate_names:
+        return max(candidate_names, key=len)
+    return canonical_id
+
+
+def _get_active_display_names_for_modality(modality: str) -> dict[str, str]:
+    df = modality_data[modality].get('working_hours_df')
+    names_by_canonical: dict[str, set[str]] = {}
+    if df is not None and not df.empty and 'PPL' in df.columns:
+        for raw_name in df['PPL'].dropna().astype(str).tolist():
+            canonical_id = get_canonical_worker_id(raw_name)
+            names_by_canonical.setdefault(canonical_id, set()).add(raw_name)
+    return {
+        canonical_id: _get_preferred_display_name(canonical_id, names)
+        for canonical_id, names in names_by_canonical.items()
+    }
+
+
+def _build_combined_skill_counts_view() -> tuple[dict[str, dict[str, int]], dict[str, str]]:
+    names_by_canonical: dict[str, set[str]] = {}
+    all_canonical_ids: set[str] = set()
+
+    for modality in allowed_modalities:
+        modality_display_names = _get_active_display_names_for_modality(modality)
+        for canonical_id, display_name in modality_display_names.items():
+            names_by_canonical.setdefault(canonical_id, set()).add(display_name)
+        all_canonical_ids.update(modality_display_names.keys())
+        all_canonical_ids.update(
+            (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).keys()
+        )
+
+    display_names = {
+        canonical_id: _get_preferred_display_name(canonical_id, names_by_canonical.get(canonical_id))
+        for canonical_id in all_canonical_ids
+    }
+
+    combined_counts = {skill: {} for skill in SKILL_COLUMNS}
+    for canonical_id in all_canonical_ids:
+        display_name = display_names[canonical_id]
+        for skill in SKILL_COLUMNS:
+            total = 0
+            for modality in allowed_modalities:
+                total += int(
+                    (
+                        global_worker_data.get('assignments_per_mod', {})
+                        .get(modality, {})
+                        .get(canonical_id, {})
+                        .get(skill, 0)
+                    )
+                    or 0
+                )
+            combined_counts[skill][display_name] = total
+
+    return combined_counts, display_names
+
+
 def _resolve_flow_target_skill(candidate: dict[str, Any], assigned_skill: str) -> Optional[str]:
     assigned_skill = normalize_skill(assigned_skill)
     if assigned_skill in SKILL_COLUMNS:
@@ -1007,19 +1072,39 @@ def _normalize_flow_skill_key(raw_skill: Any) -> Optional[str]:
     return None
 
 
+def _normalize_flow_target_key(raw_skill: Any) -> Optional[str]:
+    raw_text = str(raw_skill or '').strip()
+    if raw_text == FLOW_UNRESOLVED_TARGET:
+        return FLOW_UNRESOLVED_TARGET
+    return _normalize_flow_skill_key(raw_skill)
+
+
 def _record_cross_pool_flow(
     requested_skill: str,
     target_skill: Optional[str],
     amount: float,
 ) -> bool:
     requested_skill = normalize_skill(requested_skill)
-    target_skill = normalize_skill(target_skill) if target_skill else None
-
-    if requested_skill not in SKILL_COLUMNS or target_skill not in SKILL_COLUMNS:
+    if requested_skill not in SKILL_COLUMNS:
         selection_logger.warning(
-            "Skipping cross-pool flow tracking due to unknown skill: requested=%s target=%s",
+            "Skipping cross-pool flow tracking due to unknown requested skill: requested=%s target=%s",
             requested_skill,
             target_skill,
+        )
+        return False
+
+    normalized_target = normalize_skill(target_skill) if target_skill else None
+    if target_skill is None:
+        normalized_target = FLOW_UNRESOLVED_TARGET
+        selection_logger.info(
+            "Cross-pool flow recorded with unresolved target skill: requested=%s",
+            requested_skill,
+        )
+    elif normalized_target not in SKILL_COLUMNS:
+        selection_logger.warning(
+            "Skipping cross-pool flow tracking due to unknown target skill: requested=%s target=%s",
+            requested_skill,
+            normalized_target,
         )
         return False
 
@@ -1028,21 +1113,22 @@ def _record_cross_pool_flow(
     except (TypeError, ValueError):
         return False
 
-    if flow_amount <= 0 or requested_skill == target_skill:
+    if flow_amount <= 0 or requested_skill == normalized_target:
         return False
 
     flow_cross_pool = global_worker_data.setdefault('flow_cross_pool', {})
     requested_bucket = flow_cross_pool.setdefault(requested_skill, {})
-    requested_bucket[target_skill] = float(requested_bucket.get(target_skill, 0.0)) + flow_amount
+    requested_bucket[normalized_target] = float(requested_bucket.get(normalized_target, 0.0)) + flow_amount
     return True
 
 
 def _build_flow_balance_payload() -> dict[str, Any]:
-    visible_skills = list(SKILL_COLUMNS)
+    visible_skills = list(SKILL_COLUMNS) + [FLOW_UNRESOLVED_TARGET]
     skill_labels = {
         skill_name: SKILL_SETTINGS.get(skill_name, {}).get('label', skill_name)
-        for skill_name in visible_skills
+        for skill_name in SKILL_COLUMNS
     }
+    skill_labels[FLOW_UNRESOLVED_TARGET] = FLOW_UNRESOLVED_LABEL
 
     raw_flow = global_worker_data.get('flow_cross_pool', {}) or {}
     out_totals: dict[str, float] = {skill: 0.0 for skill in visible_skills}
@@ -1063,7 +1149,7 @@ def _build_flow_balance_payload() -> dict[str, Any]:
 
         requested_bucket = normalized_flow.setdefault(requested_skill, {})
         for raw_target, raw_amount in raw_targets.items():
-            target_skill = _normalize_flow_skill_key(raw_target)
+            target_skill = _normalize_flow_target_key(raw_target)
             if target_skill not in skill_labels:
                 continue
             try:
@@ -2400,17 +2486,10 @@ def upload_file() -> Any:
     modality = resolve_modality_from_request()
     d = modality_data[modality]
 
+    combined_skill_counts, _ = _build_combined_skill_counts_view()
     all_worker_names = set()
-    combined_skill_counts = {skill: {} for skill in SKILL_COLUMNS}
-
-    for mod_key in allowed_modalities:
-        mod_d = modality_data[mod_key]
-        for skill in SKILL_COLUMNS:
-            for worker, count in mod_d['skill_counts'].get(skill, {}).items():
-                all_worker_names.add(worker)
-                if worker not in combined_skill_counts[skill]:
-                    combined_skill_counts[skill][worker] = 0
-                combined_skill_counts[skill][worker] += count
+    for skill in SKILL_COLUMNS:
+        all_worker_names.update(combined_skill_counts[skill].keys())
 
     sum_counts = {}
     global_counts = {}
@@ -2598,7 +2677,6 @@ def load_today_from_master() -> Any:
 
             for modality in allowed_modalities:
                 d = modality_data[modality]
-                d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
                 d['working_hours_df'] = None
                 d['info_texts'] = []
                 global_worker_data['assignments_per_mod'][modality] = {}
@@ -2647,12 +2725,6 @@ def load_today_from_master() -> Any:
 
                 if df is None or df.empty:
                     continue
-
-                for worker in df['PPL'].unique():
-                    for skill in SKILL_COLUMNS:
-                        if skill not in d['skill_counts']:
-                            d['skill_counts'][skill] = {}
-                        d['skill_counts'][skill][worker] = 0
 
                 d['info_texts'] = []
 
@@ -2875,13 +2947,6 @@ def resolve_live_task_preview() -> Any:
 @admin_required
 def add_live_worker() -> Any:
     def _post_add(modality: str, ppl_name: str) -> None:
-        d = modality_data[modality]
-        for skill in SKILL_COLUMNS:
-            if skill not in d['skill_counts']:
-                d['skill_counts'][skill] = {}
-            if ppl_name not in d['skill_counts'][skill]:
-                d['skill_counts'][skill][ppl_name] = 0
-
         selection_logger.info(f"Worker {ppl_name} added to LIVE {modality} schedule (no counter reset)")
 
     return _handle_add_worker(use_staged=False, post_success=_post_add)
@@ -3312,13 +3377,6 @@ def _assign_worker(
                     actual_modality,
                 )
 
-                if actual_skill in SKILL_COLUMNS:
-                    if actual_skill not in d['skill_counts']:
-                        d['skill_counts'][actual_skill] = {}
-                    if person not in d['skill_counts'][actual_skill]:
-                        d['skill_counts'][actual_skill][person] = 0
-                    d['skill_counts'][actual_skill][person] += 1
-
                 # Check if this is a weighted ('w') assignment.
                 # Shift modifier is always applied; W stream only for weighted assignments.
                 is_weighted = candidate.get('__is_weighted', False)
@@ -3573,6 +3631,8 @@ def get_worker_load_data() -> Any:
         if df is None or df.empty:
             continue
 
+        mod_assignments = global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}
+
         for idx, row in df.iterrows():
             worker_name = row['PPL']
             canonical_id = get_canonical_worker_id(worker_name)
@@ -3591,6 +3651,8 @@ def get_worker_load_data() -> Any:
                     'global_weight': global_weight,
                     'global_assignments': {}
                 }
+            elif len(str(worker_name)) > len(str(all_workers[canonical_id]['name'])):
+                all_workers[canonical_id]['name'] = worker_name
 
             # Store modality-specific data
             mod_data = {
@@ -3607,8 +3669,7 @@ def get_worker_load_data() -> Any:
             for skill in SKILL_COLUMNS:
                 skill_val = row.get(skill, None)
                 mod_data['skills'][skill] = skill_value_to_display(skill_val)
-                # Get skill count for this worker in this modality
-                count = d['skill_counts'].get(skill, {}).get(worker_name, 0)
+                count = int(mod_assignments.get(canonical_id, {}).get(skill, 0) or 0)
                 mod_data['skill_counts'][skill] = count
                 mod_data['assignment_total'] += count
 

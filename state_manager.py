@@ -65,7 +65,7 @@ class StateManager:
 
     Thread-safe access to:
     - global_worker_data: Cross-modality worker tracking
-    - modality_data: Live modality schedules and counters
+    - modality_data: Live modality schedules and derived metadata
     - staged_modality_data: Next-day prep data
     - worker_skill_json_roster: JSON skill roster cache
 
@@ -136,7 +136,6 @@ class StateManager:
                     'info_texts_by_skill': {},
                     'total_work_hours': {},
                     'worker_modifiers': {},
-                    'skill_counts': {skill: {} for skill in skill_columns},
                     'last_reset_date': None
                 }
 

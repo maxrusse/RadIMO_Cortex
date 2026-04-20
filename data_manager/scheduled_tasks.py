@@ -16,7 +16,6 @@ from config import (
     APP_CONFIG,
     FLOW_SNAPSHOT_LOGGER,
     allowed_modalities,
-    SKILL_COLUMNS,
     UPLOAD_FOLDER,
     selection_logger,
 )
@@ -141,7 +140,6 @@ def check_and_perform_daily_reset() -> None:
         for mod, d in modality_data.items():
             d['last_reset_date'] = today
             global_worker_data['assignments_per_mod'][mod] = {}
-            d['skill_counts'] = {skill: {} for skill in SKILL_COLUMNS}
 
         try:
             staged_day_path = os.path.join(
