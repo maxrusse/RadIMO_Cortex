@@ -6,7 +6,7 @@
     {% include 'partials/header_links.html' %}
     {% set header_links = header_nav.links %}
 
-  active_page options: 'dashboard', 'balance', 'skill_matrix', 'button_weights',
+  active_page options: 'dashboard', 'balance_summary', 'balance_detail', 'skill_matrix', 'button_weights',
                        'change_today', 'prep_tomorrow', 'upload', 'timetable'
 
   For prep pages, use page_mode instead:
@@ -26,7 +26,8 @@
 {% if is_admin %}
   {% set header_nav.links = [
     {'href': url_for('routes.logout', modality=_mod), 'label': 'Logout', 'accent': True},
-    {'href': url_for('routes.worker_load_monitor'), 'label': 'Balance', 'active': active_page == 'balance'},
+    {'href': url_for('routes.balance_summary_page'), 'label': 'Balance', 'active': active_page == 'balance_summary'},
+    {'href': url_for('routes.worker_load_monitor'), 'label': 'Balance Detail', 'active': active_page == 'balance_detail'},
     {'href': url_for('routes.skill_roster_page'), 'label': 'Skill Matrix', 'active': active_page == 'skill_matrix'},
     {'href': url_for('routes.button_weights_page'), 'label': 'Weight Matrix', 'active': active_page == 'button_weights'},
     {'href': url_for('routes.prep_today'), 'label': 'Change Today', 'active': _change_today_active},

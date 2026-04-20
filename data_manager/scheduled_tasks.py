@@ -135,6 +135,8 @@ def check_and_perform_daily_reset() -> None:
         # Reset global weighted counts
         global_worker_data['weighted_counts'] = {}
         global_worker_data['flow_cross_pool'] = {}
+        global_worker_data['distribution_stats'] = {}
+        global_worker_data['recent_distributions'] = []
 
         # Reset per-modality tracking
         for mod, d in modality_data.items():

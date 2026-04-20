@@ -122,6 +122,8 @@ class StateManager:
                 'weighted_counts': {},  # {worker_id: count}
                 'assignments_per_mod': {mod: {} for mod in allowed_modalities},
                 'flow_cross_pool': {},  # {requested_skill: {absorbing_main_skill: weighted_amount}}
+                'distribution_stats': {},  # {requested_skill: {inflow_weight, overflow_weight, unresolved_weight, count}}
+                'recent_distributions': [],  # Structured recent assignment events
                 'last_reset_date': None,  # Global reset date tracker
                 'last_preload_date': None,  # Next-workday preload tracker
                 'last_preload_source': None,  # 'csv' or 'snapshot'

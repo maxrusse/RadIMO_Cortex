@@ -313,6 +313,7 @@
     .text-yellow { color: #856404; }
     .text-red { color: var(--load-red); }
     .text-muted { color: #6c757d; }
+    .text-low { color: #7a8793; }
 
     /* Badge */
     .badge {
@@ -486,6 +487,91 @@
       background: #fbfcfe;
     }
 
+    .kpi-strip {
+      margin-bottom: 1rem;
+    }
+
+    .kpi-section + .kpi-section {
+      margin-top: 0.9rem;
+    }
+
+    .kpi-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .kpi-section-header h4 {
+      margin: 0;
+      color: #004892;
+      font-size: 0.92rem;
+    }
+
+    .kpi-section-note {
+      font-size: 0.76rem;
+      color: #667482;
+    }
+
+    .kpi-grid-compact {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.65rem;
+    }
+
+    .summary-card-main-sub {
+      font-size: 0.82rem;
+      color: #617180;
+      margin-top: 0.1rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .summary-card-badge.is-soft {
+      color: #16324d;
+      background: #dbe8f5 !important;
+    }
+
+    .section-note {
+      margin: -0.4rem 0 0.85rem 0;
+      font-size: 0.8rem;
+      color: #617180;
+    }
+
+    .recent-table td,
+    .recent-table th {
+      font-size: 0.76rem;
+    }
+
+    .recent-pill {
+      display: inline-block;
+      padding: 0.12rem 0.42rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .recent-pill-overflow {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .recent-pill-ok {
+      background: #e6f4ea;
+      color: #256a3a;
+    }
+
+    .recent-pill-unresolved {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    .advanced-panel {
+      display: none;
+    }
+
     /* Hide sections based on mode */
     .advanced-only {
       display: none;
@@ -495,21 +581,31 @@
       display: none;
     }
 
-    body.mode-advanced .advanced-only {
-      display: block;
-    }
-
-    body.mode-flow .flow-only {
-      display: block;
-    }
-
-    body.mode-advanced .simple-only {
+    .recent-only {
       display: none;
     }
 
+    body.mode-advanced-weight .advanced-only,
+    body.mode-advanced-count .advanced-only {
+      display: block;
+    }
+
+    body.mode-advanced-weight .advanced-weight-panel,
+    body.mode-advanced-count .advanced-count-panel,
+    body.mode-flow .flow-only,
+    body.mode-recent .recent-only {
+      display: block;
+    }
+
+    body.mode-advanced-weight .simple-only,
+    body.mode-advanced-count .simple-only,
     body.mode-flow .simple-only,
     body.mode-flow .advanced-only,
-    body.mode-flow .color-toggle {
+    body.mode-flow .data-filter-only,
+    body.mode-recent .simple-only,
+    body.mode-recent .advanced-only,
+    body.mode-recent .flow-only,
+    body.mode-recent .data-filter-only {
       display: none;
     }
 
@@ -532,7 +628,7 @@
   {% set header_title = 'RadIMO Cortex | Balance' %}
   {% set header_subtitle = 'Real-time load tracking' %}
   {% set header_mode = 'global' %}
-  {% set active_page = 'balance' %}
+  {% set active_page = 'balance_detail' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
@@ -547,6 +643,7 @@
   "modality_settings": {{ modality_settings | tojson }},
   "load_monitor_config": {{ load_monitor_config | tojson }},
   "initial_mode": {{ initial_mode | tojson }},
+  "skill_modality_weights": {{ skill_modality_weights | tojson }},
   "ui_colors": {{ ui_colors | tojson }}
 }
 </script>
@@ -556,8 +653,10 @@
   <div class="controls-bar">
     <div class="mode-toggle">
       <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
-      <button class="mode-btn" data-mode="advanced" onclick="setMode('advanced')">Advanced</button>
+      <button class="mode-btn" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Advanced Weight</button>
+      <button class="mode-btn" data-mode="advanced-count" onclick="setMode('advanced-count')">Advanced Count</button>
       <button class="mode-btn" data-mode="flow" onclick="setMode('flow')">Flow</button>
+      <button class="mode-btn" data-mode="recent" onclick="setMode('recent')">Recent</button>
     </div>
 
     <div class="color-toggle">
@@ -574,8 +673,34 @@
     </div>
   </div>
 
-  <!-- Filter Bar (Advanced Mode Only) -->
-  <div class="filter-bar advanced-only" id="filter-bar">
+  <div class="kpi-strip">
+    <div class="kpi-section">
+      <div class="kpi-section-header">
+        <h4>Overview</h4>
+        <span class="kpi-section-note" id="kpi-threshold-note">Workers below 1.0h are ignored for min/max and load benchmark.</span>
+      </div>
+      <div class="summary-grid" id="summary-overview"></div>
+    </div>
+
+    <div class="kpi-section">
+      <div class="kpi-section-header">
+        <h4>Skills / Hour</h4>
+        <span class="kpi-section-note">Exposure metric based on active worker hours in each skill.</span>
+      </div>
+      <div class="kpi-grid-compact" id="summary-skill-hour"></div>
+    </div>
+
+    <div class="kpi-section">
+      <div class="kpi-section-header">
+        <h4>Modalities / Hour</h4>
+        <span class="kpi-section-note">Exposure metric based on active worker hours in each modality.</span>
+      </div>
+      <div class="kpi-grid-compact" id="summary-modality-hour"></div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar data-filter-only" id="filter-bar">
     <label>Skill:</label>
     <button class="filter-btn active" data-skill="" onclick="filterBySkill('')">All</button>
     {% for skill in skills %}
@@ -601,9 +726,7 @@
     </label>
   </div>
 
-  <!-- SIMPLE MODE: Three stacked tables -->
   <div class="simple-only">
-    <!-- Global View -->
     <div class="section-divider">
       <h3>Global (Total Weight + Weight / Hour)</h3>
     </div>
@@ -621,32 +744,64 @@
       </table>
     </div>
 
-    <!-- Per Modality Summary -->
     <div class="section-divider">
-      <h3>Per Modality</h3>
+      <h3>Per Modality / Hour</h3>
     </div>
     <div class="table-container">
       <div class="summary-grid" id="summary-modality"></div>
     </div>
 
-    <!-- Per Skill Summary -->
     <div class="section-divider">
-      <h3>Per Skill</h3>
+      <h3>Per Skill / Hour</h3>
     </div>
     <div class="table-container">
       <div class="summary-grid" id="summary-skill"></div>
     </div>
   </div>
 
-  <!-- ADVANCED MODE: Full matrix table -->
   <div class="advanced-only">
     <div class="section-divider">
-      <h3>Full Matrix (Modality × Skill)</h3>
+      <h3>Advanced Matrix (Modality × Skill)</h3>
     </div>
+    <div class="advanced-panel advanced-weight-panel">
+      <p class="section-note">Derived weight view using assignment count × configured skill-modality weight from the current config.</p>
+      <div class="table-container" style="overflow-x: auto;">
+        <table class="load-table compact-grid" id="table-advanced-weight">
+          <thead id="thead-advanced-weight"></thead>
+          <tbody id="tbody-advanced-weight"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="advanced-panel advanced-count-panel">
+      <p class="section-note">Raw assignment counts. Useful as debug view when tiny modalities like X-ray would distort weighted comparisons.</p>
+      <div class="table-container" style="overflow-x: auto;">
+        <table class="load-table compact-grid" id="table-advanced-count">
+          <thead id="thead-advanced-count"></thead>
+          <tbody id="tbody-advanced-count"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="recent-only">
+    <div class="section-divider">
+      <h3>Recent Distributions</h3>
+    </div>
+    <p class="section-note">Last assignment events recorded in the backend tracking stream.</p>
     <div class="table-container" style="overflow-x: auto;">
-      <table class="load-table compact-grid" id="table-advanced">
-        <thead id="thead-advanced"></thead>
-        <tbody id="tbody-advanced"></tbody>
+      <table class="load-table recent-table" id="table-recent">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Worker</th>
+            <th>Requested</th>
+            <th>Assigned</th>
+            <th>Task</th>
+            <th>Weight</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-recent"></tbody>
       </table>
     </div>
   </div>
@@ -669,12 +824,28 @@
         <span class="flow-meta-label">Weighted Movement Total</span>
         <span class="flow-meta-value" id="meta-total">0</span>
       </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Request Inflow</span>
+        <span class="flow-meta-value" id="meta-inflow">0</span>
+      </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Overflow Quote</span>
+        <span class="flow-meta-value" id="meta-overflow-quote">0%</span>
+      </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Unresolved Weight</span>
+        <span class="flow-meta-value" id="meta-unresolved">0</span>
+      </div>
+      <div class="flow-meta-box">
+        <span class="flow-meta-label">Unresolved Quote</span>
+        <span class="flow-meta-value" id="meta-unresolved-quote">0%</span>
+      </div>
     </div>
 
     <div class="flow-diagram-card">
       <div class="flow-diagram-header">
         <h4>Migration Flow</h4>
-        <span class="flow-diagram-caption">requested skill to absorbing main skill, weighted by requested skill-modality</span>
+        <span class="flow-diagram-caption">requested skill to absorbing target skill, weighted by requested skill-modality</span>
       </div>
       <div class="flow-diagram-wrap">
         <svg id="flow-diagram" class="flow-diagram" role="img" aria-label="Weighted skill overflow migration flow diagram"></svg>

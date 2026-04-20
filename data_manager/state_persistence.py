@@ -29,6 +29,8 @@ def save_state():
                 'weighted_counts': global_worker_data['weighted_counts'],
                 'assignments_per_mod': global_worker_data['assignments_per_mod'],
                 'flow_cross_pool': global_worker_data.get('flow_cross_pool', {}),
+                'distribution_stats': global_worker_data.get('distribution_stats', {}),
+                'recent_distributions': global_worker_data.get('recent_distributions', []),
                 'last_reset_date': global_worker_data['last_reset_date'].isoformat() if global_worker_data['last_reset_date'] else None,
                 'last_preload_date': global_worker_data['last_preload_date'].isoformat() if global_worker_data['last_preload_date'] else None,
                 'last_preload_source': global_worker_data.get('last_preload_source'),
@@ -71,6 +73,8 @@ def load_state():
             global_worker_data['weighted_counts'] = gwd.get('weighted_counts', {})
             global_worker_data['assignments_per_mod'] = gwd.get('assignments_per_mod', {mod: {} for mod in allowed_modalities})
             global_worker_data['flow_cross_pool'] = gwd.get('flow_cross_pool', {})
+            global_worker_data['distribution_stats'] = gwd.get('distribution_stats', {})
+            global_worker_data['recent_distributions'] = gwd.get('recent_distributions', [])
 
             last_reset_str = gwd.get('last_reset_date')
             if last_reset_str:

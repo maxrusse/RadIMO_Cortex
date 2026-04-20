@@ -370,6 +370,16 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertFalse(mock_get_worker.call_args.kwargs["allow_overflow"])
 
     @patch("routes.has_admin_access", return_value=True)
+    def test_balance_summary_page_renders_management_sections(self, _mock_admin) -> None:
+        response = self.client.get("/balance-summary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Balance Summary", response.data)
+        self.assertIn(b'id="summary-overview"', response.data)
+        self.assertIn(b'id="leaders-overflow"', response.data)
+        self.assertIn(b'js/balance_summary.js', response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_simple_mode_renders_summary_sections_without_detail_tables(self, _mock_admin) -> None:
         response = self.client.get("/worker-load?mode=simple")
 
@@ -379,8 +389,34 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'Total Weight', response.data)
         self.assertIn(b'id="summary-modality"', response.data)
         self.assertIn(b'id="summary-skill"', response.data)
-        self.assertNotIn(b'id="table-modality"', response.data)
-        self.assertNotIn(b'id="table-skill"', response.data)
+        self.assertIn(b'id="summary-overview"', response.data)
+        self.assertIn(b"Advanced Weight", response.data)
+        self.assertIn(b"Advanced Count", response.data)
+        self.assertIn(b"Recent", response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_worker_load_advanced_weight_mode_renders_derived_weight_matrix(self, _mock_admin) -> None:
+        response = self.client.get("/worker-load?mode=advanced-weight")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="table-advanced-weight"', response.data)
+        self.assertIn(b'Derived weight view using assignment count', response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_worker_load_advanced_count_mode_renders_count_matrix(self, _mock_admin) -> None:
+        response = self.client.get("/worker-load?mode=advanced-count")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="table-advanced-count"', response.data)
+        self.assertIn(b'Raw assignment counts', response.data)
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_worker_load_recent_mode_renders_recent_distribution_table(self, _mock_admin) -> None:
+        response = self.client.get("/worker-load?mode=recent")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="table-recent"', response.data)
+        self.assertIn(b'Recent Distributions', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes.allowed_modalities", ["ct"])
@@ -422,6 +458,41 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(worker["weight_per_hour"], 2.0)
         self.assertEqual(worker["global_weight"], 4.0)
         self.assertEqual(worker["global_assignments"]["total"], 2)
+        self.assertIn("summary", payload)
+        self.assertEqual(payload["summary"]["valid_worker_threshold_hours"], 1.0)
+        self.assertIn("skills_per_hour", payload["summary"])
+        self.assertIn("modalities_per_hour", payload["summary"])
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_worker_load_recent_distributions_api_returns_latest_items(self, _mock_admin) -> None:
+        original_recent = list(routes_module.global_worker_data.get("recent_distributions", []))
+        try:
+            routes_module.global_worker_data["recent_distributions"] = [
+                {
+                    "timestamp": "2026-04-20T09:00:00",
+                    "person": "Worker One",
+                    "canonical_id": "worker-one",
+                    "requested_skill": "aou",
+                    "requested_modality": "ct",
+                    "actual_skill": "cvt",
+                    "actual_modality": "ct",
+                    "weight": 1.5,
+                    "overflowed": True,
+                    "unresolved": False,
+                    "task_label": "Task A",
+                }
+            ]
+
+            response = self.client.get("/api/worker-load/recent-distributions")
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["items"][0]["requested_skill"], "aou")
+            self.assertTrue(payload["items"][0]["overflowed"])
+        finally:
+            routes_module.global_worker_data["recent_distributions"] = original_recent
 
     @patch("routes._df_to_api_response", return_value={})
     @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())

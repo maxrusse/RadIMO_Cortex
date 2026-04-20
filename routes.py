@@ -149,6 +149,9 @@ LOG_SOURCE_ALIASES = {
 }
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
 FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
+VALID_WORKER_THRESHOLD_HOURS = 1.0
+RECENT_DISTRIBUTION_LIMIT = 10
+RECENT_DISTRIBUTION_MAX_STORED = 50
 
 
 def _build_task_roles() -> list[dict[str, Any]]:
@@ -1122,6 +1125,113 @@ def _record_cross_pool_flow(
     return True
 
 
+def _get_or_create_distribution_stats() -> dict[str, dict[str, float]]:
+    stats = global_worker_data.get('distribution_stats')
+    if not isinstance(stats, dict):
+        stats = {}
+        global_worker_data['distribution_stats'] = stats
+    return stats
+
+
+def _record_distribution_stats(
+    *,
+    requested_skill: str,
+    flow_weight: float,
+    overflowed: bool,
+    unresolved: bool,
+) -> bool:
+    requested_skill = normalize_skill(requested_skill)
+    if requested_skill not in SKILL_COLUMNS:
+        return False
+    try:
+        normalized_weight = float(flow_weight)
+    except (TypeError, ValueError):
+        return False
+    if normalized_weight <= 0:
+        return False
+
+    stats = _get_or_create_distribution_stats()
+    bucket = stats.setdefault(requested_skill, {
+        'requested_inflow_weight': 0.0,
+        'requested_count': 0,
+        'inflow_weight': 0.0,
+        'overflow_weight': 0.0,
+        'unresolved_weight': 0.0,
+        'count': 0,
+    })
+    bucket['inflow_weight'] = float(bucket.get('inflow_weight', 0.0) or 0.0) + normalized_weight
+    if overflowed:
+        bucket['overflow_weight'] = float(bucket.get('overflow_weight', 0.0) or 0.0) + normalized_weight
+    if unresolved:
+        bucket['unresolved_weight'] = float(bucket.get('unresolved_weight', 0.0) or 0.0) + normalized_weight
+    bucket['count'] = int(bucket.get('count', 0) or 0) + 1
+    return True
+
+
+def _record_distribution_request(
+    *,
+    requested_skill: str,
+    request_weight: float,
+) -> bool:
+    requested_skill = normalize_skill(requested_skill)
+    if requested_skill not in SKILL_COLUMNS:
+        return False
+    try:
+        normalized_weight = float(request_weight)
+    except (TypeError, ValueError):
+        return False
+    if normalized_weight <= 0:
+        return False
+
+    stats = _get_or_create_distribution_stats()
+    bucket = stats.setdefault(requested_skill, {
+        'requested_inflow_weight': 0.0,
+        'requested_count': 0,
+        'inflow_weight': 0.0,
+        'overflow_weight': 0.0,
+        'unresolved_weight': 0.0,
+        'count': 0,
+    })
+    bucket['requested_inflow_weight'] = float(bucket.get('requested_inflow_weight', 0.0) or 0.0) + normalized_weight
+    bucket['requested_count'] = int(bucket.get('requested_count', 0) or 0) + 1
+    return True
+
+
+def _record_recent_distribution(
+    *,
+    person: str,
+    canonical_id: str,
+    requested_skill: str,
+    requested_modality: str,
+    actual_skill: str,
+    actual_modality: str,
+    flow_weight: float,
+    overflowed: bool,
+    unresolved: bool,
+    task_label: Optional[str],
+) -> None:
+    recent_events = global_worker_data.setdefault('recent_distributions', [])
+    if not isinstance(recent_events, list):
+        recent_events = []
+        global_worker_data['recent_distributions'] = recent_events
+
+    recent_events.append({
+        'timestamp': get_local_now().isoformat(timespec='seconds'),
+        'person': person,
+        'canonical_id': canonical_id,
+        'requested_skill': normalize_skill(requested_skill) or requested_skill,
+        'requested_modality': normalize_modality(requested_modality) or requested_modality,
+        'actual_skill': normalize_skill(actual_skill) or actual_skill,
+        'actual_modality': normalize_modality(actual_modality) or actual_modality,
+        'weight': round(float(flow_weight or 0.0), 4),
+        'overflowed': bool(overflowed),
+        'unresolved': bool(unresolved),
+        'task_label': task_label or '',
+    })
+    if len(recent_events) > RECENT_DISTRIBUTION_MAX_STORED:
+        del recent_events[:-RECENT_DISTRIBUTION_MAX_STORED]
+
+
 def _build_flow_balance_payload() -> dict[str, Any]:
     visible_skills = list(SKILL_COLUMNS) + [FLOW_UNRESOLVED_TARGET]
     skill_labels = {
@@ -1131,6 +1241,7 @@ def _build_flow_balance_payload() -> dict[str, Any]:
     skill_labels[FLOW_UNRESOLVED_TARGET] = FLOW_UNRESOLVED_LABEL
 
     raw_flow = global_worker_data.get('flow_cross_pool', {}) or {}
+    distribution_stats = global_worker_data.get('distribution_stats', {}) or {}
     out_totals: dict[str, float] = {skill: 0.0 for skill in visible_skills}
     in_totals: dict[str, float] = {skill: 0.0 for skill in visible_skills}
     out_by_skill: dict[str, list[dict[str, Any]]] = {skill: [] for skill in visible_skills}
@@ -1193,6 +1304,48 @@ def _build_flow_balance_payload() -> dict[str, Any]:
         in_by_skill[target_skill] = rows
 
     cross_pool_total = round(sum(out_totals.values()), 2)
+    total_inflow_weight = round(
+        sum(
+            float((distribution_stats.get(skill, {}) or {}).get('requested_inflow_weight', 0.0) or 0.0)
+            for skill in SKILL_COLUMNS
+        ),
+        2,
+    )
+    total_assigned_base_weight = round(
+        sum(
+            float((distribution_stats.get(skill, {}) or {}).get('inflow_weight', 0.0) or 0.0)
+            for skill in SKILL_COLUMNS
+        ),
+        2,
+    )
+    unresolved_weight_total = round(
+        sum(
+            float((distribution_stats.get(skill, {}) or {}).get('unresolved_weight', 0.0) or 0.0)
+            for skill in SKILL_COLUMNS
+        ),
+        2,
+    )
+    overflow_quote = round(cross_pool_total / total_inflow_weight, 4) if total_inflow_weight > 0 else 0.0
+    unresolved_quote = round(unresolved_weight_total / cross_pool_total, 4) if cross_pool_total > 0 else 0.0
+    by_requested_skill = {
+        skill: {
+            'requested_inflow_weight': round(float((distribution_stats.get(skill, {}) or {}).get('requested_inflow_weight', 0.0) or 0.0), 2),
+            'requested_count': int((distribution_stats.get(skill, {}) or {}).get('requested_count', 0) or 0),
+            'inflow_weight': round(float((distribution_stats.get(skill, {}) or {}).get('requested_inflow_weight', 0.0) or 0.0), 2),
+            'assigned_base_weight': round(float((distribution_stats.get(skill, {}) or {}).get('inflow_weight', 0.0) or 0.0), 2),
+            'overflow_weight': round(float((distribution_stats.get(skill, {}) or {}).get('overflow_weight', 0.0) or 0.0), 2),
+            'unresolved_weight': round(float((distribution_stats.get(skill, {}) or {}).get('unresolved_weight', 0.0) or 0.0), 2),
+            'count': int((distribution_stats.get(skill, {}) or {}).get('count', 0) or 0),
+        }
+        for skill in SKILL_COLUMNS
+    }
+    for skill_name, metrics in by_requested_skill.items():
+        inflow = float(metrics.get('requested_inflow_weight', 0.0) or 0.0)
+        overflow = float(metrics.get('overflow_weight', 0.0) or 0.0)
+        unresolved = float(metrics.get('unresolved_weight', 0.0) or 0.0)
+        metrics['overflow_quote'] = round(overflow / inflow, 4) if inflow > 0 else 0.0
+        metrics['unresolved_quote'] = round(unresolved / overflow, 4) if overflow > 0 else 0.0
+
     return {
         'success': True,
         'skills': visible_skills,
@@ -1208,6 +1361,15 @@ def _build_flow_balance_payload() -> dict[str, Any]:
             for skill in visible_skills
         },
         'grand_totals': {'cross_pool_total': cross_pool_total},
+        'summary': {
+            'total_inflow_weight': total_inflow_weight,
+            'total_assigned_base_weight': total_assigned_base_weight,
+            'overflow_weight_total': cross_pool_total,
+            'overflow_quote': overflow_quote,
+            'unresolved_weight_total': unresolved_weight_total,
+            'unresolved_quote': unresolved_quote,
+            'by_requested_skill': by_requested_skill,
+        },
         'meta': {
             'window': 'since_daily_reset',
             'last_reset_date': (
@@ -2674,6 +2836,8 @@ def load_today_from_master() -> Any:
             # This handles both empty returns and partial modality returns
             global_worker_data['weighted_counts'] = {}
             global_worker_data['flow_cross_pool'] = {}
+            global_worker_data['distribution_stats'] = {}
+            global_worker_data['recent_distributions'] = []
 
             for modality in allowed_modalities:
                 d = modality_data[modality]
@@ -3309,8 +3473,27 @@ def _assign_worker(
         # Store response data to return after releasing lock
         response_data = None
         state_modified = False
+        requested_weight_override = None
+        if special_task:
+            requested_weight_override = get_special_task_weight(
+                special_task['slug'],
+                modality,
+                strict=use_strict_weights,
+            )
+        request_flow_weight = _get_cross_pool_flow_weight(
+            canonical_skill,
+            modality,
+            use_strict_weights=use_strict_weights,
+            work_amount=task_work_amount,
+            weight_override=requested_weight_override,
+        )
 
         with lock:
+            _record_distribution_request(
+                requested_skill=canonical_skill,
+                request_weight=request_flow_weight,
+            )
+
             # 1) Special task explicit targets: use configured specialist pools directly.
             if target_skill_modalities:
                 result = get_next_available_worker(
@@ -3410,6 +3593,27 @@ def _assign_worker(
                     requested_skill=canonical_skill,
                     target_skill=flow_target_skill,
                     amount=flow_weight,
+                )
+                normalized_flow_target = _normalize_flow_target_key(flow_target_skill)
+                overflowed = normalized_flow_target != canonical_skill
+                unresolved = normalized_flow_target == FLOW_UNRESOLVED_TARGET
+                _record_distribution_stats(
+                    requested_skill=canonical_skill,
+                    flow_weight=flow_weight,
+                    overflowed=overflowed,
+                    unresolved=unresolved,
+                )
+                _record_recent_distribution(
+                    person=person,
+                    canonical_id=canonical_id,
+                    requested_skill=canonical_skill,
+                    requested_modality=modality,
+                    actual_skill=actual_skill,
+                    actual_modality=actual_modality,
+                    flow_weight=flow_weight,
+                    overflowed=overflowed,
+                    unresolved=unresolved,
+                    task_label=task_label,
                 )
                 state_modified = True
 
@@ -3588,6 +3792,26 @@ def get_flow_balance_data() -> Any:
 
 
 # =============================================================================
+# BALANCE SUMMARY
+# =============================================================================
+
+@routes.route('/balance-summary')
+@admin_required
+def balance_summary_page() -> Any:
+    load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
+    return render_template(
+        'balance_summary.html',
+        skills=SKILL_COLUMNS,
+        skill_settings=SKILL_SETTINGS,
+        modalities=list(MODALITY_SETTINGS.keys()),
+        modality_settings=MODALITY_SETTINGS,
+        load_monitor_config=load_monitor_config,
+        ui_colors=APP_CONFIG.get('ui_colors', {}),
+        is_admin=True,
+    )
+
+
+# =============================================================================
 # WORKER LOAD MONITOR
 # =============================================================================
 
@@ -3597,10 +3821,18 @@ def worker_load_monitor() -> Any:
     """Worker load monitoring page with simple/advanced views."""
     load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
     initial_mode = (request.args.get('mode') or '').strip().lower()
-    if initial_mode not in {'simple', 'advanced', 'flow'}:
+    if initial_mode not in {'simple', 'advanced-weight', 'advanced-count', 'flow', 'recent'}:
         initial_mode = (load_monitor_config.get('default_view') or 'simple').strip().lower()
-    if initial_mode not in {'simple', 'advanced', 'flow'}:
+    if initial_mode not in {'simple', 'advanced-weight', 'advanced-count', 'flow', 'recent'}:
         initial_mode = 'simple'
+
+    skill_modality_weights = {
+        mod: {
+            skill: round(float(get_skill_modality_weight(skill, mod)), 4)
+            for skill in SKILL_COLUMNS
+        }
+        for mod in allowed_modalities
+    }
 
     return render_template(
         'worker_load_monitor.html',
@@ -3610,6 +3842,7 @@ def worker_load_monitor() -> Any:
         modality_settings=MODALITY_SETTINGS,
         load_monitor_config=load_monitor_config,
         initial_mode=initial_mode,
+        skill_modality_weights=skill_modality_weights,
         ui_colors=APP_CONFIG.get('ui_colors', {}),
         is_admin=True
     )
@@ -3718,6 +3951,64 @@ def get_worker_load_data() -> Any:
     # Get max weight for relative color coding
     max_weight = max((w['global_weight'] for w in all_workers.values()), default=0.0)
     max_weight_per_hour = max((w.get('weight_per_hour', 0.0) for w in all_workers.values()), default=0.0)
+    valid_workers = [
+        worker for worker in all_workers.values()
+        if float(worker.get('hours_worked_now', 0.0) or 0.0) >= VALID_WORKER_THRESHOLD_HOURS
+    ]
+    valid_workers.sort(key=lambda worker: float(worker.get('weight_per_hour', 0.0) or 0.0))
+
+    def _serialize_worker_summary(worker: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        if not worker:
+            return None
+        return {
+            'canonical_id': worker.get('canonical_id'),
+            'name': worker.get('name'),
+            'hours_worked_now': round(float(worker.get('hours_worked_now', 0.0) or 0.0), 4),
+            'global_weight': round(float(worker.get('global_weight', 0.0) or 0.0), 4),
+            'weight_per_hour': round(float(worker.get('weight_per_hour', 0.0) or 0.0), 4),
+        }
+
+    skill_summary: dict[str, dict[str, Any]] = {}
+    for skill in SKILL_COLUMNS:
+        weight_total = 0.0
+        hours_total = 0.0
+        active_worker_count = 0
+        for worker in all_workers.values():
+            skill_weight = float(worker.get('skill_weights', {}).get(skill, 0.0) or 0.0)
+            if skill_weight <= 0:
+                continue
+            weight_total += skill_weight
+            hours_total += float(worker.get('hours_worked_now', 0.0) or 0.0)
+            active_worker_count += 1
+        skill_summary[skill] = {
+            'weight_total': round(weight_total, 4),
+            'hours_total': round(hours_total, 4),
+            'weight_per_hour': round(weight_total / hours_total, 4) if hours_total > 0 else 0.0,
+            'active_worker_count': active_worker_count,
+        }
+
+    modality_summary: dict[str, dict[str, Any]] = {}
+    for modality in allowed_modalities:
+        weight_total = 0.0
+        hours_total = 0.0
+        active_worker_count = 0
+        for worker in all_workers.values():
+            mod_data = worker.get('modalities', {}).get(modality)
+            if not mod_data:
+                continue
+            mod_weight = float(mod_data.get('weighted_total', 0.0) or 0.0)
+            mod_assignments = int(mod_data.get('assignment_total', 0) or 0)
+            if mod_weight <= 0 and mod_assignments <= 0:
+                continue
+            weight_total += mod_weight
+            hours_total += float(worker.get('hours_worked_now', 0.0) or 0.0)
+            active_worker_count += 1
+        modality_summary[modality] = {
+            'weight_total': round(weight_total, 4),
+            'hours_total': round(hours_total, 4),
+            'weight_per_hour': round(weight_total / hours_total, 4) if hours_total > 0 else 0.0,
+            'active_worker_count': active_worker_count,
+        }
 
     return jsonify({
         'success': True,
@@ -3728,5 +4019,30 @@ def get_worker_load_data() -> Any:
         'max_weight_per_hour': max_weight_per_hour,
         'skills': SKILL_COLUMNS,
         'modalities': allowed_modalities,
-        'config': APP_CONFIG.get('worker_load_monitor', {})
+        'config': APP_CONFIG.get('worker_load_monitor', {}),
+        'summary': {
+            'valid_worker_threshold_hours': VALID_WORKER_THRESHOLD_HOURS,
+            'global': {
+                'max_worker_per_hour': _serialize_worker_summary(valid_workers[-1] if valid_workers else None),
+                'min_worker_per_hour': _serialize_worker_summary(valid_workers[0] if valid_workers else None),
+            },
+            'skills_per_hour': skill_summary,
+            'modalities_per_hour': modality_summary,
+        },
+    })
+
+
+@routes.route('/api/worker-load/recent-distributions', methods=['GET'])
+@admin_required
+def get_worker_load_recent_distributions() -> Any:
+    recent_events = global_worker_data.get('recent_distributions', []) or []
+    if not isinstance(recent_events, list):
+        recent_events = []
+    events = list(reversed(recent_events[-RECENT_DISTRIBUTION_LIMIT:]))
+    return jsonify({
+        'success': True,
+        'events': events,
+        'items': events,
+        'count': len(events),
+        'limit': RECENT_DISTRIBUTION_LIMIT,
     })
