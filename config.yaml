@@ -107,15 +107,17 @@ skills:
     slug: gyn
   aou:
     label: AOU
-    tooltip: Abdomen / Uro / Onko
+    tooltip: Abdomen / Onko / Uro
+    show_abbreviation_hint: true
     button_color: '#3478c6'
     text_color: '#ffffff'
-    special: true             # Abdomen / Uro / Onko subspecialty
+    special: true             # Abdomen / Onko / Uro subspecialty
     display_order: 0
     slug: aou
   cvt:
     label: CVT
     tooltip: Cardio / Vask / Thorax
+    show_abbreviation_hint: true
     button_color: '#d07a2d'
     text_color: '#ffffff'
     special: true             # Cardio / Vask / Thorax subspecialty
@@ -123,7 +125,8 @@ skills:
     slug: cvt
   mdh:
     label: MDH
-    tooltip: Muskel-Skelett / Hals / Derma
+    tooltip: MSK / Derma / Hals
+    show_abbreviation_hint: true
     button_color: '#4a9a46'
     text_color: '#ffffff'
     special: true             # Musculoskeletal & skin subspecialty

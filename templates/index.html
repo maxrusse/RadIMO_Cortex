@@ -415,7 +415,13 @@
     <div id="result"></div>
     <div class="clipboard-note">
       <div>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</div>
-      <div>AOU = Abdomen / Uro / Onko, MDH = Muskel-Skelett / Hals / Derma, CVT = Cardio / Vask / Thorax</div>
+      {% set skill_hint = namespace(text='') %}
+      {% for skill_def in skill_definitions if skill_def.show_abbreviation_hint %}
+        {% set skill_hint.text = skill_hint.text ~ (', ' if skill_hint.text else '') ~ skill_def.label ~ ' = ' ~ skill_def.tooltip %}
+      {% endfor %}
+      {% if skill_hint.text %}
+      <div>{{ skill_hint.text }}</div>
+      {% endif %}
     </div>
     <div class="info-box">
       <div class="info-header">
