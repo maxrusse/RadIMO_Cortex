@@ -32,21 +32,12 @@ function getModalityLabel(modality) {
   return MODALITY_SETTINGS[modality]?.label || modality.toUpperCase();
 }
 
-function getSkillColor(skill) {
-  return SKILL_SETTINGS[skill]?.button_color || '#5b7ea6';
-}
-
-function getModalityColor(modality) {
-  return MODALITY_SETTINGS[modality]?.nav_color || '#6c757d';
-}
-
 function getRequestedSkillOverflowMetrics(flowPayload) {
   const bySkill = flowPayload.summary?.by_requested_skill || {};
   return Object.entries(bySkill).map(function([skill, metrics]) {
     return {
       key: skill,
       label: getSkillLabel(skill),
-      color: getSkillColor(skill),
       inflowWeight: Number(metrics.inflow_weight || 0),
       overflowWeight: Number(metrics.overflow_weight || 0),
       unresolvedWeight: Number(metrics.unresolved_weight || 0),
@@ -71,7 +62,6 @@ function computeSkillMetrics(workers) {
     return {
       key: skill,
       label: getSkillLabel(skill),
-      color: getSkillColor(skill),
       weightTotal,
       hoursTotal,
       weightPerHour: hoursTotal > 0 ? weightTotal / hoursTotal : 0,
@@ -93,7 +83,6 @@ function computeModalityMetrics(workers) {
     return {
       key: modality,
       label: getModalityLabel(modality),
-      color: getModalityColor(modality),
       weightTotal,
       hoursTotal,
       weightPerHour: hoursTotal > 0 ? weightTotal / hoursTotal : 0,

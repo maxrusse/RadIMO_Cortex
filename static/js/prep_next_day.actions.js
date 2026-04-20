@@ -350,6 +350,7 @@ async function saveInlineChanges(tab) {
   const succeededKeys = new Set();
 
   for (const [changeKey, change] of changeEntries) {
+    const changeUnits = getPendingChangeUnits(change);
     try {
       if (change.isDelete) {
         await postJsonWithSnapshot(tab, deleteEndpoint, {
@@ -359,7 +360,7 @@ async function saveInlineChanges(tab) {
         }, {
           conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-        successCount++;
+        successCount += changeUnits;
         succeededKeys.add(changeKey);
       } else if (change.isNew) {
         // New modality addition - need to add via add-worker endpoint
@@ -396,14 +397,14 @@ async function saveInlineChanges(tab) {
         }, {
           conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-        successCount++;
+        successCount += changeUnits;
         succeededKeys.add(changeKey);
       } else {
         // Existing entry update
         await postJsonWithSnapshot(tab, updateEndpoint, change, {
           conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
         });
-        successCount++;
+        successCount += changeUnits;
         succeededKeys.add(changeKey);
       }
     } catch (fetchError) {
@@ -1255,6 +1256,7 @@ async function updateShiftFromModal(shiftIdx, updates) {
   if (!group) return;
   updateEditPlanDraftShift(shiftIdx, updates);
   markDraftShiftMaterialized(shiftIdx);
+  applyModalEditModeUI();
 }
 
 // Update a single skill in the modal draft
@@ -1278,6 +1280,7 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
     syncSkillValueControlClass(skillSelect, effectiveValue);
   }
   updateEditPlanDraftShiftSkills(shiftIdx, { [modKey]: { [skill]: effectiveValue } });
+  applyModalEditModeUI();
 }
 
 function isValidTimeValue(value) {
@@ -1958,16 +1961,31 @@ function setModalMode(mode) {
   const saveButton = document.getElementById('modal-save-button');
   if (!saveButton) return;
   if (mode === 'add-worker') {
-    saveButton.textContent = 'Add Worker';
     saveButton.className = 'btn btn-success';
   } else if (mode === 'edit-plan') {
-    saveButton.textContent = 'Save Edits';
     saveButton.className = 'btn btn-primary';
   } else {
     // Edit mode: all edits are live, no Save button needed
     saveButton.style.display = 'none';
   }
   applyModalEditModeUI();
+}
+
+function updateModalSaveButtonLabel() {
+  const saveButton = document.getElementById('modal-save-button');
+  if (!saveButton) return;
+
+  if (modalMode === 'add-worker') {
+    saveButton.textContent = 'Add Worker';
+    saveButton.title = '';
+    return;
+  }
+
+  if (modalMode === 'edit-plan') {
+    const hasPendingDraft = typeof hasEditPlanPendingChanges === 'function' && hasEditPlanPendingChanges();
+    saveButton.textContent = hasPendingDraft ? 'Save Edits*' : 'Save Edits';
+    saveButton.title = hasPendingDraft ? '* Pending changes in this edit dialog' : '';
+  }
 }
 
 function applyModalEditModeUI() {
@@ -1981,6 +1999,7 @@ function applyModalEditModeUI() {
       saveButton.style.display = 'none';
     }
   }
+  updateModalSaveButtonLabel();
 }
 
 function saveModalAction() {

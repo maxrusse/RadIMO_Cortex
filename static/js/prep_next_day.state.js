@@ -630,16 +630,73 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function getPendingChangeUnits(change) {
+  if (!change) return 0;
+  if (change.isDelete || change.isNew) {
+    return 1;
+  }
+  const updateCount = Object.keys(change.updates || {}).length;
+  return updateCount > 0 ? updateCount : 1;
+}
+
+function getPendingChangeCount(tab) {
+  const changes = Object.values(pendingChanges[tab] || {});
+  return changes.reduce((total, change) => total + getPendingChangeUnits(change), 0);
+}
+
+function normalizeEditPlanSkillMap(skillMap = {}) {
+  const normalized = {};
+  SKILLS.forEach(skill => {
+    normalized[skill] = normalizeSkillValueJS(skillMap?.[skill]);
+  });
+  return normalized;
+}
+
+function normalizeEditPlanShiftForComparison(shift = {}) {
+  const rowType = shift.row_type || (shift.is_gap_entry ? 'gap' : 'shift');
+  const normalizedModalities = {};
+  Object.keys(shift.modalities || {}).sort().forEach(modKey => {
+    const modData = shift.modalities?.[modKey] || {};
+    normalizedModalities[modKey] = {
+      row_index: typeof modData.row_index === 'number' ? modData.row_index : -1,
+      baseSkills: normalizeEditPlanSkillMap(modData.baseSkills || modData.skills || {}),
+      skills: normalizeEditPlanSkillMap(modData.skills || modData.baseSkills || {}),
+    };
+  });
+
+  return {
+    start_time: shift.start_time || '',
+    end_time: shift.end_time || '',
+    modifier: parseFloat(shift.modifier) || 1.0,
+    counts_for_hours: shift.counts_for_hours !== false,
+    training: shift.training !== false,
+    task: shift.task || '',
+    row_type: rowType,
+    is_gap_entry: rowType === 'gap' || Boolean(shift.is_gap_entry),
+    modalities: normalizedModalities,
+  };
+}
+
+function normalizeEditPlanShiftsForComparison(shifts = []) {
+  return (shifts || []).map(shift => normalizeEditPlanShiftForComparison(shift));
+}
+
+function hasEditPlanPendingChanges() {
+  if (!currentEditEntry || !editPlanDraft || editPlanDraft.worker !== currentEditEntry.worker) {
+    return false;
+  }
+
+  const group = entriesData[currentEditEntry.tab]?.[currentEditEntry.groupIdx];
+  if (!group) return false;
+
+  const sourceShifts = normalizeEditPlanShiftsForComparison(group.modalShiftsArray || group.shiftsArray || []);
+  const draftShifts = normalizeEditPlanShiftsForComparison(editPlanDraft.shifts || []);
+  return JSON.stringify(sourceShifts) !== JSON.stringify(draftShifts);
+}
+
 // Update the save button text to reflect pending change count
 function updateSaveButtonCount(tab) {
-  const changes = Object.values(pendingChanges[tab] || {});
-  const count = changes.reduce((total, change) => {
-    if (change.isDelete || change.isNew) {
-      return total + 1;
-    }
-    const updateCount = Object.keys(change.updates || {}).length;
-    return total + (updateCount > 0 ? updateCount : 1);
-  }, 0);
+  const count = getPendingChangeCount(tab);
   const saveBtn = document.getElementById(`save-inline-btn-${tab}`);
   if (saveBtn) {
     saveBtn.textContent = count > 0 ? `Save ${count} change${count !== 1 ? 's' : ''}` : 'Save Changes';
