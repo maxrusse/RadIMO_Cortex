@@ -38,15 +38,14 @@
 
   .summary-card {
     background: #fff;
-    border: 1px solid #dbe4ee;
+    border: 1px solid #dde5ee;
     border-radius: 8px;
     padding: 0.95rem 1rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    box-shadow: none;
   }
 
   .summary-card-primary {
-    padding: 1.15rem 1.2rem;
-    box-shadow: 0 4px 10px rgba(0, 72, 146, 0.08);
+    padding: 1.1rem 1.15rem;
   }
 
   .summary-card-primary .summary-card-title {
@@ -117,13 +116,14 @@
   .section-divider {
     margin: 1.6rem 0 0.85rem 0;
     padding-bottom: 0.45rem;
-    border-bottom: 3px solid #004892;
+    border-bottom: 1px solid #d9e2eb;
   }
 
   .section-divider h3 {
     margin: 0;
-    color: #004892;
-    font-size: 1.05rem;
+    color: #203040;
+    font-size: 1rem;
+    font-weight: 700;
   }
 
   .leaders-grid {
@@ -137,16 +137,17 @@
   }
 
   .leaders-card {
-    border: 1px solid #dbe4ee;
+    border: 1px solid #dde5ee;
     border-radius: 8px;
     padding: 0.8rem 0.9rem;
-    background: #fbfdff;
+    background: #ffffff;
   }
 
   .leaders-card h4 {
     margin: 0 0 0.55rem 0;
-    color: #004892;
+    color: #203040;
     font-size: 0.9rem;
+    font-weight: 700;
   }
 
   .leaders-list {
@@ -185,6 +186,11 @@
 
 <div class="card">
   <div class="section-divider">
+    <h3>Day Load</h3>
+  </div>
+  <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
+
+  <div class="section-divider">
     <h3>Global Drivers</h3>
   </div>
   <div class="leaders-grid leaders-grid-compact">
@@ -198,18 +204,13 @@
     </div>
   </div>
 
-  <div class="section-divider">
-    <h3>Load So Far</h3>
-  </div>
-  <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
-
   <div class="leaders-grid leaders-grid-compact">
     <div class="leaders-card">
-      <h4>Load by Skill</h4>
+      <h4>Day Load by Skill</h4>
       <ol class="leaders-list" id="leaders-skill-total"></ol>
     </div>
     <div class="leaders-card">
-      <h4>Load by Modality</h4>
+      <h4>Day Load by Modality</h4>
       <ol class="leaders-list" id="leaders-modality-total"></ol>
     </div>
   </div>

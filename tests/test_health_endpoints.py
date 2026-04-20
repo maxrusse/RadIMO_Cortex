@@ -376,7 +376,7 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Performance", response.data)
         self.assertIn(b"Global Drivers", response.data)
-        self.assertIn(b"Load So Far", response.data)
+        self.assertIn(b"Day Load", response.data)
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
         self.assertIn(b'id="leaders-overflow"', response.data)

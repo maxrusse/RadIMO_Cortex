@@ -127,23 +127,23 @@ function renderOverviewCards(workerPayload, flowPayload, options = {}) {
 
   const primaryCards = [
     {
-      title: 'Global Load / Hour',
+      title: 'Day Load',
       kicker: dataState,
-      main: formatMaybeValue(globalPerHour, 2),
-      className: 'summary-card-primary',
-      rows: [
-        { left: 'Total load so far', right: formatMaybeValue(totalWeight, 1) },
-        { left: 'Worker hours', right: formatMaybeValue(totalHours, 1) },
-      ],
-    },
-    {
-      title: 'Request Inflow',
-      kicker: 'Till now',
       main: formatMaybeValue(requestInflow, 1),
       className: 'summary-card-primary',
       rows: [
-        { left: 'Recorded workers', right: recordedWorkers == null ? '—' : String(recordedWorkers) },
+        { left: 'Absorbed load so far', right: formatMaybeValue(totalWeight, 1) },
         { left: 'Overflow support', right: formatMaybeValue(overflowSupport, 1) },
+      ],
+    },
+    {
+      title: 'Global Load / Hour',
+      kicker: 'Till now',
+      main: formatMaybeValue(globalPerHour, 2),
+      className: 'summary-card-primary',
+      rows: [
+        { left: 'Worker hours', right: formatMaybeValue(totalHours, 1) },
+        { left: 'Recorded workers', right: recordedWorkers == null ? '—' : String(recordedWorkers) },
       ],
     },
   ];
