@@ -847,10 +847,11 @@
       min-width: 8.5rem;
       display: inline-flex;
       align-items: center;
+      visibility: visible;
     }
 
     .prep-inline-save-status:empty {
-      display: none;
+      visibility: hidden;
     }
 
     .prep-inline-save-status.is-success {
@@ -953,6 +954,14 @@
       font-size: 0.78rem;
       color: #6c757d;
       font-weight: 600;
+      min-width: 12rem;
+      display: inline-flex;
+      align-items: center;
+      visibility: visible;
+    }
+
+    .prep-action-status:empty {
+      visibility: hidden;
     }
 
     .prep-date-input {
@@ -1049,31 +1058,76 @@
       flex-wrap: wrap;
     }
 
+    .prep-auto-refresh {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.3rem 0.55rem;
+      border: 1px solid #d7e1ec;
+      border-radius: 6px;
+      background: #f7fafc;
+      font-size: 0.76rem;
+      color: #415364;
+      line-height: 1.2;
+    }
+
+    .prep-auto-refresh input[type="checkbox"] {
+      margin: 0;
+    }
+
+    .prep-refresh-btn {
+      min-height: 30px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.76rem;
+    }
+
+    .prep-refresh-status {
+      color: #617180;
+      min-width: 110px;
+    }
+
     .prep-legend {
       font-size: 0.75rem;
       color: #666;
     }
 
+    #message-container {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1200;
+      width: min(440px, calc(100vw - 2rem));
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      pointer-events: none;
+    }
+
     /* Message */
     .message {
-      padding: 1rem;
+      padding: 0.8rem 0.95rem;
       border-radius: 4px;
-      margin-bottom: 1rem;
-      display: none;
+      display: block;
+      box-shadow: 0 8px 24px rgba(15, 39, 64, 0.16);
+      pointer-events: auto;
     }
 
     .message.success {
       background: #d4edda;
       color: #155724;
       border: 1px solid #c3e6cb;
-      display: block;
     }
 
     .message.error {
       background: #f8d7da;
       color: #721c24;
       border: 1px solid #f5c6cb;
-      display: block;
+    }
+
+    .message.info {
+      background: #eef4fb;
+      color: #16324d;
+      border: 1px solid #c8d9eb;
     }
 
     /* Add Panel */
@@ -1510,7 +1564,14 @@
           <button class="btn btn-success" onclick="saveInlineChanges('today')" id="save-inline-btn-today"
             style="display: none;">Save Changes</button>
           <span id="save-status-today" class="prep-inline-save-status" aria-live="polite"></span>
+          <span id="load-status-today" class="prep-action-status" aria-live="polite"></span>
           <button class="btn btn-primary" onclick="openAddWorkerModal('today')">+ Add Worker</button>
+          <div class="prep-auto-refresh">
+            <input type="checkbox" id="auto-refresh-today" onchange="togglePrepAutoRefresh('today')" checked>
+            <label for="auto-refresh-today">Auto-refresh</label>
+            <button class="btn btn-secondary prep-refresh-btn" type="button" onclick="refreshPrepTab('today')">Refresh</button>
+            <span id="prep-refresh-status-today" class="prep-refresh-status">Auto-refresh on</span>
+          </div>
         </div>
         <div class="prep-legend">
           <span class="skill-val skill-val-1">1</span> Active

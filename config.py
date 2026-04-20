@@ -252,6 +252,7 @@ def _build_skill_metadata(skills_config: Dict[str, Dict[str, Any]]) -> Tuple[Lis
             'button_color': data.get('button_color', '#004892'),
             'text_color': data.get('text_color', '#ffffff'),
             'special': bool(data.get('special', False)),
+            'show_abbreviation_hint': bool(data.get('show_abbreviation_hint', False)),
         })
 
     return columns, slug_map, templates

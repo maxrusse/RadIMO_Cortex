@@ -3,6 +3,7 @@ const SKILLS = CONFIG.skills || [];
 const MODALITIES = CONFIG.modalities || [];
 const SKILL_SETTINGS = CONFIG.skill_settings || {};
 const MODALITY_SETTINGS = CONFIG.modality_settings || {};
+let summaryAutoRefreshInterval = null;
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -69,21 +70,17 @@ function computeBandStats(workerPayload) {
 
 function classifySystemStatus(bandStats, flowPayload) {
   const overflowQuote = Number(flowPayload.summary?.overflow_quote || 0);
-  const unresolvedQuote = Number(flowPayload.summary?.unresolved_quote || 0);
-  const validCount = bandStats.validWorkers.length || 1;
-  const overBandShare = bandStats.overBandWorkers.length / validCount;
-  const underBandShare = bandStats.underBandWorkers.length / validCount;
 
   if (!bandStats.validWorkers.length) {
     return { label: 'No Baseline', color: '#6c757d', note: 'No valid worker-hour baseline yet' };
   }
-  if (overflowQuote >= 0.35 || overBandShare >= 0.4 || unresolvedQuote >= 0.2) {
-    return { label: 'Strained', color: '#b02a37', note: 'High overflow or many workers above band' };
+  if (overflowQuote >= 0.35) {
+    return { label: 'Strained', color: '#b02a37', note: 'High overflow pressure in the current stream' };
   }
-  if (overflowQuote >= 0.2 || overBandShare >= 0.25 || underBandShare >= 0.35) {
-    return { label: 'Watch', color: '#856404', note: 'Uneven load or meaningful overflow pressure' };
+  if (overflowQuote >= 0.2) {
+    return { label: 'Watch', color: '#856404', note: 'Meaningful overflow pressure needs attention' };
   }
-  return { label: 'Stable', color: '#2d7a46', note: 'Most active workers inside the 20% band' };
+  return { label: 'Stable', color: '#2d7a46', note: 'Overflow pressure remains low' };
 }
 
 function getRequestedSkillOverflowMetrics(flowPayload) {
@@ -160,8 +157,6 @@ function renderOverviewCards(workerPayload, flowPayload) {
   const totalWeight = workers.reduce(function(sum, worker) { return sum + Number(worker.global_weight || 0); }, 0);
   const totalHours = workers.reduce(function(sum, worker) { return sum + Number(worker.hours_worked_now || 0); }, 0);
   const globalPerHour = totalHours > 0 ? totalWeight / totalHours : 0;
-  const maxWorker = workerPayload.summary?.global?.max_worker_per_hour;
-  const minWorker = workerPayload.summary?.global?.min_worker_per_hour;
   const overflowSkills = getRequestedSkillOverflowMetrics(flowPayload)
     .sort(function(a, b) {
       if (b.overflowQuote !== a.overflowQuote) return b.overflowQuote - a.overflowQuote;
@@ -207,23 +202,23 @@ function renderOverviewCards(workerPayload, flowPayload) {
 
   const secondaryCards = [
     {
-      title: 'Load Spread',
-      badge: minWorker?.name || '-',
-      color: '#6c757d',
-      main: maxWorker && minWorker ? formatValue(Number(maxWorker.weight_per_hour || 0) - Number(minWorker.weight_per_hour || 0), 2) : '-',
+      title: 'Recorded Workers',
+      badge: `${workers.length}`,
+      color: '#3b6ea5',
+      main: `${workers.length}`,
       rows: [
-        { left: 'Max / hour', right: maxWorker ? formatValue(maxWorker.weight_per_hour, 2) : '-' },
-        { left: 'Min / hour', right: minWorker ? formatValue(minWorker.weight_per_hour, 2) : '-' },
+        { left: 'Valid baseline', right: `${bandStats.validWorkers.length}` },
+        { left: 'Threshold', right: `${formatValue(bandStats.threshold, 1)} h` },
       ],
     },
     {
-      title: 'Unresolved Share',
-      badge: formatPercent(overflowSummary.unresolved_quote || 0),
-      color: '#6c757d',
-      main: formatValue(overflowSummary.unresolved_weight_total || 0, 1),
+      title: 'Top Overflow Skill',
+      badge: overflowSkills[0] ? overflowSkills[0].label : '-',
+      color: overflowSkills[0]?.color || '#5b7ea6',
+      main: overflowSkills[0] ? formatPercent(overflowSkills[0].overflowQuote) : '-',
       rows: [
-        { left: 'Unresolved', right: formatValue(overflowSummary.unresolved_weight_total || 0, 1) },
-        { left: 'Of overflow', right: formatPercent(overflowSummary.unresolved_quote || 0) },
+        { left: 'Overflow weight', right: overflowSkills[0] ? formatValue(overflowSkills[0].overflowWeight, 1) : '-' },
+        { left: 'Request inflow', right: overflowSkills[0] ? formatValue(overflowSkills[0].inflowWeight, 1) : '-' },
       ],
     },
   ];
@@ -252,11 +247,11 @@ function renderOverviewCards(workerPayload, flowPayload) {
   const strip = document.getElementById('signal-strip');
   if (strip) {
     const signals = [
-      { label: 'Above band', value: `${bandStats.overBandWorkers.length}` },
-      { label: 'Below band', value: `${bandStats.underBandWorkers.length}` },
-      { label: 'Peak worker', value: maxWorker ? `${maxWorker.name} ${formatValue(maxWorker.weight_per_hour, 2)}` : '-' },
+      { label: 'Valid baseline', value: `${bandStats.validWorkers.length}` },
+      { label: 'Recorded workers', value: `${workers.length}` },
+      { label: 'Request inflow', value: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
+      { label: 'Overflow total', value: formatValue(overflowSummary.overflow_weight_total || 0, 1) },
       { label: 'Top overflow', value: overflowSkills[0] ? `${overflowSkills[0].label} ${formatPercent(overflowSkills[0].overflowQuote)}` : '-' },
-      { label: 'In band', value: `${bandStats.inBandCount}` },
     ];
     strip.innerHTML = signals.map(function(signal) {
       return `<div class="signal-pill"><span>${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong></div>`;
@@ -292,9 +287,6 @@ function renderLeaderSections(workerPayload, flowPayload) {
     .sort(function(a, b) { return Number(b.weight || 0) - Number(a.weight || 0); })
     .slice(0, 5);
 
-  renderLeaderList('leaders-workers', [...bandStats.overBandWorkers.slice(0, 3), ...bandStats.underBandWorkers.slice(0, 2)], function(item) {
-    return `${escapeHtml(item.name)}: <strong>${formatValue(item.weight_per_hour, 2)}</strong> /h`;
-  });
   renderLeaderList('leaders-skills', skills, function(item) {
     return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightPerHour, 2)}</strong> /h`;
   });
@@ -340,4 +332,8 @@ function loadSummaryData() {
 
 document.addEventListener('DOMContentLoaded', function() {
   loadSummaryData();
+  if (summaryAutoRefreshInterval) {
+    clearInterval(summaryAutoRefreshInterval);
+  }
+  summaryAutoRefreshInterval = setInterval(loadSummaryData, 30000);
 });

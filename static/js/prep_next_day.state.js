@@ -17,6 +17,7 @@ let sortState = { today: { column: 'shift', direction: 'asc' }, tomorrow: { colu
 let modalMode = 'edit';
 let lastAddedShiftMeta = null;
 let loadRequestId = { today: 0, tomorrow: 0 };
+let prepAutoRefreshInterval = { today: null, tomorrow: null };
 const GERMAN_WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const ENGLISH_TO_GERMAN_WEEKDAYS = {
   sunday: 'Sonntag',

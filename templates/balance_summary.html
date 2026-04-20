@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | Balance Summary{% endblock %}
+{% block title %}RadIMO Cortex | Performance{% endblock %}
 
 {% block styles %}
   {% include 'partials/admin_theme.html' %}
@@ -211,8 +211,8 @@
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Balance Summary' %}
-  {% set header_subtitle = 'Leadership view on current balance and overflow pressure' %}
+  {% set header_title = 'RadIMO Cortex | Performance' %}
+  {% set header_subtitle = 'Leadership view on current system performance and overflow pressure' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'balance_summary' %}
   {% set header_nav = namespace(links=[]) %}
@@ -235,8 +235,8 @@
   <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
 
   <div class="actions-row">
-    <a class="action-link" href="{{ url_for('routes.worker_load_monitor') }}">Open Balance Detail</a>
-    <a class="action-link secondary" href="{{ url_for('routes.worker_load_monitor', mode='flow') }}">Open Flow Analysis</a>
+    <a class="action-link" href="{{ url_for('routes.worker_load_monitor', modality=modality|default('ct')) }}">Open Balance Monitor</a>
+    <a class="action-link secondary" href="{{ url_for('routes.worker_load_monitor', modality=modality|default('ct'), mode='flow') }}">Open Flow Analysis</a>
   </div>
 
   <div class="signal-strip" id="signal-strip"></div>
@@ -244,13 +244,9 @@
   <div class="summary-grid summary-grid-secondary" id="summary-secondary"></div>
 
   <div class="section-divider">
-    <h3>Pressure Drivers</h3>
+    <h3>Global Drivers</h3>
   </div>
   <div class="leaders-grid">
-    <div class="leaders-card">
-      <h4>Workers Outside Band</h4>
-      <ol class="leaders-list" id="leaders-workers"></ol>
-    </div>
     <div class="leaders-card">
       <h4>Top Skills / Hour</h4>
       <ol class="leaders-list" id="leaders-skills"></ol>

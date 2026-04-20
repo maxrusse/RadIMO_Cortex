@@ -544,6 +544,56 @@
       font-size: 0.76rem;
     }
 
+    .recent-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding: 0.6rem;
+      background: #f7f9fb;
+      border: 1px solid #d8e3ef;
+      border-radius: 6px;
+    }
+
+    .recent-control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .recent-control-group label {
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #44515f;
+    }
+
+    .recent-select,
+    .recent-search {
+      height: 32px;
+      padding: 0 0.55rem;
+      border: 1px solid #c8d3de;
+      border-radius: 5px;
+      background: #fff;
+      color: #1f2937;
+      font-size: 0.76rem;
+    }
+
+    .recent-select {
+      min-width: 82px;
+    }
+
+    .recent-search {
+      min-width: 132px;
+    }
+
+    .recent-summary {
+      margin-left: auto;
+      font-size: 0.74rem;
+      color: #617180;
+      white-space: normal;
+    }
+
     .recent-pill {
       display: inline-block;
       padding: 0.12rem 0.42rem;
@@ -666,7 +716,7 @@
     </div>
 
     <div class="auto-refresh">
-      <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
+      <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()" checked>
       <label for="auto-refresh">Auto-refresh</label>
       <button class="refresh-btn" type="button" onclick="refreshCurrentMode()">Refresh</button>
       <span class="last-update" id="last-update"></span>
@@ -783,7 +833,50 @@
     <div class="section-divider">
       <h3>Recent Assignment Events</h3>
     </div>
-    <p class="section-note">Last assignment events recorded in the backend tracking stream.</p>
+    <p class="section-note">Last assignment events recorded in the backend tracking stream. Full shows the complete current-day stream.</p>
+    <div class="recent-controls">
+      <div class="recent-control-group">
+        <label for="recent-filter-worker">Worker</label>
+        <input class="recent-search" id="recent-filter-worker" type="search" placeholder="Name filtern" oninput="filterRecentByWorker(this.value)">
+      </div>
+      <div class="recent-control-group">
+        <label for="recent-filter-status">Status</label>
+        <select class="recent-select" id="recent-filter-status" onchange="filterRecentByStatus(this.value)">
+          <option value="">All</option>
+          <option value="direct">Direct</option>
+          <option value="overflow">Overflow</option>
+          <option value="unresolved">Unresolved</option>
+        </select>
+      </div>
+      <div class="recent-control-group">
+        <label for="recent-filter-skill">Skill</label>
+        <select class="recent-select" id="recent-filter-skill" onchange="filterRecentBySkill(this.value)">
+          <option value="">All</option>
+          {% for skill in skills %}
+          <option value="{{ skill }}">{{ skill_settings[skill].label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="recent-control-group">
+        <label for="recent-filter-modality">Modality</label>
+        <select class="recent-select" id="recent-filter-modality" onchange="filterRecentByModality(this.value)">
+          <option value="">All</option>
+          {% for mod in modalities %}
+          <option value="{{ mod }}">{{ modality_settings[mod].label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="recent-control-group">
+        <label for="recent-visible-count">Visible</label>
+        <select class="recent-select" id="recent-visible-count" onchange="setRecentVisibleCount(this.value)">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="full">Full</option>
+        </select>
+      </div>
+      <div class="recent-summary" id="recent-summary-note">Showing 0 of 0 events</div>
+    </div>
     <div class="table-container" style="overflow-x: auto;">
       <table class="load-table recent-table" id="table-recent">
         <thead>

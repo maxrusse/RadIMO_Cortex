@@ -232,10 +232,11 @@ class TestFlowBalanceTracking(unittest.TestCase):
             },
         )
 
-    def test_record_recent_distribution_keeps_latest_items(self) -> None:
+    def test_record_recent_distribution_keeps_full_same_day_stream(self) -> None:
         global_worker_data['recent_distributions'] = []
 
-        for index in range(routes.RECENT_DISTRIBUTION_MAX_STORED + 3):
+        total_events = 53
+        for index in range(total_events):
             routes._record_recent_distribution(
                 person=f'Worker {index}',
                 canonical_id=f'worker-{index}',
@@ -250,9 +251,9 @@ class TestFlowBalanceTracking(unittest.TestCase):
             )
 
         recent = global_worker_data['recent_distributions']
-        self.assertEqual(len(recent), routes.RECENT_DISTRIBUTION_MAX_STORED)
-        self.assertEqual(recent[0]['person'], 'Worker 3')
-        self.assertEqual(recent[-1]['person'], f'Worker {routes.RECENT_DISTRIBUTION_MAX_STORED + 2}')
+        self.assertEqual(len(recent), total_events)
+        self.assertEqual(recent[0]['person'], 'Worker 0')
+        self.assertEqual(recent[-1]['person'], f'Worker {total_events - 1}')
 
     def test_daily_reset_snapshots_and_clears_flow_counters(self) -> None:
         global_worker_data['flow_cross_pool'] = {'aou': {'cvt': 3.5}}

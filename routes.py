@@ -150,8 +150,6 @@ LOG_SOURCE_ALIASES = {
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
 FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
 VALID_WORKER_THRESHOLD_HOURS = 1.0
-RECENT_DISTRIBUTION_LIMIT = 10
-RECENT_DISTRIBUTION_MAX_STORED = 50
 
 
 def _build_task_roles() -> list[dict[str, Any]]:
@@ -1228,8 +1226,6 @@ def _record_recent_distribution(
         'unresolved': bool(unresolved),
         'task_label': task_label or '',
     })
-    if len(recent_events) > RECENT_DISTRIBUTION_MAX_STORED:
-        del recent_events[:-RECENT_DISTRIBUTION_MAX_STORED]
 
 
 def _build_flow_balance_payload() -> dict[str, Any]:
@@ -2111,8 +2107,10 @@ def timetable() -> Any:
 def skill_roster_page() -> Any:
     valid_skills_map = build_valid_skills_map()
     default_w_modifier = BALANCER_SETTINGS.get('default_w_modifier', 1.0)
+    modality = resolve_modality_from_request()
     return render_template(
         'skill_roster.html',
+        modality=modality,
         valid_skills_map=valid_skills_map,
         default_w_modifier=default_w_modifier,
         is_admin=True
@@ -2121,8 +2119,9 @@ def skill_roster_page() -> Any:
 @routes.route('/button-weights')
 @admin_required
 def button_weights_page() -> Any:
+    modality = resolve_modality_from_request()
     valid_skills_map = build_valid_skills_map()
-    return render_template('button_weights.html', valid_skills_map=valid_skills_map, is_admin=True)
+    return render_template('button_weights.html', modality=modality, valid_skills_map=valid_skills_map, is_admin=True)
 
 @routes.route('/api/admin/button_weights', methods=['GET', 'POST'])
 @admin_required
@@ -3799,8 +3798,10 @@ def get_flow_balance_data() -> Any:
 @admin_required
 def balance_summary_page() -> Any:
     load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
+    modality = resolve_modality_from_request()
     return render_template(
         'balance_summary.html',
+        modality=modality,
         skills=SKILL_COLUMNS,
         skill_settings=SKILL_SETTINGS,
         modalities=list(MODALITY_SETTINGS.keys()),
@@ -3820,6 +3821,7 @@ def balance_summary_page() -> Any:
 def worker_load_monitor() -> Any:
     """Worker load monitoring page with simple/advanced views."""
     load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
+    modality = resolve_modality_from_request()
     initial_mode = (request.args.get('mode') or '').strip().lower()
     if initial_mode not in {'simple', 'advanced-weight', 'advanced-count', 'flow', 'recent'}:
         initial_mode = (load_monitor_config.get('default_view') or 'simple').strip().lower()
@@ -3836,6 +3838,7 @@ def worker_load_monitor() -> Any:
 
     return render_template(
         'worker_load_monitor.html',
+        modality=modality,
         skills=SKILL_COLUMNS,
         skill_settings=SKILL_SETTINGS,
         modalities=list(MODALITY_SETTINGS.keys()),
@@ -4038,11 +4041,11 @@ def get_worker_load_recent_distributions() -> Any:
     recent_events = global_worker_data.get('recent_distributions', []) or []
     if not isinstance(recent_events, list):
         recent_events = []
-    events = list(reversed(recent_events[-RECENT_DISTRIBUTION_LIMIT:]))
+    events = list(reversed(recent_events))
     return jsonify({
         'success': True,
         'events': events,
         'items': events,
         'count': len(events),
-        'limit': RECENT_DISTRIBUTION_LIMIT,
+        'limit': len(events),
     })

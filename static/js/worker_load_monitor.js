@@ -23,6 +23,7 @@ let flowDataLoaded = false;
 let flowData = null;
 let recentDataLoaded = false;
 let recentData = [];
+let recentFilters = { skill: '', modality: '', status: '', worker: '', visible: '50' };
 let filters = { modality: '', skill: '', hideZero: false };
 let sortState = {
   global: { column: 'weight_per_hour', direction: 'desc' },
@@ -170,21 +171,17 @@ function computeBandStats(workers) {
 
 function classifySystemStatus(bandStats, flowPayload) {
   const overflowQuote = Number(flowPayload?.summary?.overflow_quote || 0);
-  const unresolvedQuote = Number(flowPayload?.summary?.unresolved_quote || 0);
-  const validCount = bandStats.validWorkers.length || 1;
-  const overBandShare = bandStats.overBandWorkers.length / validCount;
-  const underBandShare = bandStats.underBandWorkers.length / validCount;
 
   if (!bandStats.validWorkers.length) {
     return { label: 'No Baseline', color: '#6c757d', note: 'No valid worker-hour baseline yet' };
   }
-  if (overflowQuote >= 0.35 || overBandShare >= 0.4 || unresolvedQuote >= 0.2) {
-    return { label: 'Strained', color: '#b02a37', note: 'High overflow or many workers above band' };
+  if (overflowQuote >= 0.35) {
+    return { label: 'Strained', color: '#b02a37', note: 'High overflow pressure in the current stream' };
   }
-  if (overflowQuote >= 0.2 || overBandShare >= 0.25 || underBandShare >= 0.35) {
-    return { label: 'Watch', color: '#856404', note: 'Uneven load or meaningful overflow pressure' };
+  if (overflowQuote >= 0.2) {
+    return { label: 'Watch', color: '#856404', note: 'Meaningful overflow pressure needs attention' };
   }
-  return { label: 'Stable', color: '#2d7a46', note: 'Most active workers inside the 20% band' };
+  return { label: 'Stable', color: '#2d7a46', note: 'Overflow pressure remains low' };
 }
 
 function getRequestedSkillOverflowMetrics(flowPayload) {
@@ -346,14 +343,6 @@ function renderOverviewCards(workers) {
   const globalPerHour = totalHours > 0 ? totalWeight / totalHours : 0;
   const status = classifySystemStatus(bandStats, flowData);
   const topOverflowSkill = getRequestedSkillOverflowMetrics(flowData)[0];
-  const maxWorker = validWorkers.reduce(function(best, worker) {
-    if (!best || Number(worker.weight_per_hour || 0) > Number(best.weight_per_hour || 0)) return worker;
-    return best;
-  }, null);
-  const minWorker = validWorkers.reduce(function(best, worker) {
-    if (!best || Number(worker.weight_per_hour || 0) < Number(best.weight_per_hour || 0)) return worker;
-    return best;
-  }, null);
   const overflowSummary = flowData?.summary || {};
 
   const cards = [
@@ -381,48 +370,25 @@ function renderOverviewCards(workers) {
       ],
     },
     {
-      title: 'Workers Above Band',
-      badge: `${bandStats.overBandWorkers.length}`,
-      color: '#b02a37',
-      main: formatPercent(validWorkers.length ? bandStats.overBandWorkers.length / validWorkers.length : 0),
-      mainLabel: 'Share above +20%',
+      title: 'Recorded Workers',
+      badge: `${workers.length}`,
+      color: '#3b6ea5',
+      main: `${workers.length}`,
+      mainLabel: 'Workers in current table',
       subRows: [
-        { left: 'Benchmark', right: formatValue(benchmark, 2) },
-        { left: 'Upper band', right: formatValue(bandStats.highThreshold, 2) },
+        { left: 'Valid baseline', right: `${validWorkers.length}` },
+        { left: 'Threshold', right: formatValue(getValidWorkerThresholdHours(), 1) + ' h' },
       ],
     },
     {
-      title: 'Workers Below Band',
-      badge: `${bandStats.underBandWorkers.length}`,
+      title: 'Request Inflow',
+      badge: 'Today',
       color: '#5f6c77',
-      main: formatPercent(validWorkers.length ? bandStats.underBandWorkers.length / validWorkers.length : 0),
-      mainLabel: 'Share below -20%',
+      main: formatValue(overflowSummary.total_inflow_weight || 0, 1),
+      mainLabel: 'Requested weight',
       subRows: [
-        { left: 'In band', right: `${bandStats.inBandCount}` },
-        { left: 'Lower band', right: formatValue(bandStats.lowThreshold, 2) },
-      ],
-    },
-    {
-      title: 'Peak Worker / Hour',
-      badge: maxWorker ? 'Peak' : '-',
-      color: '#b02a37',
-      main: maxWorker ? formatValue(maxWorker.weight_per_hour, 2) : '-',
-      mainSub: maxWorker ? maxWorker.name : 'No valid worker',
-      mainLabel: 'Highest current load',
-      subRows: [
-        { left: 'Weight', right: maxWorker ? formatValue(maxWorker.global_weight) : '-' },
-        { left: 'Hours', right: maxWorker ? formatValue(maxWorker.hours_worked_now) : '-' },
-      ],
-    },
-    {
-      title: 'Load Spread',
-      badge: minWorker ? minWorker.name : '-',
-      color: '#6c757d',
-      main: maxWorker && minWorker ? formatValue(Number(maxWorker.weight_per_hour || 0) - Number(minWorker.weight_per_hour || 0), 2) : '-',
-      mainLabel: 'Peak minus floor',
-      subRows: [
-        { left: 'Max / hour', right: maxWorker ? formatValue(maxWorker.weight_per_hour, 2) : '-' },
-        { left: 'Min / hour', right: minWorker ? formatValue(minWorker.weight_per_hour, 2) : '-' },
+        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
+        { left: 'Cross-pool', right: formatValue(overflowSummary.overflow_weight_total || 0, 1) },
       ],
     },
     {
@@ -434,17 +400,6 @@ function renderOverviewCards(workers) {
       subRows: [
         { left: 'Request inflow', right: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
         { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
-      ],
-    },
-    {
-      title: 'Unresolved Share',
-      badge: formatPercent(overflowSummary.unresolved_quote || 0),
-      color: '#6c757d',
-      main: formatValue(overflowSummary.unresolved_weight_total || 0, 1),
-      mainLabel: 'Unresolved weight',
-      subRows: [
-        { left: 'Unresolved', right: formatValue(overflowSummary.unresolved_weight_total || 0, 1) },
-        { left: 'Of overflow', right: formatPercent(overflowSummary.unresolved_quote || 0) },
       ],
     },
     {
@@ -463,7 +418,7 @@ function renderOverviewCards(workers) {
   renderCardGrid('summary-overview', cards, 'No overview metrics available.');
   const note = document.getElementById('kpi-threshold-note');
   if (note) {
-    note.textContent = `Workers below ${formatValue(getValidWorkerThresholdHours(), 1)}h are ignored for min/max and load benchmark. Average benchmark: ${formatValue(benchmark, 2)}.`;
+    note.textContent = `Workers below ${formatValue(getValidWorkerThresholdHours(), 1)}h are excluded from the valid baseline count.`;
   }
 }
 
@@ -733,12 +688,48 @@ function renderAdvancedTable(variant) {
 
 function renderRecentTable() {
   const tbody = document.getElementById('tbody-recent');
+  const summary = document.getElementById('recent-summary-note');
   if (!tbody) return;
   if (!recentData.length) {
+    if (summary) {
+      summary.textContent = 'Showing 0 of 0 events';
+    }
     tbody.innerHTML = '<tr><td colspan="7" class="no-data">No recent distributions recorded yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = recentData.map(function(item) {
+  const filtered = recentData.filter(function(item) {
+    const status = item.unresolved ? 'unresolved' : (item.overflowed ? 'overflow' : 'direct');
+    const workerName = String(item.person || '').toLowerCase();
+    const requestedSkill = String(item.requested_skill || '');
+    const actualSkill = String(item.actual_skill || '');
+    const requestedModality = String(item.requested_modality || '');
+    const actualModality = String(item.actual_modality || '');
+    if (recentFilters.worker && !workerName.includes(recentFilters.worker)) {
+      return false;
+    }
+    if (recentFilters.status && status !== recentFilters.status) {
+      return false;
+    }
+    if (recentFilters.skill && requestedSkill !== recentFilters.skill && actualSkill !== recentFilters.skill) {
+      return false;
+    }
+    if (recentFilters.modality && requestedModality !== recentFilters.modality && actualModality !== recentFilters.modality) {
+      return false;
+    }
+    return true;
+  });
+
+  const visibleCount = recentFilters.visible === 'full' ? filtered.length : Math.max(parseInt(recentFilters.visible, 10) || 0, 0);
+  const visibleItems = recentFilters.visible === 'full' ? filtered : filtered.slice(0, visibleCount);
+  if (summary) {
+    const visibleLabel = recentFilters.visible === 'full' ? 'Full day stream' : `${visibleItems.length} visible`;
+    summary.textContent = `${visibleLabel} | showing ${visibleItems.length} of ${filtered.length} filtered events (${recentData.length} loaded)`;
+  }
+  if (!visibleItems.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No recent events match the current filters.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = visibleItems.map(function(item) {
     const requested = `${getSkillLabel(item.requested_skill)} / ${getModalityLabel(item.requested_modality)}`;
     const actual = `${getSkillLabel(item.actual_skill)} / ${getModalityLabel(item.actual_modality)}`;
     let status = '<span class="recent-pill recent-pill-ok">Direct</span>';
@@ -757,6 +748,41 @@ function renderRecentTable() {
       <td>${status}</td>
     </tr>`;
   }).join('');
+}
+
+function filterRecentByWorker(value) {
+  recentFilters.worker = String(value || '').trim().toLowerCase();
+  if (currentMode === 'recent') {
+    renderRecentTable();
+  }
+}
+
+function filterRecentByStatus(value) {
+  recentFilters.status = value || '';
+  if (currentMode === 'recent') {
+    renderRecentTable();
+  }
+}
+
+function filterRecentBySkill(value) {
+  recentFilters.skill = value || '';
+  if (currentMode === 'recent') {
+    renderRecentTable();
+  }
+}
+
+function filterRecentByModality(value) {
+  recentFilters.modality = value || '';
+  if (currentMode === 'recent') {
+    renderRecentTable();
+  }
+}
+
+function setRecentVisibleCount(value) {
+  recentFilters.visible = value || '50';
+  if (currentMode === 'recent') {
+    renderRecentTable();
+  }
 }
 
 function renderWorkerLoadPanels() {
@@ -797,7 +823,8 @@ function renderAllTables() {
   }
 }
 
-function setMode(mode) {
+function setMode(mode, options = {}) {
+  const skipLoad = options.skipLoad === true;
   currentMode = MODES.includes(mode) ? mode : 'simple';
   MODES.forEach(function(modeName) {
     document.body.classList.remove(`mode-${modeName}`);
@@ -807,10 +834,13 @@ function setMode(mode) {
     btn.classList.toggle('active', btn.dataset.mode === currentMode);
   });
   renderAllTables();
+  if (skipLoad) {
+    return;
+  }
   if (currentMode === 'flow' && !flowDataLoaded) {
     loadFlowData();
   }
-  if (currentMode === 'recent' && !recentDataLoaded) {
+  if (currentMode === 'recent') {
     loadRecentData();
   }
 }
@@ -846,12 +876,13 @@ function applyFilters() {
 
 function toggleAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
   if (checkbox?.checked) {
     refreshCurrentMode();
     autoRefreshInterval = setInterval(refreshCurrentMode, 30000);
-  } else if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
   }
 }
 
@@ -1097,6 +1128,6 @@ function refreshCurrentMode() {
 
 document.addEventListener('DOMContentLoaded', function() {
   setColorMode(colorMode);
-  setMode(currentMode);
-  refreshCurrentMode();
+  setMode(currentMode, { skipLoad: true });
+  toggleAutoRefresh();
 });

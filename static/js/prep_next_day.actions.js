@@ -128,6 +128,9 @@ async function toggleEditMode(tab) {
   editMode[tab] = !editMode[tab];
   pendingChanges[tab] = {};  // Reset pending changes
   applyEditModeUI(tab);
+  if (tab === 'today' && document.getElementById('auto-refresh-today')?.checked) {
+    updatePrepRefreshStatus(tab, editMode[tab] ? 'Paused during edits' : 'Auto-refresh on');
+  }
   if (wasActive && !editMode[tab]) {
     await loadData();
     return;
@@ -478,8 +481,8 @@ function updatePrepLastEditLabel(text) {
   }
 }
 
-function updatePrepLoadResultLabel(text, kind = 'info') {
-  const statusEl = document.getElementById('load-status-tomorrow');
+function updatePrepLoadResultLabel(text, kind = 'info', mode = 'tomorrow') {
+  const statusEl = document.getElementById(mode === 'today' ? 'load-status-today' : 'load-status-tomorrow');
   if (!statusEl) return;
 
   statusEl.textContent = text || '';
@@ -812,6 +815,50 @@ async function loadData() {
   if (isTabAvailable(otherTab)) {
     loadTabData(otherTab);
   }
+}
+
+function updatePrepRefreshStatus(tab, message) {
+  const statusEl = document.getElementById(`prep-refresh-status-${tab}`);
+  if (statusEl) {
+    statusEl.textContent = message || '';
+  }
+}
+
+function shouldAutoRefreshPrepTab(tab) {
+  if (editMode[tab]) return false;
+  if (Object.keys(pendingChanges[tab] || {}).length > 0) return false;
+  if (document.getElementById('edit-modal')?.classList.contains('show')) return false;
+  if (document.getElementById('break-popup')?.classList.contains('show')) return false;
+  return true;
+}
+
+async function refreshPrepTab(tab, options = {}) {
+  const silent = options.silent === true;
+  if (!isTabAvailable(tab)) return;
+  if (!shouldAutoRefreshPrepTab(tab)) {
+    updatePrepRefreshStatus(tab, 'Paused during edits');
+    return;
+  }
+  await loadTabData(tab);
+  if (!silent) {
+    updatePrepRefreshStatus(tab, `Updated ${new Date().toLocaleTimeString()}`);
+  }
+}
+
+function togglePrepAutoRefresh(tab) {
+  const checkbox = document.getElementById(`auto-refresh-${tab}`);
+  if (prepAutoRefreshInterval[tab]) {
+    clearInterval(prepAutoRefreshInterval[tab]);
+    prepAutoRefreshInterval[tab] = null;
+  }
+  if (!checkbox?.checked) {
+    updatePrepRefreshStatus(tab, 'Auto-refresh off');
+    return;
+  }
+  updatePrepRefreshStatus(tab, 'Auto-refresh on');
+  prepAutoRefreshInterval[tab] = setInterval(function() {
+    refreshPrepTab(tab, { silent: true });
+  }, 30000);
 }
 
 // Build grouped entries list: worker -> shifts (time-based) -> modality×skills matrix
@@ -2446,17 +2493,17 @@ async function loadFromCSV(mode, options = {}) {
     const result = await response.json();
 
   if (response.ok) {
-      updatePrepLoadResultLabel(result.message || 'Loaded!', 'success');
+      updatePrepLoadResultLabel(result.message || 'Loaded!', 'success', mode === 'today' ? 'today' : 'tomorrow');
       if (mode === 'next' && result.target_date) {
         setPrepTargetMeta({ dateValue: result.target_date });
         updatePrepTargetUI();
       }
       await loadData();
     } else {
-      updatePrepLoadResultLabel(result.error || 'Error', 'error');
+      updatePrepLoadResultLabel(result.error || 'Error', 'error', mode === 'today' ? 'today' : 'tomorrow');
     }
   } catch (error) {
-    updatePrepLoadResultLabel('Error: ' + error.message, 'error');
+    updatePrepLoadResultLabel('Error: ' + error.message, 'error', mode === 'today' ? 'today' : 'tomorrow');
   }
 }
 
@@ -2474,3 +2521,6 @@ function showMessage(type, message) {
 // Initialize edit mode UI and load current tab (lazy loading)
 applyEditModeUI(currentTab);
 loadTabData(currentTab);
+if (currentTab === 'today') {
+  togglePrepAutoRefresh('today');
+}
