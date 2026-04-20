@@ -136,38 +136,6 @@
       color: white;
     }
 
-    /* Color Mode Toggle */
-    .color-toggle {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
-
-    .color-toggle label {
-      font-weight: 500;
-      margin-right: 0.5rem;
-    }
-
-    .color-btn {
-      padding: 0.3rem 1rem;
-      border: 1px solid #6c757d;
-      background: white;
-      color: #6c757d;
-      font-size: 0.85rem;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-
-    .color-btn:hover {
-      background: #f0f0f0;
-    }
-
-    .color-btn.active {
-      background: #6c757d;
-      color: white;
-    }
-
     /* Controls Bar */
     .controls-bar {
       display: flex;
@@ -694,7 +662,8 @@
   "load_monitor_config": {{ load_monitor_config | tojson }},
   "initial_mode": {{ initial_mode | tojson }},
   "skill_modality_weights": {{ skill_modality_weights | tojson }},
-  "ui_colors": {{ ui_colors | tojson }}
+  "ui_colors": {{ ui_colors | tojson }},
+  "worker_name_display_style": {{ worker_name_display_style | tojson }}
 }
 </script>
 
@@ -709,27 +678,11 @@
       <button class="mode-btn" data-mode="recent" onclick="setMode('recent')">Recent Events</button>
     </div>
 
-    <div class="color-toggle">
-      <label>Color Mode:</label>
-      <button class="color-btn active" data-color="absolute" onclick="setColorMode('absolute')">Absolute</button>
-      <button class="color-btn" data-color="relative" onclick="setColorMode('relative')">Relative</button>
-    </div>
-
     <div class="auto-refresh">
       <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()" checked>
       <label for="auto-refresh">Auto-refresh</label>
       <button class="refresh-btn" type="button" onclick="refreshCurrentMode()">Refresh</button>
       <span class="last-update" id="last-update"></span>
-    </div>
-  </div>
-
-  <div class="kpi-strip">
-    <div class="kpi-section">
-      <div class="kpi-section-header">
-        <h4>Current State</h4>
-        <span class="kpi-section-note" id="kpi-threshold-note">Workers below 1.0h are ignored for min/max and load benchmark.</span>
-      </div>
-      <div class="summary-grid" id="summary-overview"></div>
     </div>
   </div>
 
@@ -778,31 +731,6 @@
       </table>
     </div>
 
-    <div class="section-divider">
-      <h3>Modality Load / Hour</h3>
-    </div>
-    <div class="table-container">
-      <div class="kpi-section-header">
-        <span class="kpi-section-note">Exposure metric based on active worker hours in each modality.</span>
-      </div>
-      <div class="kpi-grid-compact" id="summary-modality-hour"></div>
-    </div>
-    <div class="table-container">
-      <div class="summary-grid" id="summary-modality"></div>
-    </div>
-
-    <div class="section-divider">
-      <h3>Skill Load / Hour</h3>
-    </div>
-    <div class="table-container">
-      <div class="kpi-section-header">
-        <span class="kpi-section-note">Exposure metric based on active worker hours in each skill.</span>
-      </div>
-      <div class="kpi-grid-compact" id="summary-skill-hour"></div>
-    </div>
-    <div class="table-container">
-      <div class="summary-grid" id="summary-skill"></div>
-    </div>
   </div>
 
   <div class="advanced-only">
@@ -953,5 +881,6 @@
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/worker_name_utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/worker_load_monitor.js') }}"></script>
 {% endblock %}

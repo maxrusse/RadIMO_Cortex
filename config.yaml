@@ -345,13 +345,13 @@ specialist_fallback_routes: {}
 
 skill_value_colors:
   active:     # skill = 1 (primary assignment - actively receives work)
-    color: '#2f8c7a'
+    color: '#28a745'
   passive:    # skill = 0 (fallback only - receives work if no active workers)
-    color: '#8a8f98'
+    color: '#856404'
   excluded:   # skill = -1 (never assign - worker explicitly excluded)
     color: '#dc3545'
   weighted:   # skill = 'w' (assisted/weighted - receives less work, supervised)
-    color: '#3d6aa8'
+    color: '#007bff'
 
 # =============================================================================
 # UI THEME COLORS
@@ -480,6 +480,7 @@ balancer:
 
 vendor_mappings:
   medweb:
+    worker_name_display_style: last_first_id
     # Column name mappings for this vendor's CSV format
     columns:
       date: "Datum"                           # Date column

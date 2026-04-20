@@ -37,8 +37,6 @@ const GERMAN_TO_ENGLISH_WEEKDAYS = {
   Freitag: 'friday',
   Samstag: 'saturday'
 };
-const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
-const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
 let prepTargetDate = CONFIG.prep_target_date || null;
 let prepTargetWeekday = CONFIG.prep_target_weekday_name || null;
 let prepTargetDateGerman = CONFIG.prep_target_date_german || null;
@@ -52,30 +50,7 @@ let addWorkerModalState = {
 };
 
 function buildWorkerSortKey(name) {
-  const raw = (name == null ? '' : String(name)).trim();
-  if (!raw) return '';
-
-  const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return raw.toLowerCase();
-
-  const tokens = cleaned
-    .split(' ')
-    .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
-    .filter(Boolean)
-    .filter(token => {
-      const normalized = token.toLowerCase();
-      return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
-    });
-
-  if (tokens.length === 0) {
-    const fallback = cleaned.toLowerCase();
-    return `${fallback}|${fallback}`;
-  }
-
-  const last = tokens[tokens.length - 1].toLowerCase();
-  const first = tokens.slice(0, -1).join(' ').toLowerCase();
-  const full = tokens.join(' ').toLowerCase();
-  return `${last}|${first}|${full}`;
+  return window.WorkerNameUtils.buildSortKey(name);
 }
 
 
@@ -99,16 +74,7 @@ function parseWorkerInput(inputValue) {
  * Returns "Full Name (ID)" format if name is known, otherwise just the ID.
  */
 function getWorkerDisplayName(workerId) {
-  const fullName = WORKER_NAMES[workerId];
-  if (fullName && fullName !== workerId) {
-    // If full name already contains the ID in parentheses, use it as-is
-    if (fullName.includes('(' + workerId + ')')) {
-      return fullName;
-    }
-    // Otherwise, append ID in parentheses
-    return fullName + ' (' + workerId + ')';
-  }
-  return workerId;
+  return window.WorkerNameUtils.formatDisplayName(WORKER_NAMES[workerId] || workerId, workerId);
 }
 
 /**
@@ -576,13 +542,13 @@ function getSkillBorderClass(value) {
   }
 }
 
-// Get color for skill value - only 1 and w get strong colors, 0/-1 are neutral (from config)
+// Get color for skill value from shared config/fallback palette
 function getSkillColor(value) {
   const v = normalizeSkillValueJS(value);
   if (v === 1) return SKILL_VALUE_COLORS.active?.color || '#28a745';
-  if (v === 'w') return SKILL_VALUE_COLORS.weighted?.color || '#17a2b8';
-  if (v === -1) return SKILL_VALUE_COLORS.excluded?.color || '#ccc';
-  return SKILL_VALUE_COLORS.passive?.color || '#ccc';
+  if (v === 'w') return SKILL_VALUE_COLORS.weighted?.color || '#007bff';
+  if (v === -1) return SKILL_VALUE_COLORS.excluded?.color || '#dc3545';
+  return SKILL_VALUE_COLORS.passive?.color || '#856404';
 }
 
 // Calculate aggregated proficiency class for a set of values

@@ -495,22 +495,22 @@
 
     .skill-value-select.skill-border--1,
     .grid-input.skill-border--1 {
-      border-color: #c43d2c;
+      border-color: #dc3545;
     }
 
     .skill-value-select.skill-border-0,
     .grid-input.skill-border-0 {
-      border-color: #d97a1f;
+      border-color: #ffc107;
     }
 
     .skill-value-select.skill-border-w,
     .grid-input.skill-border-w {
-      border-color: #c8a11a;
+      border-color: #007bff;
     }
 
     .skill-value-select.skill-border-1,
     .grid-input.skill-border-1 {
-      border-color: #2f9b57;
+      border-color: #28a745;
     }
 
     .worker-skill-table tr:nth-child(even) {
@@ -1058,6 +1058,15 @@
       flex-wrap: wrap;
     }
 
+    .prep-actions-side {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.8rem;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+
     .prep-auto-refresh {
       display: inline-flex;
       align-items: center;
@@ -1566,18 +1575,20 @@
           <span id="save-status-today" class="prep-inline-save-status" aria-live="polite"></span>
           <span id="load-status-today" class="prep-action-status" aria-live="polite"></span>
           <button class="btn btn-primary" onclick="openAddWorkerModal('today')">+ Add Worker</button>
+        </div>
+        <div class="prep-actions-side">
+          <div class="prep-legend">
+          <span class="skill-val skill-val-1">1</span> Active
+          <span class="skill-val skill-val-0">0</span> Passive
+          <span class="skill-val skill-val--1">-1</span> Excluded
+          <span class="skill-val skill-val-w">w</span> Weighted
+          </div>
           <div class="prep-auto-refresh">
             <input type="checkbox" id="auto-refresh-today" onchange="togglePrepAutoRefresh('today')" checked>
             <label for="auto-refresh-today">Auto-refresh</label>
             <button class="btn btn-secondary prep-refresh-btn" type="button" onclick="refreshPrepTab('today')">Refresh</button>
             <span id="prep-refresh-status-today" class="prep-refresh-status">Auto-refresh on</span>
           </div>
-        </div>
-        <div class="prep-legend">
-          <span class="skill-val skill-val-1">1</span> Active
-          <span class="skill-val skill-val-0">0</span> Passive
-          <span class="skill-val skill-val--1">-1</span> Excluded
-          <span class="skill-val skill-val-w">w</span> Weighted
         </div>
       </div>
 
@@ -1787,14 +1798,15 @@
     </div>
   </div>
 
-  <!-- Worker list datalist for autocomplete (shows "Full Name (ID)" format) -->
+  <!-- Worker list datalist for autocomplete with display and raw-name aliases -->
   <datalist id="worker-list-datalist">
     {% for worker in worker_list %}
     {% set display_name = worker_names.get(worker, worker) if worker_names else worker %}
-    {% if display_name != worker and '(' ~ worker ~ ')' not in display_name %}
-    <option value="{{ display_name }} ({{ worker }})"></option>
-    {% else %}
-    <option value="{{ display_name }}"></option>
+    {% set raw_full_name = worker_skills.get(worker, {}).get('full_name', '') if worker_skills else '' %}
+    {% set display_option = display_name if display_name == worker or ('(' ~ worker ~ ')') in display_name else display_name ~ ' (' ~ worker ~ ')' %}
+    <option value="{{ display_option }}"></option>
+    {% if raw_full_name and raw_full_name != display_option %}
+    <option value="{{ raw_full_name }}"></option>
     {% endif %}
     {% endfor %}
   </datalist>
@@ -1807,6 +1819,7 @@
       "skill_settings": {{ skill_settings|default ({}) | tojson }},
       "worker_skills": {{ worker_skills|default ({}) | tojson }},
       "worker_names": {{ worker_names|default ({}) | tojson }},
+      "worker_name_display_style": {{ worker_name_display_style | tojson }},
       "task_roles": {{ task_roles|default ([]) | tojson }},
       "skill_value_colors": {{ skill_value_colors|default ({}) | tojson }},
       "ui_colors": {{ ui_colors|default ({}) | tojson }},
@@ -1819,6 +1832,7 @@
     }
   </script>
 
+  <script src="{{ url_for('static', filename='js/worker_name_utils.js') }}"></script>
   <script src="{{ url_for('static', filename='js/timeline.js') }}"></script>
   <script src="{{ url_for('static', filename='js/timeline_feed.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.config.js') }}"></script>

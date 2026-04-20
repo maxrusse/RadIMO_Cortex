@@ -20,9 +20,15 @@ from config import (
     skill_columns_map,
     BALANCER_SETTINGS,
     WORKER_SKILL_ROSTER_PATH,
+    get_worker_name_display_style,
     selection_logger,
 )
-from lib.utils import is_weighted_skill, normalize_skill_value
+from lib.utils import (
+    build_worker_sort_key,
+    format_worker_display_name,
+    is_weighted_skill,
+    normalize_skill_value,
+)
 from state_manager import StateManager
 
 # Get state references
@@ -85,22 +91,34 @@ def build_worker_name_mapping(roster: Dict[str, Any]) -> Dict[str, str]:
     """
     name_mapping = {}
     canonical_to_variations = get_all_workers_by_canonical_id()
-
+    worker_name_display_style = get_worker_name_display_style()
     for worker_id in roster.keys():
         # First priority: full_name in roster entry
         if isinstance(roster[worker_id], dict) and 'full_name' in roster[worker_id]:
-            name_mapping[worker_id] = roster[worker_id]['full_name']
+            name_mapping[worker_id] = format_worker_display_name(
+                roster[worker_id]['full_name'],
+                worker_id,
+                style=worker_name_display_style,
+            )
             continue
 
         # Second priority: longest variation from global worker data
         variations = canonical_to_variations.get(worker_id, [])
         if variations:
             # Prefer the longest name (usually "Dr. Name (ID)")
-            name_mapping[worker_id] = max(variations, key=len)
+            name_mapping[worker_id] = format_worker_display_name(
+                max(variations, key=len),
+                worker_id,
+                style=worker_name_display_style,
+            )
             continue
 
         # Fallback: use the ID itself
-        name_mapping[worker_id] = worker_id
+        name_mapping[worker_id] = format_worker_display_name(
+            worker_id,
+            worker_id,
+            style=worker_name_display_style,
+        )
 
     return name_mapping
 
@@ -256,6 +274,7 @@ def _build_medweb_worker_candidate(
     code_col: str,
     activity_col: str,
     rules: List[dict],
+    display_style: str = 'first_last_id',
 ) -> Optional[Dict[str, Any]]:
     """Build a single worker candidate from a CSV row."""
     activity_desc = row.get(activity_col, '')
@@ -298,7 +317,11 @@ def _build_medweb_worker_candidate(
     return {
         'worker_id': worker_id,
         'full_name': full_name or worker_id,
-        'display_name': full_name or worker_id,
+        'display_name': format_worker_display_name(
+            full_name or worker_id,
+            worker_id,
+            style=display_style,
+        ),
         'employee_name': employee_name,
         'employee_code': employee_code,
         'employee_personalnummer': employee_personalnummer,
@@ -318,6 +341,7 @@ def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> 
     rules would classify at least one of their rows as a shift.
     """
     vendor_mapping = config.get('medweb_mapping', {})
+    display_style = config.get('worker_name_display_style', 'first_last_id')
     rules = vendor_mapping.get('rules', [])
     cols = vendor_mapping.get('columns', {
         'employee_name': 'Name des Mitarbeiters',
@@ -347,6 +371,7 @@ def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> 
             code_col=code_col,
             activity_col=activity_col,
             rules=rules,
+            display_style=display_style,
         )
         if candidate is None:
             continue
@@ -363,7 +388,13 @@ def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> 
             existing['source_date'] = candidate['source_date']
             existing['source_day_part'] = candidate['source_day_part']
 
-    return sorted(candidates.values(), key=lambda item: (item.get('display_name', '').lower(), item.get('worker_id', '').lower()))
+    return sorted(
+        candidates.values(),
+        key=lambda item: (
+            build_worker_sort_key(item.get('display_name', '')),
+            str(item.get('worker_id', '')).lower(),
+        ),
+    )
 
 
 def import_csv_worker_to_skill_roster(csv_path: str, config: Dict[str, Any], worker_id: str) -> Dict[str, Any]:

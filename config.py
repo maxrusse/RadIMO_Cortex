@@ -59,6 +59,7 @@ DEFAULT_ACCESS_PROTECTION_ENABLED = False
 DEFAULT_ADMIN_ACCESS_PROTECTION_ENABLED = False
 DEFAULT_SECRET_KEY = 'super_secret_key_for_dev'  # Change this in production
 DEFAULT_TIMEZONE = 'Europe/Berlin'  # Default timezone for all date/time operations
+DEFAULT_WORKER_NAME_DISPLAY_STYLE = 'first_last_id'
 
 DEFAULT_BALANCER = {
     'enabled': True,
@@ -175,6 +176,19 @@ def _build_app_config() -> Dict[str, Any]:
 
     # Extract medweb mapping from vendor_mappings (required)
     config['medweb_mapping'] = vendor_configs.get('medweb', {})
+    worker_name_display_style = (
+        raw_config.get('worker_name_display_style')
+        or config['medweb_mapping'].get('worker_name_display_style')
+        or DEFAULT_WORKER_NAME_DISPLAY_STYLE
+    )
+    if worker_name_display_style not in {'first_last_id', 'last_first_id', 'raw'}:
+        selection_logger.warning(
+            "Unknown worker_name_display_style '%s' - falling back to %s",
+            worker_name_display_style,
+            DEFAULT_WORKER_NAME_DISPLAY_STYLE,
+        )
+        worker_name_display_style = DEFAULT_WORKER_NAME_DISPLAY_STYLE
+    config['worker_name_display_style'] = worker_name_display_style
 
     # Include worker_roster
     config['worker_roster'] = raw_config.get('worker_roster', {})
@@ -266,6 +280,10 @@ SKILL_SETTINGS = APP_CONFIG['skills']
 SKILL_ROSTER_AUTO_IMPORT = APP_CONFIG.get('skill_roster_auto_import', True)
 TIMEZONE = APP_CONFIG.get('timezone', DEFAULT_TIMEZONE)
 
+
+def get_worker_name_display_style() -> str:
+    return APP_CONFIG.get('worker_name_display_style', DEFAULT_WORKER_NAME_DISPLAY_STYLE)
+
 allowed_modalities = list(MODALITY_SETTINGS.keys())
 allowed_modalities_map = {m.lower(): m for m in allowed_modalities}
 default_modality = allowed_modalities[0] if allowed_modalities else 'ct'
@@ -316,6 +334,7 @@ def _build_runtime_config_state(config: Dict[str, Any]) -> Dict[str, Any]:
         'allowed_modalities': allowed_modalities_list,
         'allowed_modalities_map': {m.lower(): m for m in allowed_modalities_list},
         'default_modality': allowed_modalities_list[0] if allowed_modalities_list else 'ct',
+        'worker_name_display_style': config.get('worker_name_display_style', DEFAULT_WORKER_NAME_DISPLAY_STYLE),
         'modality_labels': {
             mod: settings.get('label', mod.upper())
             for mod, settings in modality_settings.items()

@@ -323,7 +323,8 @@ function renderTable(tab) {
 
     const shiftsToRender = shifts;
 
-    const escapedWorker = escapeHtml(group.worker);
+    const workerLabel = getWorkerDisplayName(group.worker);
+    const escapedWorker = escapeHtml(workerLabel);
 
     const totalRows = shiftsToRender.length;
     const isDuplicate = shifts.length > 1;
@@ -519,7 +520,8 @@ function renderEditModalContent() {
   let html = '';
 
   // XSS-safe rendering
-  const escapedWorker = escapeHtml(group.worker);
+  const workerLabel = getWorkerDisplayName(group.worker);
+  const escapedWorker = escapeHtml(workerLabel);
   const shifts = getModalShifts(group);
   const numShifts = shifts.length;
   const duplicateBadge = numShifts > 1 ? `<span class="duplicate-badge">${numShifts}x</span>` : '';
@@ -774,7 +776,7 @@ function renderEditModalContent() {
 </div>`;
   }
 
-  document.getElementById('modal-title').textContent = `Edit Worker - ${group.worker}`;
+  document.getElementById('modal-title').textContent = `Edit Worker - ${getWorkerDisplayName(group.worker)}`;
   document.getElementById('modal-content').innerHTML = html;
   applyModalEditModeUI();
 
@@ -796,9 +798,12 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
   html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
     <div class="form-group" style="margin-bottom: 0;">
       <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Worker Name</label>
-      <input type="text" id="add-worker-name-input" value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Dr. Müller"
+      <input type="text" id="add-worker-name-input" value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Müller, Anna (AM)"
              list="worker-list-datalist" autocomplete="off" onchange="onAddWorkerNameChange()" oninput="onAddWorkerNameChange()"
              style="width: 100%; max-width: 300px; padding: 0.5rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px;">
+      <div style="margin-top: 0.4rem; font-size: 0.75rem; color: #666;">
+        Bitte Medweb-Schreibweise bzw. Medweb-ID verwenden, sonst kann ein separater Worker-Eintrag entstehen.
+      </div>
     </div>
   </div>`;
 

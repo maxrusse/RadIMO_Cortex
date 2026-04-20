@@ -8,12 +8,10 @@ const MODALITY_SETTINGS = CONFIG.modality_settings || {};
 const LOAD_MONITOR_CONFIG = CONFIG.load_monitor_config || {};
 const UI_COLORS = CONFIG.ui_colors || {};
 const SKILL_MODALITY_WEIGHTS = CONFIG.skill_modality_weights || {};
-const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
-const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
+window.WORKER_NAME_DISPLAY_STYLE = CONFIG.worker_name_display_style || 'first_last_id';
 const MODES = ['simple', 'advanced-weight', 'advanced-count', 'flow', 'recent'];
 
 let currentMode = MODES.includes(CONFIG.initial_mode) ? CONFIG.initial_mode : (LOAD_MONITOR_CONFIG.default_view || 'simple');
-let colorMode = LOAD_MONITOR_CONFIG.color_thresholds?.mode || 'absolute';
 let workersData = [];
 let workerLoadSummary = {};
 let maxWeight = 0;
@@ -87,29 +85,7 @@ function getModalityColor(modality) {
 }
 
 function buildWorkerSortKey(name) {
-  const raw = (name == null ? '' : String(name)).trim();
-  if (!raw) return '';
-  const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return raw.toLowerCase();
-
-  const tokens = cleaned
-    .split(' ')
-    .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
-    .filter(Boolean)
-    .filter(token => {
-      const normalized = token.toLowerCase();
-      return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
-    });
-
-  if (!tokens.length) {
-    const fallback = cleaned.toLowerCase();
-    return `${fallback}|${fallback}`;
-  }
-
-  const last = tokens[tokens.length - 1].toLowerCase();
-  const first = tokens.slice(0, -1).join(' ').toLowerCase();
-  const full = tokens.join(' ').toLowerCase();
-  return `${last}|${first}|${full}`;
+  return window.WorkerNameUtils.buildSortKey(name);
 }
 
 function getValidWorkerThresholdHours() {
@@ -140,11 +116,16 @@ function getValidWorkers(workers) {
 
 function getRatioBenchmark(workers) {
   const validWorkers = getValidWorkers(workers);
-  if (!validWorkers.length) return 0;
-  const total = validWorkers.reduce(function(sum, worker) {
-    return sum + Number(worker.weight_per_hour || 0);
-  }, 0);
-  return total / validWorkers.length;
+  const nonZeroRatios = validWorkers
+    .map(function(worker) { return Number(worker.weight_per_hour || 0); })
+    .filter(function(value) { return value > 0; })
+    .sort(function(a, b) { return a - b; });
+  if (!nonZeroRatios.length) return 0;
+  const mid = Math.floor(nonZeroRatios.length / 2);
+  if (nonZeroRatios.length % 2 === 0) {
+    return (nonZeroRatios[mid - 1] + nonZeroRatios[mid]) / 2;
+  }
+  return nonZeroRatios[mid];
 }
 
 function computeBandStats(workers) {
@@ -208,19 +189,9 @@ function getRequestedSkillOverflowMetrics(flowPayload) {
 
 function getLoadThresholds(scaleMax = maxWeight) {
   const thresholds = LOAD_MONITOR_CONFIG.color_thresholds || {};
-  let lowThreshold;
-  let highThreshold;
-
-  if (colorMode === 'relative' && scaleMax > 0) {
-    const relConfig = thresholds.relative || { low_pct: 33, high_pct: 66 };
-    lowThreshold = scaleMax * (relConfig.low_pct / 100);
-    highThreshold = scaleMax * (relConfig.high_pct / 100);
-  } else {
-    const absConfig = thresholds.absolute || { low: 3.0, high: 7.0 };
-    lowThreshold = absConfig.low;
-    highThreshold = absConfig.high;
-  }
-
+  const absConfig = thresholds.absolute || { low: 3.0, high: 7.0 };
+  const lowThreshold = absConfig.low;
+  const highThreshold = absConfig.high;
   return { lowThreshold, highThreshold };
 }
 
@@ -335,91 +306,7 @@ function renderCardGrid(containerId, cards, emptyMessage, isCompact = false) {
 }
 
 function renderOverviewCards(workers) {
-  const bandStats = computeBandStats(workers);
-  const validWorkers = bandStats.validWorkers;
-  const benchmark = bandStats.benchmark;
-  const totalWeight = workers.reduce(function(sum, worker) { return sum + Number(worker.global_weight || 0); }, 0);
-  const totalHours = workers.reduce(function(sum, worker) { return sum + Number(worker.hours_worked_now || 0); }, 0);
-  const globalPerHour = totalHours > 0 ? totalWeight / totalHours : 0;
-  const status = classifySystemStatus(bandStats, flowData);
-  const topOverflowSkill = getRequestedSkillOverflowMetrics(flowData)[0];
-  const overflowSummary = flowData?.summary || {};
-
-  const cards = [
-    {
-      title: 'System Status',
-      badge: status.label,
-      color: status.color,
-      main: status.note,
-      mainLabel: 'Current balance state',
-      subRows: [
-        { left: 'Valid baseline', right: `${validWorkers.length} workers` },
-        { left: 'Threshold', right: `${formatValue(getValidWorkerThresholdHours(), 1)} h` },
-      ],
-    },
-    {
-      title: 'Global Load / Hour',
-      badge: `${validWorkers.length} valid`,
-      softBadge: true,
-      color: '#dbe8f5',
-      main: formatValue(globalPerHour, 2),
-      mainLabel: 'Weight / Hour',
-      subRows: [
-        { left: 'Total weight', right: formatValue(totalWeight) },
-        { left: 'Total hours', right: formatValue(totalHours) },
-      ],
-    },
-    {
-      title: 'Recorded Workers',
-      badge: `${workers.length}`,
-      color: '#3b6ea5',
-      main: `${workers.length}`,
-      mainLabel: 'Workers in current table',
-      subRows: [
-        { left: 'Valid baseline', right: `${validWorkers.length}` },
-        { left: 'Threshold', right: formatValue(getValidWorkerThresholdHours(), 1) + ' h' },
-      ],
-    },
-    {
-      title: 'Request Inflow',
-      badge: 'Today',
-      color: '#5f6c77',
-      main: formatValue(overflowSummary.total_inflow_weight || 0, 1),
-      mainLabel: 'Requested weight',
-      subRows: [
-        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
-        { left: 'Cross-pool', right: formatValue(overflowSummary.overflow_weight_total || 0, 1) },
-      ],
-    },
-    {
-      title: 'Overflow Pressure',
-      badge: formatPercent(overflowSummary.overflow_quote || 0),
-      color: '#856404',
-      main: formatValue(overflowSummary.overflow_weight_total || 0, 1),
-      mainLabel: 'Cross-pool weight',
-      subRows: [
-        { left: 'Request inflow', right: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
-        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
-      ],
-    },
-    {
-      title: 'Top Overflow Skill',
-      badge: topOverflowSkill ? topOverflowSkill.label : '-',
-      color: topOverflowSkill?.color || '#5b7ea6',
-      main: topOverflowSkill ? formatPercent(topOverflowSkill.overflowQuote) : '-',
-      mainLabel: 'Requested-skill overflow quote',
-      subRows: [
-        { left: 'Overflow weight', right: topOverflowSkill ? formatValue(topOverflowSkill.overflowWeight, 1) : '-' },
-        { left: 'Request inflow', right: topOverflowSkill ? formatValue(topOverflowSkill.inflowWeight, 1) : '-' },
-      ],
-    },
-  ];
-
-  renderCardGrid('summary-overview', cards, 'No overview metrics available.');
-  const note = document.getElementById('kpi-threshold-note');
-  if (note) {
-    note.textContent = `Workers below ${formatValue(getValidWorkerThresholdHours(), 1)}h are excluded from the valid baseline count.`;
-  }
+  return workers;
 }
 
 function renderSkillCards(workers, containerId, emptyMessage, compact = false) {
@@ -700,11 +587,12 @@ function renderRecentTable() {
   const filtered = recentData.filter(function(item) {
     const status = item.unresolved ? 'unresolved' : (item.overflowed ? 'overflow' : 'direct');
     const workerName = String(item.person || '').toLowerCase();
+    const workerRawName = String(item.person_raw || '').toLowerCase();
     const requestedSkill = String(item.requested_skill || '');
     const actualSkill = String(item.actual_skill || '');
     const requestedModality = String(item.requested_modality || '');
     const actualModality = String(item.actual_modality || '');
-    if (recentFilters.worker && !workerName.includes(recentFilters.worker)) {
+    if (recentFilters.worker && !workerName.includes(recentFilters.worker) && !workerRawName.includes(recentFilters.worker)) {
       return false;
     }
     if (recentFilters.status && status !== recentFilters.status) {
@@ -787,14 +675,9 @@ function setRecentVisibleCount(value) {
 
 function renderWorkerLoadPanels() {
   const filteredWorkers = getFilteredWorkers();
-  renderOverviewCards(filteredWorkers);
 
   if (currentMode === 'simple') {
-    renderModalityCards(filteredWorkers, 'summary-modality-hour', 'No modality hour metrics for the current filter.', true);
-    renderSkillCards(filteredWorkers, 'summary-skill-hour', 'No skill hour metrics for the current filter.', true);
     renderGlobalTable();
-    renderModalityCards(filteredWorkers, 'summary-modality', 'No modality activity for the current filter.');
-    renderSkillCards(filteredWorkers, 'summary-skill', 'No skill activity for the current filter.');
     updateSortIndicators('global', 'table-global');
     return;
   }
@@ -843,14 +726,6 @@ function setMode(mode, options = {}) {
   if (currentMode === 'recent') {
     loadRecentData();
   }
-}
-
-function setColorMode(mode) {
-  colorMode = mode;
-  document.querySelectorAll('.color-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.color === mode);
-  });
-  renderAllTables();
 }
 
 function filterByModality(modality) {
@@ -1127,7 +1002,6 @@ function refreshCurrentMode() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  setColorMode(colorMode);
   setMode(currentMode, { skipLoad: true });
   toggleAutoRefresh();
 });

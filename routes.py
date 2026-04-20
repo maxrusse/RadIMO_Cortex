@@ -48,6 +48,7 @@ from config import (
     WORKER_SKILL_ROSTER_PATH,
     selection_logger,
     SKILL_ROSTER_AUTO_IMPORT,
+    get_worker_name_display_style,
     normalize_modality,
     normalize_skill,
     is_no_overflow,
@@ -60,6 +61,7 @@ from config import (
 )
 from lib import usage_logger
 from lib.utils import (
+    format_worker_display_name,
     get_local_now,
     get_next_workday,
     get_weekday_name_german,
@@ -971,9 +973,18 @@ def _get_preferred_display_name(
 ) -> str:
     candidate_names = set(preferred_names or set())
     candidate_names.update(get_all_workers_by_canonical_id().get(canonical_id, []))
+    worker_name_display_style = get_worker_name_display_style()
     if candidate_names:
-        return max(candidate_names, key=len)
-    return canonical_id
+        return format_worker_display_name(
+            max(candidate_names, key=len),
+            canonical_id,
+            style=worker_name_display_style,
+        )
+    return format_worker_display_name(
+        canonical_id,
+        canonical_id,
+        style=worker_name_display_style,
+    )
 
 
 def _get_active_display_names_for_modality(modality: str) -> dict[str, str]:
@@ -2098,6 +2109,7 @@ def timetable() -> Any:
         modality_color_map=modality_color_map,
         task_roles=task_roles,
         worker_skills=worker_skills,
+        worker_name_display_style=get_worker_name_display_style(),
         target_weekday_name=target_weekday_name,
         is_admin=has_admin_access()
     )
@@ -2113,6 +2125,7 @@ def skill_roster_page() -> Any:
         modality=modality,
         valid_skills_map=valid_skills_map,
         default_w_modifier=default_w_modifier,
+        worker_name_display_style=get_worker_name_display_style(),
         is_admin=True
     )
 
@@ -2966,6 +2979,7 @@ def _render_prep_page(initial_tab: str) -> Any:
         task_roles=task_roles,
         skill_value_colors=APP_CONFIG.get('skill_value_colors', {}),
         ui_colors=APP_CONFIG.get('ui_colors', {}),
+        worker_name_display_style=get_worker_name_display_style(),
         quick_break=quick_break,
         is_admin=True
     )
@@ -3847,6 +3861,7 @@ def worker_load_monitor() -> Any:
         initial_mode=initial_mode,
         skill_modality_weights=skill_modality_weights,
         ui_colors=APP_CONFIG.get('ui_colors', {}),
+        worker_name_display_style=get_worker_name_display_style(),
         is_admin=True
     )
 
@@ -3857,6 +3872,7 @@ def get_worker_load_data() -> Any:
     """API endpoint returning all worker load data for monitoring."""
     current_dt = get_local_now()
     global_hours_map = calculate_global_work_hours_now(current_dt)
+    worker_name_display_style = get_worker_name_display_style()
 
     # Collect all unique workers across all modalities
     all_workers = {}  # canonical_id -> {name, shift_info, modality_data}
@@ -3877,7 +3893,12 @@ def get_worker_load_data() -> Any:
                 hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
                 global_weight = round(float(get_global_weighted_count(canonical_id)), 4)
                 all_workers[canonical_id] = {
-                    'name': worker_name,
+                    'name': format_worker_display_name(
+                        worker_name,
+                        canonical_id,
+                        style=worker_name_display_style,
+                    ),
+                    '_raw_name': str(worker_name),
                     'canonical_id': canonical_id,
                     'modalities': {},
                     'skills': {},
@@ -3887,8 +3908,13 @@ def get_worker_load_data() -> Any:
                     'global_weight': global_weight,
                     'global_assignments': {}
                 }
-            elif len(str(worker_name)) > len(str(all_workers[canonical_id]['name'])):
-                all_workers[canonical_id]['name'] = worker_name
+            elif len(str(worker_name)) > len(str(all_workers[canonical_id].get('_raw_name', ''))):
+                all_workers[canonical_id]['name'] = format_worker_display_name(
+                    worker_name,
+                    canonical_id,
+                    style=worker_name_display_style,
+                )
+                all_workers[canonical_id]['_raw_name'] = str(worker_name)
 
             # Store modality-specific data
             mod_data = {
@@ -3936,6 +3962,7 @@ def get_worker_load_data() -> Any:
                 get_modality_weighted_count(canonical_id, modality),
                 4,
             )
+        worker_data.pop('_raw_name', None)
 
     # Calculate per-modality weighted totals
     modality_weights = {}
@@ -4041,7 +4068,19 @@ def get_worker_load_recent_distributions() -> Any:
     recent_events = global_worker_data.get('recent_distributions', []) or []
     if not isinstance(recent_events, list):
         recent_events = []
-    events = list(reversed(recent_events))
+    worker_name_display_style = get_worker_name_display_style()
+    events = []
+    for item in reversed(recent_events):
+        event = dict(item)
+        raw_person = str(event.get('person', '') or '')
+        canonical_id = str(event.get('canonical_id', '') or '')
+        event['person_raw'] = raw_person
+        event['person'] = format_worker_display_name(
+            raw_person,
+            canonical_id,
+            style=worker_name_display_style,
+        )
+        events.append(event)
     return jsonify({
         'success': True,
         'events': events,

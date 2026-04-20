@@ -22,6 +22,7 @@ const TASK_ROLES = Array.isArray(CONFIG.task_roles) ? CONFIG.task_roles : [];
 const SKILL_VALUE_COLORS = CONFIG.skill_value_colors || {};
 const UI_COLORS = CONFIG.ui_colors || {};
 const QUICK_BREAK = CONFIG.quick_break || { duration_minutes: 30, gap_type: 'Break', mode: 'split_shift' };
+window.WORKER_NAME_DISPLAY_STYLE = CONFIG.worker_name_display_style || 'first_last_id';
 
 // Generate dynamic CSS for modality and skill colors from config
 (function () {
@@ -46,18 +47,18 @@ const QUICK_BREAK = CONFIG.quick_break || { duration_minutes: 30, gap_type: 'Bre
   }
   // Skill VALUE colors for text display
   const activeColor = SKILL_VALUE_COLORS.active?.color || '#28a745';
-  const weightedColor = SKILL_VALUE_COLORS.weighted?.color || '#17a2b8';
-  const passiveColor = SKILL_VALUE_COLORS.passive?.color || '#999';
-  const excludedColor = SKILL_VALUE_COLORS.excluded?.color || '#999';
+  const weightedColor = SKILL_VALUE_COLORS.weighted?.color || '#007bff';
+  const passiveColor = SKILL_VALUE_COLORS.passive?.color || '#856404';
+  const excludedColor = SKILL_VALUE_COLORS.excluded?.color || '#dc3545';
   css += `.skill-val-1 { color: ${activeColor}; font-weight: 700; }\n`;
   css += `.skill-val-0 { color: ${passiveColor}; font-weight: 400; }\n`;
   css += `.skill-val--1 { color: ${excludedColor}; font-weight: 400; }\n`;
   css += `.skill-val-w { color: ${weightedColor}; font-weight: 700; }\n`;
-  // Compact border cues for edit controls: -1 red, 0 orange, w yellow, 1 green
-  css += `.skill-border--1 { border-color: #c43d2c !important; box-shadow: inset 0 0 0 1px #c43d2c; }\n`;
-  css += `.skill-border-0 { border-color: #d97a1f !important; box-shadow: inset 0 0 0 1px #d97a1f; }\n`;
-  css += `.skill-border-w { border-color: #c8a11a !important; box-shadow: inset 0 0 0 1px #c8a11a; }\n`;
-  css += `.skill-border-1 { border-color: #2f9b57 !important; box-shadow: inset 0 0 0 1px #2f9b57; }\n`;
+  // Compact border cues aligned with Skill Matrix: -1 red, 0 yellow, w blue, 1 green
+  css += `.skill-border--1 { border-color: #dc3545 !important; box-shadow: inset 0 0 0 1px #dc3545; }\n`;
+  css += `.skill-border-0 { border-color: #ffc107 !important; box-shadow: inset 0 0 0 1px #ffc107; }\n`;
+  css += `.skill-border-w { border-color: #007bff !important; box-shadow: inset 0 0 0 1px #007bff; }\n`;
+  css += `.skill-border-1 { border-color: #28a745 !important; box-shadow: inset 0 0 0 1px #28a745; }\n`;
   css += `.modifier-high { background: ${weightedColor}; color: white; }\n`;
   css += `.agg-has-weighted { color: ${weightedColor}; font-weight: bold; }\n`;
   // UI theme colors

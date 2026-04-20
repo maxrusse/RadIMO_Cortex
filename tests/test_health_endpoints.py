@@ -151,7 +151,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="skill-btn-mdh"', response.data)
-        self.assertIn(b'title="Muskel-Skelett / Hals / Derma"', response.data)
+        self.assertIn(b'title="MSK / Derma / Hals"', response.data)
         self.assertNotIn(b'aria-label="Strikte Zuweisung"', response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
@@ -374,25 +374,27 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/balance-summary")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Balance Summary", response.data)
+        self.assertIn(b"Performance", response.data)
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="leaders-overflow"', response.data)
         self.assertIn(b'js/balance_summary.js', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
-    def test_worker_load_simple_mode_renders_summary_sections_without_detail_tables(self, _mock_admin) -> None:
+    def test_worker_load_simple_mode_renders_global_table_without_extra_summary_blocks(self, _mock_admin) -> None:
         response = self.client.get("/worker-load?mode=simple")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-global"', response.data)
         self.assertIn(b'Weight / Hour', response.data)
         self.assertIn(b'Total Weight', response.data)
-        self.assertIn(b'id="summary-modality"', response.data)
-        self.assertIn(b'id="summary-skill"', response.data)
-        self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b"Weighted Matrix", response.data)
         self.assertIn(b"Count Matrix", response.data)
         self.assertIn(b"Recent Events", response.data)
+        self.assertNotIn(b'id="summary-modality"', response.data)
+        self.assertNotIn(b'id="summary-skill"', response.data)
+        self.assertNotIn(b'id="summary-modality-hour"', response.data)
+        self.assertNotIn(b'id="summary-skill-hour"', response.data)
+        self.assertNotIn(b'id="summary-overview"', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_weight_mode_renders_derived_weight_matrix(self, _mock_admin) -> None:
@@ -489,8 +491,11 @@ class TestHealthEndpoints(unittest.TestCase):
             payload = response.get_json()
             self.assertTrue(payload["success"])
             self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["limit"], 1)
             self.assertEqual(payload["items"][0]["requested_skill"], "aou")
             self.assertTrue(payload["items"][0]["overflowed"])
+            self.assertEqual(payload["items"][0]["person_raw"], "Worker One")
+            self.assertEqual(payload["items"][0]["person"], "One, Worker (worker-one)")
         finally:
             routes_module.global_worker_data["recent_distributions"] = original_recent
 

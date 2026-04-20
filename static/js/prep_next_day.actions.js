@@ -934,7 +934,8 @@ async function deleteWorkerEntries(tab, groupIdx) {
   if (!group) return;
 
   const allEntries = group.allEntries || [];
-  if (!confirm(`Delete all ${allEntries.length} entries for ${group.worker}?`)) return;
+  const workerLabel = getWorkerDisplayName(group.worker);
+  if (!confirm(`Delete all ${allEntries.length} entries for ${workerLabel}?`)) return;
 
   const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
 
@@ -951,7 +952,7 @@ async function deleteWorkerEntries(tab, groupIdx) {
         reloadOnConflict: true,
       });
     }
-    showMessage('success', `Deleted all entries for ${group.worker}`);
+    showMessage('success', `Deleted all entries for ${workerLabel}`);
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -968,7 +969,8 @@ async function deleteEntry(tab, groupIdx, entryIdx) {
   const entry = group.entries[entryIdx];
   if (!entry) return;
 
-  if (!confirm(`Delete entry for ${entry.worker} (${entry.modality.toUpperCase()} ${entry.start_time}-${entry.end_time})?`)) return;
+  const workerLabel = getWorkerDisplayName(entry.worker);
+  if (!confirm(`Delete entry for ${workerLabel} (${entry.modality.toUpperCase()} ${entry.start_time}-${entry.end_time})?`)) return;
 
   const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
 
@@ -980,7 +982,7 @@ async function deleteEntry(tab, groupIdx, entryIdx) {
     }, {
       reloadOnConflict: true,
     });
-    showMessage('success', `Deleted entry for ${entry.worker}`);
+    showMessage('success', `Deleted entry for ${workerLabel}`);
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -1229,8 +1231,9 @@ async function deleteShiftFromModal(shiftIdx) {
   if (!shift) return;
 
   const isLastShift = shifts.length === 1;
+  const workerLabel = getWorkerDisplayName(group.worker);
   const confirmMessage = isLastShift
-    ? `Delete this shift (${shift.start_time}-${shift.end_time})? This is the last shift for ${group.worker}, so the worker will be removed. Continue?`
+    ? `Delete this shift (${shift.start_time}-${shift.end_time})? This is the last shift for ${workerLabel}, so the worker will be removed. Continue?`
     : `Delete this shift (${shift.start_time}-${shift.end_time})?`;
 
   if (!confirm(confirmMessage)) return;
@@ -1608,7 +1611,7 @@ async function addShiftFromModal() {
         timeSegments: [{ start: startTime, end: endTime }],
       }
     ];
-    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${group.worker}. Save edits to apply.`);
+    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${getWorkerDisplayName(group.worker)}. Save edits to apply.`);
     lastAddedShiftMeta = { worker: group.worker, shiftKey: addedShiftKey };
     renderEditModalContent();
     return;
@@ -1670,7 +1673,7 @@ async function addShiftFromModal() {
         });
       }
     }
-    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${group.worker}`);
+    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${getWorkerDisplayName(group.worker)}`);
 
     lastAddedShiftMeta = { worker: group.worker, shiftKey: addedShiftKey };
     await loadData();
@@ -1729,7 +1732,7 @@ function applySkillValues(skillMap = {}) {
 function applyWorkerSkillPresetForModality(workerName, modKey) {
   const workerRoster = WORKER_SKILLS[workerName];
   if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${workerName}`);
+    showMessage('error', `No skill preset found for ${getWorkerDisplayName(workerName)}`);
     return;
   }
 
@@ -1755,7 +1758,7 @@ function applyWorkerSkillPresetForShiftModality(groupIdx, shiftIdx, modKey) {
   const workerName = group?.worker;
   const workerRoster = workerName ? WORKER_SKILLS[workerName] : null;
   if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${workerName || 'worker'}`);
+    showMessage('error', `No skill preset found for ${workerName ? getWorkerDisplayName(workerName) : 'worker'}`);
     return;
   }
 
@@ -1805,7 +1808,7 @@ function applyWorkerRosterToShift(shiftIdx) {
 
   const workerRoster = WORKER_SKILLS[group.worker];
   if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${group.worker}`);
+    showMessage('error', `No skill preset found for ${getWorkerDisplayName(group.worker)}`);
     return;
   }
 
@@ -2314,7 +2317,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
 
   // If not in edit mode, show confirmation popup
   if (!editMode[tab]) {
-    const msg = `Add ${duration}-min break for ${group.worker}?\n\nTime: ${gapStart} - ${gapEnd}`;
+    const msg = `Add ${duration}-min break for ${getWorkerDisplayName(group.worker)}?\n\nTime: ${gapStart} - ${gapEnd}`;
     if (!confirm(msg)) return;
   }
 
@@ -2344,7 +2347,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
       reloadOnConflict: true,
     });
 
-    showMessage('success', `Added break (${gapStart}-${gapEnd}) for ${group.worker}`);
+    showMessage('success', `Added break (${gapStart}-${gapEnd}) for ${getWorkerDisplayName(group.worker)}`);
     await loadData();
   } catch (error) {
     if (error.isConflict) {

@@ -162,6 +162,9 @@ function renderOverviewCards(workerPayload, flowPayload) {
       if (b.overflowQuote !== a.overflowQuote) return b.overflowQuote - a.overflowQuote;
       return b.overflowWeight - a.overflowWeight;
     });
+  const activeOverflowSkills = overflowSkills.filter(function(item) {
+    return item.overflowWeight > 0;
+  });
   const overflowSummary = flowPayload.summary || {};
 
   const primaryCards = [
@@ -171,14 +174,11 @@ function renderOverviewCards(workerPayload, flowPayload) {
       color: status.color,
       main: status.note,
       className: 'summary-card-primary summary-card-status',
-      rows: [
-        { left: 'Valid baseline', right: `${bandStats.validWorkers.length} workers` },
-        { left: 'Threshold', right: `${formatValue(bandStats.threshold, 1)} h` },
-      ],
+      rows: [],
     },
     {
       title: 'Global Load / Hour',
-      badge: `${bandStats.validWorkers.length} valid`,
+      badge: 'Today',
       color: '#3b6ea5',
       main: formatValue(globalPerHour, 2),
       className: 'summary-card-primary',
@@ -195,30 +195,19 @@ function renderOverviewCards(workerPayload, flowPayload) {
       className: 'summary-card-primary',
       rows: [
         { left: 'Request inflow', right: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
-        { left: 'Assigned base', right: formatValue(overflowSummary.total_assigned_base_weight || 0, 1) },
       ],
     },
   ];
 
   const secondaryCards = [
     {
-      title: 'Recorded Workers',
-      badge: `${workers.length}`,
-      color: '#3b6ea5',
-      main: `${workers.length}`,
-      rows: [
-        { left: 'Valid baseline', right: `${bandStats.validWorkers.length}` },
-        { left: 'Threshold', right: `${formatValue(bandStats.threshold, 1)} h` },
-      ],
-    },
-    {
       title: 'Top Overflow Skill',
-      badge: overflowSkills[0] ? overflowSkills[0].label : '-',
-      color: overflowSkills[0]?.color || '#5b7ea6',
-      main: overflowSkills[0] ? formatPercent(overflowSkills[0].overflowQuote) : '-',
+      badge: activeOverflowSkills[0] ? activeOverflowSkills[0].label : '-',
+      color: activeOverflowSkills[0]?.color || '#5b7ea6',
+      main: activeOverflowSkills[0] ? formatPercent(activeOverflowSkills[0].overflowQuote) : '-',
       rows: [
-        { left: 'Overflow weight', right: overflowSkills[0] ? formatValue(overflowSkills[0].overflowWeight, 1) : '-' },
-        { left: 'Request inflow', right: overflowSkills[0] ? formatValue(overflowSkills[0].inflowWeight, 1) : '-' },
+        { left: 'Overflow weight', right: activeOverflowSkills[0] ? formatValue(activeOverflowSkills[0].overflowWeight, 1) : '-' },
+        { left: 'Request inflow', right: activeOverflowSkills[0] ? formatValue(activeOverflowSkills[0].inflowWeight, 1) : '-' },
       ],
     },
   ];
@@ -243,20 +232,6 @@ function renderOverviewCards(workerPayload, flowPayload) {
   if (secondaryContainer) {
     secondaryContainer.innerHTML = renderCards(secondaryCards);
   }
-
-  const strip = document.getElementById('signal-strip');
-  if (strip) {
-    const signals = [
-      { label: 'Valid baseline', value: `${bandStats.validWorkers.length}` },
-      { label: 'Recorded workers', value: `${workers.length}` },
-      { label: 'Request inflow', value: formatValue(overflowSummary.total_inflow_weight || 0, 1) },
-      { label: 'Overflow total', value: formatValue(overflowSummary.overflow_weight_total || 0, 1) },
-      { label: 'Top overflow', value: overflowSkills[0] ? `${overflowSkills[0].label} ${formatPercent(overflowSkills[0].overflowQuote)}` : '-' },
-    ];
-    strip.innerHTML = signals.map(function(signal) {
-      return `<div class="signal-pill"><span>${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong></div>`;
-    }).join('');
-  }
 }
 
 function renderLeaderList(id, items, formatter) {
@@ -277,6 +252,7 @@ function renderLeaderSections(workerPayload, flowPayload) {
   const skills = computeSkillMetrics(workers).slice(0, 5);
   const modalities = computeModalityMetrics(workers).slice(0, 5);
   const overflowSkills = getRequestedSkillOverflowMetrics(flowPayload)
+    .filter(function(item) { return item.overflowWeight > 0; })
     .sort(function(a, b) {
       if (b.overflowQuote !== a.overflowQuote) return b.overflowQuote - a.overflowQuote;
       return b.overflowWeight - a.overflowWeight;

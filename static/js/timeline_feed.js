@@ -5,8 +5,6 @@
  */
 
 const TimelineFeed = (function() {
-  const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
-  const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
   const WEIGHTED_MARKERS = new Set(['w', 'W', 2, '2']);
   const ENGLISH_TO_GERMAN_WEEKDAYS = {
     sunday: 'Sonntag',
@@ -53,30 +51,7 @@ const TimelineFeed = (function() {
   }
 
   function buildWorkerSortKey(name) {
-    const raw = (name == null ? '' : String(name)).trim();
-    if (!raw) return '';
-
-    const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-    if (!cleaned) return raw.toLowerCase();
-
-    const tokens = cleaned
-      .split(' ')
-      .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
-      .filter(Boolean)
-      .filter(token => {
-        const normalized = token.toLowerCase();
-        return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
-      });
-
-    if (tokens.length === 0) {
-      const fallback = cleaned.toLowerCase();
-      return `${fallback}|${fallback}`;
-    }
-
-    const last = tokens[tokens.length - 1].toLowerCase();
-    const first = tokens.slice(0, -1).join(' ').toLowerCase();
-    const full = tokens.join(' ').toLowerCase();
-    return `${last}|${first}|${full}`;
+    return window.WorkerNameUtils.buildSortKey(name);
   }
 
   function normalizeWeekdayName(targetDay) {

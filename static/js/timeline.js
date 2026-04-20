@@ -8,8 +8,6 @@ const TimelineChart = (function() {
   const TIMELINE_START = 6;  // 6:00
   const TIMELINE_END = 20;   // 20:00
   const TIMELINE_HOURS = TIMELINE_END - TIMELINE_START;
-  const WORKER_SORT_TITLES = new Set(['dr', 'pd', 'prof', 'med', 'dent', 'dipl', 'ing', 'dipl-ing']);
-  const WORKER_SORT_PARTICLES = new Set(['von', 'van', 'de', 'del', 'der', 'den', 'zu', 'zum', 'zur']);
 
   // Parse time string "HH:MM" into hours and minutes
   function parseTimeStr(timeStr) {
@@ -90,30 +88,7 @@ const TimelineChart = (function() {
   }
 
   function buildWorkerSortKey(name) {
-    const raw = (name == null ? '' : String(name)).trim();
-    if (!raw) return '';
-
-    const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-    if (!cleaned) return raw.toLowerCase();
-
-    const tokens = cleaned
-      .split(' ')
-      .map(token => token.trim().replace(/^[,.;:()[\]{}]+|[,.;:()[\]{}]+$/g, ''))
-      .filter(Boolean)
-      .filter(token => {
-        const normalized = token.toLowerCase();
-        return !WORKER_SORT_TITLES.has(normalized) && !WORKER_SORT_PARTICLES.has(normalized);
-      });
-
-    if (tokens.length === 0) {
-      const fallback = cleaned.toLowerCase();
-      return `${fallback}|${fallback}`;
-    }
-
-    const last = tokens[tokens.length - 1].toLowerCase();
-    const first = tokens.slice(0, -1).join(' ').toLowerCase();
-    const full = tokens.join(' ').toLowerCase();
-    return `${last}|${first}|${full}`;
+    return window.WorkerNameUtils.buildSortKey(name);
   }
 
 
@@ -660,7 +635,8 @@ const TimelineChart = (function() {
       // Worker name cell
       const nameCell = document.createElement('div');
       nameCell.className = 'worker-name-cell';
-      nameCell.textContent = worker;
+      const workerLabel = window.WorkerNameUtils.formatDisplayName(worker);
+      nameCell.textContent = workerLabel;
 
       // Timeline cell
       const timelineCell = document.createElement('div');
@@ -683,7 +659,7 @@ const TimelineChart = (function() {
 
           const tasks = normalizeTasks(entry.tasks || entry.task);
           const activity = tasks.length ? tasks.join(', ') : 'Gap';
-          gapBar.title = `${worker}\n${activity}: ${entry.start_time}-${entry.end_time}`;
+          gapBar.title = `${workerLabel}\n${activity}: ${entry.start_time}-${entry.end_time}`;
 
           timelineCell.appendChild(gapBar);
           return;
@@ -727,7 +703,7 @@ const TimelineChart = (function() {
           // Tooltip
           const timeDisplay = entry.TIME || `${entry.start_time}-${entry.end_time}`;
           const skillsTooltip = `Active (${tooltipModSkillLabels.length}): ${tooltipModSkillLabels.join(', ') || 'none'}`;
-          bar.title = `${worker}\n${taskTooltip}Zeit: ${timeDisplay}\n${skillsTooltip}`;
+          bar.title = `${workerLabel}\n${taskTooltip}Zeit: ${timeDisplay}\n${skillsTooltip}`;
 
           timelineCell.appendChild(bar);
         } else {
@@ -749,7 +725,7 @@ const TimelineChart = (function() {
 
           const timeDisplay = entry.TIME || `${entry.start_time}-${entry.end_time}`;
           const skillsTooltip = 'Active (0): none';
-          bar.title = `${worker}\n${taskTooltip}Zeit: ${timeDisplay}\n${skillsTooltip}`;
+          bar.title = `${workerLabel}\n${taskTooltip}Zeit: ${timeDisplay}\n${skillsTooltip}`;
 
           timelineCell.appendChild(bar);
         }

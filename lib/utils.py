@@ -100,36 +100,104 @@ _WORKER_SORT_PARTICLES = {
 }
 
 
+def _extract_worker_label_and_id(name: Any) -> Tuple[str, str]:
+    raw = '' if name is None else str(name).strip()
+    if not raw:
+        return '', ''
+    match = re.search(r'\(([^()]+)\)\s*$', raw)
+    worker_id = match.group(1).strip() if match else ''
+    cleaned = re.sub(r'\s*\([^)]*\)\s*$', '', raw).strip()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    return cleaned, worker_id
+
+
+def _clean_worker_tokens(value: str) -> List[str]:
+    tokens: List[str] = []
+    for token in value.split(' '):
+        stripped = token.strip().strip('.,;:()[]{}')
+        normalized = stripped.casefold()
+        if not normalized:
+            continue
+        if normalized in _WORKER_SORT_TITLES:
+            continue
+        tokens.append(stripped)
+    return tokens
+
+
+def _split_worker_name_parts(name: Any) -> Tuple[str, str]:
+    cleaned, _ = _extract_worker_label_and_id(name)
+    if not cleaned:
+        return '', ''
+
+    if ',' in cleaned:
+        left, right = cleaned.split(',', 1)
+        surname_tokens = _clean_worker_tokens(left)
+        given_tokens = _clean_worker_tokens(right)
+        surname = ' '.join(surname_tokens).strip() or left.strip()
+        given = ' '.join(given_tokens).strip() or right.strip()
+        return surname, given
+
+    tokens = _clean_worker_tokens(cleaned)
+    if not tokens:
+        return cleaned, ''
+    if len(tokens) == 1:
+        return tokens[0], ''
+
+    surname_start = len(tokens) - 1
+    if len(tokens) >= 2 and tokens[-2].casefold() in _WORKER_SORT_PARTICLES:
+        surname_start = len(tokens) - 2
+    elif tokens[-1].casefold() in _WORKER_SORT_PARTICLES and len(tokens) >= 2:
+        surname_start = len(tokens) - 2
+
+    surname = ' '.join(tokens[surname_start:]).strip()
+    given = ' '.join(tokens[:surname_start]).strip()
+    return surname, given
+
+
+def format_worker_display_name(
+    name: Any,
+    worker_id: Optional[str] = None,
+    style: str = 'first_last_id',
+) -> str:
+    raw = '' if name is None else str(name).strip()
+    cleaned, embedded_id = _extract_worker_label_and_id(name)
+    resolved_id = '' if worker_id is None else str(worker_id).strip()
+    if not resolved_id:
+        resolved_id = embedded_id
+
+    surname, given = _split_worker_name_parts(cleaned)
+    normalized_style = str(style or 'first_last_id').strip().lower()
+    if normalized_style == 'raw':
+        return raw or resolved_id
+    elif surname and given and normalized_style == 'last_first_id':
+        label = f"{surname}, {given}"
+    elif surname and given:
+        label = f"{given} {surname}"
+    else:
+        label = surname or cleaned or resolved_id
+
+    if resolved_id and f"({resolved_id})" not in label:
+        return f"{label} ({resolved_id})"
+    return label
+
+
 def build_worker_sort_key(name: Any) -> str:
     """Build a surname-like sort key from the visible worker label."""
     raw = '' if name is None else str(name).strip()
     if not raw:
         return ''
 
-    # Remove trailing canonical code like "Name (ABC)".
-    cleaned = re.sub(r'\s*\([^)]*\)\s*$', '', raw).strip()
-    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned, _ = _extract_worker_label_and_id(raw)
     if not cleaned:
         return raw.casefold()
 
-    tokens = []
-    for token in cleaned.split(' '):
-        normalized = token.strip().strip('.,;:()[]{}').casefold()
-        if not normalized:
-            continue
-        if normalized in _WORKER_SORT_TITLES:
-            continue
-        if normalized in _WORKER_SORT_PARTICLES:
-            continue
-        tokens.append(token.strip().strip('.,;:()[]{}'))
-
-    if not tokens:
+    surname, given = _split_worker_name_parts(cleaned)
+    if not surname and not given:
         fallback = cleaned.casefold()
         return f"{fallback}|{fallback}"
-
-    last = tokens[-1].casefold()
-    first = ' '.join(tokens[:-1]).casefold()
-    full = ' '.join(tokens).casefold()
+    last = surname.casefold()
+    first = given.casefold()
+    full = f"{surname} {given}".strip().casefold()
     return f"{last}|{first}|{full}"
 
 

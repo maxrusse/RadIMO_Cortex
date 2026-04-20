@@ -27,6 +27,7 @@ let currentTimeIntervalId = null;
  */
 function initTimetableConfig(config) {
   TimetableConfig = { ...TimetableConfig, ...config };
+  window.WORKER_NAME_DISPLAY_STYLE = TimetableConfig.workerNameDisplayStyle || 'first_last_id';
 }
 
 // Inject dynamic styles based on modality and skills
