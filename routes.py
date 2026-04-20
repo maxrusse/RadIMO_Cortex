@@ -925,7 +925,6 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
     data: list[dict[str, Any]] = []
     columns = df.columns
     has_counts_for_hours = 'counts_for_hours' in columns
-    has_manual = 'is_manual' in columns
     has_row_type = 'row_type' in columns
     has_training = 'training' in columns
     for idx, row in df.iterrows():
@@ -947,9 +946,6 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
             training_value = coerce_bool(row.get('training'))
             if training_value is not None:
                 worker_data['training'] = training_value
-
-        if has_manual:
-            worker_data['is_manual'] = bool(row.get('is_manual', False))
 
         data.append(worker_data)
 
@@ -1494,7 +1490,6 @@ def _iter_worker_revision_rows(use_staged: bool) -> list[dict[str, Any]]:
         has_counts_for_hours = 'counts_for_hours' in columns
         has_row_type = 'row_type' in columns
         has_training = 'training' in columns
-        has_manual = 'is_manual' in columns
 
         for _, row in df.iterrows():
             worker_name = str(row.get('PPL', '')).strip()
@@ -1516,7 +1511,6 @@ def _iter_worker_revision_rows(use_staged: bool) -> list[dict[str, Any]]:
                 'counts_for_hours': _get_counts_for_hours(row, has_counts_for_hours),
                 'row_type': row_type,
                 'training': training_value,
-                'is_manual': bool(row.get('is_manual', False)) if has_manual else False,
             }
             for skill in SKILL_COLUMNS:
                 revision_row[skill] = skill_value_to_display(row.get(skill, None))

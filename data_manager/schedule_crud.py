@@ -709,10 +709,8 @@ def _build_replaced_worker_schedule_df(
         new_df = pd.DataFrame(plan_rows)
         df = pd.concat([df, new_df], ignore_index=True)
 
-    if use_staged:
-        if 'is_manual' not in df.columns:
-            df['is_manual'] = False
-        df.loc[df['PPL'] == worker_name, 'is_manual'] = True
+    if 'is_manual' in df.columns:
+        df = df.drop(columns=['is_manual'])
 
     reindexed = original_worker_count != len(plan_rows)
     return df, {'reindexed': reindexed}

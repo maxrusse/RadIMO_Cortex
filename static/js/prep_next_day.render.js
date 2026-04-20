@@ -344,10 +344,6 @@ function renderTable(tab) {
       const modKeysToShow = MODALITIES.map(m => m.toLowerCase());
       const quickBreakDisabled = tab === 'today' && editMode[tab];
 
-      if (shift.is_manual) {
-        tr.classList.add('row-manual');
-      }
-
       if (shiftIdx === 0) {
         tr.classList.add('worker-group-first');
         let workerHtml = `<span class="worker-name ${isDuplicate ? 'duplicate' : ''}"${warningTitle}>${escapedWorker}</span>${duplicateBadge}`;

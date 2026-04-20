@@ -207,7 +207,7 @@ def build_worker_sort_key(name: Any) -> str:
 
 def strip_builder_fields(row: dict) -> dict:
     cleaned = dict(row)
-    for key in ('shift_duration', 'TIME', 'row_index', 'is_manual'):
+    for key in ('shift_duration', 'TIME', 'row_index'):
         cleaned.pop(key, None)
     return cleaned
 

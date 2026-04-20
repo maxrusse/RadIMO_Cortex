@@ -298,7 +298,7 @@ def _build_dataframe_from_records(records: List[dict], modality: str, *, validat
     df.loc[gap_mask, 'training'] = False
     df.loc[gap_mask, 'shift_duration'] = 0.0
 
-    col_order = ['PPL', 'row_type', 'training', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks', 'counts_for_hours', 'is_manual']
+    col_order = ['PPL', 'row_type', 'training', 'Modifier', 'TIME', 'start_time', 'end_time', 'shift_duration', 'tasks', 'counts_for_hours']
     skill_cols = [skill for skill in SKILL_COLUMNS if skill in df.columns]
     col_order = col_order[:4] + skill_cols + col_order[4:]
 
