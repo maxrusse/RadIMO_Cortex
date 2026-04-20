@@ -1215,6 +1215,8 @@
       height: 75vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
     }
 
     .modal h3 {
@@ -1226,14 +1228,22 @@
       order: 0;
       overflow-y: auto;
       flex: 1;
+      min-height: 0;
     }
 
     .modal-actions {
-      order: -1;
-      margin-bottom: 1rem;
+      order: 1;
+      margin-top: 1rem;
       display: flex;
       gap: 0.5rem;
       justify-content: flex-end;
+      flex: 0 0 auto;
+      position: sticky;
+      bottom: 0;
+      background: white;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e6edf4;
+      z-index: 2;
     }
 
     /* Break Duration Popup */
@@ -1772,8 +1782,8 @@
       <h3 id="modal-title">Edit Worker</h3>
       <div id="modal-content"></div>
       <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-        <button class="btn btn-success" id="modal-save-button" style="display: none;" onclick="saveModalAction()">Add Worker</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button type="button" class="btn btn-success" id="modal-save-button" style="display: none;" onclick="saveModalAction()">Add Worker</button>
       </div>
     </div>
   </div>

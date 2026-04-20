@@ -15,6 +15,11 @@ function formatValue(value, digits = 1) {
   return Number(value || 0).toFixed(digits);
 }
 
+function formatMaybeValue(value, digits = 1) {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  return Number(value).toFixed(digits);
+}
+
 function formatPercent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
@@ -52,27 +57,6 @@ function getRequestedSkillOverflowMetrics(flowPayload) {
   }).filter(function(item) {
     return item.inflowWeight > 0 || item.overflowWeight > 0;
   });
-}
-
-function classifyPerformanceStatus(flowPayload, options = {}) {
-  const workerDataAvailable = options.workerDataAvailable !== false;
-  const flowDataAvailable = options.flowDataAvailable !== false;
-  if (!workerDataAvailable || !flowDataAvailable) {
-    return { label: 'Partial', color: '#6c757d', note: 'Showing partial data while one source is unavailable' };
-  }
-  const hasWorkerData = Number(flowPayload.worker_count || 0) > 0;
-  const overflowQuote = Number(flowPayload.summary?.overflow_quote || 0);
-  const totalInflow = Number(flowPayload.summary?.total_inflow_weight || 0);
-  if (!hasWorkerData && totalInflow <= 0) {
-    return { label: 'No Data', color: '#6c757d', note: 'No worker or inflow data recorded yet' };
-  }
-  if (overflowQuote >= 0.35) {
-    return { label: 'Strained', color: '#b02a37', note: "Overflow is carrying a large share of today's load" };
-  }
-  if (overflowQuote >= 0.2) {
-    return { label: 'Watch', color: '#856404', note: "Overflow is materially supporting today's balance" };
-  }
-  return { label: 'Stable', color: '#2d7a46', note: 'Most load is still absorbed directly' };
 }
 
 function computeSkillMetrics(workers) {
@@ -124,42 +108,42 @@ function renderOverviewCards(workerPayload, flowPayload, options = {}) {
   if (!primaryContainer) return;
 
   const workers = workerPayload.workers || [];
-  const totalWeight = workers.reduce(function(sum, worker) { return sum + Number(worker.global_weight || 0); }, 0);
-  const totalHours = workers.reduce(function(sum, worker) { return sum + Number(worker.hours_worked_now || 0); }, 0);
-  const globalPerHour = totalHours > 0 ? totalWeight / totalHours : 0;
+  const workerDataAvailable = options.workerDataAvailable !== false;
+  const flowDataAvailable = options.flowDataAvailable !== false;
+  const totalWeight = workerDataAvailable
+    ? workers.reduce(function(sum, worker) { return sum + Number(worker.global_weight || 0); }, 0)
+    : null;
+  const totalHours = workerDataAvailable
+    ? workers.reduce(function(sum, worker) { return sum + Number(worker.hours_worked_now || 0); }, 0)
+    : null;
+  const globalPerHour = workerDataAvailable && totalHours > 0 ? totalWeight / totalHours : (workerDataAvailable ? 0 : null);
   const overflowSummary = flowPayload.summary || {};
-  const requestInflow = Number(overflowSummary.total_inflow_weight || 0);
-  const recordedWorkers = workers.length;
-  const status = classifyPerformanceStatus(
-    {
-      ...flowPayload,
-      worker_count: recordedWorkers,
-    },
-    options,
-  );
+  const requestInflow = flowDataAvailable ? Number(overflowSummary.total_inflow_weight || 0) : null;
+  const recordedWorkers = workerDataAvailable ? workers.length : null;
+  const overflowSupport = flowDataAvailable ? Number(overflowSummary.overflow_weight_total || 0) : null;
+  const dataState = !workerDataAvailable || !flowDataAvailable
+    ? 'Partial data'
+    : ((recordedWorkers > 0 || requestInflow > 0) ? 'Current day' : 'No data yet');
 
   const primaryCards = [
     {
       title: 'Global Load / Hour',
-      badge: status.label,
-      color: status.color,
-      main: formatValue(globalPerHour, 2),
+      kicker: dataState,
+      main: formatMaybeValue(globalPerHour, 2),
       className: 'summary-card-primary',
       rows: [
-        { left: 'Status', right: status.note },
-        { left: 'Total weight', right: formatValue(totalWeight) },
-        { left: 'Total hours', right: formatValue(totalHours) },
+        { left: 'Total load so far', right: formatMaybeValue(totalWeight, 1) },
+        { left: 'Worker hours', right: formatMaybeValue(totalHours, 1) },
       ],
     },
     {
-      title: 'Total Load So Far',
-      badge: `${recordedWorkers} workers`,
-      color: '#4d647e',
-      main: formatValue(totalWeight, 1),
+      title: 'Request Inflow',
+      kicker: 'Till now',
+      main: formatMaybeValue(requestInflow, 1),
       className: 'summary-card-primary',
       rows: [
-        { left: 'Request inflow', right: formatValue(requestInflow, 1) },
-        { left: 'Global load / hour', right: formatValue(globalPerHour, 2) },
+        { left: 'Recorded workers', right: recordedWorkers == null ? '—' : String(recordedWorkers) },
+        { left: 'Overflow support', right: formatMaybeValue(overflowSupport, 1) },
       ],
     },
   ];
@@ -170,7 +154,7 @@ function renderOverviewCards(workerPayload, flowPayload, options = {}) {
       return `<div class="${cardClass}">
       <div class="summary-card-header">
         <span class="summary-card-title">${escapeHtml(card.title)}</span>
-        <span class="summary-card-badge" style="background:${card.color};">${escapeHtml(card.badge)}</span>
+        ${card.kicker ? `<div class="summary-card-kicker">${escapeHtml(card.kicker)}</div>` : ''}
       </div>
       <div class="summary-card-main">${escapeHtml(card.main)}</div>
       ${card.rows.map(function(row) {
@@ -222,12 +206,12 @@ function renderLeaderSections(workerPayload, flowPayload) {
   renderLeaderList('leaders-skill-total', skills.sort(function(a, b) {
     return b.weightTotal - a.weightTotal;
   }), function(item) {
-    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightTotal, 1)}</strong> total <span style="color:#667;">(${formatValue(item.weightPerHour, 2)} /h)</span>`;
+    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightTotal, 1)}</strong> load <span style="color:#667;">(${formatValue(item.weightPerHour, 2)} /h)</span>`;
   });
   renderLeaderList('leaders-modality-total', modalities.sort(function(a, b) {
     return b.weightTotal - a.weightTotal;
   }), function(item) {
-    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightTotal, 1)}</strong> total <span style="color:#667;">(${formatValue(item.weightPerHour, 2)} /h)</span>`;
+    return `${escapeHtml(item.label)}: <strong>${formatValue(item.weightTotal, 1)}</strong> load <span style="color:#667;">(${formatValue(item.weightPerHour, 2)} /h)</span>`;
   });
   renderLeaderList('leaders-overflow-skills', overflowSkills, function(item) {
     return `${escapeHtml(item.label)}: <strong>${formatPercent(item.overflowQuote)}</strong> (${formatValue(item.overflowWeight, 1)} / ${formatValue(item.inflowWeight, 1)})`;

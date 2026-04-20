@@ -810,7 +810,7 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
   // Tasks section
   html += `<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
     <label style="font-weight: 600; font-size: 1rem;">Tasks/Shifts</label>
-    <button class="btn btn-success btn-small" onclick="addTaskToAddWorkerModal(); renderAddWorkerModalContent();">+ Add Task</button>
+    <button type="button" class="btn btn-success btn-small" onclick="addTaskToAddWorkerModal(); renderAddWorkerModalContent();">+ Add Task</button>
   </div>`;
 
   // Render each task
@@ -820,7 +820,7 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
     html += `<div style="margin-bottom: 1rem; padding: 0.75rem; border: 2px solid ${borderColor}; border-radius: 8px; background: #fafafa;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <span style="font-weight: 600; color: #333;">Task ${idx + 1}</span>
-        <button class="btn btn-small" style="background: #dc3545; color: white;" onclick="removeTaskFromAddWorkerModal(${idx})">✕ Remove</button>
+        <button type="button" class="btn btn-small" style="background: #dc3545; color: white;" onclick="removeTaskFromAddWorkerModal(${idx})">✕ Remove</button>
       </div>
 
       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
