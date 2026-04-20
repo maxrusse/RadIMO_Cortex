@@ -353,7 +353,7 @@
   {% set view_toggle_label = 'View by:' %}
   {% set view_toggle_items = [
     {'href': url_for('routes.index', modality=modality), 'label': 'Modality', 'active': True},
-    {'href': url_for('routes.index_by_skill'), 'label': 'Skill'}
+    {'href': url_for('routes.index_by_skill', modality=modality, skill=(visible_skills[0] if visible_skills else skill_order[0])), 'label': 'Skill'}
   ] %}
   {% set selector_links %}
     {% for mod in modality_order %}

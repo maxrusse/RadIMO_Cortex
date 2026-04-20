@@ -20,6 +20,7 @@ import yaml
 # Third-party imports
 from flask import (
     Blueprint,
+    Response,
     jsonify,
     redirect,
     render_template,
@@ -125,6 +126,22 @@ from balancer import (
 
 # Create Blueprint
 routes = Blueprint('routes', __name__)
+
+
+@routes.after_app_request
+def add_no_store_headers(response: Response) -> Response:
+    endpoint = request.endpoint or ''
+    if endpoint == 'static':
+        return response
+
+    is_html = response.mimetype == 'text/html'
+    is_redirect = 300 <= response.status_code < 400
+    if is_html or is_redirect:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['Vary'] = 'Cookie'
+    return response
 
 LOG_ROOT = Path('logs')
 LOG_SOURCE_DEFINITIONS: dict[str, dict[str, str]] = {
@@ -2048,12 +2065,14 @@ def index_by_skill() -> Any:
             })
 
     default_info_modality = visible_modalities[0] if visible_modalities else (allowed_modalities[0] if allowed_modalities else '')
+    requested_modality = resolve_modality_from_request()
+    modality_context = requested_modality if requested_modality in visible_modalities else default_info_modality
     info_texts_by_modality = {}
     for mod in allowed_modalities:
         mod_data = modality_data[mod]
         by_skill = mod_data.get('info_texts_by_skill') or {}
         info_texts_by_modality[mod] = by_skill.get(skill, [])
-    info_texts = info_texts_by_modality.get(default_info_modality, [])
+    info_texts = info_texts_by_modality.get(modality_context, [])
     regular_strict_button_modalities = [
         mod for mod in visible_modalities
         if is_strict_button_visible(skill, mod)
@@ -2067,7 +2086,8 @@ def index_by_skill() -> Any:
         special_task_buttons=special_task_buttons,
         info_texts=info_texts,
         info_texts_by_modality=info_texts_by_modality,
-        default_info_modality=default_info_modality,
+        default_info_modality=modality_context,
+        modality=modality_context,
         is_admin=has_admin_access()
     )
 

@@ -107,6 +107,27 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertNotIn(b'aria-label="Strikte Zuweisung"', response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
+    def test_dashboard_pages_send_no_store_cache_headers(self, _mock_access) -> None:
+        for path in ("/?modality=mr", "/by-skill?skill=AOU&modality=mr"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers.get("Cache-Control"), "no-store, no-cache, must-revalidate, max-age=0")
+            self.assertEqual(response.headers.get("Pragma"), "no-cache")
+            self.assertEqual(response.headers.get("Expires"), "0")
+
+    def test_logout_redirect_sends_no_store_headers(self) -> None:
+        with self.client.session_transaction() as session_ctx:
+            session_ctx["admin_logged_in"] = True
+
+        response = self.client.get("/logout?modality=mr")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login?modality=mr", response.location)
+        self.assertEqual(response.headers.get("Cache-Control"), "no-store, no-cache, must-revalidate, max-age=0")
+        self.assertEqual(response.headers.get("Pragma"), "no-cache")
+        self.assertEqual(response.headers.get("Expires"), "0")
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill == "notfall" and modality == "ct")
     def test_index_page_renders_strict_button_when_enabled(self, _mock_visibility, _mock_access) -> None:
         response = self.client.get("/?modality=ct")

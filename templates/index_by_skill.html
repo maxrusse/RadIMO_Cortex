@@ -316,12 +316,12 @@
   {% set header_links = header_nav.links %}
   {% set view_toggle_label = 'View by:' %}
   {% set view_toggle_items = [
-    {'href': url_for('routes.index'), 'label': 'Modality'},
+    {'href': url_for('routes.index', modality=modality), 'label': 'Modality'},
     {'href': url_for('routes.index_by_skill'), 'label': 'Skill', 'active': True}
   ] %}
   {% set selector_links %}
     {% for skill_def in skill_definitions %}
-    <a href="{{ url_for('routes.index_by_skill', skill=skill_def.slug) }}" data-skill="{{ skill_def.name }}"
+    <a href="{{ url_for('routes.index_by_skill', skill=skill_def.slug, modality=modality) }}" data-skill="{{ skill_def.name }}"
       class="selector-link{% if skill == skill_def.name %} selector-link--active{% endif %}">
       {{ skill_def.label }}
     </a>
