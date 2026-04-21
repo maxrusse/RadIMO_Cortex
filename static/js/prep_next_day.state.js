@@ -376,20 +376,120 @@ function setPrepTargetMeta({ dateValue, weekdayName, dateGerman }) {
 // Helper: Check if a task name is a gap (using config, not string matching)
 function isGapTask(taskName) {
   if (!taskName) return false;
-  const gapTasks = getGapTasks();
-  const taskLower = taskName.toLowerCase().trim();
-  return gapTasks.some(g => g.name && g.name.toLowerCase().trim() === taskLower);
+  const taskConfig = resolveTaskConfigByName(taskName);
+  return taskConfig?.type === 'gap';
 }
 
 // Cache for pre-built dropdown options (performance optimization)
 // Key format: targetDay -> { baseHtmlNoGaps, baseHtmlWithGaps, optionsByValue, firstShiftName }
 let taskOptionsCacheByDay = new Map();
 
+function normalizeTaskTimeRanges(dayTimes) {
+  if (typeof dayTimes === 'string') {
+    return dayTimes.trim() ? [dayTimes.trim()] : [];
+  }
+  if (Array.isArray(dayTimes)) {
+    return dayTimes
+      .map(entry => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function buildGapOptionValue(baseName, persistedName, timeRange) {
+  return `__gap__|${baseName}|${persistedName}|${timeRange}`;
+}
+
+function parseGapOptionValue(value) {
+  if (typeof value !== 'string' || !value.startsWith('__gap__|')) {
+    return null;
+  }
+  const parts = value.split('|');
+  if (parts.length !== 4) return null;
+  const [, baseName, persistedName, timeRange] = parts;
+  const parsed = parseDayTimes(timeRange);
+  if (!parsed) return null;
+  const [start, end] = parsed;
+  return { baseName, persistedName, timeRange, start, end };
+}
+
+function resolveGapBlocksForTask(taskConfig, targetDay) {
+  if (!taskConfig || taskConfig.type !== 'gap') return [];
+  const blocks = [];
+
+  const addBlocks = (persistedName, timesConfig) => {
+    const dayTimes = typeof resolveDayTimes === 'function'
+      ? resolveDayTimes(timesConfig || {}, targetDay)
+      : ((timesConfig || {})[targetDay] || (timesConfig || {}).default);
+    normalizeTaskTimeRanges(dayTimes).forEach(timeRange => {
+      const parsed = parseDayTimes(timeRange);
+      if (!parsed) return;
+      const [start, end] = parsed;
+      blocks.push({
+        baseName: taskConfig.name,
+        persistedName: persistedName || taskConfig.name,
+        timeRange,
+        start,
+        end
+      });
+    });
+  };
+
+  const segments = Array.isArray(taskConfig.segments) ? taskConfig.segments : [];
+  if (segments.length > 0) {
+    segments.forEach(segment => {
+      addBlocks(segment?.label || taskConfig.name, segment?.times || {});
+    });
+    return blocks;
+  }
+
+  addBlocks(taskConfig.name, taskConfig.times || {});
+  return blocks;
+}
+
+function buildGapTaskOptionConfig(taskConfig, targetDay, gapBlock) {
+  const optionValue = buildGapOptionValue(taskConfig.name, gapBlock.persistedName, gapBlock.timeRange);
+  return {
+    ...taskConfig,
+    name: optionValue,
+    persisted_name: gapBlock.persistedName,
+    display_name: `${gapBlock.persistedName} (${gapBlock.start}-${gapBlock.end})`,
+    times: { [targetDay || 'default']: gapBlock.timeRange },
+    segments: []
+  };
+}
+
+function resolveTaskConfigByName(taskName, targetDay = null) {
+  if (!taskName) return null;
+  const directMatch = TASK_ROLES.find(t => t.name === taskName);
+  if (directMatch) return directMatch;
+
+  const effectiveTargetDay = targetDay || getTargetWeekdayName(currentTab);
+  const parsedGapValue = parseGapOptionValue(taskName);
+  if (parsedGapValue) {
+    const baseGapTask = getGapTasks().find(t => t.name === parsedGapValue.baseName);
+    if (!baseGapTask) return null;
+    return buildGapTaskOptionConfig(baseGapTask, effectiveTargetDay, parsedGapValue);
+  }
+
+  const matchingGapConfigs = [];
+  getGapTasks().forEach(taskConfig => {
+    resolveGapBlocksForTask(taskConfig, effectiveTargetDay).forEach(gapBlock => {
+      if (gapBlock.persistedName === taskName) {
+        matchingGapConfigs.push(buildGapTaskOptionConfig(taskConfig, effectiveTargetDay, gapBlock));
+      }
+    });
+  });
+  if (matchingGapConfigs.length === 1) {
+    return matchingGapConfigs[0];
+  }
+
+  return null;
+}
+
 function isGapAvailableForDay(taskConfig, targetDay) {
   if (!taskConfig || taskConfig.type !== 'gap') return true;
-  const times = taskConfig.times || {};
-  if (Object.keys(times).length === 0) return true;
-  return Boolean(resolveDayTimes(times, targetDay));
+  return resolveGapBlocksForTask(taskConfig, targetDay).length > 0;
 }
 
 // Build and cache dropdown options (called once, reused many times)
@@ -410,6 +510,7 @@ function buildTaskOptionsCache(targetDay) {
 
   // Map of option value -> { html, htmlSelected } for quick selection updates
   const optionsByValue = new Map();
+  const optionDescriptors = [];
 
   // Regular shifts group
   if (shifts.length > 0) {
@@ -459,13 +560,24 @@ function buildTaskOptionsCache(targetDay) {
   if (gaps.length > 0) {
     baseHtmlWithGaps += '<optgroup label="Gaps">';
     gaps.forEach(t => {
-      const escapedName = escapeHtml(t.name);
-      const dataAttrs = `data-type="gap" data-times='${JSON.stringify(t.times || {})}'`;
-      const optionHtml = `<option value="${escapedName}" ${dataAttrs}>${escapedName}</option>`;
-      const optionHtmlSelected = `<option value="${escapedName}" ${dataAttrs} selected>${escapedName}</option>`;
+      const gapBlocks = resolveGapBlocksForTask(t, targetDay);
+      gapBlocks.forEach(gapBlock => {
+        const optionTask = buildGapTaskOptionConfig(t, targetDay, gapBlock);
+        const escapedValue = escapeHtml(optionTask.name);
+        const escapedLabel = escapeHtml(optionTask.display_name || optionTask.persisted_name || optionTask.name);
+        const dataAttrs = `data-type="gap" data-times='${JSON.stringify(optionTask.times || {})}' data-persisted-name="${escapeHtml(optionTask.persisted_name || t.name)}"`;
+        const optionHtml = `<option value="${escapedValue}" ${dataAttrs}>${escapedLabel}</option>`;
+        const optionHtmlSelected = `<option value="${escapedValue}" ${dataAttrs} selected>${escapedLabel}</option>`;
 
-      baseHtmlWithGaps += optionHtml;
-      optionsByValue.set(t.name, { html: optionHtml, htmlSelected: optionHtmlSelected, isShift: false });
+        baseHtmlWithGaps += optionHtml;
+        optionsByValue.set(optionTask.name, { html: optionHtml, htmlSelected: optionHtmlSelected, isShift: false });
+        optionDescriptors.push({
+          value: optionTask.name,
+          persistedName: optionTask.persisted_name || t.name,
+          start: gapBlock.start,
+          end: gapBlock.end
+        });
+      });
     });
     baseHtmlWithGaps += '</optgroup>';
   }
@@ -477,6 +589,7 @@ function buildTaskOptionsCache(targetDay) {
     baseHtmlNoGaps,
     baseHtmlWithGaps,
     optionsByValue,
+    optionDescriptors,
     firstShiftName
   };
 
@@ -492,7 +605,7 @@ function clearTaskOptionsCache() {
 // Helper: Render task/role dropdown with optgroups for Shifts vs Gaps
 // autoSelectFirst: if true and no selectedValue, auto-select the first shift option
 // OPTIMIZED: Uses cached base HTML and only modifies selection
-function renderTaskOptionsWithGroups(selectedValue = '', includeGaps = false, autoSelectFirst = false, targetDay = null) {
+function renderTaskOptionsWithGroups(selectedValue = '', includeGaps = false, autoSelectFirst = false, targetDay = null, selectedRange = null) {
   const effectiveTargetDay = targetDay || getTargetWeekdayName(currentTab);
   const cache = buildTaskOptionsCache(effectiveTargetDay);
 
@@ -516,22 +629,38 @@ function renderTaskOptionsWithGroups(selectedValue = '', includeGaps = false, au
     return baseHtml.replace(optionData.html, optionData.htmlSelected);
   }
 
+  if (selectedValue && includeGaps) {
+    const matchingDescriptors = cache.optionDescriptors.filter(desc => desc.persistedName === selectedValue);
+    if (selectedRange?.start && selectedRange?.end) {
+      const exactTimed = matchingDescriptors.find(desc => desc.start === selectedRange.start && desc.end === selectedRange.end);
+      if (exactTimed) {
+        const timedOption = cache.optionsByValue.get(exactTimed.value);
+        if (timedOption) return baseHtml.replace(timedOption.html, timedOption.htmlSelected);
+      }
+    }
+    if (matchingDescriptors.length === 1) {
+      const uniqueOption = cache.optionsByValue.get(matchingDescriptors[0].value);
+      if (uniqueOption) return baseHtml.replace(uniqueOption.html, uniqueOption.htmlSelected);
+    }
+  }
+
   // Selected value not found in cache, add a fallback option to preserve existing value
   if (!selectedValue) {
     return baseHtml;
   }
-  const taskConfig = TASK_ROLES.find(t => t.name === selectedValue);
+  const taskConfig = resolveTaskConfigByName(selectedValue, effectiveTargetDay);
   if (!taskConfig) {
     return baseHtml;
   }
   const escapedName = escapeHtml(taskConfig.name);
+  const escapedLabel = escapeHtml(taskConfig.display_name || taskConfig.persisted_name || taskConfig.name);
   let dataAttrs = '';
   if (taskConfig.type === 'gap') {
-    dataAttrs = `data-type="gap" data-times='${JSON.stringify(taskConfig.times || {})}'`;
+    dataAttrs = `data-type="gap" data-times='${JSON.stringify(taskConfig.times || {})}' data-persisted-name="${escapeHtml(taskConfig.persisted_name || taskConfig.name)}"`;
   } else {
     dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(taskConfig.modalities || [])}' data-shift="${escapeHtml(taskConfig.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(taskConfig.skill_overrides || {})}' data-modifier="${taskConfig.modifier || 1.0}"`;
   }
-  const fallbackOption = `<option value="${escapedName}" ${dataAttrs} selected>${escapedName}</option>`;
+  const fallbackOption = `<option value="${escapedName}" ${dataAttrs} selected>${escapedLabel}</option>`;
   return `${baseHtml}${fallbackOption}`;
 }
 
@@ -540,8 +669,13 @@ function renderGapOptions(selectedValue = '', targetDay = null) {
   const gaps = getGapTasks().filter(t => isGapAvailableForDay(t, effectiveTargetDay));
   let html = '<option value="">-- Select --</option>';
   gaps.forEach(t => {
-    const selected = t.name === selectedValue ? 'selected' : '';
-    html += `<option value="${escapeHtml(t.name)}" ${selected}>${escapeHtml(t.name)}</option>`;
+    const gapBlocks = resolveGapBlocksForTask(t, effectiveTargetDay);
+    gapBlocks.forEach(gapBlock => {
+      const optionTask = buildGapTaskOptionConfig(t, effectiveTargetDay, gapBlock);
+      const selected = optionTask.name === selectedValue ? 'selected' : '';
+      const label = optionTask.display_name || optionTask.persisted_name || optionTask.name;
+      html += `<option value="${escapeHtml(optionTask.name)}" ${selected}>${escapeHtml(label)}</option>`;
+    });
   });
   if (selectedValue && !gaps.some(t => t.name === selectedValue)) {
     html += `<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)}</option>`;

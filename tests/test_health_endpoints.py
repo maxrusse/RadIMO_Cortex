@@ -557,6 +557,14 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(payload["prep_loaded_label"], "Mittwoch (08.04.2026)")
         self.assertEqual(payload["prep_last_edit_label"], "02.04.2026 12:12")
 
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_pages_expose_segmented_gap_task_roles_in_page_config(self, _mock_admin) -> None:
+        for path in ("/prep-tomorrow", "/prep-today"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'"segments"', response.data)
+            self.assertIn(b"ZGT Ausgleich", response.data)
+
     @patch("routes.update_schedule_row", return_value=(True, {"reindexed": False}))
     @patch("routes._validate_modality", return_value=None)
     @patch("routes._get_snapshot_version", return_value="token-1")

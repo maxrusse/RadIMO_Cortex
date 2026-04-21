@@ -110,6 +110,111 @@ class TestTaskPreviewResolution(unittest.TestCase):
 
         self.assertEqual(preview["skills_by_modality"][self.modality][self.primary_skill], "-1")
 
+    def test_gap_preview_uses_first_matching_segment_for_target_day(self) -> None:
+        gap_rule = {
+            "name": "ZGT",
+            "type": "gap",
+            "segments": [
+                {
+                    "label": "ZGT",
+                    "times": {"Mittwoch": ["09:00-15:45"]},
+                    "skill_overrides": {"all": -1},
+                },
+                {
+                    "label": "ZGT",
+                    "times": {"Donnerstag": ["07:30-09:00"]},
+                    "skill_overrides": {"all": -1},
+                },
+                {
+                    "label": "ZGT Ausgleich",
+                    "times": {"Donnerstag": ["15:15-15:30"]},
+                    "skill_overrides": {"all": -1},
+                },
+            ],
+            "counts_for_hours": False,
+        }
+
+        with patch("routes._build_task_roles", return_value=[gap_rule]):
+            preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="ZGT",
+                training=False,
+                use_staged=True,
+                target_date=date(2026, 4, 16),  # Thursday
+                mode="edit",
+                current_shift={"start_time": "07:30", "end_time": "09:00", "modalities": {}},
+            )
+
+        self.assertEqual(preview["row_type"], "gap")
+        self.assertEqual(preview["start_time"], "07:30")
+        self.assertEqual(preview["end_time"], "09:00")
+
+    def test_gap_preview_honors_encoded_gap_variant(self) -> None:
+        gap_rule = {
+            "name": "ZGT",
+            "type": "gap",
+            "segments": [
+                {
+                    "label": "ZGT",
+                    "times": {"Donnerstag": ["07:30-09:00"]},
+                    "skill_overrides": {"all": -1},
+                },
+                {
+                    "label": "ZGT Ausgleich",
+                    "times": {"Donnerstag": ["15:15-15:30"]},
+                    "skill_overrides": {"all": -1},
+                },
+            ],
+            "counts_for_hours": False,
+        }
+
+        with patch("routes._build_task_roles", return_value=[gap_rule]):
+            preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="__gap__|ZGT|ZGT Ausgleich|15:15-15:30",
+                training=False,
+                use_staged=True,
+                target_date=date(2026, 4, 16),  # Thursday
+                mode="new",
+            )
+
+        self.assertEqual(preview["row_type"], "gap")
+        self.assertEqual(preview["start_time"], "15:15")
+        self.assertEqual(preview["end_time"], "15:30")
+
+    def test_gap_preview_honors_plain_persisted_segment_label(self) -> None:
+        gap_rule = {
+            "name": "ZGT",
+            "type": "gap",
+            "segments": [
+                {
+                    "label": "ZGT",
+                    "times": {"Donnerstag": ["07:30-09:00"]},
+                    "skill_overrides": {"all": -1},
+                },
+                {
+                    "label": "ZGT Ausgleich",
+                    "times": {"Donnerstag": ["15:15-15:30"]},
+                    "skill_overrides": {"all": -1},
+                },
+            ],
+            "counts_for_hours": False,
+        }
+
+        with patch("routes._build_task_roles", return_value=[gap_rule]):
+            preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="ZGT Ausgleich",
+                training=False,
+                use_staged=True,
+                target_date=date(2026, 4, 16),  # Thursday
+                mode="new",
+            )
+
+        self.assertEqual(preview["row_type"], "gap")
+        self.assertEqual(preview["start_time"], "15:15")
+        self.assertEqual(preview["end_time"], "15:30")
+
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes._resolve_task_preview")
     @patch("routes._resolve_preview_target_date", return_value=date(2026, 4, 18))
@@ -144,6 +249,40 @@ class TestTaskPreviewResolution(unittest.TestCase):
         mock_preview.assert_called_once()
         self.assertEqual(mock_preview.call_args.kwargs["mode"], "new")
         self.assertEqual(mock_preview.call_args.kwargs["target_date"], date(2026, 4, 18))
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_preview_endpoint_accepts_plain_persisted_segment_label(self, _mock_admin_access) -> None:
+        gap_rule = {
+            "name": "ZGT",
+            "type": "gap",
+            "segments": [
+                {
+                    "label": "ZGT",
+                    "times": {"Donnerstag": ["07:30-09:00"]},
+                    "skill_overrides": {"all": -1},
+                },
+                {
+                    "label": "ZGT Ausgleich",
+                    "times": {"Donnerstag": ["15:15-15:30"]},
+                    "skill_overrides": {"all": -1},
+                },
+            ],
+            "counts_for_hours": False,
+        }
+
+        with patch("routes._build_task_roles", return_value=[gap_rule]):
+            response = self.client.post(
+                "/api/prep-next-day/resolve-task-preview",
+                json={"worker": "Alice (A1)", "task": "ZGT Ausgleich", "target_date": "2026-04-16"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["task"], "ZGT Ausgleich")
+        self.assertEqual(payload["row_type"], "gap")
+        self.assertEqual(payload["start_time"], "15:15")
+        self.assertEqual(payload["end_time"], "15:30")
+        self.assertEqual(payload["target_date"], "2026-04-16")
 
     @patch("routes.has_admin_access", return_value=True)
     def test_prep_preview_endpoint_rejects_invalid_target_date(self, _mock_admin_access) -> None:

@@ -100,6 +100,19 @@ function parseDayTimes(dayTimes) {
 
 function getGapTimeRange(taskConfig, targetDay) {
   if (!taskConfig) return null;
+  const segments = Array.isArray(taskConfig.segments) ? taskConfig.segments : [];
+  if (segments.length > 0) {
+    for (const segment of segments) {
+      const segmentTimes = segment?.times || {};
+      const resolvedSegmentTimes = typeof resolveDayTimes === 'function'
+        ? resolveDayTimes(segmentTimes, targetDay)
+        : (segmentTimes[targetDay] || segmentTimes.default);
+      const segmentRanges = normalizeTaskTimeRanges(resolvedSegmentTimes);
+      if (segmentRanges.length > 0) {
+        return parseDayTimes(segmentRanges[0]);
+      }
+    }
+  }
   const times = taskConfig.times || {};
   const dayTimes = typeof resolveDayTimes === 'function'
     ? resolveDayTimes(times, targetDay)
@@ -1012,7 +1025,35 @@ function openEditModal(tab, groupIdx) {
 
 // Handle task change in existing shift (edit modal draft only)
 function getTaskConfigByName(taskName) {
-  return taskName ? TASK_ROLES.find(t => t.name === taskName) : null;
+  return taskName ? resolveTaskConfigByName(taskName) : null;
+}
+
+function getTaskPersistedName(taskName) {
+  const taskConfig = getTaskConfigByName(taskName);
+  return taskConfig?.persisted_name || taskConfig?.name || taskName;
+}
+
+function buildGapPreviewFromTaskConfig(taskName, taskConfig, targetDay) {
+  const [startTime, endTime] = getGapTimeRange(taskConfig, targetDay) || ['12:00', '13:00'];
+  const skillsByModality = {};
+  MODALITIES.forEach(mod => {
+    const modKey = mod.toLowerCase();
+    skillsByModality[modKey] = {};
+    SKILLS.forEach(skill => {
+      skillsByModality[modKey][skill] = '-1';
+    });
+  });
+  return {
+    task: taskName,
+    row_type: 'gap',
+    training: false,
+    modifier: Number(taskConfig?.modifier || 1.0),
+    counts_for_hours: taskConfig?.counts_for_hours === true,
+    start_time: startTime,
+    end_time: endTime,
+    base_skills_by_modality: skillsByModality,
+    skills_by_modality: skillsByModality,
+  };
 }
 
 function getTaskPreviewEndpoint(tab) {
@@ -1092,13 +1133,15 @@ async function refreshEditShiftFromPreview(shiftIdx, taskName, trainingEnabled =
   const taskConfig = getTaskConfigByName(taskName);
   if (!taskConfig) return;
 
-  const preview = await fetchTaskPreview(tab, {
-    worker: group.worker,
-    task: taskName,
-    training: taskConfig.type === 'gap' ? false : (trainingEnabled !== null ? Boolean(trainingEnabled) : (shift.training !== false)),
-    mode: 'edit',
-    current_shift: shift,
-  });
+  const preview = taskConfig.type === 'gap'
+    ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
+    : await fetchTaskPreview(tab, {
+        worker: group.worker,
+        task: taskName,
+        training: trainingEnabled !== null ? Boolean(trainingEnabled) : (shift.training !== false),
+        mode: 'edit',
+        current_shift: shift,
+      });
 
   replaceDraftShiftPreviewState(shiftIdx, preview);
   markDraftShiftMaterialized(shiftIdx);
@@ -1126,12 +1169,16 @@ async function refreshAddWorkerTaskPreview(idx) {
   const workerValue = fullName || workerId;
   if (!workerValue) return;
 
-  const preview = await fetchTaskPreview(addWorkerModalState.tab, {
-    worker: workerValue,
-    task: task.task,
-    training: task.training !== false,
-    mode: 'new',
-  });
+  const taskConfig = getTaskConfigByName(task.task);
+  if (!taskConfig) return;
+  const preview = taskConfig.type === 'gap'
+    ? buildGapPreviewFromTaskConfig(task.task, taskConfig, getTargetWeekdayName(addWorkerModalState.tab))
+    : await fetchTaskPreview(addWorkerModalState.tab, {
+        worker: workerValue,
+        task: task.task,
+        training: task.training !== false,
+        mode: 'new',
+      });
   applyPreviewToAddWorkerTask(task, preview);
 }
 
@@ -1147,12 +1194,14 @@ async function refreshModalAddFormPreview() {
 
   const trainingEl = document.getElementById('modal-add-training');
   const trainingEnabled = taskConfig.type === 'gap' ? false : (trainingEl ? trainingEl.checked : (taskConfig.training !== false));
-  const preview = await fetchTaskPreview(tab, {
-    worker: group.worker,
-    task: taskName,
-    training: trainingEnabled,
-    mode: 'new',
-  });
+  const preview = taskConfig.type === 'gap'
+    ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
+    : await fetchTaskPreview(tab, {
+        worker: group.worker,
+        task: taskName,
+        training: trainingEnabled,
+        mode: 'new',
+      });
 
   document.getElementById('modal-add-start').value = preview.start_time;
   document.getElementById('modal-add-end').value = preview.end_time;
@@ -1419,9 +1468,6 @@ async function onModalTaskChange() {
   if (!option || !option.value) {
     return;
   }
-
-  const taskName = option.value;
-  const taskConfig = TASK_ROLES.find(t => t.name === taskName);
   try {
     await refreshModalAddFormPreview();
   } catch (error) {
@@ -1564,7 +1610,7 @@ async function addShiftFromModal() {
   const countsHoursEl = document.getElementById('modal-add-counts-hours');
   const countsForHours = countsHoursEl ? countsHoursEl.checked : true;
   const isGap = isGapTask(taskName);
-  const taskConfig = TASK_ROLES.find(t => t.name === taskName);
+  const taskConfig = getTaskConfigByName(taskName);
   const trainingEl = document.getElementById('modal-add-training');
   const trainingEnabled = isGap ? false : (trainingEl ? trainingEl.checked : (taskConfig?.training !== false));
   const taskKey = (taskName || '').trim();
@@ -1642,7 +1688,7 @@ async function addShiftFromModal() {
         await postJsonWithSnapshot(tab, addGapEndpoint, {
           modality,
           row_index: rowIndex,
-          gap_type: taskName,
+          gap_type: getTaskPersistedName(taskName),
           gap_start: startTime,
           gap_end: endTime,
           gap_counts_for_hours: countsForHours
@@ -1784,7 +1830,7 @@ function applyWorkerSkillPresetForShiftModality(groupIdx, shiftIdx, modKey) {
 async function applyPresetToShift(shiftIdx, taskName) {
   if (!taskName) return;
 
-  const task = TASK_ROLES.find(t => t.name === taskName);
+  const task = getTaskConfigByName(taskName);
   if (!task) {
     showMessage('error', `Preset not found: ${taskName}`);
     return;
@@ -1858,9 +1904,14 @@ async function saveModalChanges() {
   const modalState = captureModalState();
   try {
     syncEditPlanDraftFromModal();
+    const persistedShifts = (editPlanDraft.shifts || []).map(shift => ({
+      ...shift,
+      task: getTaskPersistedName(shift.task),
+      tasks: getTaskPersistedName(shift.tasks || shift.task),
+    }));
     await postJsonWithSnapshot(tab, applyEndpoint, {
       worker: editPlanDraft.worker,
-      shifts: editPlanDraft.shifts || [],
+      shifts: persistedShifts,
       worker_revision: currentEditEntry?.openedWorkerRevision || getWorkerRevision(tab, editPlanDraft.worker),
     }, {
       reloadOnConflict: true,
@@ -2070,7 +2121,7 @@ async function updateAddWorkerTask(idx, field, value) {
 
   // If the task changes, update times, modifier, and skill defaults from config.
   if (field === 'task') {
-    const taskConfig = TASK_ROLES.find(t => t.name === value);
+    const taskConfig = getTaskConfigByName(value);
     if (!taskConfig) {
       renderAddWorkerModalContent();
       return;
@@ -2266,7 +2317,7 @@ async function saveAddWorkerModal() {
         modifier: task.modifier,
         counts_for_hours: isGap ? task.counts_for_hours === true : task.counts_for_hours !== false,
         training: trainingEnabled,
-        task: task.task,
+        task: getTaskPersistedName(task.task),
         row_type: isGap ? 'gap' : 'shift',
         modalities
       };
@@ -2291,7 +2342,7 @@ async function saveAddWorkerModal() {
 }
 
 function getGapCountsForHours(taskName) {
-  const taskConfig = TASK_ROLES.find(t => t.name === taskName);
+  const taskConfig = getTaskConfigByName(taskName);
   return taskConfig?.counts_for_hours === true;
 }
 

@@ -191,6 +191,7 @@ def _build_task_roles() -> list[dict[str, Any]]:
             'type': rule_type,
             'modalities': modalities_list,
             'times': rule.get('times', {}),
+            'segments': rule.get('segments', []),
             'gaps': rule.get('gaps', {}),
             'skill_overrides': skill_overrides,
             'modifier': rule.get('modifier', 1.0),
@@ -208,6 +209,129 @@ def _get_task_role_by_name(task_name: str) -> Optional[dict[str, Any]]:
         if str(task_role.get('name', '')).strip() == normalized_name:
             return task_role
     return None
+
+
+def _decode_gap_task_variant(task_name: str) -> Optional[dict[str, str]]:
+    raw_name = str(task_name or '').strip()
+    if not raw_name.startswith('__gap__|'):
+        return None
+    parts = raw_name.split('|')
+    if len(parts) != 4:
+        return None
+    _, base_name, persisted_name, time_range = parts
+    if not base_name or not persisted_name or not time_range:
+        return None
+    return {
+        'base_name': base_name,
+        'persisted_name': persisted_name,
+        'time_range': time_range,
+    }
+
+
+def _build_effective_gap_task_role(
+    task_name: str,
+    *,
+    target_date: date,
+    current_shift: Optional[dict[str, Any]] = None,
+) -> Optional[dict[str, Any]]:
+    weekday_name = get_weekday_name_german(target_date)
+    variant = _decode_gap_task_variant(task_name)
+    normalized_task_name = str(task_name or '').strip()
+    base_lookup_name = variant['base_name'] if variant else normalized_task_name
+    task_role = _get_task_role_by_name(base_lookup_name)
+
+    matched_persisted_segment_name = False
+    if task_role is None and not variant:
+        for candidate_role in _build_task_roles():
+            if str(candidate_role.get('type', 'shift')).strip().lower() != 'gap':
+                continue
+            raw_segments = candidate_role.get('segments')
+            if not isinstance(raw_segments, list) or not raw_segments:
+                continue
+            for segment in raw_segments:
+                if not isinstance(segment, dict):
+                    continue
+                segment_label = str(segment.get('label', '')).strip()
+                if segment_label and segment_label == normalized_task_name:
+                    task_role = candidate_role
+                    matched_persisted_segment_name = True
+                    break
+            if task_role is not None:
+                break
+
+    if task_role is None:
+        return None
+
+    if str(task_role.get('type', 'shift')).strip().lower() != 'gap':
+        return task_role
+
+    raw_segments = task_role.get('segments')
+    if not isinstance(raw_segments, list) or not raw_segments:
+        return task_role
+
+    matching_segments: list[tuple[dict[str, Any], list[tuple[time, time]]]] = []
+    for segment in raw_segments:
+        if not isinstance(segment, dict):
+            continue
+        segment_times = parse_gap_times(segment.get('times', {}), weekday_name)
+        if not segment_times:
+            continue
+        matching_segments.append((segment, segment_times))
+
+    if not matching_segments:
+        return task_role
+
+    selected_segment: Optional[dict[str, Any]] = None
+    selected_time_range: Optional[str] = None
+
+    if variant or matched_persisted_segment_name:
+        for segment, segment_times in matching_segments:
+            segment_label = str(segment.get('label', task_role.get('name', ''))).strip()
+            for start_time, end_time in segment_times:
+                time_range = f"{start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}"
+                if variant and segment_label == variant['persisted_name'] and time_range == variant['time_range']:
+                    selected_segment = segment
+                    selected_time_range = time_range
+                    break
+                if matched_persisted_segment_name and segment_label == normalized_task_name:
+                    selected_segment = segment
+                    selected_time_range = time_range
+                    break
+            if selected_segment is not None:
+                break
+
+    if selected_segment is None:
+        current_start = format_time_value((current_shift or {}).get('start_time'))
+        current_end = format_time_value((current_shift or {}).get('end_time'))
+        if current_start and current_end:
+            for segment, segment_times in matching_segments:
+                for start_time, end_time in segment_times:
+                    if start_time.strftime('%H:%M') == current_start and end_time.strftime('%H:%M') == current_end:
+                        selected_segment = segment
+                        selected_time_range = f"{current_start}-{current_end}"
+                        break
+                if selected_segment is not None:
+                    break
+
+    if selected_segment is None:
+        first_segment, first_times = matching_segments[0]
+        first_start, first_end = first_times[0]
+        selected_segment = first_segment
+        selected_time_range = f"{first_start.strftime('%H:%M')}-{first_end.strftime('%H:%M')}"
+
+    effective_rule = dict(task_role)
+    effective_rule.pop('segments', None)
+    for key in ('times', 'label', 'counts_for_hours', 'modifier', 'gaps', 'day_part', 'day_parts'):
+        if key in selected_segment:
+            effective_rule[key] = selected_segment[key]
+
+    if selected_time_range is not None:
+        effective_rule['times'] = {weekday_name: selected_time_range}
+
+    if 'skill_overrides' in selected_segment:
+        effective_rule['skill_overrides'] = selected_segment.get('skill_overrides', {})
+
+    return effective_rule
 
 
 def _resolve_preview_target_date(use_staged: bool, payload: dict[str, Any]) -> date:
@@ -263,7 +387,11 @@ def _resolve_task_preview(
     mode: str = 'new',
     current_shift: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    task_role = _get_task_role_by_name(task_name)
+    task_role = _build_effective_gap_task_role(
+        task_name,
+        target_date=target_date,
+        current_shift=current_shift,
+    )
     if task_role is None:
         raise ValueError(f"Unknown task: {task_name}")
 

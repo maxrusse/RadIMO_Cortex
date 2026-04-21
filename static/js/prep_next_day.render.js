@@ -584,7 +584,7 @@ function renderEditModalContent() {
   <div style="flex: 1; min-width: 180px;">
     <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
     <select id="edit-shift-${shiftIdx}-task" onchange="onEditShiftTaskChange(${shiftIdx}, this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;" ${isEditable ? '' : 'disabled'}>
-      ${renderTaskOptionsWithGroups(shift.task || '', true)}
+      ${renderTaskOptionsWithGroups(shift.task || '', true, false, null, { start: shift.start_time, end: shift.end_time })}
     </select>
   </div>
 
@@ -823,7 +823,7 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
         <div style="flex: 1; min-width: 180px;">
           <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
           <select onchange="updateAddWorkerTask(${idx}, 'task', this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;">
-            ${renderTaskOptionsWithGroups(task.task, true)}
+            ${renderTaskOptionsWithGroups(task.task, true, false, null, { start: task.start_time, end: task.end_time })}
           </select>
         </div>
 
