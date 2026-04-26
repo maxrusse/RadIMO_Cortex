@@ -169,6 +169,36 @@ LOG_SOURCE_ALIASES = {
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
 FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
 VALID_WORKER_THRESHOLD_HOURS = 1.0
+GERMAN_TO_ENGLISH_WEEKDAYS = {
+    "Montag": "monday",
+    "Dienstag": "tuesday",
+    "Mittwoch": "wednesday",
+    "Donnerstag": "thursday",
+    "Freitag": "friday",
+    "Samstag": "saturday",
+    "Sonntag": "sunday",
+}
+
+
+def _select_day_config_value(value_config: Any, weekday_name: str, default: Any = None) -> Any:
+    if not isinstance(value_config, dict):
+        return value_config if value_config is not None else default
+    if weekday_name in value_config:
+        return value_config[weekday_name]
+    english_day = GERMAN_TO_ENGLISH_WEEKDAYS.get(weekday_name)
+    if english_day and english_day in value_config:
+        return value_config[english_day]
+    if 'default' in value_config:
+        return value_config['default']
+    return default
+
+
+def _resolve_day_modifier(value_config: Any, target_date: date, default: float = 1.0) -> float:
+    raw_value = _select_day_config_value(value_config, get_weekday_name_german(target_date), default)
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _build_task_roles() -> list[dict[str, Any]]:
@@ -197,6 +227,34 @@ def _build_task_roles() -> list[dict[str, Any]]:
             'modifier': rule.get('modifier', 1.0),
             'counts_for_hours': counts_for_hours,
             'allow_roster_exclusion_override': bool(rule.get('allow_roster_exclusion_override', False)),
+        })
+
+    for entry in APP_CONFIG.get('synthetic_shifts', []):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get('use_shift') or entry.get('task_role') or entry.get('shift_role'):
+            continue
+        show_in_task_dropdown = coerce_bool(entry.get('show_in_task_dropdown'))
+        if show_in_task_dropdown is False:
+            continue
+        skill_overrides = entry.get('skill_overrides', {})
+        if not isinstance(skill_overrides, dict) or not skill_overrides:
+            continue
+        task_roles.append({
+            'name': entry.get('label') or entry.get('task') or entry.get('worker_name') or entry.get('name', ''),
+            'type': 'shift',
+            'modalities': extract_modalities_from_skill_overrides(skill_overrides),
+            'times': entry.get('times', {}),
+            'segments': [],
+            'gaps': entry.get('gaps', {}),
+            'skill_overrides': skill_overrides,
+            'modifier': entry.get('modifier', 1.0),
+            'counts_for_hours': entry.get(
+                'counts_for_hours',
+                APP_CONFIG.get('balancer', {}).get('hours_counting', {}).get('shift_default', True),
+            ),
+            'allow_roster_exclusion_override': bool(entry.get('allow_roster_exclusion_override', False)),
+            'synthetic': True,
         })
     return task_roles
 
@@ -397,7 +455,7 @@ def _resolve_task_preview(
 
     is_gap = str(task_role.get('type', 'shift')).strip().lower() == 'gap'
     resolved_training = False if is_gap else bool(training if training is not None else True)
-    modifier = 1.0 if is_gap else float(task_role.get('modifier', 1.0) or 1.0)
+    modifier = 1.0 if is_gap else _resolve_day_modifier(task_role.get('modifier', 1.0), target_date)
     counts_for_hours = bool(task_role.get('counts_for_hours', False if is_gap else True))
 
     if is_gap:

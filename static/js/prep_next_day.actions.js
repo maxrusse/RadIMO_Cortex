@@ -280,10 +280,10 @@ function validateAndSaveModifier(el) {
 
   // Validate - clamp to valid range
   if (isNaN(parsed) || parsed < 0.3) parsed = 0.3;
-  else if (parsed > 1.25) parsed = 1.25;
+  else if (parsed > 3.0) parsed = 3.0;
 
   // Round to nearest valid value
-  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
+  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
   parsed = validValues.reduce((prev, curr) =>
     Math.abs(curr - parsed) < Math.abs(prev - parsed) ? curr : prev
   );
@@ -301,10 +301,10 @@ function validateAndSaveShiftModifier(el) {
 
   // Validate - clamp to valid range
   if (isNaN(parsed) || parsed < 0.3) parsed = 0.3;
-  else if (parsed > 1.25) parsed = 1.25;
+  else if (parsed > 3.0) parsed = 3.0;
 
   // Round to nearest valid value
-  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
+  const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
   parsed = validValues.reduce((prev, curr) =>
     Math.abs(curr - parsed) < Math.abs(prev - parsed) ? curr : prev
   );
@@ -329,7 +329,7 @@ function handleModKeydown(event, el) {
     event.preventDefault();
   } else if (event.key === 'ArrowUp') {
     const val = parseFloat(el.value) || 1.0;
-    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
+    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
     const idx = validValues.indexOf(val);
     const next = idx < validValues.length - 1 ? validValues[idx + 1] : validValues[validValues.length - 1];
     el.value = next;
@@ -337,7 +337,7 @@ function handleModKeydown(event, el) {
     event.preventDefault();
   } else if (event.key === 'ArrowDown') {
     const val = parseFloat(el.value) || 1.0;
-    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25];
+    const validValues = [0.3, 0.5, 0.75, 0.9, 1.0, 1.1, 1.2, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
     const idx = validValues.indexOf(val);
     const next = idx > 0 ? validValues[idx - 1] : validValues[0];
     el.value = next;
@@ -1047,7 +1047,7 @@ function buildGapPreviewFromTaskConfig(taskName, taskConfig, targetDay) {
     task: taskName,
     row_type: 'gap',
     training: false,
-    modifier: Number(taskConfig?.modifier || 1.0),
+    modifier: resolveDayModifier(taskConfig?.modifier, targetDay),
     counts_for_hours: taskConfig?.counts_for_hours === true,
     start_time: startTime,
     end_time: endTime,
@@ -2232,7 +2232,7 @@ function buildAddWorkerTaskState(taskConfig, targetDay) {
   const isGap = config.type === 'gap';
   const trainingEnabled = isGap ? false : (config.training !== false);
   const countsForHours = isGap ? false : (config.counts_for_hours !== false);
-  const modifier = config.modifier || 1.0;
+  const modifier = resolveDayModifier(config.modifier, targetDay);
   const baseSkillsByModality = createNeutralSkillsByModality(isGap ? -1 : 0);
   const skillsByModality = cloneSkillMap(baseSkillsByModality);
   const [startTime, endTime] = isGap

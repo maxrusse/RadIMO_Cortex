@@ -110,6 +110,36 @@ class TestTaskPreviewResolution(unittest.TestCase):
 
         self.assertEqual(preview["skills_by_modality"][self.modality][self.primary_skill], "-1")
 
+    def test_shift_preview_resolves_day_specific_modifier(self) -> None:
+        shift_rule = {
+            **self.shift_rule,
+            "modifier": {"default": 1.0, "Freitag": 2.0},
+        }
+
+        with patch("routes._build_task_roles", return_value=[shift_rule]), patch(
+            "routes.load_worker_skill_json",
+            return_value={},
+        ):
+            friday_preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="Shift A",
+                training=True,
+                use_staged=True,
+                target_date=date(2026, 4, 17),
+                mode="new",
+            )
+            thursday_preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="Shift A",
+                training=True,
+                use_staged=True,
+                target_date=date(2026, 4, 16),
+                mode="new",
+            )
+
+        self.assertEqual(friday_preview["modifier"], 2.0)
+        self.assertEqual(thursday_preview["modifier"], 1.0)
+
     def test_gap_preview_uses_first_matching_segment_for_target_day(self) -> None:
         gap_rule = {
             "name": "ZGT",

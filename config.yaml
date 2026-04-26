@@ -202,36 +202,14 @@ special_tasks:
 
 synthetic_shifts:
   - worker_name: "Gynarzt (GYNDOC)"
-    label: "Gynarzt-shift"
+    use_shift: "Gynarzt"
     weekdays: [workdays]
-    times:
-      default: "07:30-15:30"
-      Freitag: "07:30-15:15"
-    skill_overrides:
-      gyn_ct: 1
-      gyn_mr: 1
-      notfall: -1
   - worker_name: "Notfallarzt (NDOC)"
-    label: "Notfallarzt-shift"
+    use_shift: "Notfallarzt"
     weekdays: [workdays]
-    times:
-      default: "07:30-15:30"
-      Freitag: "07:30-15:15"
-    skill_overrides:
-      notfall_ct: 1
-      notfall_mr: 1
-      notfall_xray: -1
-      gyn: -1
   - worker_name: "Notfallarzt (NDOC)"
-    label: "Notfallarzt-Spätdienst"
+    use_shift: "Notfall Spätdienst"
     weekdays: [workdays]
-    times:
-      default: "15:30-19:45"
-      Freitag: "15:15-19:30"
-    skill_overrides:
-      all: -1
-      notfall_ct: 1
-      notfall_mr: 1
 
 # =============================================================================
 # WORKER ROSTER BASELINES
@@ -457,7 +435,11 @@ balancer:
 #       Freitag: "07:30-15:45"         # Optional: Friday override
 #     skill_overrides:                 # REQUIRED: Defines skills & modalities
 #       notfall_ct: 1                  # Skill_Modality: value (1, 0, -1, w)
-#     modifier: 1.0                    # OPTIONAL: Workload modifier (0.5-1.5)
+#     modifier: 1.0                    # OPTIONAL: Workload modifier (0.3-3.0)
+#     # modifier can also be day-specific:
+#     # modifier:
+#     #   default: 1.0
+#     #   Freitag: 2.0
 #     counts_for_hours: true           # OPTIONAL: Count in load balancing
 #
 # GAP RULES:
@@ -570,6 +552,32 @@ vendor_mappings:
     # =========================================================================
     # SUBSPECIALTY SHIFTS (assistant level)
     # =========================================================================
+
+    - match: "Gynarzt"
+      label: "Gynarzt"
+      type: "shift"
+      times:
+        default: "07:30-15:30"
+        Freitag: "07:30-15:15"
+      modifier:
+        default: 1.0
+        Freitag: 2.0
+      skill_overrides:
+        gyn_ct: 1
+        gyn_mr: 1
+        notfall: -1
+
+    - match: "Notfallarzt"
+      label: "Notfallarzt"
+      type: "shift"
+      times:
+        default: "07:30-15:30"
+        Freitag: "07:30-15:15"
+      skill_overrides:
+        notfall_ct: 1
+        notfall_mr: 1
+        notfall_xray: -1
+        gyn: -1
 
     - match: "SBZ: Abdomen/Onko/Uro"
       label: "SBZ: Abdomen/Onko/Uro NM"
@@ -910,6 +918,9 @@ vendor_mappings:
       type: "shift"
       times:
         default: "07:30-12:00"
+      modifier:
+        default: 1.0
+        Freitag: 2.0
       counts_for_hours: false
       skill_overrides:
         all: -1
@@ -922,7 +933,6 @@ vendor_mappings:
       times:
         default: "15:30-19:45"
         Freitag: "15:15-19:30"
-      counts_for_hours: false
       skill_overrides:
         all: -1
         notfall_ct: 1

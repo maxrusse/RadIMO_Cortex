@@ -612,6 +612,11 @@ function renderEditModalContent() {
       <option value="1.1" ${shift.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
       <option value="1.2" ${shift.modifier === 1.2 ? 'selected' : ''}>1.2x</option>
       <option value="1.25" ${shift.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
+      <option value="1.5" ${shift.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+      <option value="1.75" ${shift.modifier === 1.75 ? 'selected' : ''}>1.75x</option>
+      <option value="2.0" ${shift.modifier === 2.0 ? 'selected' : ''}>2.0x</option>
+      <option value="2.5" ${shift.modifier === 2.5 ? 'selected' : ''}>2.5x</option>
+      <option value="3.0" ${shift.modifier === 3.0 ? 'selected' : ''}>3.0x</option>
     </select>
   </div>
 
@@ -722,6 +727,11 @@ function renderEditModalContent() {
     <option value="1.1">1.1x</option>
     <option value="1.2">1.2x</option>
     <option value="1.25">1.25x</option>
+    <option value="1.5">1.5x</option>
+    <option value="1.75">1.75x</option>
+    <option value="2.0">2.0x</option>
+    <option value="2.5">2.5x</option>
+    <option value="3.0">3.0x</option>
   </select>
 </div>
 <div style="min-width: 100px;">
@@ -848,6 +858,11 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
             <option value="1.1" ${task.modifier === 1.1 ? 'selected' : ''}>1.1x</option>
             <option value="1.2" ${task.modifier === 1.2 ? 'selected' : ''}>1.2x</option>
             <option value="1.25" ${task.modifier === 1.25 ? 'selected' : ''}>1.25x</option>
+            <option value="1.5" ${task.modifier === 1.5 ? 'selected' : ''}>1.5x</option>
+            <option value="1.75" ${task.modifier === 1.75 ? 'selected' : ''}>1.75x</option>
+            <option value="2.0" ${task.modifier === 2.0 ? 'selected' : ''}>2.0x</option>
+            <option value="2.5" ${task.modifier === 2.5 ? 'selected' : ''}>2.5x</option>
+            <option value="3.0" ${task.modifier === 3.0 ? 'selected' : ''}>3.0x</option>
           </select>
         </div>
 

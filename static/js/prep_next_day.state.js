@@ -143,6 +143,25 @@ function resolveDayTimes(timesConfig, targetDay) {
   return times.default || null;
 }
 
+function resolveDayModifier(modifierConfig, targetDay, defaultValue = 1.0) {
+  if (modifierConfig === null || modifierConfig === undefined || modifierConfig === '') {
+    return defaultValue;
+  }
+  if (typeof modifierConfig !== 'object' || Array.isArray(modifierConfig)) {
+    const parsed = parseFloat(modifierConfig);
+    return Number.isNaN(parsed) ? defaultValue : parsed;
+  }
+  const normalizedDay = normalizeWeekdayName(targetDay);
+  const englishDay = GERMAN_TO_ENGLISH_WEEKDAYS[normalizedDay];
+  const rawValue = (
+    (normalizedDay && modifierConfig[normalizedDay] !== undefined) ? modifierConfig[normalizedDay] :
+    (englishDay && modifierConfig[englishDay] !== undefined) ? modifierConfig[englishDay] :
+    modifierConfig.default
+  );
+  const parsed = parseFloat(rawValue);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
 // Active skill values for filtering - excludes 0 and -1 (only shows explicitly active workers)
 const ACTIVE_SKILL_VALUES = new Set([1, '1', 'w', 'W']);
 
@@ -521,7 +540,8 @@ function buildTaskOptionsCache(targetDay) {
 
     shifts.forEach(t => {
       const escapedName = escapeHtml(t.name);
-      const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${t.modifier || 1.0}"`;
+      const modifier = resolveDayModifier(t.modifier, targetDay);
+      const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${modifier}"`;
       const optionHtml = `<option value="${escapedName}" ${dataAttrs}>${escapedName}</option>`;
       const optionHtmlSelected = `<option value="${escapedName}" ${dataAttrs} selected>${escapedName}</option>`;
 
@@ -543,7 +563,8 @@ function buildTaskOptionsCache(targetDay) {
 
     blockerShifts.forEach(t => {
       const escapedName = escapeHtml(t.name);
-      const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${t.modifier || 1.0}" data-counts-for-hours="false"`;
+      const modifier = resolveDayModifier(t.modifier, targetDay);
+      const dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(t.modalities || [])}' data-shift="${escapeHtml(t.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(t.skill_overrides || {})}' data-modifier="${modifier}" data-counts-for-hours="false"`;
       const optionHtml = `<option value="${escapedName}" ${dataAttrs}>${escapedName}</option>`;
       const optionHtmlSelected = `<option value="${escapedName}" ${dataAttrs} selected>${escapedName}</option>`;
 
@@ -658,7 +679,8 @@ function renderTaskOptionsWithGroups(selectedValue = '', includeGaps = false, au
   if (taskConfig.type === 'gap') {
     dataAttrs = `data-type="gap" data-times='${JSON.stringify(taskConfig.times || {})}' data-persisted-name="${escapeHtml(taskConfig.persisted_name || taskConfig.name)}"`;
   } else {
-    dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(taskConfig.modalities || [])}' data-shift="${escapeHtml(taskConfig.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(taskConfig.skill_overrides || {})}' data-modifier="${taskConfig.modifier || 1.0}"`;
+    const modifier = resolveDayModifier(taskConfig.modifier, targetDay);
+    dataAttrs = `data-type="shift" data-modalities='${JSON.stringify(taskConfig.modalities || [])}' data-shift="${escapeHtml(taskConfig.shift || 'Fruehdienst')}" data-skills='${JSON.stringify(taskConfig.skill_overrides || {})}' data-modifier="${modifier}"`;
   }
   const fallbackOption = `<option value="${escapedName}" ${dataAttrs} selected>${escapedLabel}</option>`;
   return `${baseHtml}${fallbackOption}`;

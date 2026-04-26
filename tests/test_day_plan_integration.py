@@ -655,6 +655,80 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
+    def test_synthetic_shift_can_reference_mapping_shift_definition(self) -> None:
+        target_date = datetime(2026, 1, 23)  # Friday
+        worker_name = "GynDoc"
+        skill_key = SKILL_COLUMNS[0]
+        skill_override_key = f"{skill_key}_{self.modality}"
+
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_code": "Code des Mitarbeiters",
+                },
+                "rules": [
+                    {
+                        "match": "Gynarzt",
+                        "label": "Gynarzt",
+                        "type": "shift",
+                        "times": {"default": "07:30-15:30", "Freitag": "07:30-15:15"},
+                        "modifier": {"default": 1.0, "Freitag": 2.0},
+                        "skill_overrides": {skill_override_key: 1},
+                    }
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "synthetic_shifts": [
+                {
+                    "worker_name": worker_name,
+                    "use_shift": "Gynarzt",
+                    "weekdays": ["friday"],
+                }
+            ],
+            "worker_roster": {},
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Code des Mitarbeiters",
+                    ]
+                )
+                writer.writerow(["22.01.2026", "Other Day", "Alice", "A1"])
+
+            worker_management.worker_skill_json_roster.clear()
+
+            def _fake_save(roster, create_backup=True):
+                worker_management.worker_skill_json_roster.clear()
+                worker_management.worker_skill_json_roster.update(roster)
+                return True
+
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}), \
+                 patch("data_manager.worker_management.save_worker_skill_json", side_effect=_fake_save):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, config)
+
+            csv_df = csv_result[self.modality]
+            self.assertEqual(len(csv_df), 1)
+            self.assertEqual(csv_df.iloc[0]["PPL"], worker_name)
+            self.assertEqual(csv_df.iloc[0]["tasks"], "Gynarzt")
+            self.assertEqual(csv_df.iloc[0]["start_time"].strftime("%H:%M"), "07:30")
+            self.assertEqual(csv_df.iloc[0]["end_time"].strftime("%H:%M"), "15:15")
+            self.assertEqual(float(csv_df.iloc[0]["Modifier"]), 2.0)
+            self.assertEqual(str(csv_df.iloc[0][skill_key]), "1")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
     def test_synthetic_shift_preserves_yaml_roster_exclusions_after_json_seed(self) -> None:
         target_date = datetime(2026, 1, 23)  # Friday
         worker_name = "Gynarzt (GYNDOC)"

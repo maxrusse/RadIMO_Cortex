@@ -159,6 +159,66 @@ def _select_day_times(
     return None
 
 
+def _select_day_config_value(
+    value_config: Any,
+    weekday_name: str,
+    default: Any = None,
+) -> Any:
+    if not isinstance(value_config, dict):
+        return value_config if value_config is not None else default
+    if weekday_name in value_config:
+        return value_config[weekday_name]
+    english_day = GERMAN_TO_ENGLISH_WEEKDAYS.get(weekday_name)
+    if english_day and english_day in value_config:
+        return value_config[english_day]
+    if 'default' in value_config:
+        return value_config['default']
+    return default
+
+
+def _resolve_day_modifier(value_config: Any, weekday_name: str, default: float = 1.0) -> float:
+    raw_value = _select_day_config_value(value_config, weekday_name, default)
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _rule_display_name(rule: dict) -> str:
+    return str(rule.get('label') or rule.get('match') or rule.get('name') or '').strip()
+
+
+def _find_mapping_rule_by_name(config: dict, name: Any) -> Optional[dict]:
+    normalized_name = str(name or '').strip()
+    if not normalized_name:
+        return None
+    for rule in config.get('medweb_mapping', {}).get('rules', []):
+        if _rule_display_name(rule) == normalized_name or str(rule.get('match', '')).strip() == normalized_name:
+            return rule
+    return None
+
+
+def _resolve_synthetic_shift_entry(config: dict, entry: dict) -> dict:
+    shift_ref = entry.get('use_shift') or entry.get('task_role') or entry.get('shift_role')
+    if not shift_ref:
+        return entry
+
+    referenced_rule = _find_mapping_rule_by_name(config, shift_ref)
+    if referenced_rule is None:
+        selection_logger.warning(
+            "Synthetic shift '%s' references unknown shift '%s' - using inline synthetic config",
+            entry.get('worker_name') or entry.get('name') or '(unknown)',
+            shift_ref,
+        )
+        return entry
+
+    merged = dict(referenced_rule)
+    merged.update(entry)
+    if 'label' not in entry and 'task' not in entry:
+        merged['label'] = _rule_display_name(referenced_rule)
+    return merged
+
+
 def _normalize_time_ranges_input(day_times: Any) -> Optional[List[str]]:
     if isinstance(day_times, str):
         return [day_times]
@@ -846,7 +906,10 @@ def build_working_hours_from_medweb(
                         continue
                     duration_hours = (end_dt - start_dt).total_seconds() / 3600
 
-                    rule_modifier = effective_rule.get('modifier', 1.0)
+                    rule_modifier = _resolve_day_modifier(
+                        effective_rule.get('modifier', 1.0),
+                        weekday_name,
+                    )
                     hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
                     if 'counts_for_hours' in effective_rule:
                         counts_for_hours = effective_rule['counts_for_hours']
@@ -903,7 +966,9 @@ def build_working_hours_from_medweb(
             if allowed_weekdays and weekday_name not in allowed_weekdays:
                 continue
 
-            skill_overrides = entry.get('skill_overrides', {})
+            effective_entry = _resolve_synthetic_shift_entry(config, entry)
+
+            skill_overrides = effective_entry.get('skill_overrides', {})
             if not isinstance(skill_overrides, dict) or not skill_overrides:
                 selection_logger.warning(
                     "Synthetic shift '%s' missing skill_overrides - skipping",
@@ -922,7 +987,7 @@ def build_working_hours_from_medweb(
 
             canonical_id = get_canonical_worker_id(worker_name)
             roster_combinations = get_worker_skill_mod_combinations(canonical_id, worker_roster)
-            training = coerce_bool(entry.get('training'))
+            training = coerce_bool(effective_entry.get('training'))
             if training is None:
                 training = True
             final_combinations = apply_skill_overrides(
@@ -931,29 +996,26 @@ def build_working_hours_from_medweb(
                 training=training,
             )
 
-            time_ranges = _compute_synthetic_time_ranges(entry, weekday_name)
-            task_label = str(entry.get('label') or entry.get('task') or worker_name)
+            time_ranges = _compute_synthetic_time_ranges(effective_entry, weekday_name)
+            task_label = str(effective_entry.get('label') or effective_entry.get('task') or worker_name)
 
-            try:
-                rule_modifier = float(entry.get('modifier', 1.0))
-            except (TypeError, ValueError):
-                rule_modifier = 1.0
+            rule_modifier = _resolve_day_modifier(effective_entry.get('modifier', 1.0), weekday_name)
 
             hours_counting_config = config.get('balancer', {}).get('hours_counting', {})
             counts_for_hours = _coerce_bool_like(
-                entry.get('counts_for_hours'),
+                effective_entry.get('counts_for_hours'),
                 hours_counting_config.get('shift_default', True),
             )
 
             workers_with_shifts.add(canonical_id)
 
-            embedded_gaps = entry.get('gaps', {})
+            embedded_gaps = effective_entry.get('gaps', {})
             embedded_gap_times = parse_gap_times(embedded_gaps, weekday_name)
             if embedded_gap_times:
                 if canonical_id not in exclusions_per_worker:
                     exclusions_per_worker[canonical_id] = []
                 gap_counts_for_hours = _coerce_bool_like(
-                    entry.get('gap_counts_for_hours'),
+                    effective_entry.get('gap_counts_for_hours'),
                     config.get('balancer', {}).get('hours_counting', {}).get('gap_default', False),
                 )
                 for gap_start, gap_end in embedded_gap_times:
