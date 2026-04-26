@@ -471,10 +471,10 @@ vendor_mappings:
       employee_personalnummer: "Personalnummer"  # Authoritative worker ID / initials
       employee_code: "Code des Mitarbeiters"  # Legacy/internal worker code fallback
       day_part: "Tageszeit"                   # Optional: VM/NM import column for rule filters
-                                              # Inclusive matching:
+                                              # Day-part matching:
                                               # - day_part: VM/NM matches one part
                                               # - day_parts: [VM, NM] matches either VM or NM
-                                              # - VM+NM rows are treated as VM/Früh for rule matching
+                                              # - VMNM is explicit for rows containing both parts
                                               # - NM-only rows stay NM/Spät
                                               # - if omitted, day_parts default to [VM, VMNM, NM]
 
@@ -512,12 +512,26 @@ vendor_mappings:
         privat_xray: 1
 
     - match: "Chir Assistent"
+      label: "Chir Assistent NM"
+      type: "shift"
+      day_part: NM
+      times:
+        default: "12:00-16:15"
+      skill_overrides:
+        xray: -1
+        gyn_xray: 1
+        aou_xray: 1
+        cvt_xray: 1
+        mdh_xray: 1
+        notfall_xray: 1
+
+    - match: "Chir Assistent"
       type: "shift"
       day_parts: [VM, VMNM]
       times:
         default: "07:30-16:15"
       skill_overrides:
-        all: -1
+        xray: -1
         gyn_xray: 1
         aou_xray: 1
         cvt_xray: 1
@@ -858,7 +872,7 @@ vendor_mappings:
     - match: "3. Dienst"
       label: "Röntgendienst"
       type: "shift"
-      day_parts: [VM, VMNM]
+      day_parts: [VM, VMNM, NM]
       times:
         default: "16:15-19:45"
       skill_overrides:

@@ -285,6 +285,39 @@ def _normalize_day_part_values(raw_value: Any) -> Set[str]:
     return normalized
 
 
+def _normalize_rule_day_part_values(raw_value: Any) -> Set[str]:
+    """Normalize rule day-part declarations without expanding VMNM.
+
+    VMNM is an explicit rule target for rows that contain both VM and NM. It
+    must not behave like "VM or NM", otherwise pure NM rows match base shifts.
+    """
+    if raw_value is None:
+        return set()
+
+    if isinstance(raw_value, (list, tuple, set)):
+        raw_items = list(raw_value)
+    else:
+        raw_items = [raw_value]
+
+    normalized: Set[str] = set()
+    for item in raw_items:
+        if item is None:
+            continue
+        token_norm = str(item).strip().lower()
+        if not token_norm:
+            continue
+        if token_norm in {"vm", "vormittag", "morning"}:
+            normalized.add("VM")
+        elif token_norm in {"nm", "nachmittag", "afternoon"}:
+            normalized.add("NM")
+        elif token_norm in {"vm+nm", "nm+vm", "vm/nm", "nm/vm", "vmnm", "nmvm", "both"}:
+            normalized.add("VMNM")
+        elif token_norm in {"all", "any"}:
+            normalized.update({"VM", "VMNM", "NM"})
+
+    return normalized
+
+
 def _normalize_day_part_label(raw_value: Any) -> Optional[str]:
     """Normalize day-part values to the internal VM / VMNM / NM helper label."""
     normalized = _normalize_day_part_values(raw_value)
@@ -341,7 +374,7 @@ def _normalize_rule_day_parts(rule: dict) -> Optional[Set[str]]:
     raw_value = rule.get("day_parts", rule.get("day_part"))
     if raw_value is None:
         return {"VM", "VMNM", "NM"}
-    normalized = _normalize_day_part_values(raw_value)
+    normalized = _normalize_rule_day_part_values(raw_value)
     return normalized or None
 
 
@@ -368,6 +401,9 @@ def _rule_matches_day_part(rule: dict, row_day_part: Optional[str]) -> bool:
     row_day_parts = _normalize_row_day_part_values(row_day_part)
     if not row_day_parts:
         return False
+
+    if _normalize_day_part_label(row_day_part) == "VMNM" and "VMNM" in allowed_day_parts:
+        return True
 
     return bool(allowed_day_parts.intersection(row_day_parts))
 

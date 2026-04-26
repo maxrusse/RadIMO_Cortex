@@ -15,6 +15,7 @@ from data_manager import worker_management
 from data_manager.csv_parser import (
     _normalize_day_part_label,
     _normalize_rule_day_parts,
+    _rule_matches_day_part,
     build_ppl_from_row,
     build_working_hours_from_medweb,
     match_mapping_rule,
@@ -1070,6 +1071,38 @@ class TestDayPlanIntegration(unittest.TestCase):
             {"VM", "VMNM", "NM"},
         )
 
+    def test_rule_vmnm_does_not_match_pure_nm_row(self) -> None:
+        rules = [
+            {
+                "match": "Example Shift",
+                "type": "shift",
+                "label": "Example NM",
+                "day_part": "NM",
+                "times": {"default": "12:00-16:00"},
+                "skill_overrides": {f"{SKILL_COLUMNS[0]}_{self.modality}": 1},
+            },
+            {
+                "match": "Example Shift",
+                "type": "shift",
+                "label": "Example Base",
+                "day_parts": ["VM", "VMNM"],
+                "times": {"default": "07:30-16:00"},
+                "skill_overrides": {f"{SKILL_COLUMNS[0]}_{self.modality}": 1},
+            },
+        ]
+
+        nm_rule = match_mapping_rule("Example Shift", rules, day_part="NM")
+        vm_rule = match_mapping_rule("Example Shift", rules, day_part="VM")
+        vmnm_rule = match_mapping_rule("Example Shift", rules, day_part="VMNM")
+
+        self.assertEqual(nm_rule["label"], "Example NM")
+        self.assertEqual(vm_rule["label"], "Example Base")
+        self.assertEqual(vmnm_rule["label"], "Example Base")
+
+        self.assertTrue(_rule_matches_day_part({"day_part": "VMNM"}, "VMNM"))
+        self.assertFalse(_rule_matches_day_part({"day_part": "VMNM"}, "VM"))
+        self.assertFalse(_rule_matches_day_part({"day_part": "VMNM"}, "NM"))
+
     def test_rule_without_day_part_matches_row_without_day_part(self) -> None:
         rules = [
             {
@@ -1135,6 +1168,55 @@ class TestDayPlanIntegration(unittest.TestCase):
                 vmnm_rule = match_mapping_rule(activity, rules, day_part="VMNM")
                 self.assertIsNotNone(vmnm_rule)
                 self.assertEqual(vmnm_rule["times"]["default"], "07:30-15:30")
+
+    def test_real_medweb_config_has_nm_only_chir_assistent_variant(self) -> None:
+        rules = APP_CONFIG["medweb_mapping"]["rules"]
+
+        nm_rule = match_mapping_rule("Chir Assistent", rules, day_part="NM")
+        base_rule = match_mapping_rule("Chir Assistent", rules, day_part="VM")
+        vmnm_rule = match_mapping_rule("Chir Assistent", rules, day_part="VMNM")
+
+        self.assertIsNotNone(nm_rule)
+        self.assertEqual(nm_rule["label"], "Chir Assistent NM")
+        self.assertEqual(nm_rule["day_part"], "NM")
+        self.assertEqual(nm_rule["times"]["default"], "12:00-16:15")
+
+        self.assertIsNotNone(base_rule)
+        self.assertEqual(base_rule["times"]["default"], "07:30-16:15")
+        self.assertIn("VMNM", base_rule.get("day_parts", []))
+
+        self.assertIsNotNone(vmnm_rule)
+        self.assertEqual(vmnm_rule["times"]["default"], "07:30-16:15")
+
+    def test_nm_only_chir_assistent_does_not_get_full_day(self) -> None:
+        target_date = datetime(2026, 4, 27)
+        csv_content = "\n".join([
+            "Datum,Tageszeit,Personalnummer,Code des Mitarbeiters,Name des Mitarbeiters,Code der Aktivität,Art der Aktivität,Standort,Gruppe,Zeit ändern,Beschreibung der Aktivität,Quelle",
+            "27.04.2026,NM,MAVA,VM,Valerie Katharina Manke,CHAqxqffffb7000000,Sonstiges,,Weiterbildungsassistent,17.02.2026 12:48,Chir Assistent,Universitätsklinikum Freiburg Röntgendiagnostik",
+            "27.04.2026,NM,MAVA,VM,Valerie Katharina Manke,RDqxq979797cfe4ff,Dienst,,Weiterbildungsassistent,17.02.2026 12:48,3. Dienst,Universitätsklinikum Freiburg Röntgendiagnostik",
+        ])
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, "w", encoding="utf-8", newline="") as handle:
+                handle.write(csv_content)
+
+            worker_management.worker_skill_json_roster.clear()
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}):
+                csv_result = build_working_hours_from_medweb(csv_path, target_date, APP_CONFIG)
+
+            xray_df = csv_result["xray"]
+            manke_rows = xray_df[xray_df["PPL"].str.contains("Manke", na=False)]
+
+            self.assertEqual(len(manke_rows), 2)
+            chir_row = manke_rows[manke_rows["tasks"] == "Chir Assistent NM"].iloc[0]
+            dienst_row = manke_rows[manke_rows["tasks"] == "Röntgendienst"].iloc[0]
+            self.assertEqual(chir_row["TIME"], "12:00-16:15")
+            self.assertEqual(dienst_row["TIME"], "16:15-19:45")
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
 
     def test_vm_nm_pair_collapses_to_single_base_shift(self) -> None:
         target_date = datetime(2026, 4, 1)
