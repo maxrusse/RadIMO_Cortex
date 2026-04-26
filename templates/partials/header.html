@@ -46,7 +46,7 @@
   </div>
   {% elif header_mode == 'global' %}
   <div class="app-header__subheader app-header__subheader--global">
-    <span class="header-context header-context--global">Global view</span>
+    <span class="header-context header-context--global">{{ header_global_label|default('Global view') }}</span>
   </div>
   {% endif %}
 </header>

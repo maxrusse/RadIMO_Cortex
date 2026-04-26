@@ -169,6 +169,8 @@ LOG_SOURCE_ALIASES = {
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
 FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
 VALID_WORKER_THRESHOLD_HOURS = 1.0
+DAILY_LOAD_START_MINUTE = 7 * 60
+DAILY_LOAD_END_MINUTE = 21 * 60
 GERMAN_TO_ENGLISH_WEEKDAYS = {
     "Montag": "monday",
     "Dienstag": "tuesday",
@@ -1379,6 +1381,7 @@ def _record_distribution_stats(
 def _record_distribution_request(
     *,
     requested_skill: str,
+    requested_modality: Optional[str] = None,
     request_weight: float,
 ) -> bool:
     requested_skill = normalize_skill(requested_skill)
@@ -1402,7 +1405,157 @@ def _record_distribution_request(
     })
     bucket['requested_inflow_weight'] = float(bucket.get('requested_inflow_weight', 0.0) or 0.0) + normalized_weight
     bucket['requested_count'] = int(bucket.get('requested_count', 0) or 0) + 1
+    _record_daily_load_event(
+        requested_skill=requested_skill,
+        requested_modality=requested_modality,
+        request_weight=normalized_weight,
+    )
     return True
+
+
+def _record_daily_load_event(
+    *,
+    requested_skill: str,
+    requested_modality: Optional[str],
+    request_weight: float,
+    timestamp: Optional[datetime] = None,
+) -> bool:
+    requested_skill = normalize_skill(requested_skill)
+    requested_modality = normalize_modality(requested_modality)
+    if requested_skill not in SKILL_COLUMNS or requested_modality not in allowed_modalities:
+        return False
+    try:
+        normalized_weight = float(request_weight)
+    except (TypeError, ValueError):
+        return False
+    if normalized_weight <= 0:
+        return False
+
+    events = global_worker_data.setdefault('daily_load_events', [])
+    if not isinstance(events, list):
+        events = []
+        global_worker_data['daily_load_events'] = events
+    events.append({
+        'timestamp': (timestamp or get_local_now()).isoformat(timespec='seconds'),
+        'requested_skill': requested_skill,
+        'requested_modality': requested_modality,
+        'weight': round(normalized_weight, 4),
+    })
+    return True
+
+
+def _parse_daily_load_timestamp(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _daily_load_minute_of_day(value: datetime) -> int:
+    return (value.hour * 60) + value.minute
+
+
+def _build_daily_load_series(
+    keys: list[str],
+    events: list[dict[str, Any]],
+    key_field: str,
+) -> list[dict[str, Any]]:
+    totals = {key: 0.0 for key in keys}
+    points = {key: [[DAILY_LOAD_START_MINUTE, 0.0]] for key in keys}
+
+    for event in events:
+        key = str(event.get(key_field, '') or '')
+        if key not in totals:
+            continue
+        timestamp = _parse_daily_load_timestamp(event.get('timestamp'))
+        if timestamp is None:
+            continue
+        try:
+            weight = float(event.get('weight', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if weight <= 0:
+            continue
+        minute = max(DAILY_LOAD_START_MINUTE, min(DAILY_LOAD_END_MINUTE, _daily_load_minute_of_day(timestamp)))
+        current_value = totals[key]
+        if points[key][-1][0] != minute:
+            points[key].append([minute, round(current_value, 4)])
+        totals[key] = current_value + weight
+        points[key].append([minute, round(totals[key], 4)])
+
+    series = []
+    for key in keys:
+        final_value = round(totals[key], 4)
+        if points[key][-1][0] != DAILY_LOAD_END_MINUTE:
+            points[key].append([DAILY_LOAD_END_MINUTE, final_value])
+        series.append({
+            'key': key,
+            'points': points[key],
+            'total': final_value,
+        })
+    return series
+
+
+def _build_daily_load_payload() -> dict[str, Any]:
+    raw_events = global_worker_data.get('daily_load_events', []) or []
+    if not isinstance(raw_events, list):
+        raw_events = []
+
+    normalized_events = []
+    for item in raw_events:
+        if not isinstance(item, dict):
+            continue
+        skill = normalize_skill(item.get('requested_skill'))
+        modality = normalize_modality(item.get('requested_modality'))
+        timestamp = _parse_daily_load_timestamp(item.get('timestamp'))
+        if skill not in SKILL_COLUMNS or modality not in allowed_modalities or timestamp is None:
+            continue
+        try:
+            weight = float(item.get('weight', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if weight <= 0:
+            continue
+        normalized_events.append({
+            'timestamp': timestamp.isoformat(timespec='seconds'),
+            'requested_skill': skill,
+            'requested_modality': modality,
+            'weight': weight,
+        })
+    normalized_events.sort(key=lambda event: event['timestamp'])
+
+    skill_series = _build_daily_load_series(list(SKILL_COLUMNS), normalized_events, 'requested_skill')
+    modality_series = _build_daily_load_series(list(allowed_modalities), normalized_events, 'requested_modality')
+    max_y = max(
+        [0.0]
+        + [float(item.get('total', 0.0) or 0.0) for item in skill_series]
+        + [float(item.get('total', 0.0) or 0.0) for item in modality_series]
+    )
+
+    return {
+        'success': True,
+        'meta': {
+            'window': 'today_since_daily_reset',
+            'start_minute': DAILY_LOAD_START_MINUTE,
+            'end_minute': DAILY_LOAD_END_MINUTE,
+            'start_label': '07:00',
+            'end_label': '21:00',
+            'last_reset_date': (
+                global_worker_data['last_reset_date'].isoformat()
+                if global_worker_data.get('last_reset_date')
+                else None
+            ),
+        },
+        'skill_series': skill_series,
+        'modality_series': modality_series,
+        'total_weight': round(sum(float(event['weight']) for event in normalized_events), 4),
+        'max_y': round(max_y, 4),
+        'event_count': len(normalized_events),
+    }
 
 
 def _record_recent_distribution(
@@ -3050,6 +3203,7 @@ def load_today_from_master() -> Any:
             global_worker_data['flow_cross_pool'] = {}
             global_worker_data['distribution_stats'] = {}
             global_worker_data['recent_distributions'] = []
+            global_worker_data['daily_load_events'] = []
 
             for modality in allowed_modalities:
                 d = modality_data[modality]
@@ -3704,6 +3858,7 @@ def _assign_worker(
         with lock:
             _record_distribution_request(
                 requested_skill=canonical_skill,
+                requested_modality=modality,
                 request_weight=request_flow_weight,
             )
 
@@ -4267,6 +4422,12 @@ def get_worker_load_data() -> Any:
             'modalities_per_hour': modality_summary,
         },
     })
+
+
+@routes.route('/api/worker-load/daily-load', methods=['GET'])
+@admin_required
+def get_worker_load_daily_load() -> Any:
+    return jsonify(_build_daily_load_payload())
 
 
 @routes.route('/api/worker-load/recent-distributions', methods=['GET'])

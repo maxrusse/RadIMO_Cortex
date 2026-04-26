@@ -137,6 +137,7 @@ def check_and_perform_daily_reset() -> None:
         global_worker_data['flow_cross_pool'] = {}
         global_worker_data['distribution_stats'] = {}
         global_worker_data['recent_distributions'] = []
+        global_worker_data['daily_load_events'] = []
 
         # Reset per-modality tracking
         for mod, d in modality_data.items():

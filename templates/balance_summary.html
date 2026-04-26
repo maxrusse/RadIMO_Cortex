@@ -80,6 +80,13 @@
     margin-bottom: 0.15rem;
   }
 
+  .summary-card-note {
+    color: #617180;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    margin-bottom: 0.55rem;
+  }
+
   .summary-card-sub {
     display: flex;
     justify-content: space-between;
@@ -137,6 +144,13 @@
     font-weight: 700;
   }
 
+  .leaders-note {
+    margin: -0.25rem 0 0.65rem 0;
+    color: #617180;
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+
   .leaders-list {
     margin: 0;
     padding-left: 1rem;
@@ -148,12 +162,112 @@
     margin-top: 0.35rem;
   }
 
+  .section-note {
+    margin: -0.3rem 0 0.85rem 0;
+    font-size: 0.82rem;
+    color: #617180;
+  }
+
+  .daily-load-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 0.85rem;
+  }
+
+  .daily-load-card {
+    border: 1px solid #d8e3ef;
+    border-radius: 8px;
+    background: #fff;
+    padding: 0.85rem;
+    min-width: 0;
+  }
+
+  .daily-load-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .daily-load-card-header h4 {
+    margin: 0;
+    color: #004892;
+    font-size: 0.95rem;
+  }
+
+  .daily-load-total {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #44515f;
+  }
+
+  .daily-load-note {
+    margin: -0.2rem 0 0.55rem 0;
+    color: #617180;
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+
+  .daily-load-chart-wrap {
+    overflow-x: auto;
+    border: 1px solid #e3ebf3;
+    border-radius: 6px;
+    background: #fbfdff;
+  }
+
+  .daily-load-chart {
+    display: block;
+    min-width: 620px;
+    width: 100%;
+    height: 310px;
+  }
+
+  .daily-load-empty {
+    padding: 0.8rem;
+    text-align: center;
+    color: #667;
+    font-style: italic;
+    border-top: 1px solid #edf2f7;
+  }
+
+  .daily-load-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+    margin-top: 0.65rem;
+    font-size: 0.73rem;
+    color: #4c5b67;
+  }
+
+  .daily-load-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    white-space: nowrap;
+  }
+
+  .daily-load-legend-swatch {
+    width: 0.75rem;
+    height: 0.18rem;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  @media (max-width: 1100px) {
+    .daily-load-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Performance' %}
-  {% set header_subtitle = 'Global view on full-day load, drivers, and overflow support' %}
+  {% set header_subtitle = 'Tagesübersicht zu Last, Treibern und Overflow-Unterstützung' %}
   {% set header_mode = 'global' %}
+  {% set header_global_label = 'Gesamtansicht' %}
   {% set active_page = 'balance_summary' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
@@ -173,39 +287,75 @@
 
 <div class="card">
   <div class="section-divider">
-    <h3>Day Load</h3>
+    <h3>Kennzahlen</h3>
   </div>
+  <p class="section-note">Kurzüberblick zum laufenden Tag: Anfrage-Last, bereits absorbierte Last und Last pro summierter aktiver Personenstunde.</p>
   <div class="summary-grid summary-grid-primary" id="summary-overview"></div>
 
   <div class="section-divider">
-    <h3>Global Drivers</h3>
+    <h3>Lasttreiber</h3>
   </div>
   <div class="leaders-grid leaders-grid-compact">
     <div class="leaders-card">
-      <h4>Day Load by Skill</h4>
+      <h4>Absorbierte Last nach Skill</h4>
+      <p class="leaders-note">Zugewiesene gewichtete Last, die bisher bei Mitarbeitenden angekommen ist.</p>
       <ol class="leaders-list" id="leaders-skill-total"></ol>
     </div>
     <div class="leaders-card">
-      <h4>Day Load by Modality</h4>
+      <h4>Absorbierte Last nach Modalität</h4>
+      <p class="leaders-note">Gleiche zugewiesene Last, nach Modalität aggregiert.</p>
       <ol class="leaders-list" id="leaders-modality-total"></ol>
     </div>
   </div>
 
   <div class="section-divider">
-    <h3>Overflow Support</h3>
+    <h3>Overflow-Unterstützung</h3>
   </div>
   <div class="leaders-grid">
     <div class="leaders-card">
-      <h4>Requested Skill Overflow</h4>
+      <h4>Overflow nach angefragtem Skill</h4>
+      <p class="leaders-note">Anteil der angefragten Last, der nicht im Ursprungsskill blieb.</p>
       <ol class="leaders-list" id="leaders-overflow-skills"></ol>
     </div>
     <div class="leaders-card">
-      <h4>Overflow Hotspots</h4>
+      <h4>Overflow-Hotspots</h4>
+      <p class="leaders-note">Größte gewichtete Bewegungen von angefragtem Skill zu Zielskill.</p>
       <ol class="leaders-list" id="leaders-overflow"></ol>
+    </div>
+  </div>
+
+  <div class="section-divider">
+    <h3>Angefragte Last im Tagesverlauf</h3>
+  </div>
+  <p class="section-note">Kumulative Summe der eingehenden, gewichteten Anforderungen heute. Ein Punkt steigt, sobald eine Anfrage eingeht; die Gewichtung kommt aus der Skill-/Modalitätsmatrix.</p>
+  <div class="daily-load-grid">
+    <div class="daily-load-card">
+      <div class="daily-load-card-header">
+        <h4>A · Skills</h4>
+        <span class="daily-load-total" id="daily-load-skill-total">0</span>
+      </div>
+      <p class="daily-load-note">Alle Skill-Linien; x=07:00-21:00, y=kumulative angefragte gewichtete Last.</p>
+      <div class="daily-load-chart-wrap">
+        <svg id="daily-load-skill-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Skill"></svg>
+      </div>
+      <div id="daily-load-skill-empty" class="daily-load-empty" style="display: none;">Heute noch keine angefragte Last im Zeitfenster.</div>
+      <div id="daily-load-skill-legend" class="daily-load-legend"></div>
+    </div>
+    <div class="daily-load-card">
+      <div class="daily-load-card-header">
+        <h4>B · Modalitäten</h4>
+        <span class="daily-load-total" id="daily-load-modality-total">0</span>
+      </div>
+      <p class="daily-load-note">Alle Modalitätslinien; gleiche Last wie links, aber nach CT/MR/X-ray aggregiert.</p>
+      <div class="daily-load-chart-wrap">
+        <svg id="daily-load-modality-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Modalität"></svg>
+      </div>
+      <div id="daily-load-modality-empty" class="daily-load-empty" style="display: none;">Heute noch keine angefragte Last im Zeitfenster.</div>
+      <div id="daily-load-modality-legend" class="daily-load-legend"></div>
     </div>
   </div>
 
 </div>
 
-<script src="{{ url_for('static', filename='js/balance_summary.js') }}"></script>
+<script src="{{ url_for('static', filename='js/balance_summary.js') }}?v=20260426-performance-cleanup"></script>
 {% endblock %}

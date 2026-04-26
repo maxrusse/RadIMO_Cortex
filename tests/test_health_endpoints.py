@@ -396,9 +396,11 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Performance", response.data)
-        self.assertIn(b"Global Drivers", response.data)
-        self.assertIn(b"Day Load", response.data)
+        self.assertIn("Tageslast".encode("utf-8"), response.data)
+        self.assertIn("Lasttreiber".encode("utf-8"), response.data)
+        self.assertIn("Gesamtansicht".encode("utf-8"), response.data)
         self.assertIn(b'id="summary-overview"', response.data)
+        self.assertIn(b'id="daily-load-skill-chart"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
         self.assertIn(b'id="leaders-overflow"', response.data)
         self.assertNotIn(b"Top Skills / Hour", response.data)
@@ -531,6 +533,77 @@ class TestHealthEndpoints(unittest.TestCase):
             self.assertEqual(payload["items"][0]["person"], "One, Worker (worker-one)")
         finally:
             routes_module.global_worker_data["recent_distributions"] = original_recent
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_worker_load_daily_load_api_returns_cumulative_time_series(self, _mock_admin) -> None:
+        original_events = list(routes_module.global_worker_data.get("daily_load_events", []))
+        try:
+            routes_module.global_worker_data["daily_load_events"] = []
+            routes_module._record_daily_load_event(
+                requested_skill="aou",
+                requested_modality="ct",
+                request_weight=1.5,
+                timestamp=datetime(2026, 4, 20, 8, 30),
+            )
+            routes_module._record_daily_load_event(
+                requested_skill="aou",
+                requested_modality="mr",
+                request_weight=2.0,
+                timestamp=datetime(2026, 4, 20, 10, 0),
+            )
+            routes_module._record_daily_load_event(
+                requested_skill="cvt",
+                requested_modality="ct",
+                request_weight=0.5,
+                timestamp=datetime(2026, 4, 20, 21, 30),
+            )
+
+            response = self.client.get("/api/worker-load/daily-load")
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["meta"]["start_label"], "07:00")
+            self.assertEqual(payload["meta"]["end_label"], "21:00")
+            self.assertEqual(payload["event_count"], 3)
+            self.assertEqual(payload["total_weight"], 4.0)
+
+            skill_series = {item["key"]: item for item in payload["skill_series"]}
+            modality_series = {item["key"]: item for item in payload["modality_series"]}
+            self.assertEqual(skill_series["aou"]["total"], 3.5)
+            self.assertEqual(skill_series["cvt"]["total"], 0.5)
+            self.assertEqual(modality_series["ct"]["total"], 2.0)
+            self.assertEqual(modality_series["mr"]["total"], 2.0)
+            self.assertEqual(skill_series["cvt"]["points"][-1], [1260, 0.5])
+            self.assertTrue(all(
+                skill_series["aou"]["points"][idx][1] <= skill_series["aou"]["points"][idx + 1][1]
+                for idx in range(len(skill_series["aou"]["points"]) - 1)
+            ))
+        finally:
+            routes_module.global_worker_data["daily_load_events"] = original_events
+
+    def test_distribution_request_records_daily_load_event(self) -> None:
+        original_events = list(routes_module.global_worker_data.get("daily_load_events", []))
+        original_stats = dict(routes_module.global_worker_data.get("distribution_stats", {}))
+        try:
+            routes_module.global_worker_data["daily_load_events"] = []
+            routes_module.global_worker_data["distribution_stats"] = {}
+
+            recorded = routes_module._record_distribution_request(
+                requested_skill="aou",
+                requested_modality="ct",
+                request_weight=1.25,
+            )
+
+            self.assertTrue(recorded)
+            self.assertEqual(len(routes_module.global_worker_data["daily_load_events"]), 1)
+            event = routes_module.global_worker_data["daily_load_events"][0]
+            self.assertEqual(event["requested_skill"], "aou")
+            self.assertEqual(event["requested_modality"], "ct")
+            self.assertEqual(event["weight"], 1.25)
+        finally:
+            routes_module.global_worker_data["daily_load_events"] = original_events
+            routes_module.global_worker_data["distribution_stats"] = original_stats
 
     @patch("routes._df_to_api_response", return_value={})
     @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())
