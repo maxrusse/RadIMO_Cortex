@@ -250,7 +250,13 @@ def _load_dataframe_from_backup_payload(data: dict) -> pd.DataFrame:
     return df
 
 
-def _build_dataframe_from_records(records: List[dict], modality: str, *, validate: bool) -> pd.DataFrame:
+def _build_dataframe_from_records(
+    records: List[dict],
+    modality: str,
+    *,
+    validate: bool,
+    apply_roster_overrides: bool = True,
+) -> pd.DataFrame:
     """Build a schedule DataFrame from raw records."""
     df = pd.DataFrame(records)
 
@@ -281,7 +287,8 @@ def _build_dataframe_from_records(records: List[dict], modality: str, *, validat
             df[skill] = 0
         df[skill] = df[skill].fillna(0).apply(normalize_skill_value)
 
-    df = apply_roster_overrides_to_schedule(df, modality)
+    if apply_roster_overrides:
+        df = apply_roster_overrides_to_schedule(df, modality)
 
     df['shift_duration'] = df.apply(
         lambda row: calculate_shift_duration_hours(row['start_time'], row['end_time']),
@@ -726,7 +733,12 @@ def initialize_data_from_unified(file_path: str, *, context: str = '') -> bool:
             mod_records = df[df['modality'] == mod].drop(columns=['modality'], errors='ignore')
             records_list = mod_records.to_dict(orient='records')
             try:
-                mod_df = _build_dataframe_from_records(records_list, mod, validate=True)
+                mod_df = _build_dataframe_from_records(
+                    records_list,
+                    mod,
+                    validate=True,
+                    apply_roster_overrides=False,
+                )
             except Exception as exc:
                 selection_logger.error("Failed to initialize modality %s from unified file (%s): %s", mod, context, exc)
                 continue
