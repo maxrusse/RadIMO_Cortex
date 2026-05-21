@@ -407,6 +407,13 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertNotIn(b"Top Modalities / Hour", response.data)
         self.assertIn(b'js/balance_summary.js', response.data)
 
+    def test_balance_summary_js_labels_manual_adjustment_component(self) -> None:
+        with open("static/js/balance_summary.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("manual_adjustment", script)
+        self.assertIn("davon manuelle Anpassung", script)
+
     @patch("routes.has_admin_access", return_value=True)
     def test_balance_summary_route_redirects_to_performance(self, _mock_admin) -> None:
         response = self.client.get("/balance-summary?modality=mr")
@@ -422,6 +429,7 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="table-global"', response.data)
         self.assertIn(b'Weight / Hour', response.data)
         self.assertIn(b'Total Weight', response.data)
+        self.assertIn(b'<th class="sortable" data-sort="manual_adjustment"', response.data)
         self.assertIn(b"Weighted Matrix", response.data)
         self.assertIn(b"Count Matrix", response.data)
         self.assertIn(b"Recent Events", response.data)
@@ -477,6 +485,8 @@ class TestHealthEndpoints(unittest.TestCase):
     )
     @patch("routes.get_canonical_worker_id", side_effect=lambda name: "worker-one")
     @patch("routes.calculate_global_work_hours_now", return_value={"worker-one": 2.0})
+    @patch("routes.get_global_base_weighted_count", return_value=3.5)
+    @patch("routes.get_manual_weight_adjustment", return_value=0.5)
     @patch("routes.get_global_weighted_count", return_value=4.0)
     @patch("routes.get_global_assignments", return_value={"total": 2})
     @patch("routes.get_modality_weighted_count", return_value=4.0)
@@ -493,12 +503,172 @@ class TestHealthEndpoints(unittest.TestCase):
         worker = payload["workers"][0]
         self.assertEqual(worker["hours_worked_now"], 2.0)
         self.assertEqual(worker["weight_per_hour"], 2.0)
+        self.assertEqual(worker["balance_weight"], 3.5)
+        self.assertEqual(worker["manual_adjustment"], 0.5)
         self.assertEqual(worker["global_weight"], 4.0)
         self.assertEqual(worker["global_assignments"]["total"], 2)
         self.assertIn("summary", payload)
         self.assertEqual(payload["summary"]["valid_worker_threshold_hours"], 1.0)
         self.assertIn("skills_per_hour", payload["summary"])
         self.assertIn("modalities_per_hour", payload["summary"])
+
+    @patch("routes.has_admin_access", return_value=True)
+    def test_manual_adjustments_page_renders(self, _mock_admin) -> None:
+        response = self.client.get("/manual-adjustments")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Adjust Weight", response.data)
+        self.assertIn(b"Your name", response.data)
+        self.assertIn(b'id="manual-worker-body"', response.data)
+        self.assertIn(b'js/manual_adjustments.js', response.data)
+
+        script_path = os.path.join(os.path.dirname(__file__), "..", "static/js/manual_adjustments.js")
+        with open(script_path, encoding="utf-8") as handle:
+            script = handle.read()
+        self.assertIn("Manual adjust", script)
+
+    @patch("routes.has_admin_access", return_value=False)
+    def test_manual_adjustments_nav_hidden_without_admin_access(self, _mock_admin) -> None:
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Adjust Weight", response.data)
+        self.assertIn(b"Admin", response.data)
+
+    def test_manual_adjustments_page_requires_admin_session(self) -> None:
+        response = self.client.get("/manual-adjustments")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login?modality=ct", response.location)
+
+    def test_manual_adjustments_api_requires_admin_session(self) -> None:
+        response = self.client.get("/api/manual-adjustments")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login?modality=ct", response.location)
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes._get_manual_adjustment_deltas", return_value=[-1.0, 1.0])
+    @patch("routes._build_manual_adjustment_workers", return_value=[
+        {
+            "canonical_id": "worker-one",
+            "name": "Worker One",
+            "hours_worked_now": 2.0,
+            "balance_weight": 3.0,
+            "manual_adjustment": 0.0,
+            "total_weight": 3.0,
+        }
+    ])
+    def test_manual_adjustments_api_returns_workers_and_log(self, _mock_workers, _mock_deltas, _mock_admin) -> None:
+        original_log = list(routes_module.global_worker_data.get("manual_weight_adjustments", []))
+        try:
+            routes_module.global_worker_data["manual_weight_adjustments"] = [
+                {"admin_name": "MR", "worker_id": "worker-one", "delta": 1.0}
+            ]
+            response = self.client.get("/api/manual-adjustments")
+        finally:
+            routes_module.global_worker_data["manual_weight_adjustments"] = original_log
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["allowed_deltas"], [-1.0, 1.0])
+        self.assertEqual(payload["workers"][0]["canonical_id"], "worker-one")
+        self.assertEqual(payload["adjustments"][0]["admin_name"], "MR")
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.get_admin_password", return_value="secret")
+    @patch("routes._get_manual_adjustment_deltas", return_value=[-1.0, 1.0])
+    @patch("routes._build_manual_adjustment_workers", return_value=[
+        {
+            "canonical_id": "worker-one",
+            "name": "Worker One",
+            "hours_worked_now": 2.0,
+            "balance_weight": 3.0,
+            "manual_adjustment": 0.0,
+            "total_weight": 3.0,
+        }
+    ])
+    @patch("routes.get_global_base_weighted_count", return_value=3.0)
+    @patch("routes.save_state")
+    def test_manual_adjustment_publish_updates_manual_state_not_assignment_counts(
+        self,
+        mock_save_state,
+        _mock_base,
+        _mock_workers,
+        _mock_deltas,
+        _mock_password,
+        _mock_admin,
+    ) -> None:
+        original_totals = dict(routes_module.global_worker_data.get("manual_weight_totals", {}))
+        original_log = list(routes_module.global_worker_data.get("manual_weight_adjustments", []))
+        original_assignments = json.loads(json.dumps(routes_module.global_worker_data.get("assignments_per_mod", {})))
+        try:
+            routes_module.global_worker_data["manual_weight_totals"] = {}
+            routes_module.global_worker_data["manual_weight_adjustments"] = []
+            response = self.client.post(
+                "/api/manual-adjustments",
+                json={
+                    "worker_id": "worker-one",
+                    "delta": 1.0,
+                    "admin_name": "MR",
+                    "reason": "Wrong booking correction",
+                    "admin_password": "secret",
+                },
+                environ_base={"REMOTE_ADDR": "10.1.2.3"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertTrue(payload["success"])
+            self.assertEqual(routes_module.global_worker_data["manual_weight_totals"]["worker-one"], 1.0)
+            self.assertEqual(
+                routes_module.global_worker_data.get("assignments_per_mod", {}),
+                original_assignments,
+            )
+            entry = payload["entry"]
+            self.assertEqual(entry["admin_name"], "MR")
+            self.assertEqual(entry["client_ip"], "10.1.2.3")
+            self.assertNotIn("user_agent", entry)
+            self.assertEqual(entry["total_after"], 4.0)
+            mock_save_state.assert_called_once()
+        finally:
+            routes_module.global_worker_data["manual_weight_totals"] = original_totals
+            routes_module.global_worker_data["manual_weight_adjustments"] = original_log
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.get_admin_password", return_value="secret")
+    @patch("routes._get_manual_adjustment_deltas", return_value=[-1.0, 1.0])
+    @patch("routes._build_manual_adjustment_workers", return_value=[
+        {
+            "canonical_id": "worker-one",
+            "name": "Worker One",
+            "hours_worked_now": 2.0,
+            "balance_weight": 3.0,
+            "manual_adjustment": 0.0,
+            "total_weight": 3.0,
+        }
+    ])
+    def test_manual_adjustment_publish_rejects_wrong_password(
+        self,
+        _mock_workers,
+        _mock_deltas,
+        _mock_password,
+        _mock_admin,
+    ) -> None:
+        response = self.client.post(
+            "/api/manual-adjustments",
+            json={
+                "worker_id": "worker-one",
+                "delta": 1.0,
+                "admin_name": "MR",
+                "reason": "Wrong booking correction",
+                "admin_password": "bad",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Admin password confirmation failed")
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_recent_distributions_api_returns_latest_items(self, _mock_admin) -> None:

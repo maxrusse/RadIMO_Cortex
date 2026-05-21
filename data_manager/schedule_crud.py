@@ -450,6 +450,11 @@ def reconcile_live_worker_tracking(modality: Optional[str] = None) -> None:
         canonical_id: global_worker_data['weighted_counts'].get(canonical_id, 0.0)
         for canonical_id in all_active_canon
     }
+    global_worker_data['manual_weight_totals'] = {
+        canonical_id: global_worker_data.get('manual_weight_totals', {}).get(canonical_id, 0.0)
+        for canonical_id in all_active_canon
+        if abs(float(global_worker_data.get('manual_weight_totals', {}).get(canonical_id, 0.0) or 0.0)) > 0
+    }
 
 
 def _update_schedule_row(modality: str, row_index: int, updates: dict, use_staged: bool) -> tuple:

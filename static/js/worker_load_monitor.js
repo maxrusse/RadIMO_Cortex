@@ -349,6 +349,8 @@ function renderModalityCards(workers, containerId, emptyMessage, compact = false
 
 function getSortValue(worker, column, tableType) {
   if (column === 'name') return buildWorkerSortKey(worker.name);
+  if (column === 'balance_weight') return Number(worker.balance_weight || 0);
+  if (column === 'manual_adjustment') return Number(worker.manual_adjustment || 0);
   if (tableType === 'advancedCount') {
     if (column === 'count') {
       return getDerivedWorkerCount(worker);
@@ -445,26 +447,34 @@ function renderGlobalTable() {
   const filteredWorkers = getFilteredWorkers();
   const sorted = sortWorkers(filteredWorkers, 'global');
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="no-data">No workers match filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">No workers match filters</td></tr>';
     return;
   }
 
   const maxBarRatio = Math.max(maxLoadRatio, 1);
   const benchmark = getRatioBenchmark(filteredWorkers);
   let html = '';
+  let totalBalance = 0;
+  let totalManual = 0;
   let totalWeight = 0;
   let totalHours = 0;
 
   sorted.forEach(function(worker) {
+    const balanceWeight = Number(worker.balance_weight || 0);
+    const manualAdjustment = Number(worker.manual_adjustment || 0);
     const weight = Number(worker.global_weight || 0);
     const hours = Number(worker.hours_worked_now || 0);
     const ratio = Number(worker.weight_per_hour || 0);
+    totalBalance += balanceWeight;
+    totalManual += manualAdjustment;
     totalWeight += weight;
     totalHours += hours;
     const ratioColor = getRatioColor(ratio, benchmark);
     const barWidth = Math.min((ratio / maxBarRatio) * 100, 100);
     html += `<tr>
       <td class="worker-col">${escapeHtml(worker.name)}</td>
+      <td class="weight-value">${formatValue(balanceWeight)}</td>
+      <td class="weight-value ${manualAdjustment > 0 ? 'text-red' : (manualAdjustment < 0 ? 'text-green' : 'text-muted')}">${manualAdjustment > 0 ? '+' : ''}${formatValue(manualAdjustment)}</td>
       <td class="weight-value ${getLoadColor(weight).text}">${formatValue(weight)}</td>
       <td class="weight-value ${ratioColor.text}">${formatValue(ratio, 2)}</td>
       <td>
@@ -480,6 +490,8 @@ function renderGlobalTable() {
   const totalBarWidth = Math.min((totalRatio / maxBarRatio) * 100, 100);
   html += `<tr class="totals-row">
     <td class="worker-col">Total</td>
+    <td class="weight-value">${formatValue(totalBalance)}</td>
+    <td class="weight-value ${totalManual > 0 ? 'text-red' : (totalManual < 0 ? 'text-green' : '')}">${totalManual > 0 ? '+' : ''}${formatValue(totalManual)}</td>
     <td class="weight-value">${formatValue(totalWeight)}</td>
     <td class="weight-value ${totalColor.text}">${formatValue(totalRatio, 2)}</td>
     <td>

@@ -118,7 +118,9 @@ from balancer import (
     get_next_available_worker,
     update_global_assignment,
     get_global_assignments,
+    get_global_base_weighted_count,
     get_global_weighted_count,
+    get_manual_weight_adjustment,
     get_modality_weighted_count,
     calculate_global_work_hours_now,
     BALANCER_SETTINGS
@@ -408,6 +410,18 @@ def _resolve_preview_target_date(use_staged: bool, payload: dict[str, Any]) -> d
     return get_next_workday().date()
 
 
+def _get_shift_modality_keys(current_shift: dict[str, Any]) -> list[str]:
+    modalities_payload = (current_shift or {}).get('modalities') or {}
+    if not isinstance(modalities_payload, dict) or not modalities_payload:
+        return []
+
+    result = []
+    for modality in allowed_modalities:
+        if modality in modalities_payload:
+            result.append(modality)
+    return result
+
+
 def _build_shift_skill_combinations(current_shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     modalities_payload = (current_shift or {}).get('modalities') or {}
     if not isinstance(modalities_payload, dict) or not modalities_payload:
@@ -417,7 +431,10 @@ def _build_shift_skill_combinations(current_shift: dict[str, Any]) -> Optional[d
     found_any = False
     for modality in allowed_modalities:
         mod_payload = modalities_payload.get(modality, {}) or {}
-        skill_payload = mod_payload.get('skills', {}) or {}
+        # Edit drafts keep the user's pre-training/manual baseline in baseSkills.
+        # Prefer that over the effective skills so toggling training or task
+        # previews does not rebuild the row from fresh roster defaults.
+        skill_payload = mod_payload.get('baseSkills') or mod_payload.get('skills') or {}
         for skill in SKILL_COLUMNS:
             combo_key = f"{skill}_{modality}"
             if skill in skill_payload:
@@ -426,9 +443,13 @@ def _build_shift_skill_combinations(current_shift: dict[str, Any]) -> Optional[d
     return combinations if found_any else None
 
 
-def _combinations_to_modalities(combinations: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _combinations_to_modalities(
+    combinations: dict[str, Any],
+    modalities: Optional[list[str]] = None,
+) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
-    for modality in allowed_modalities:
+    target_modalities = modalities if modalities is not None else allowed_modalities
+    for modality in target_modalities:
         result[modality] = {}
         for skill in SKILL_COLUMNS:
             result[modality][skill] = skill_value_to_display(
@@ -489,6 +510,7 @@ def _resolve_task_preview(
     roster = load_worker_skill_json() or {}
     canonical_id = get_canonical_worker_id(worker)
     roster_base = get_worker_skill_mod_combinations(canonical_id, roster)
+    edit_modalities = _get_shift_modality_keys(current_shift or {}) if mode == 'edit' else None
     shift_base = _build_shift_skill_combinations(current_shift or {}) if mode == 'edit' else None
     base_combinations = dict(roster_base)
     if shift_base:
@@ -537,8 +559,8 @@ def _resolve_task_preview(
         'counts_for_hours': counts_for_hours,
         'start_time': start_str,
         'end_time': end_str,
-        'base_skills_by_modality': _combinations_to_modalities(base_combinations),
-        'skills_by_modality': _combinations_to_modalities(final_combinations),
+        'base_skills_by_modality': _combinations_to_modalities(base_combinations, edit_modalities),
+        'skills_by_modality': _combinations_to_modalities(final_combinations, edit_modalities),
         'task_controlled_keys_by_modality': task_controlled_keys_by_modality,
     }
 
@@ -3084,6 +3106,151 @@ def _check_admin_password() -> dict[str, str]:
     return {'status': 'OK', 'detail': 'Admin password is configured'}
 
 
+def _get_manual_adjustment_deltas() -> list[float]:
+    weights = set()
+    for skill in SKILL_COLUMNS:
+        for modality in allowed_modalities:
+            for strict in (False, True):
+                try:
+                    value = float(get_skill_modality_weight(skill, modality, strict=strict))
+                except (TypeError, ValueError):
+                    continue
+                if value > 0:
+                    weights.add(round(value, 4))
+
+    for task in SPECIAL_TASKS:
+        task_slug = task.get('slug')
+        if not task_slug:
+            continue
+        for modality in allowed_modalities:
+            for strict in (False, True):
+                try:
+                    value = float(get_special_task_weight(task_slug, modality, strict=strict))
+                except (TypeError, ValueError):
+                    continue
+                if value > 0:
+                    weights.add(round(value, 4))
+
+    if not weights:
+        weights.add(1.0)
+
+    signed = {-value for value in weights}
+    signed.update(weights)
+    return sorted(signed)
+
+
+def _build_manual_adjustment_workers() -> list[dict[str, Any]]:
+    current_dt = get_local_now()
+    global_hours_map = calculate_global_work_hours_now(current_dt)
+    worker_name_display_style = get_worker_name_display_style()
+    workers: dict[str, dict[str, Any]] = {}
+
+    for modality in allowed_modalities:
+        df = modality_data.get(modality, {}).get('working_hours_df')
+        if df is None or df.empty or 'PPL' not in df.columns:
+            continue
+        for raw_name in df['PPL'].dropna().astype(str).tolist():
+            canonical_id = get_canonical_worker_id(raw_name)
+            current = workers.get(canonical_id)
+            if current is None or len(raw_name) > len(current.get('_raw_name', '')):
+                workers[canonical_id] = {
+                    '_raw_name': raw_name,
+                    'canonical_id': canonical_id,
+                    'name': format_worker_display_name(
+                        raw_name,
+                        canonical_id,
+                        style=worker_name_display_style,
+                    ),
+                }
+
+    for modality in allowed_modalities:
+        for canonical_id in (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).keys():
+            workers.setdefault(canonical_id, {
+                '_raw_name': canonical_id,
+                'canonical_id': canonical_id,
+                'name': _get_preferred_display_name(canonical_id),
+            })
+
+    for canonical_id in (global_worker_data.get('manual_weight_totals', {}) or {}).keys():
+        workers.setdefault(canonical_id, {
+            '_raw_name': canonical_id,
+            'canonical_id': canonical_id,
+            'name': _get_preferred_display_name(canonical_id),
+        })
+
+    result = []
+    for canonical_id, worker in workers.items():
+        balance_weight = round(float(get_global_base_weighted_count(canonical_id) or 0.0), 4)
+        manual_adjustment = round(float(get_manual_weight_adjustment(canonical_id) or 0.0), 4)
+        total_weight = round(balance_weight + manual_adjustment, 4)
+        hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0) or 0.0), 4)
+        result.append({
+            'canonical_id': canonical_id,
+            'name': worker['name'],
+            'hours_worked_now': hours_worked_now,
+            'balance_weight': balance_weight,
+            'manual_adjustment': manual_adjustment,
+            'total_weight': total_weight,
+        })
+    result.sort(key=lambda item: build_worker_sort_key(item['name']))
+    return result
+
+
+def _serialize_manual_adjustments() -> list[dict[str, Any]]:
+    entries = global_worker_data.get('manual_weight_adjustments', []) or []
+    if not isinstance(entries, list):
+        return []
+    return list(reversed(entries))
+
+
+def _get_client_audit_identity() -> dict[str, str]:
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    client_ip = forwarded_for.split(',')[0].strip() if forwarded_for else ''
+    if not client_ip:
+        client_ip = request.headers.get('X-Real-IP', '').strip()
+    if not client_ip:
+        client_ip = request.remote_addr or ''
+    return {
+        'client_ip': client_ip,
+    }
+
+
+def _verify_manual_adjustment_payload(data: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[tuple[Any, int]]]:
+    worker_id = str(data.get('worker_id', '')).strip()
+    admin_name = str(data.get('admin_name', '')).strip()
+    reason = str(data.get('reason', '')).strip()
+    admin_password = str(data.get('admin_password', ''))
+
+    if not worker_id:
+        return None, (jsonify({'error': 'Missing worker_id'}), 400)
+    if not admin_name:
+        return None, (jsonify({'error': 'Missing admin_name'}), 400)
+    if not reason:
+        return None, (jsonify({'error': 'Missing reason'}), 400)
+    if admin_password != get_admin_password():
+        return None, (jsonify({'error': 'Admin password confirmation failed'}), 403)
+
+    try:
+        delta = round(float(data.get('delta')), 4)
+    except (TypeError, ValueError):
+        return None, (jsonify({'error': 'Invalid delta'}), 400)
+
+    allowed_deltas = _get_manual_adjustment_deltas()
+    if delta == 0 or not any(abs(delta - allowed) < 0.00001 for allowed in allowed_deltas):
+        return None, (jsonify({'error': 'Delta is not an allowed manual adjustment value'}), 400)
+
+    active_workers = {worker['canonical_id'] for worker in _build_manual_adjustment_workers()}
+    if worker_id not in active_workers:
+        return None, (jsonify({'error': 'Unknown or inactive worker'}), 400)
+
+    return {
+        'worker_id': worker_id,
+        'delta': delta,
+        'admin_name': admin_name,
+        'reason': reason,
+    }, None
+
+
 def _check_upload_folder() -> dict[str, str]:
     """Check upload folder exists and is writable."""
     upload_folder = 'uploads'
@@ -4192,6 +4359,93 @@ def balance_summary_page() -> Any:
 # WORKER LOAD MONITOR
 # =============================================================================
 
+@routes.route('/manual-adjustments')
+@admin_required
+def manual_adjustments_page() -> Any:
+    modality = resolve_modality_from_request()
+    return render_template(
+        'manual_adjustments.html',
+        modality=modality,
+        ui_colors=APP_CONFIG.get('ui_colors', {}),
+        is_admin=True,
+    )
+
+
+@routes.route('/api/manual-adjustments', methods=['GET', 'POST'])
+@admin_required
+def manual_adjustments_api() -> Any:
+    if request.method == 'GET':
+        return jsonify({
+            'success': True,
+            'workers': _build_manual_adjustment_workers(),
+            'allowed_deltas': _get_manual_adjustment_deltas(),
+            'adjustments': _serialize_manual_adjustments(),
+            'last_reset_date': (
+                global_worker_data['last_reset_date'].isoformat()
+                if global_worker_data.get('last_reset_date')
+                else None
+            ),
+        })
+
+    payload = request.get_json(silent=True) or {}
+    validated, error = _verify_manual_adjustment_payload(payload)
+    if error:
+        response, status = error
+        return response, status
+
+    worker_id = validated['worker_id']
+    delta = validated['delta']
+    workers_by_id = {worker['canonical_id']: worker for worker in _build_manual_adjustment_workers()}
+    worker = workers_by_id[worker_id]
+
+    with lock:
+        base_before = round(float(get_global_base_weighted_count(worker_id) or 0.0), 4)
+        manual_before = round(float(get_manual_weight_adjustment(worker_id) or 0.0), 4)
+        total_before = round(base_before + manual_before, 4)
+        manual_after = round(manual_before + delta, 4)
+        total_after = round(base_before + manual_after, 4)
+
+        manual_totals = global_worker_data.setdefault('manual_weight_totals', {})
+        if abs(manual_after) < 0.00001:
+            manual_totals.pop(worker_id, None)
+        else:
+            manual_totals[worker_id] = manual_after
+
+        audit_entries = global_worker_data.setdefault('manual_weight_adjustments', [])
+        if not isinstance(audit_entries, list):
+            audit_entries = []
+            global_worker_data['manual_weight_adjustments'] = audit_entries
+        entry = {
+            'timestamp': get_local_now().isoformat(timespec='seconds'),
+            'admin_name': validated['admin_name'],
+            **_get_client_audit_identity(),
+            'worker_id': worker_id,
+            'worker_name': worker['name'],
+            'delta': delta,
+            'balance_before': base_before,
+            'manual_before': manual_before,
+            'total_before': total_before,
+            'manual_after': manual_after,
+            'total_after': total_after,
+            'reason': validated['reason'],
+        }
+        audit_entries.append(entry)
+
+    save_state()
+
+    return jsonify({
+        'success': True,
+        'entry': entry,
+        'worker': {
+            **worker,
+            'manual_adjustment': manual_after,
+            'total_weight': total_after,
+        },
+        'workers': _build_manual_adjustment_workers(),
+        'adjustments': _serialize_manual_adjustments(),
+    })
+
+
 @routes.route('/worker-load')
 @admin_required
 def worker_load_monitor() -> Any:
@@ -4253,6 +4507,8 @@ def get_worker_load_data() -> Any:
 
             if canonical_id not in all_workers:
                 hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
+                balance_weight = round(float(get_global_base_weighted_count(canonical_id)), 4)
+                manual_adjustment = round(float(get_manual_weight_adjustment(canonical_id)), 4)
                 global_weight = round(float(get_global_weighted_count(canonical_id)), 4)
                 all_workers[canonical_id] = {
                     'name': format_worker_display_name(
@@ -4267,6 +4523,8 @@ def get_worker_load_data() -> Any:
                     'skill_weights': {},
                     'hours_worked_now': hours_worked_now,
                     'weight_per_hour': round(global_weight / hours_worked_now, 4) if hours_worked_now > 0 else 0.0,
+                    'balance_weight': balance_weight,
+                    'manual_adjustment': manual_adjustment,
                     'global_weight': global_weight,
                     'global_assignments': {}
                 }
@@ -4301,6 +4559,8 @@ def get_worker_load_data() -> Any:
 
     # Add global weighted counts and assignments
     for canonical_id, worker_data in all_workers.items():
+        worker_data['balance_weight'] = round(float(get_global_base_weighted_count(canonical_id)), 4)
+        worker_data['manual_adjustment'] = round(float(get_manual_weight_adjustment(canonical_id)), 4)
         worker_data['global_weight'] = round(float(get_global_weighted_count(canonical_id)), 4)
         worker_data['global_assignments'] = get_global_assignments(canonical_id)
         hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
@@ -4356,6 +4616,8 @@ def get_worker_load_data() -> Any:
             'canonical_id': worker.get('canonical_id'),
             'name': worker.get('name'),
             'hours_worked_now': round(float(worker.get('hours_worked_now', 0.0) or 0.0), 4),
+            'balance_weight': round(float(worker.get('balance_weight', 0.0) or 0.0), 4),
+            'manual_adjustment': round(float(worker.get('manual_adjustment', 0.0) or 0.0), 4),
             'global_weight': round(float(worker.get('global_weight', 0.0) or 0.0), 4),
             'weight_per_hour': round(float(worker.get('weight_per_hour', 0.0) or 0.0), 4),
         }

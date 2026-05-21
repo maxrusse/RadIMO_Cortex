@@ -18,6 +18,8 @@ class TestFlowBalanceTracking(unittest.TestCase):
         self.prev_assignments_per_mod = copy.deepcopy(global_worker_data.get('assignments_per_mod', {}))
         self.prev_distribution_stats = copy.deepcopy(global_worker_data.get('distribution_stats', {}))
         self.prev_recent_distributions = copy.deepcopy(global_worker_data.get('recent_distributions', []))
+        self.prev_manual_weight_totals = copy.deepcopy(global_worker_data.get('manual_weight_totals', {}))
+        self.prev_manual_weight_adjustments = copy.deepcopy(global_worker_data.get('manual_weight_adjustments', []))
         self.prev_modality_state = {
             mod: {
                 'last_reset_date': modality_data[mod].get('last_reset_date'),
@@ -32,6 +34,8 @@ class TestFlowBalanceTracking(unittest.TestCase):
         global_worker_data['assignments_per_mod'] = self.prev_assignments_per_mod
         global_worker_data['distribution_stats'] = self.prev_distribution_stats
         global_worker_data['recent_distributions'] = self.prev_recent_distributions
+        global_worker_data['manual_weight_totals'] = self.prev_manual_weight_totals
+        global_worker_data['manual_weight_adjustments'] = self.prev_manual_weight_adjustments
         for mod in allowed_modalities:
             modality_data[mod]['last_reset_date'] = self.prev_modality_state[mod]['last_reset_date']
 
@@ -262,6 +266,8 @@ class TestFlowBalanceTracking(unittest.TestCase):
         global_worker_data['assignments_per_mod'] = {mod: {} for mod in allowed_modalities}
         global_worker_data['distribution_stats'] = {'aou': {'inflow_weight': 2.0, 'overflow_weight': 1.0, 'unresolved_weight': 0.0, 'count': 1}}
         global_worker_data['recent_distributions'] = [{'person': 'Worker One'}]
+        global_worker_data['manual_weight_totals'] = {'worker-one': 1.0}
+        global_worker_data['manual_weight_adjustments'] = [{'worker_id': 'worker-one', 'delta': 1.0}]
 
         with patch('data_manager.scheduled_tasks.get_local_now', return_value=datetime(2026, 3, 2, 8, 0, 0)), \
              patch('data_manager.worker_management.invalidate_work_hours_cache'), \
@@ -276,6 +282,8 @@ class TestFlowBalanceTracking(unittest.TestCase):
         self.assertEqual(global_worker_data['last_reset_date'], date(2026, 3, 2))
         self.assertEqual(global_worker_data['distribution_stats'], {})
         self.assertEqual(global_worker_data['recent_distributions'], [])
+        self.assertEqual(global_worker_data['manual_weight_totals'], {})
+        self.assertEqual(global_worker_data['manual_weight_adjustments'], [])
         self.assertTrue(mock_flow_log.called)
 
         snapshot_payload = json.loads(mock_flow_log.call_args.args[0])

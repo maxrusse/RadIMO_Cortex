@@ -88,6 +88,88 @@ class TestTaskPreviewResolution(unittest.TestCase):
         self.assertEqual(preview["skills_by_modality"][self.modality][self.primary_skill], "1")
         self.assertEqual(preview["skills_by_modality"][self.modality][self.secondary_skill], "1")
 
+    def test_edit_preview_scopes_to_existing_shift_modalities(self) -> None:
+        if len(allowed_modalities) < 2:
+            self.skipTest("Need at least two modalities for modality scoping")
+        other_modality = allowed_modalities[1]
+        other_key = f"{self.primary_skill}_{other_modality}"
+        roster = {
+            "A1": {
+                self.primary_key: 0,
+                other_key: 1,
+            }
+        }
+        shift_rule = {
+            **self.shift_rule,
+            "skill_overrides": {
+                self.primary_key: 1,
+                other_key: 1,
+            },
+        }
+        current_shift = {
+            "modalities": {
+                self.modality: {
+                    "skills": {
+                        self.primary_skill: 0,
+                    }
+                }
+            }
+        }
+
+        with patch("routes._build_task_roles", return_value=[shift_rule]), patch(
+            "routes.load_worker_skill_json",
+            return_value=roster,
+        ):
+            preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="Shift A",
+                training=True,
+                use_staged=True,
+                target_date=date(2026, 4, 16),
+                mode="edit",
+                current_shift=current_shift,
+            )
+
+        self.assertEqual(list(preview["skills_by_modality"].keys()), [self.modality])
+        self.assertNotIn(other_modality, preview["base_skills_by_modality"])
+        self.assertEqual(preview["skills_by_modality"][self.modality][self.primary_skill], "1")
+
+    def test_edit_preview_prefers_draft_base_skills_over_effective_skills(self) -> None:
+        roster = {
+            "A1": {
+                self.primary_key: 0,
+            }
+        }
+        current_shift = {
+            "modalities": {
+                self.modality: {
+                    "baseSkills": {
+                        self.primary_skill: "w",
+                    },
+                    "skills": {
+                        self.primary_skill: -1,
+                    },
+                }
+            }
+        }
+
+        with patch("routes._build_task_roles", return_value=[self.shift_rule]), patch(
+            "routes.load_worker_skill_json",
+            return_value=roster,
+        ):
+            preview = routes._resolve_task_preview(
+                worker="Alice (A1)",
+                task_name="Shift A",
+                training=True,
+                use_staged=True,
+                target_date=date(2026, 4, 16),
+                mode="edit",
+                current_shift=current_shift,
+            )
+
+        self.assertEqual(preview["base_skills_by_modality"][self.modality][self.primary_skill], "w")
+        self.assertEqual(preview["skills_by_modality"][self.modality][self.primary_skill], "w")
+
     def test_new_preview_keeps_backend_weighted_training_logic(self) -> None:
         roster = {
             "A1": {

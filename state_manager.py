@@ -125,6 +125,8 @@ class StateManager:
                 'distribution_stats': {},  # {requested_skill: {inflow_weight, overflow_weight, unresolved_weight, count}}
                 'recent_distributions': [],  # Structured recent assignment events
                 'daily_load_events': [],  # Structured current-day requested load events
+                'manual_weight_totals': {},  # {worker_id: current-day manual delta}
+                'manual_weight_adjustments': [],  # Current-day manual adjustment audit entries
                 'last_reset_date': None,  # Global reset date tracker
                 'last_preload_date': None,  # Next-workday preload tracker
                 'last_preload_source': None,  # 'csv' or 'snapshot'

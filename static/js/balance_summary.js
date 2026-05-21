@@ -122,6 +122,9 @@ function renderOverviewCards(workerPayload, flowPayload, dailyLoadPayload, optio
   const totalWeight = workerDataAvailable
     ? workers.reduce(function(sum, worker) { return sum + Number(worker.global_weight || 0); }, 0)
     : null;
+  const totalManualAdjustment = workerDataAvailable
+    ? workers.reduce(function(sum, worker) { return sum + Number(worker.manual_adjustment || 0); }, 0)
+    : null;
   const totalHours = workerDataAvailable
     ? workers.reduce(function(sum, worker) { return sum + Number(worker.hours_worked_now || 0); }, 0)
     : null;
@@ -146,6 +149,7 @@ function renderOverviewCards(workerPayload, flowPayload, dailyLoadPayload, optio
       className: 'summary-card-primary',
       rows: [
         { left: 'Bisher absorbierte Last', right: formatMaybeValue(totalWeight, 1) },
+        { left: 'davon manuelle Anpassung', right: formatMaybeValue(totalManualAdjustment, 1) },
         { left: 'Overflow-Unterstützung', right: formatMaybeValue(overflowSupport, 1) },
       ],
     },

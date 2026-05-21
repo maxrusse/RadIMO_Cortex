@@ -138,6 +138,8 @@ def check_and_perform_daily_reset() -> None:
         global_worker_data['distribution_stats'] = {}
         global_worker_data['recent_distributions'] = []
         global_worker_data['daily_load_events'] = []
+        global_worker_data['manual_weight_totals'] = {}
+        global_worker_data['manual_weight_adjustments'] = []
 
         # Reset per-modality tracking
         for mod, d in modality_data.items():

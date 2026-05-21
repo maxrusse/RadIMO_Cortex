@@ -1105,22 +1105,17 @@ function replaceDraftShiftPreviewState(shiftIdx, preview) {
 
   const previewSkills = preview.skills_by_modality || {};
   const previewBaseSkills = preview.base_skills_by_modality || previewSkills;
-  const modalityKeys = new Set([
-    ...Object.keys(shift.modalities || {}),
-    ...Object.keys(previewSkills),
-  ]);
+  const modalityKeys = new Set(Object.keys(shift.modalities || {}));
 
   modalityKeys.forEach(modKey => {
-    if (!shift.modalities[modKey]) {
-      shift.modalities[modKey] = {
-        skills: {},
-        baseSkills: {},
-        row_index: -1,
-        materialize: true,
-      };
-    }
-    shift.modalities[modKey].baseSkills = cloneSkillMap(previewBaseSkills[modKey] || {});
-    shift.modalities[modKey].skills = cloneSkillMap(previewSkills[modKey] || {});
+    const existingModData = shift.modalities[modKey];
+    if (!existingModData) return;
+    existingModData.baseSkills = cloneSkillMap(
+      previewBaseSkills[modKey] || existingModData.baseSkills || existingModData.skills || {}
+    );
+    existingModData.skills = cloneSkillMap(
+      previewSkills[modKey] || existingModData.skills || existingModData.baseSkills || {}
+    );
   });
 }
 

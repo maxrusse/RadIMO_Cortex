@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block title %}RadIMO Cortex | Adjust Weight{% endblock %}
+
+{% block styles %}
+    {% include 'partials/admin_theme.html' %}
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f0f0;
+      padding: 1rem;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1rem;
+    }
+
+    .page-note {
+      color: #5f6c77;
+      font-size: 0.85rem;
+      margin: 0.25rem 0 1rem;
+    }
+
+    .dense-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .dense-table th,
+    .dense-table td {
+      padding: 0.35rem 0.5rem;
+      border: 1px solid #e5e5e5;
+      vertical-align: middle;
+    }
+
+    .dense-table th {
+      background: #004892;
+      color: white;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ma-positive {
+      color: #b02a37;
+      font-weight: 700;
+    }
+
+    .ma-negative {
+      color: #2d7a46;
+      font-weight: 700;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 0.35rem 0.65rem;
+    }
+
+    .btn-primary {
+      background: #004892;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: #fff;
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .status {
+      min-height: 1.25rem;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .status.error {
+      color: #b02a37;
+    }
+
+    .status.success {
+      color: #2d7a46;
+    }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal-panel {
+      background: white;
+      border-radius: 8px;
+      width: min(520px, 100%);
+      padding: 1rem;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-panel h3 {
+      margin: 0 0 0.75rem;
+      color: #004892;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .form-grid label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .form-grid input,
+    .form-grid select {
+      padding: 0.45rem;
+      border: 1px solid #cfd7df;
+      border-radius: 4px;
+      font: inherit;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+{% endblock %}
+
+{% block content %}
+  {% set active_page = 'manual_adjustments' %}
+  {% set header_nav = namespace(links=[]) %}
+  {% include 'partials/header_links.html' %}
+  {% set header_links = header_nav.links %}
+  {% include 'partials/header.html' %}
+
+<script id="page-config" type="application/json">
+{
+  "ui_colors": {{ ui_colors | tojson }}
+}
+</script>
+
+<div class="card">
+  <h2>Adjust Weight</h2>
+  <p class="page-note">Current-day fairness corrections. These change weighted totals but do not create assignment counts.</p>
+  <div id="manual-adjustment-status" class="status"></div>
+  <div class="table-wrap">
+    <table class="dense-table">
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th class="num">Hours</th>
+          <th class="num">Balance</th>
+          <th class="num">Manual</th>
+          <th class="num">Total</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="manual-worker-body">
+        <tr><td colspan="6">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Weight Adjustment Log</h3>
+  <div class="table-wrap">
+    <table class="dense-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Your name</th>
+          <th>IP</th>
+          <th>Worker</th>
+          <th class="num">Delta</th>
+          <th class="num">Balance Before</th>
+          <th class="num">Total After</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="manual-log-body">
+        <tr><td colspan="8">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="manual-adjustment-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="manual-modal-title">
+  <div class="modal-panel">
+    <h3 id="manual-modal-title">Manual Adjust</h3>
+    <div class="form-grid">
+      <label>
+        Worker
+        <input id="manual-worker-name" type="text" readonly>
+      </label>
+      <label>
+        Value
+        <select id="manual-delta"></select>
+      </label>
+      <label>
+        Reason
+        <input id="manual-reason" type="text" maxlength="160">
+      </label>
+      <label>
+        Your name
+        <input id="manual-admin-name" type="text" autocomplete="name">
+      </label>
+      <label>
+        Admin password
+        <input id="manual-admin-password" type="password" autocomplete="current-password">
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeManualAdjustmentModal()">Cancel</button>
+      <button type="button" class="btn btn-primary" id="manual-submit-button" onclick="submitManualAdjustment()">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/manual_adjustments.js') }}"></script>
+{% endblock %}

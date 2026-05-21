@@ -38,9 +38,22 @@ from state_manager import get_state
 # -----------------------------------------------------------
 # Helper functions to compute global totals across modalities
 # -----------------------------------------------------------
-def get_global_weighted_count(canonical_id: str) -> float:
-    """Get single global weighted count for a worker (consolidated across all modalities)."""
+def get_global_base_weighted_count(canonical_id: str) -> float:
+    """Get assignment-derived global weighted count without manual adjustments."""
     return global_worker_data['weighted_counts'].get(canonical_id, 0.0)
+
+
+def get_manual_weight_adjustment(canonical_id: str) -> float:
+    """Get current-day manual weight adjustment for a worker."""
+    try:
+        return float(global_worker_data.get('manual_weight_totals', {}).get(canonical_id, 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def get_global_weighted_count(canonical_id: str) -> float:
+    """Get global weighted count including current-day manual adjustments."""
+    return get_global_base_weighted_count(canonical_id) + get_manual_weight_adjustment(canonical_id)
 
 
 def get_modality_weighted_count(canonical_id: str, modality: str) -> float:
