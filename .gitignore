@@ -43,8 +43,13 @@ uploads/
 
 # Runtime skill roster state
 data/worker_skill_roster.json
+data/worker_skill_roster.*.json
+data/button_weights.json
+data/fairness_state.json
+data/backups/
 
 # Code aggregator exports
+exports/
 *_export.txt
 aggregation_summary.txt
 

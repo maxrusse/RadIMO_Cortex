@@ -98,7 +98,7 @@ from data_manager import (
     update_schedule_row,
     add_worker_to_schedule,
     delete_worker_from_schedule,
-    replace_worker_schedule,
+    replace_worker_schedule_all,
     add_gap_to_schedule,
     add_gap_to_schedule_batch,
     remove_gap_from_schedule,
@@ -976,7 +976,7 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
     return jsonify({'error': result}), 400
 
 
-def _handle_apply_worker_plan(use_staged: bool) -> Any:
+def _handle_apply_worker_plan(use_staged: bool, *, create_only: bool = False) -> Any:
     data = request.json or {}
     worker = data.get('worker')
     shifts = data.get('shifts', [])
@@ -988,36 +988,53 @@ def _handle_apply_worker_plan(use_staged: bool) -> Any:
     if not worker:
         return jsonify({'error': 'Missing worker'}), 400
 
-    worker_revision_error = _check_worker_revision(
-        data.get('worker_revision'),
-        worker,
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if worker_revision_error:
-        return worker_revision_error
-
-    if data.get('worker_revision') in (None, ''):
-        snapshot_error = _check_snapshot_version(
-            data.get('snapshot_version'),
+    with lock:
+        worker_revision_error = _check_worker_revision(
+            data.get('worker_revision'),
+            worker,
             use_staged,
             target_date=target_date if use_staged else None,
         )
-        if snapshot_error:
-            return snapshot_error
+        if worker_revision_error:
+            return worker_revision_error
 
-    errors = []
-    for modality in allowed_modalities:
-        rows = _build_rows_from_plan(worker, shifts, modality)
+        if data.get('worker_revision') in (None, ''):
+            snapshot_error = _check_snapshot_version(
+                data.get('snapshot_version'),
+                use_staged,
+                target_date=target_date if use_staged else None,
+            )
+            if snapshot_error:
+                return snapshot_error
 
-        success, result, error = replace_worker_schedule(modality, worker, rows, use_staged=use_staged)
-        if not success:
-            errors.append(f"{modality.upper()}: {error}")
-
-    if errors:
-        return jsonify({'error': '; '.join(errors)}), 400
+        rows_by_modality = {
+            modality: _build_rows_from_plan(worker, shifts, modality)
+            for modality in allowed_modalities
+        }
+        success, result, error = replace_worker_schedule_all(
+            worker,
+            rows_by_modality,
+            use_staged=use_staged,
+            target_date=target_date if use_staged else datetime.today().date(),
+            create_only=create_only,
+        )
+    if not success:
+        error = error or {}
+        status_code = 409 if error.get('code') == 'worker_exists' else 500
+        if error.get('code') == 'invalid_plan':
+            status_code = 400
+        return jsonify({
+            'error': error.get('message', 'Worker plan could not be saved.'),
+            'code': error.get('code'),
+            'worker': error.get('worker'),
+            'snapshot_version': _get_snapshot_version(
+                use_staged,
+                target_date=target_date if use_staged else None,
+            ),
+        }), status_code
     return jsonify({
         'success': True,
+        'created': create_only,
         'worker_revision': _get_worker_revision(worker, use_staged),
         'snapshot_version': _get_snapshot_version(
             use_staged,
@@ -3594,6 +3611,12 @@ def update_prep_row() -> Any:
 def apply_prep_worker_plan() -> Any:
     return _handle_apply_worker_plan(use_staged=True)
 
+
+@routes.route('/api/prep-next-day/create-worker-plan', methods=['POST'])
+@admin_required
+def create_prep_worker_plan() -> Any:
+    return _handle_apply_worker_plan(use_staged=True, create_only=True)
+
 @routes.route('/api/prep-next-day/resolve-task-preview', methods=['POST'])
 @admin_required
 def resolve_prep_task_preview() -> Any:
@@ -3635,6 +3658,12 @@ def update_live_row() -> Any:
 @admin_required
 def apply_live_worker_plan() -> Any:
     return _handle_apply_worker_plan(use_staged=False)
+
+
+@routes.route('/api/live-schedule/create-worker-plan', methods=['POST'])
+@admin_required
+def create_live_worker_plan() -> Any:
+    return _handle_apply_worker_plan(use_staged=False, create_only=True)
 
 @routes.route('/api/live-schedule/resolve-task-preview', methods=['POST'])
 @admin_required

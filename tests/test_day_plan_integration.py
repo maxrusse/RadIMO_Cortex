@@ -99,7 +99,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertTrue(csv_result)
             csv_df = next(iter(csv_result.values()))
 
-            with patch.object(schedule_crud, "backup_dataframe"):
+            with patch.object(schedule_crud, "persist_schedule_snapshot"):
                 base_skills = {skill: 0 for skill in SKILL_COLUMNS}
                 base_skills[skill_key] = 1
                 for worker_data in [
@@ -184,7 +184,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         for skill in SKILL_COLUMNS:
             worker_data[skill] = "w" if skill == weighted_skill else 0
 
-        with patch.object(schedule_crud, "backup_dataframe"):
+        with patch.object(schedule_crud, "persist_schedule_snapshot"):
             success, _, error = schedule_crud._add_worker_to_schedule(
                 self.modality,
                 worker_data,
@@ -1463,7 +1463,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(len(rows), 3)
         self.assertEqual(sum(1 for row in rows if row["row_type"] == "gap"), 2)
 
-        with patch.object(schedule_crud, "backup_dataframe"):
+        with patch.object(schedule_crud, "persist_schedule_snapshot"):
             success, _, error = schedule_crud.replace_worker_schedule(
                 self.modality,
                 worker_name,
@@ -1515,7 +1515,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(rows[0]["row_type"], "shift")
         self.assertTrue(all(rows[0][skill] == -1 for skill in SKILL_COLUMNS))
 
-        with patch.object(schedule_crud, "backup_dataframe"):
+        with patch.object(schedule_crud, "persist_schedule_snapshot"):
             success, _, error = schedule_crud.replace_worker_schedule(
                 self.modality,
                 worker_name,

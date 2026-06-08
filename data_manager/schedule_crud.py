@@ -7,6 +7,7 @@ This module handles:
 - Worker tracking reconciliation
 - Overlapping shift resolution
 """
+import copy
 from datetime import datetime, time, date
 from typing import Optional, Dict, List, Tuple
 
@@ -21,6 +22,7 @@ from lib.utils import (
     TIME_FORMAT,
     is_weighted_skill,
     normalize_skill_value,
+    get_local_now,
     get_next_workday,
     subtract_intervals,
     merge_intervals,
@@ -28,7 +30,12 @@ from lib.utils import (
     coerce_bool,
 )
 from state_manager import StateManager
-from data_manager.file_ops import _calculate_total_work_hours, backup_dataframe
+from data_manager.file_ops import (
+    _calculate_total_work_hours,
+    backup_dataframe,
+    persist_schedule_snapshot,
+)
+from data_manager.worker_management import get_canonical_worker_id, invalidate_work_hours_cache
 
 # Get state references
 _state = StateManager.get_instance()
@@ -660,28 +667,64 @@ def _replace_worker_schedule(
 ) -> tuple:
     """Replace all schedule rows for a worker with the provided rows."""
     data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
 
-    try:
-        df, info = _build_replaced_worker_schedule_df(
-            modality,
-            worker_name,
-            rows,
-            use_staged,
-            target_date=target_date,
-        )
-        data_dict['working_hours_df'] = df
+    with _state.lock:
+        try:
+            replacement_df, info = _build_replaced_worker_schedule_df(
+                modality,
+                worker_name,
+                rows,
+                use_staged,
+                target_date=target_date,
+            )
+        except ValueError as e:
+            return False, None, f'Invalid time format: {e}'
+        except Exception as e:
+            return False, None, str(e)
 
-        if not use_staged:
-            reconcile_live_worker_tracking(modality)
+        state_before = {
+            'working_hours_df': data_dict.get('working_hours_df'),
+            'worker_modifiers': copy.deepcopy(data_dict.get('worker_modifiers', {})),
+            'total_work_hours': copy.deepcopy(data_dict.get('total_work_hours', {})),
+            'last_modified': data_dict.get('last_modified'),
+            'last_prepped_at': data_dict.get('last_prepped_at'),
+        }
+        tracking_before = {
+            key: copy.deepcopy(global_worker_data.get(key))
+            for key in ('assignments_per_mod', 'weighted_counts', 'manual_weight_totals')
+        }
 
-        backup_dataframe(modality, use_staged=use_staged)
-        return True, info, None
-
-    except ValueError as e:
-        return False, None, f'Invalid time format: {e}'
-    except Exception as e:
-        return False, None, str(e)
+        try:
+            data_dict['working_hours_df'] = replacement_df
+            data_dict['total_work_hours'] = _calculate_total_work_hours(replacement_df)
+            if use_staged:
+                modified_at = get_local_now()
+                data_dict['last_modified'] = modified_at
+                data_dict['last_prepped_at'] = modified_at.strftime('%d.%m.%Y %H:%M')
+            else:
+                invalidate_work_hours_cache(modality)
+                reconcile_live_worker_tracking(modality)
+            persist_schedule_snapshot(use_staged=use_staged)
+            return True, info, None
+        except Exception as exc:
+            data_dict['working_hours_df'] = state_before['working_hours_df']
+            data_dict['worker_modifiers'] = state_before['worker_modifiers']
+            data_dict['total_work_hours'] = state_before['total_work_hours']
+            data_dict['last_modified'] = state_before['last_modified']
+            data_dict['last_prepped_at'] = state_before['last_prepped_at']
+            if not use_staged:
+                invalidate_work_hours_cache(modality)
+            for key, previous in tracking_before.items():
+                global_worker_data[key] = previous
+            selection_logger.error(
+                "Failed to persist %s schedule update for %s/%s; rolled back: %s",
+                "staged" if use_staged else "live",
+                modality,
+                worker_name,
+                exc,
+                exc_info=True,
+            )
+            return False, None, 'Schedule could not be persisted. No changes were applied.'
 
 
 def _build_replaced_worker_schedule_df(
@@ -724,6 +767,111 @@ def _build_replaced_worker_schedule_df(
 def replace_worker_schedule(modality: str, worker_name: str, rows: list, use_staged: bool) -> tuple:
     """Public wrapper for replacing a worker schedule."""
     return _replace_worker_schedule(modality, worker_name, rows, use_staged)
+
+
+def replace_worker_schedule_all(
+    worker_name: str,
+    rows_by_modality: Dict[str, List[dict]],
+    use_staged: bool,
+    *,
+    target_date: Optional[date] = None,
+    create_only: bool = False,
+) -> tuple:
+    """Replace one worker across every modality as one persisted transaction."""
+    data_store = staged_modality_data if use_staged else modality_data
+    canonical_id = get_canonical_worker_id(worker_name)
+
+    with _state.lock:
+        if create_only:
+            for modality in allowed_modalities:
+                current_df = data_store[modality].get('working_hours_df')
+                if current_df is None or current_df.empty or 'PPL' not in current_df.columns:
+                    continue
+                for existing_name in current_df['PPL'].dropna().astype(str).unique():
+                    if get_canonical_worker_id(existing_name) == canonical_id:
+                        return False, None, {
+                            'code': 'worker_exists',
+                            'message': f'{existing_name} already exists in this schedule.',
+                            'worker': existing_name,
+                        }
+
+        candidate_dfs: Dict[str, pd.DataFrame] = {}
+        result_by_modality: Dict[str, dict] = {}
+        try:
+            for modality in allowed_modalities:
+                candidate_df, info = _build_replaced_worker_schedule_df(
+                    modality,
+                    worker_name,
+                    rows_by_modality.get(modality, []),
+                    use_staged,
+                    target_date=target_date,
+                )
+                candidate_dfs[modality] = candidate_df
+                result_by_modality[modality] = info
+        except ValueError as exc:
+            return False, None, {'code': 'invalid_plan', 'message': f'Invalid time format: {exc}'}
+        except Exception as exc:
+            return False, None, {'code': 'invalid_plan', 'message': str(exc)}
+
+        state_before = {
+            modality: {
+                'working_hours_df': data_store[modality].get('working_hours_df'),
+                'worker_modifiers': copy.deepcopy(data_store[modality].get('worker_modifiers', {})),
+                'total_work_hours': copy.deepcopy(data_store[modality].get('total_work_hours', {})),
+                'last_modified': data_store[modality].get('last_modified'),
+                'last_prepped_at': data_store[modality].get('last_prepped_at'),
+            }
+            for modality in allowed_modalities
+        }
+        tracking_before = {
+            key: copy.deepcopy(global_worker_data.get(key))
+            for key in ('assignments_per_mod', 'weighted_counts', 'manual_weight_totals')
+        }
+
+        try:
+            modified_at = get_local_now() if use_staged else None
+            for modality, candidate_df in candidate_dfs.items():
+                data_store[modality]['working_hours_df'] = candidate_df
+                data_store[modality]['total_work_hours'] = _calculate_total_work_hours(candidate_df)
+                if use_staged:
+                    data_store[modality]['last_modified'] = modified_at
+                    data_store[modality]['last_prepped_at'] = modified_at.strftime('%d.%m.%Y %H:%M')
+                else:
+                    data_store[modality]['worker_modifiers'] = (
+                        candidate_df.groupby('PPL')['Modifier'].first().to_dict()
+                        if candidate_df is not None and not candidate_df.empty
+                        else {}
+                    )
+                    invalidate_work_hours_cache(modality)
+
+            if not use_staged:
+                reconcile_live_worker_tracking()
+
+            persist_schedule_snapshot(use_staged=use_staged)
+        except Exception as exc:
+            for modality, previous in state_before.items():
+                data_store[modality]['working_hours_df'] = previous['working_hours_df']
+                data_store[modality]['worker_modifiers'] = previous['worker_modifiers']
+                data_store[modality]['total_work_hours'] = previous['total_work_hours']
+                data_store[modality]['last_modified'] = previous['last_modified']
+                data_store[modality]['last_prepped_at'] = previous['last_prepped_at']
+                if not use_staged:
+                    invalidate_work_hours_cache(modality)
+            for key, previous in tracking_before.items():
+                global_worker_data[key] = previous
+            selection_logger.error(
+                "Failed to persist %s worker plan for %s; rolled back: %s",
+                "staged" if use_staged else "live",
+                worker_name,
+                exc,
+                exc_info=True,
+            )
+            return False, None, {
+                'code': 'persistence_failed',
+                'message': 'Schedule could not be persisted. No changes were applied.',
+            }
+
+        return True, {'modalities': result_by_modality}, None
 
 
 def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool, verify_ppl: Optional[str] = None) -> tuple:

@@ -2152,23 +2152,13 @@ function updateAddWorkerSkill(idx, modality, skill, value) {
   if (!task.baseSkillsByModality[modality]) task.baseSkillsByModality[modality] = {};
   if (!task.skillsByModality[modality]) task.skillsByModality[modality] = {};
 
-  const workerInput = document.getElementById('add-worker-name-input');
-  const inputValue = workerInput ? workerInput.value.trim() : '';
-  const { id: workerId } = parseWorkerInput(inputValue);
-  if (workerId && WORKER_SKILLS[workerId]?.[modality]?.[skill] === -1) {
-    task.baseSkillsByModality[modality][skill] = -1;
-    task.skillsByModality[modality][skill] = -1;
-    renderAddWorkerModalContent();
-    return;
-  }
-
   const raw = (value || '').toString().trim();
   const baseValue = raw === 'w' ? 'w' : (parseInt(raw, 10) || 0);
   task.baseSkillsByModality[modality][skill] = baseValue;
   task.skillsByModality[modality][skill] = applyTrainingToSkillValue(baseValue, task.training !== false);
 }
 
-// Helper: apply roster exclusions to skillsByModality (roster -1 always wins)
+// Helper: use roster values as initial defaults; later manual edits remain authoritative.
 // Roster structure is modality-scoped: { modality: { skill: value } }
 function applyRosterToSkillsByModality(skillsByModality, workerName, baseSkillsByModality = null) {
   if (!workerName || !WORKER_SKILLS[workerName]) return;
@@ -2180,7 +2170,6 @@ function applyRosterToSkillsByModality(skillsByModality, workerName, baseSkillsB
     // Get roster skills for this specific modality
     const modalityRoster = workerRoster[modKey] || {};
     SKILLS.forEach(skill => {
-      // Roster -1 always wins (cannot be overridden)
       if (modalityRoster[skill] === -1) {
         skillsByModality[modKey][skill] = -1;
         if (baseSkillsByModality) {
@@ -2288,8 +2277,8 @@ async function saveAddWorkerModal() {
 
   const { tab, tasks } = addWorkerModalState;
   const workerEndpoint = tab === 'today'
-    ? '/api/live-schedule/apply-worker-plan'
-    : '/api/prep-next-day/apply-worker-plan';
+    ? '/api/live-schedule/create-worker-plan'
+    : '/api/prep-next-day/create-worker-plan';
 
   try {
     const shifts = tasks.map(task => {
@@ -2326,10 +2315,20 @@ async function saveAddWorkerModal() {
     });
 
     closeModal();
-    showMessage('success', `${getWorkerDisplayName(workerId)} added/updated`);
+    showMessage('success', `${getWorkerDisplayName(workerId)} added`);
     await loadData();
   } catch (error) {
     if (error.isConflict) {
+      const existingWorker = error.result?.worker;
+      if (error.result?.code === 'worker_exists' && existingWorker) {
+        await loadTabData(tab);
+        setModalMode('edit-plan');
+        if (reopenEditModalForWorker(tab, existingWorker)) {
+          document.getElementById('modal-title').textContent = `Edit Worker (${tab === 'today' ? 'Today' : 'Tomorrow'})`;
+          document.getElementById('edit-modal').classList.add('show');
+          showMessage('info', `${getWorkerDisplayName(existingWorker)} already exists. Opened Edit Worker instead.`);
+        }
+      }
       return;
     }
     showMessage('error', error.message);

@@ -10,6 +10,7 @@ This module handles:
 import os
 import json
 import shutil
+import tempfile
 from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -109,9 +110,32 @@ def _get_staged_day_archive_path(target_date: date, suffix: str) -> str:
 
 def _write_payload_to_path(payload: dict, target_path: str, mode_label: str) -> None:
     """Write a unified backup payload to the requested path."""
-    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-    with open(target_path, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+    target_dir = os.path.dirname(target_path)
+    os.makedirs(target_dir, exist_ok=True)
+    existing_mode = None
+    try:
+        existing_mode = os.stat(target_path).st_mode & 0o777
+    except FileNotFoundError:
+        pass
+
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{Path(target_path).name}.",
+        suffix=".tmp",
+        dir=target_dir,
+    )
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(temp_path, existing_mode if existing_mode is not None else 0o664)
+        os.replace(temp_path, target_path)
+    except Exception:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+        raise
     selection_logger.info("Unified %s backup updated at %s", mode_label, target_path)
 
 
@@ -587,6 +611,11 @@ def persist_live_backup() -> None:
         _write_unified_backup(use_staged=False)
     except Exception as exc:
         selection_logger.error("Error persisting unified live backup: %s", exc)
+
+
+def persist_schedule_snapshot(use_staged: bool) -> None:
+    """Persist the complete live or staged schedule and propagate failures."""
+    _write_unified_backup(use_staged=use_staged)
 
 
 def load_staged_dataframe(modality: str, target_date: Optional[date] = None) -> bool:

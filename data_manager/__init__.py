@@ -82,6 +82,7 @@ from data_manager.worker_management import (
 from data_manager.file_ops import (
     apply_roster_overrides_to_schedule,
     backup_dataframe,
+    persist_schedule_snapshot,
     persist_live_backup,
     load_staged_dataframe,
     reload_staged_data_from_disk,
@@ -103,6 +104,7 @@ from data_manager.schedule_crud import (
     add_gap_to_schedule,
     add_gap_to_schedule_batch,
     replace_worker_schedule,
+    replace_worker_schedule_all,
     remove_gap_from_schedule,
     update_gap_in_schedule,
 )
@@ -165,6 +167,7 @@ __all__ = [
     # File operations
     'apply_roster_overrides_to_schedule',
     'backup_dataframe',
+    'persist_schedule_snapshot',
     'persist_live_backup',
     'load_staged_dataframe',
     'reload_staged_data_from_disk',
@@ -184,6 +187,7 @@ __all__ = [
     'add_gap_to_schedule',
     'add_gap_to_schedule_batch',
     'replace_worker_schedule',
+    'replace_worker_schedule_all',
     'remove_gap_from_schedule',
     'update_gap_in_schedule',
 

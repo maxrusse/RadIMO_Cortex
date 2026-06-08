@@ -28,7 +28,7 @@ class TestGapCrud(unittest.TestCase):
         schedule_crud.modality_data[self.other_modality]["working_hours_df"] = pd.DataFrame([base_row])
 
     def test_add_update_remove_gap_row(self) -> None:
-        with patch.object(schedule_crud, "backup_dataframe") as backup_mock:
+        with patch.object(schedule_crud, "persist_schedule_snapshot") as persist_mock:
             success, _, error = schedule_crud._add_gap_to_schedule(
                 self.modality,
                 row_index=0,
@@ -85,10 +85,10 @@ class TestGapCrud(unittest.TestCase):
             self.assertEqual(shift_rows.iloc[0]["end_time"], time(9, 0))
             self.assertEqual(shift_rows.iloc[1]["start_time"], time(10, 30))
             self.assertEqual(shift_rows.iloc[1]["end_time"], time(12, 0))
-            backup_mock.assert_called()
+            persist_mock.assert_called()
 
     def test_update_row_to_gap_enforces_defaults(self) -> None:
-        with patch.object(schedule_crud, "backup_dataframe"):
+        with patch.object(schedule_crud, "persist_schedule_snapshot"):
             success, result = schedule_crud._update_schedule_row(
                 self.modality,
                 row_index=0,
