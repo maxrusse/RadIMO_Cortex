@@ -941,6 +941,7 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
     modality = data.get('modality')
     row_index = data.get('row_index')
     updates = data.get('updates', {})
+    verify_ppl = data.get('verify_ppl')
     target_date = None
     if use_staged:
         target_date, staged_error = _prepare_staged_mutation(data)
@@ -959,7 +960,13 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
     if error:
         return error
 
-    success, result = update_schedule_row(modality, row_index, updates, use_staged=use_staged)
+    success, result = update_schedule_row(
+        modality,
+        row_index,
+        updates,
+        use_staged=use_staged,
+        verify_ppl=verify_ppl,
+    )
 
     if success:
         if log_message:
@@ -3696,6 +3703,7 @@ def add_live_gap() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    verify_ppl = data.get('verify_ppl')
     snapshot_error = _check_snapshot_version(data.get('snapshot_version'), False)
 
     if snapshot_error:
@@ -3712,7 +3720,8 @@ def add_live_gap() -> Any:
         gap_start,
         gap_end,
         use_staged=False,
-        gap_counts_for_hours=gap_counts_for_hours
+        gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
     if success:
@@ -3733,6 +3742,7 @@ def add_live_gap_batch() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    verify_ppl = data.get('verify_ppl')
     snapshot_error = _check_snapshot_version(data.get('snapshot_version'), False)
 
     if snapshot_error:
@@ -3747,7 +3757,8 @@ def add_live_gap_batch() -> Any:
         gap_start,
         gap_end,
         use_staged=False,
-        gap_counts_for_hours=gap_counts_for_hours
+        gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
     if success:
@@ -3768,6 +3779,7 @@ def add_staged_gap() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    verify_ppl = data.get('verify_ppl')
     target_date, staged_error = _prepare_staged_mutation(data)
     if staged_error:
         return staged_error
@@ -3791,7 +3803,8 @@ def add_staged_gap() -> Any:
         gap_start,
         gap_end,
         use_staged=True,
-        gap_counts_for_hours=gap_counts_for_hours
+        gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
     if success:
@@ -3812,6 +3825,7 @@ def add_staged_gap_batch() -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
+    verify_ppl = data.get('verify_ppl')
     target_date, staged_error = _prepare_staged_mutation(data)
     if staged_error:
         return staged_error
@@ -3833,7 +3847,8 @@ def add_staged_gap_batch() -> Any:
         gap_start,
         gap_end,
         use_staged=True,
-        gap_counts_for_hours=gap_counts_for_hours
+        gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
     if success:
@@ -3853,6 +3868,7 @@ def _handle_remove_gap(use_staged: bool) -> Any:
     gap_start = data.get('gap_start')
     gap_end = data.get('gap_end')
     gap_activity = data.get('gap_activity')
+    verify_ppl = data.get('verify_ppl')
     target_date = None
     if use_staged:
         target_date, staged_error = _prepare_staged_mutation(data)
@@ -3880,7 +3896,8 @@ def _handle_remove_gap(use_staged: bool) -> Any:
         row_index,
         None,
         use_staged=use_staged,
-        gap_match=gap_match
+        gap_match=gap_match,
+        verify_ppl=verify_ppl,
     )
 
     if success:
@@ -3907,6 +3924,7 @@ def _handle_update_gap(use_staged: bool) -> Any:
     new_end = data.get('new_end')
     new_activity = data.get('new_activity')
     new_counts_for_hours = data.get('new_counts_for_hours')
+    verify_ppl = data.get('verify_ppl')
     target_date = None
     if use_staged:
         target_date, staged_error = _prepare_staged_mutation(data)
@@ -3938,7 +3956,8 @@ def _handle_update_gap(use_staged: bool) -> Any:
         new_activity,
         use_staged=use_staged,
         new_counts_for_hours=new_counts_for_hours,
-        gap_match=gap_match
+        gap_match=gap_match,
+        verify_ppl=verify_ppl,
     )
 
     if success:

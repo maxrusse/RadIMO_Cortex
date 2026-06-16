@@ -464,7 +464,13 @@ def reconcile_live_worker_tracking(modality: Optional[str] = None) -> None:
     }
 
 
-def _update_schedule_row(modality: str, row_index: int, updates: dict, use_staged: bool) -> tuple:
+def _update_schedule_row(
+    modality: str,
+    row_index: int,
+    updates: dict,
+    use_staged: bool,
+    verify_ppl: Optional[str] = None,
+) -> tuple:
     """Update a single row in the schedule.
 
     Returns:
@@ -483,6 +489,8 @@ def _update_schedule_row(modality: str, row_index: int, updates: dict, use_stage
         if 'PPL' in updates:
             return False, 'Worker renames are only allowed in the skill roster'
         worker_name = df.at[row_index, 'PPL']
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, 'Row mismatch: Schedule has changed. Please reload.'
         worker_rows = df[df['PPL'] == worker_name].copy()
         rows_with_index = [(idx, row.to_dict()) for idx, row in worker_rows.iterrows()]
 
@@ -556,9 +564,15 @@ def _update_schedule_row(modality: str, row_index: int, updates: dict, use_stage
         return False, str(e)
 
 
-def update_schedule_row(modality: str, row_index: int, updates: dict, use_staged: bool) -> tuple:
+def update_schedule_row(
+    modality: str,
+    row_index: int,
+    updates: dict,
+    use_staged: bool,
+    verify_ppl: Optional[str] = None,
+) -> tuple:
     """Public wrapper for updating a schedule row."""
-    return _update_schedule_row(modality, row_index, updates, use_staged)
+    return _update_schedule_row(modality, row_index, updates, use_staged, verify_ppl=verify_ppl)
 
 
 def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) -> tuple:
@@ -929,6 +943,7 @@ def _add_gap_to_schedule(
     gap_end: str,
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Add a gap intent row for a worker (canonicalized to gap segments on rebuild)."""
     data_dict = _get_schedule_data_dict(modality, use_staged)
@@ -940,6 +955,8 @@ def _add_gap_to_schedule(
     try:
         _ensure_row_type_column(df)
         worker_name = df.loc[row_index, 'PPL']
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
 
         gap_start_time = datetime.strptime(gap_start, TIME_FORMAT).time()
         gap_end_time = datetime.strptime(gap_end, TIME_FORMAT).time()
@@ -993,6 +1010,7 @@ def add_gap_to_schedule(
     gap_end: str,
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for adding a gap to a schedule."""
     return _add_gap_to_schedule(
@@ -1003,6 +1021,7 @@ def add_gap_to_schedule(
         gap_end,
         use_staged,
         gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
 
@@ -1013,6 +1032,7 @@ def add_gap_to_schedule_batch(
     gap_end: str,
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for adding a gap to multiple modality rows atomically."""
     return _add_gap_to_schedule_batch(
@@ -1022,6 +1042,7 @@ def add_gap_to_schedule_batch(
         gap_end,
         use_staged,
         gap_counts_for_hours=gap_counts_for_hours,
+        verify_ppl=verify_ppl,
     )
 
 
@@ -1032,6 +1053,7 @@ def _add_gap_to_schedule_batch(
     gap_end: str,
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Add a gap intent row for a worker across multiple modalities atomically."""
     if not row_index_map:
@@ -1072,6 +1094,8 @@ def _add_gap_to_schedule_batch(
                 return False, None, 'Invalid row index'
 
             row_worker = df.loc[row_index_int, 'PPL']
+            if verify_ppl and str(row_worker) != str(verify_ppl):
+                return False, None, 'Row mismatch: Schedule has changed. Please reload.'
             if worker_name is None:
                 worker_name = row_worker
             elif str(row_worker) != str(worker_name):
@@ -1129,6 +1153,7 @@ def _remove_gap_from_schedule(
     gap_index: Optional[int],
     use_staged: bool,
     gap_match: Optional[dict] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Remove a gap intent row from a worker's schedule."""
     data_dict = _get_schedule_data_dict(modality, use_staged)
@@ -1140,6 +1165,8 @@ def _remove_gap_from_schedule(
     try:
         _ensure_row_type_column(df)
         worker_name = df.loc[row_index, 'PPL']
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
 
         if not gap_match:
             return False, None, 'Gap match criteria required'
@@ -1198,9 +1225,17 @@ def remove_gap_from_schedule(
     gap_index: Optional[int],
     use_staged: bool,
     gap_match: Optional[dict] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for removing a gap from a schedule."""
-    return _remove_gap_from_schedule(modality, row_index, gap_index, use_staged, gap_match=gap_match)
+    return _remove_gap_from_schedule(
+        modality,
+        row_index,
+        gap_index,
+        use_staged,
+        gap_match=gap_match,
+        verify_ppl=verify_ppl,
+    )
 
 
 def _update_gap_in_schedule(
@@ -1213,6 +1248,7 @@ def _update_gap_in_schedule(
     use_staged: bool,
     new_counts_for_hours: Optional[bool] = None,
     gap_match: Optional[dict] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Update a gap intent row in a worker's schedule."""
     data_dict = _get_schedule_data_dict(modality, use_staged)
@@ -1224,6 +1260,8 @@ def _update_gap_in_schedule(
     try:
         _ensure_row_type_column(df)
         worker_name = df.loc[row_index, 'PPL']
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
 
         if not gap_match:
             return False, None, 'Gap match criteria required'
@@ -1294,6 +1332,7 @@ def update_gap_in_schedule(
     use_staged: bool,
     new_counts_for_hours: Optional[bool] = None,
     gap_match: Optional[dict] = None,
+    verify_ppl: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for updating a gap in a schedule."""
     return _update_gap_in_schedule(
@@ -1306,4 +1345,5 @@ def update_gap_in_schedule(
         use_staged,
         new_counts_for_hours=new_counts_for_hours,
         gap_match=gap_match,
+        verify_ppl=verify_ppl,
     )

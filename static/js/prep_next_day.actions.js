@@ -152,6 +152,18 @@ async function toggleEditMode(tab) {
 }
 
 // Track inline skill change (supports adding new modalities with rowIndex=-1)
+function buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx) {
+  const group = Number.isInteger(groupIdx) ? entriesData[tab]?.[groupIdx] : null;
+  return {
+    modality: modKey,
+    row_index: rowIndex,
+    groupIdx,
+    shiftIdx,
+    verify_ppl: group?.worker,
+    updates: {}
+  };
+}
+
 function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shiftIdx, el = null) {
   const normalizedVal = normalizeSkillValueJS(value);
 
@@ -171,7 +183,7 @@ function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shif
   } else {
     const key = `${modKey}-${rowIndex}`;
     if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
+      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
     }
     pendingChanges[tab][key].updates[skill] = normalizedVal;
     if (isWeightedSkill(normalizedVal)) {
@@ -203,7 +215,7 @@ function onInlineModifierChange(tab, modKey, rowIndex, value, groupIdx, shiftIdx
   } else {
     const key = `${modKey}-${rowIndex}`;
     if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: rowIndex, updates: {} };
+      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
     }
     pendingChanges[tab][key].updates['Modifier'] = parsed;
   }
@@ -347,79 +359,156 @@ function handleModKeydown(event, el) {
 }
 
 // Save all inline changes (handles both updates and new modality additions)
+function cloneQuickEditWorkerShifts(group) {
+  return JSON.parse(JSON.stringify(getTableShifts(group) || []));
+}
+
+function getQuickEditChangeGroup(tab, change) {
+  if (!change) return null;
+  if (Number.isInteger(change.groupIdx) && entriesData[tab]?.[change.groupIdx]) {
+    return entriesData[tab][change.groupIdx];
+  }
+  const expectedWorker = change.verify_ppl;
+  if (!expectedWorker) return null;
+  return (entriesData[tab] || []).find(group => group.worker === expectedWorker) || null;
+}
+
+function ensureQuickEditPlanModality(shift, modKey, options = {}) {
+  if (!shift.modalities) shift.modalities = {};
+  if (!shift.modalities[modKey]) {
+    const defaultSkillValue = shift.is_gap_entry ? -1 : 0;
+    const skills = {};
+    SKILLS.forEach(skill => {
+      skills[skill] = defaultSkillValue;
+    });
+    shift.modalities[modKey] = {
+      row_index: -1,
+      modifier: shift.modifier || 1.0,
+      materialize: options.materialize === true,
+      skills
+    };
+  }
+  const modData = shift.modalities[modKey];
+  if (!modData.skills) modData.skills = {};
+  if (options.materialize === true) {
+    modData.materialize = true;
+  }
+  return modData;
+}
+
+function applyQuickEditChangeToPlan(tab, shifts, change) {
+  if (!change || !Number.isInteger(change.shiftIdx)) {
+    throw new Error('Pending edit is missing shift metadata. Reload and try again.');
+  }
+  const shift = shifts[change.shiftIdx];
+  if (!shift) {
+    throw new Error('Pending edit references a shift that no longer exists. Reload and try again.');
+  }
+
+  if (change.isDelete) {
+    shift.deleted = true;
+    return;
+  }
+
+  const modKey = change.modality;
+  const modData = ensureQuickEditPlanModality(shift, modKey, { materialize: change.isNew });
+  const updates = change.updates || {};
+
+  Object.entries(updates).forEach(([field, value]) => {
+    if (field === 'start_time') {
+      shift.start_time = value;
+      shift.timeSegments = [{ start: shift.start_time, end: shift.end_time }];
+      return;
+    }
+    if (field === 'end_time') {
+      shift.end_time = value;
+      shift.timeSegments = [{ start: shift.start_time, end: shift.end_time }];
+      return;
+    }
+    if (field === 'Modifier') {
+      const parsed = parseFloat(value) || 1.0;
+      shift.modifier = parsed;
+      Object.values(shift.modalities || {}).forEach(existingModData => {
+        if (existingModData) existingModData.modifier = parsed;
+      });
+      return;
+    }
+    if (SKILLS.includes(field)) {
+      modData.skills[field] = normalizeSkillValueJS(value);
+    }
+  });
+}
+
+function buildQuickEditWorkerPlan(tab, group, changes) {
+  const shifts = cloneQuickEditWorkerShifts(group);
+  changes.forEach(({ change }) => applyQuickEditChangeToPlan(tab, shifts, change));
+  return shifts
+    .filter(shift => !shift.deleted)
+    .map(shift => ({
+      ...shift,
+      task: getTaskPersistedName(shift.task),
+      tasks: getTaskPersistedName(shift.tasks || shift.task),
+    }));
+}
+
+function groupQuickEditChangesByWorker(tab, changeEntries) {
+  const grouped = new Map();
+  changeEntries.forEach(([changeKey, change]) => {
+    const group = getQuickEditChangeGroup(tab, change);
+    if (!group) {
+      throw new Error('Pending edit references a worker that is no longer visible. Reload and try again.');
+    }
+    const groupKey = group.worker;
+    if (!grouped.has(groupKey)) {
+      grouped.set(groupKey, { group, changes: [], keys: [], units: 0 });
+    }
+    const bucket = grouped.get(groupKey);
+    bucket.changes.push({ key: changeKey, change });
+    bucket.keys.push(changeKey);
+    bucket.units += getPendingChangeUnits(change);
+  });
+  return grouped;
+}
+
 async function saveInlineChanges(tab) {
   const changeEntries = Object.entries(pendingChanges[tab] || {});
   if (changeEntries.length === 0) {
     updateSaveInlineStatus(tab, 'No changes to save', 'error');
     return;
   }
-  const updateEndpoint = tab === 'today' ? '/api/live-schedule/update-row' : '/api/prep-next-day/update-row';
-  const addEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
-  const deleteEndpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
+  const applyEndpoint = tab === 'today'
+    ? '/api/live-schedule/apply-worker-plan'
+    : '/api/prep-next-day/apply-worker-plan';
 
   // Collect errors instead of throwing on first failure
   const errors = [];
   let successCount = 0;
   const succeededKeys = new Set();
+  let groupedChanges;
+  try {
+    groupedChanges = groupQuickEditChangesByWorker(tab, changeEntries);
+  } catch (error) {
+    updateSaveInlineStatus(tab, error.message, 'error');
+    return;
+  }
 
-  for (const [changeKey, change] of changeEntries) {
-    const changeUnits = getPendingChangeUnits(change);
+  for (const { group, changes, keys, units } of groupedChanges.values()) {
     try {
-      if (change.isDelete) {
-        await postJsonWithSnapshot(tab, deleteEndpoint, {
-          modality: change.modality,
-          row_index: change.row_index,
-          verify_ppl: change.verify_ppl
-        }, {
-          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
-        });
-        successCount += changeUnits;
-        succeededKeys.add(changeKey);
-      } else if (change.isNew) {
-        // New modality addition - need to add via add-worker endpoint
-        const group = entriesData[tab][change.groupIdx];
-        const shift = group ? getTableShifts(group)[change.shiftIdx] : null;
-        if (!group || !shift) continue;
-
-        // Build worker_data for the new modality
-        const workerData = {
-          PPL: group.worker,
-          start_time: shift.start_time,
-          end_time: shift.end_time,
-          Modifier: change.updates.Modifier || 1.0,
-          tasks: shift.task || '',
-          row_type: shift.is_gap_entry ? 'gap' : 'shift',
-          counts_for_hours: shift.counts_for_hours !== false,
-          training: shift.training !== false,
-          materialize: true
-        };
-        // Get original skill values from the placeholder modality
-        const originalSkills = shift.modalities[change.modality]?.skills || {};
-        // Add all skills (preserve original values for unchanged skills)
-        SKILLS.forEach(skill => {
-          if (change.updates[skill] !== undefined) {
-            workerData[skill] = change.updates[skill];
-          } else {
-            workerData[skill] = originalSkills[skill] !== undefined ? originalSkills[skill] : -1;
-          }
-        });
-
-        await postJsonWithSnapshot(tab, addEndpoint, {
-          modality: change.modality,
-          worker_data: workerData
-        }, {
-          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
-        });
-        successCount += changeUnits;
-        succeededKeys.add(changeKey);
-      } else {
-        // Existing entry update
-        await postJsonWithSnapshot(tab, updateEndpoint, change, {
-          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
-        });
-        successCount += changeUnits;
-        succeededKeys.add(changeKey);
+      const shifts = buildQuickEditWorkerPlan(tab, group, changes);
+      const result = await postJsonWithSnapshot(tab, applyEndpoint, {
+        worker: group.worker,
+        shifts,
+        worker_revision: group.worker_revision || getWorkerRevision(tab, group.worker),
+      }, {
+        conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
+        includeSnapshotVersion: false,
+      });
+      if (result?.worker_revision) {
+        if (!workerRevisions[tab]) workerRevisions[tab] = {};
+        workerRevisions[tab][group.worker] = result.worker_revision;
       }
+      successCount += units;
+      keys.forEach(key => succeededKeys.add(key));
     } catch (fetchError) {
       errors.push(fetchError.message || 'Unknown error');
       if (fetchError.isConflict) {
@@ -915,7 +1004,7 @@ function onInlineTimeChange(tab, groupIdx, shiftIdx, field, value) {
     if (modData.row_index === undefined || modData.row_index < 0) return;
     const key = `${modKey}-${modData.row_index}`;
     if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: modData.row_index, updates: {} };
+      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
     }
     pendingChanges[tab][key].updates[field === 'start' ? 'start_time' : 'end_time'] = value;
   });
@@ -936,7 +1025,7 @@ function onInlineShiftModifierChange(tab, groupIdx, shiftIdx, value) {
     if (modData.row_index === undefined || modData.row_index < 0) return;
     const key = `${modKey}-${modData.row_index}`;
     if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: modData.row_index, updates: {} };
+      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
     }
     pendingChanges[tab][key].updates['Modifier'] = parsed;
   });
@@ -1421,6 +1510,8 @@ async function deleteShiftInline(tab, groupIdx, shiftIdx) {
     pendingChanges[tab][key] = {
       modality: modKey,
       row_index: modData.row_index,
+      groupIdx,
+      shiftIdx,
       verify_ppl: group.worker,
       isDelete: true
     };
@@ -1683,6 +1774,7 @@ async function addShiftFromModal() {
         await postJsonWithSnapshot(tab, addGapEndpoint, {
           modality,
           row_index: rowIndex,
+          verify_ppl: group.worker,
           gap_type: getTaskPersistedName(taskName),
           gap_start: startTime,
           gap_end: endTime,
@@ -2404,6 +2496,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
 
     await postJsonWithSnapshot(tab, addEndpoint, {
       row_index_map: Object.fromEntries(rowIndexByModality.entries()),
+      verify_ppl: group.worker,
       gap_type: gapType,
       gap_start: gapStart,
       gap_end: gapEnd,
