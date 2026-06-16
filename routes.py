@@ -936,6 +936,26 @@ def _build_rows_from_plan(worker: str, shifts: list, modality: str) -> list:
     return rows
 
 
+def _parse_worker_plan_modalities(value: Any) -> tuple[Optional[list[str]], Optional[Any]]:
+    if value is None:
+        return list(allowed_modalities), None
+    if not isinstance(value, list):
+        return None, (jsonify({'error': 'modalities must be a list', 'code': 'invalid_plan'}), 400)
+
+    target_modalities = []
+    seen = set()
+    for raw_modality in value:
+        modality = str(raw_modality).strip().lower()
+        if modality not in allowed_modalities or modality in seen:
+            continue
+        seen.add(modality)
+        target_modalities.append(modality)
+
+    if not target_modalities:
+        return None, (jsonify({'error': 'No valid modalities selected', 'code': 'invalid_plan'}), 400)
+    return target_modalities, None
+
+
 def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> Any:
     data = request.json
     modality = data.get('modality')
@@ -994,6 +1014,9 @@ def _handle_apply_worker_plan(use_staged: bool, *, create_only: bool = False) ->
             return staged_error
     if not worker:
         return jsonify({'error': 'Missing worker'}), 400
+    target_modalities, modality_error = _parse_worker_plan_modalities(data.get('modalities'))
+    if modality_error:
+        return modality_error
 
     with lock:
         worker_revision_error = _check_worker_revision(
@@ -1016,7 +1039,7 @@ def _handle_apply_worker_plan(use_staged: bool, *, create_only: bool = False) ->
 
         rows_by_modality = {
             modality: _build_rows_from_plan(worker, shifts, modality)
-            for modality in allowed_modalities
+            for modality in target_modalities
         }
         success, result, error = replace_worker_schedule_all(
             worker,
@@ -1024,6 +1047,7 @@ def _handle_apply_worker_plan(use_staged: bool, *, create_only: bool = False) ->
             use_staged=use_staged,
             target_date=target_date if use_staged else datetime.today().date(),
             create_only=create_only,
+            target_modalities=target_modalities,
         )
     if not success:
         error = error or {}

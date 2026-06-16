@@ -180,6 +180,89 @@ class TestWebScheduleEditPersistence(unittest.TestCase):
             self.assertEqual(worker_rows.iloc[1]["end_time"].strftime("%H:%M"), "16:00")
             self.assertEqual(str(worker_rows.iloc[1][SKILL_COLUMNS[0]]), "w")
 
+    def test_empty_worker_plan_deletes_worker_across_modalities(self) -> None:
+        response = self.client.post(
+            "/api/live-schedule/apply-worker-plan",
+            json={
+                "worker": "Alice (A1)",
+                "shifts": [],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        for modality in allowed_modalities:
+            worker_rows = self.state.modality_data[modality]["working_hours_df"]
+            self.assertTrue(worker_rows[worker_rows["PPL"] == "Alice (A1)"].empty)
+
+    def test_scoped_worker_plan_updates_only_selected_modalities(self) -> None:
+        target_modality = "xray" if "xray" in allowed_modalities else allowed_modalities[-1]
+        untouched_modalities = [modality for modality in allowed_modalities if modality != target_modality]
+        before = {
+            modality: self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+            for modality in untouched_modalities
+        }
+        payload = self._worker_plan(value=1, start="09:30", end="12:30")
+        payload["modalities"] = [target_modality]
+
+        response = self.client.post(
+            "/api/live-schedule/apply-worker-plan",
+            json=payload,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        target_rows = self.state.modality_data[target_modality]["working_hours_df"]
+        target_rows = target_rows[target_rows["PPL"] == "Alice (A1)"]
+        self.assertEqual(len(target_rows), 1)
+        self.assertEqual(target_rows.iloc[0]["start_time"].strftime("%H:%M"), "09:30")
+        self.assertEqual(str(target_rows.iloc[0][SKILL_COLUMNS[0]]), "1")
+        for modality in untouched_modalities:
+            pd.testing.assert_frame_equal(
+                self.state.modality_data[modality]["working_hours_df"],
+                before[modality],
+            )
+
+    def test_worker_plan_rejects_empty_modality_scope_without_changes(self) -> None:
+        before = {
+            modality: self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+            for modality in allowed_modalities
+        }
+        payload = self._worker_plan(value=1)
+        payload["modalities"] = ["unknown"]
+
+        response = self.client.post(
+            "/api/live-schedule/apply-worker-plan",
+            json=payload,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["code"], "invalid_plan")
+        for modality in allowed_modalities:
+            pd.testing.assert_frame_equal(
+                self.state.modality_data[modality]["working_hours_df"],
+                before[modality],
+            )
+
+    def test_worker_plan_rejects_non_list_modality_scope_without_changes(self) -> None:
+        before = {
+            modality: self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+            for modality in allowed_modalities
+        }
+        payload = self._worker_plan(value=1)
+        payload["modalities"] = "xray"
+
+        response = self.client.post(
+            "/api/live-schedule/apply-worker-plan",
+            json=payload,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["code"], "invalid_plan")
+        for modality in allowed_modalities:
+            pd.testing.assert_frame_equal(
+                self.state.modality_data[modality]["working_hours_df"],
+                before[modality],
+            )
+
     def test_tomorrow_edit_writes_and_reloads_selected_dated_snapshot(self) -> None:
         payload = self._worker_plan(value="w", start="10:00", end="14:00")
         payload["target_date"] = self.target_date.isoformat()

@@ -692,15 +692,12 @@ function renderEditModalContent() {
 
 
 
-  // Add New Shift/Gap section (same styling as Add Worker modal)
+  // Add New Shift/Gap section is available from edit mode, but collapsed so
+  // the popup remains centered on the worker's current table state.
   if (isEditable) {
-    html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #d4edda; border: 2px solid #28a745; border-radius: 8px;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-<label style="font-weight: 600; color: #155724;">+ Add New Shift / Gap</label>
-<div style="display: flex; gap: 0.5rem;">
-  <button class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()">Add</button>
-</div>
-  </div>
+    html += `<details class="edit-modal-add-shift" style="margin-bottom: 1rem; padding: 0.75rem; background: #f6fbf7; border: 1px solid #b8dfc2; border-radius: 8px;">
+  <summary style="cursor:pointer; font-weight: 600; color: #155724;">+ Add New Shift / Gap</summary>
+  <div style="margin-top: 0.75rem;">
   <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
 <div style="flex: 1; min-width: 180px;">
   <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
@@ -779,10 +776,15 @@ function renderEditModalContent() {
   });
   html += `</tbody>
   </table>
-</div>`;
+</div>
+<div style="display: flex; justify-content: flex-end; margin-top: 0.75rem;">
+  <button class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()">Add Shift / Gap</button>
+</div>
+  </div>
+</details>`;
   }
 
-  document.getElementById('modal-title').textContent = `Edit Worker - ${getWorkerDisplayName(group.worker)}`;
+  document.getElementById('modal-title').textContent = `Edit Worker (${tab === 'today' ? 'Today' : 'Tomorrow'}) - ${getWorkerDisplayName(group.worker)}`;
   document.getElementById('modal-content').innerHTML = html;
   applyModalEditModeUI();
 

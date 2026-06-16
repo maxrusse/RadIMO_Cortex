@@ -62,7 +62,7 @@ modalities:
     nav_color: '#2f8c7a'
     hover_color: '#247060'
     background_color: '#e3f3ef'
-    hidden_skills: [gyn, aou, cvt, privat]
+    hidden_skills: [gyn, aou, privat]
 
 # =============================================================================
 # SKILLS
@@ -190,18 +190,6 @@ special_tasks:
   #   skill_dashboards: []
   #   allow_overflow: false
   #   display_order: 121
-  - name: xray-normal
-    label: Thorax
-    base_skill: cvt
-    target_skill_modalities:
-      - cvt_xray
-    modalities_dashboards: [xray]
-    skill_dashboards: []
-    allow_overflow: false
-    display_order: -1
-    button_color: '#3f8f82'
-    text_color: '#ffffff'
-
 # =============================================================================
 # SYNTHETIC SHIFTS
 # =============================================================================

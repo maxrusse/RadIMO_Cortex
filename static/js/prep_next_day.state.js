@@ -197,7 +197,7 @@ function setEditPlanDraftFromGroup(group, options = {}) {
   if (!group) return;
   const shouldReset = options.force || !editPlanDraft || editPlanDraft.worker !== group.worker;
   if (!shouldReset) return;
-  const sourceShifts = group.modalShiftsArray || group.shiftsArray || [];
+  const sourceShifts = getTableShifts(group);
   editPlanDraft = {
     worker: group.worker,
     shifts: JSON.parse(JSON.stringify(sourceShifts))
@@ -788,7 +788,7 @@ function escapeHtml(text) {
 
 function getPendingChangeUnits(change) {
   if (!change) return 0;
-  if (change.isDelete || change.isNew) {
+  if (change.isDelete) {
     return 1;
   }
   const updateCount = Object.keys(change.updates || {}).length;
@@ -837,17 +837,68 @@ function normalizeEditPlanShiftsForComparison(shifts = []) {
   return (shifts || []).map(shift => normalizeEditPlanShiftForComparison(shift));
 }
 
-function hasEditPlanPendingChanges() {
+function countSkillMapChanges(beforeSkills = {}, afterSkills = {}) {
+  let count = 0;
+  SKILLS.forEach(skill => {
+    const before = normalizeSkillValueJS(beforeSkills?.[skill]);
+    const after = normalizeSkillValueJS(afterSkills?.[skill]);
+    if (before !== after) {
+      count += 1;
+    }
+  });
+  return count;
+}
+
+function countEditPlanShiftChanges(beforeShift = null, afterShift = null) {
+  if (!beforeShift || !afterShift) return 1;
+
+  let count = 0;
+  ['start_time', 'end_time', 'modifier', 'counts_for_hours', 'training', 'task', 'row_type'].forEach(field => {
+    if (beforeShift[field] !== afterShift[field]) {
+      count += 1;
+    }
+  });
+
+  const modalityKeys = new Set([
+    ...Object.keys(beforeShift.modalities || {}),
+    ...Object.keys(afterShift.modalities || {}),
+  ]);
+  modalityKeys.forEach(modKey => {
+    const beforeMod = beforeShift.modalities?.[modKey] || null;
+    const afterMod = afterShift.modalities?.[modKey] || null;
+    if (!beforeMod || !afterMod) {
+      count += 1;
+      return;
+    }
+    if (beforeMod.row_index !== afterMod.row_index) {
+      count += 1;
+    }
+    count += countSkillMapChanges(beforeMod.baseSkills || beforeMod.skills || {}, afterMod.baseSkills || afterMod.skills || {});
+  });
+
+  return count;
+}
+
+function getEditPlanPendingChangeCount() {
   if (!currentEditEntry || !editPlanDraft || editPlanDraft.worker !== currentEditEntry.worker) {
-    return false;
+    return 0;
   }
 
   const group = entriesData[currentEditEntry.tab]?.[currentEditEntry.groupIdx];
-  if (!group) return false;
+  if (!group) return 0;
 
-  const sourceShifts = normalizeEditPlanShiftsForComparison(group.modalShiftsArray || group.shiftsArray || []);
+  const sourceShifts = normalizeEditPlanShiftsForComparison(getTableShifts(group));
   const draftShifts = normalizeEditPlanShiftsForComparison(editPlanDraft.shifts || []);
-  return JSON.stringify(sourceShifts) !== JSON.stringify(draftShifts);
+  const maxLength = Math.max(sourceShifts.length, draftShifts.length);
+  let count = 0;
+  for (let idx = 0; idx < maxLength; idx += 1) {
+    count += countEditPlanShiftChanges(sourceShifts[idx] || null, draftShifts[idx] || null);
+  }
+  return count;
+}
+
+function hasEditPlanPendingChanges() {
+  return getEditPlanPendingChangeCount() > 0;
 }
 
 // Update the save button text to reflect pending change count

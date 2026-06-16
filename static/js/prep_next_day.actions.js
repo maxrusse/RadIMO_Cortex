@@ -164,34 +164,35 @@ function buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx) {
   };
 }
 
+function buildInlineChangeKey(tab, modKey, rowIndex, groupIdx, shiftIdx) {
+  const group = Number.isInteger(groupIdx) ? entriesData[tab]?.[groupIdx] : null;
+  const workerKey = `${groupIdx}:${group?.worker || 'unknown-worker'}`;
+  const rowKey = rowIndex === -1 ? 'new' : `row-${rowIndex}`;
+  return `${workerKey}-shift-${shiftIdx}-${modKey}-${rowKey}`;
+}
+
+function ensurePendingInlineChange(tab, modKey, rowIndex, groupIdx, shiftIdx) {
+  const key = buildInlineChangeKey(tab, modKey, rowIndex, groupIdx, shiftIdx);
+  if (!pendingChanges[tab][key]) {
+    pendingChanges[tab][key] = {
+      ...buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx),
+      isNew: rowIndex === -1,
+      materialize: rowIndex === -1,
+    };
+  }
+  return pendingChanges[tab][key];
+}
+
 function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shiftIdx, el = null) {
   const normalizedVal = normalizeSkillValueJS(value);
+  const change = ensurePendingInlineChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
 
-  // Handle new modality additions (rowIndex = -1)
-  if (rowIndex === -1) {
-    const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, materialize: true, updates: {} };
-    }
-    pendingChanges[tab][key].updates[skill] = normalizedVal;
-    if (isWeightedSkill(normalizedVal)) {
-      const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
-      pendingChanges[tab][key].updates['Modifier'] = currentWeight;
-    } else {
-      delete pendingChanges[tab][key].updates['Modifier'];
-    }
+  change.updates[skill] = normalizedVal;
+  if (isWeightedSkill(normalizedVal)) {
+    const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
+    change.updates['Modifier'] = currentWeight;
   } else {
-    const key = `${modKey}-${rowIndex}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
-    }
-    pendingChanges[tab][key].updates[skill] = normalizedVal;
-    if (isWeightedSkill(normalizedVal)) {
-      const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
-      pendingChanges[tab][key].updates['Modifier'] = currentWeight;
-    } else {
-      delete pendingChanges[tab][key].updates['Modifier'];
-    }
+    delete change.updates['Modifier'];
   }
 
   if (el && el.nextElementSibling) {
@@ -204,21 +205,8 @@ function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shif
 // Track inline modifier change per modality
 function onInlineModifierChange(tab, modKey, rowIndex, value, groupIdx, shiftIdx) {
   const parsed = parseFloat(value) || 1.0;
-
-  if (rowIndex === -1) {
-    // New modality addition
-    const key = `new-${groupIdx}-${shiftIdx}-${modKey}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = { modality: modKey, row_index: -1, groupIdx, shiftIdx, isNew: true, materialize: true, updates: {} };
-    }
-    pendingChanges[tab][key].updates['Modifier'] = parsed;
-  } else {
-    const key = `${modKey}-${rowIndex}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
-    }
-    pendingChanges[tab][key].updates['Modifier'] = parsed;
-  }
+  const change = ensurePendingInlineChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
+  change.updates['Modifier'] = parsed;
 
   updateSaveButtonCount(tab);
 }
@@ -439,16 +427,54 @@ function applyQuickEditChangeToPlan(tab, shifts, change) {
   });
 }
 
-function buildQuickEditWorkerPlan(tab, group, changes) {
+function serializeWorkerPlanShift(shift) {
+  return {
+    ...shift,
+    task: getTaskPersistedName(shift.task),
+    tasks: getTaskPersistedName(shift.tasks || shift.task),
+  };
+}
+
+function getQuickEditChangedModalities(changes) {
+  const changed = new Set();
+  const validModalities = new Set(MODALITIES.map(modality => modality.toLowerCase()));
+  changes.forEach(({ change }) => {
+    if (change?.modality) {
+      changed.add(String(change.modality).toLowerCase());
+    }
+  });
+  return Array.from(changed).filter(modality => validModalities.has(modality));
+}
+
+function filterWorkerPlanShiftModalities(shift, targetModalities) {
+  if (!Array.isArray(targetModalities) || targetModalities.length === 0) {
+    return shift;
+  }
+  const targetSet = new Set(targetModalities);
+  const filteredModalities = {};
+  Object.entries(shift.modalities || {}).forEach(([modKey, modData]) => {
+    if (targetSet.has(String(modKey).toLowerCase())) {
+      filteredModalities[modKey] = modData;
+    }
+  });
+  return {
+    ...shift,
+    modalities: filteredModalities,
+  };
+}
+
+function buildQuickEditWorkerPlanPayload(tab, group, changes) {
   const shifts = cloneQuickEditWorkerShifts(group);
   changes.forEach(({ change }) => applyQuickEditChangeToPlan(tab, shifts, change));
-  return shifts
-    .filter(shift => !shift.deleted)
-    .map(shift => ({
-      ...shift,
-      task: getTaskPersistedName(shift.task),
-      tasks: getTaskPersistedName(shift.tasks || shift.task),
-    }));
+  const modalities = getQuickEditChangedModalities(changes);
+  return {
+    shifts: shifts
+      .filter(shift => !shift.deleted)
+      .map(shift => filterWorkerPlanShiftModalities(shift, modalities))
+      .filter(shift => Object.keys(shift.modalities || {}).length > 0)
+      .map(serializeWorkerPlanShift),
+    modalities,
+  };
 }
 
 function groupQuickEditChangesByWorker(tab, changeEntries) {
@@ -494,10 +520,11 @@ async function saveInlineChanges(tab) {
 
   for (const { group, changes, keys, units } of groupedChanges.values()) {
     try {
-      const shifts = buildQuickEditWorkerPlan(tab, group, changes);
+      const planPayload = buildQuickEditWorkerPlanPayload(tab, group, changes);
       const result = await postJsonWithSnapshot(tab, applyEndpoint, {
         worker: group.worker,
-        shifts,
+        shifts: planPayload.shifts,
+        modalities: planPayload.modalities,
         worker_revision: group.worker_revision || getWorkerRevision(tab, group.worker),
       }, {
         conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
@@ -1002,11 +1029,8 @@ function onInlineTimeChange(tab, groupIdx, shiftIdx, field, value) {
   Object.keys(shift.modalities).forEach(modKey => {
     const modData = shift.modalities[modKey];
     if (modData.row_index === undefined || modData.row_index < 0) return;
-    const key = `${modKey}-${modData.row_index}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
-    }
-    pendingChanges[tab][key].updates[field === 'start' ? 'start_time' : 'end_time'] = value;
+    const change = ensurePendingInlineChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
+    change.updates[field === 'start' ? 'start_time' : 'end_time'] = value;
   });
   updateSaveButtonCount(tab);
 }
@@ -1023,11 +1047,8 @@ function onInlineShiftModifierChange(tab, groupIdx, shiftIdx, value) {
 
   Object.entries(shift.modalities).forEach(([modKey, modData]) => {
     if (modData.row_index === undefined || modData.row_index < 0) return;
-    const key = `${modKey}-${modData.row_index}`;
-    if (!pendingChanges[tab][key]) {
-      pendingChanges[tab][key] = buildInlineRowChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
-    }
-    pendingChanges[tab][key].updates['Modifier'] = parsed;
+    const change = ensurePendingInlineChange(tab, modKey, modData.row_index, groupIdx, shiftIdx);
+    change.updates['Modifier'] = parsed;
   });
 }
 
@@ -1040,52 +1061,20 @@ async function deleteWorkerEntries(tab, groupIdx) {
   const workerLabel = getWorkerDisplayName(group.worker);
   if (!confirm(`Delete all ${allEntries.length} entries for ${workerLabel}?`)) return;
 
-  const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
-
-  try {
-    // Delete all entries in reverse order (to avoid index shifting issues)
-    // Sort by row_index descending to delete from end first
-    const sortedEntries = [...allEntries].sort((a, b) => b.row_index - a.row_index);
-    for (const entry of sortedEntries) {
-      await postJsonWithSnapshot(tab, endpoint, {
-        modality: entry.modality,
-        row_index: entry.row_index,
-        verify_ppl: entry.worker,
-      }, {
-        reloadOnConflict: true,
-      });
-    }
-    showMessage('success', `Deleted all entries for ${workerLabel}`);
-    await loadData();
-  } catch (error) {
-    if (error.isConflict) {
-      return;
-    }
-    showMessage('error', error.message);
-  }
-}
-
-// Delete single entry
-async function deleteEntry(tab, groupIdx, entryIdx) {
-  const group = entriesData[tab][groupIdx];
-  if (!group) return;
-  const entry = group.entries[entryIdx];
-  if (!entry) return;
-
-  const workerLabel = getWorkerDisplayName(entry.worker);
-  if (!confirm(`Delete entry for ${workerLabel} (${entry.modality.toUpperCase()} ${entry.start_time}-${entry.end_time})?`)) return;
-
-  const endpoint = tab === 'today' ? '/api/live-schedule/delete-worker' : '/api/prep-next-day/delete-worker';
+  const endpoint = tab === 'today'
+    ? '/api/live-schedule/apply-worker-plan'
+    : '/api/prep-next-day/apply-worker-plan';
 
   try {
     await postJsonWithSnapshot(tab, endpoint, {
-      modality: entry.modality,
-      row_index: entry.row_index,
-      verify_ppl: entry.worker,
+      worker: group.worker,
+      shifts: [],
+      worker_revision: group.worker_revision || getWorkerRevision(tab, group.worker),
     }, {
       reloadOnConflict: true,
+      includeSnapshotVersion: false,
     });
-    showMessage('success', `Deleted entry for ${workerLabel}`);
+    showMessage('success', `Deleted all entries for ${workerLabel}`);
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -1506,7 +1495,8 @@ async function deleteShiftInline(tab, groupIdx, shiftIdx) {
   // Queue delete for save, and hide shift from view immediately
   Object.entries(shift.modalities).forEach(([modKey, modData]) => {
     if (modData.row_index === undefined || modData.row_index < 0) return;
-    const key = `delete-${modKey}-${modData.row_index}`;
+    const updateKey = buildInlineChangeKey(tab, modKey, modData.row_index, groupIdx, shiftIdx);
+    const key = `delete-${updateKey}`;
     pendingChanges[tab][key] = {
       modality: modKey,
       row_index: modData.row_index,
@@ -1515,7 +1505,6 @@ async function deleteShiftInline(tab, groupIdx, shiftIdx) {
       verify_ppl: group.worker,
       isDelete: true
     };
-    const updateKey = `${modKey}-${modData.row_index}`;
     delete pendingChanges[tab][updateKey];
   });
 
@@ -1991,11 +1980,7 @@ async function saveModalChanges() {
   const modalState = captureModalState();
   try {
     syncEditPlanDraftFromModal();
-    const persistedShifts = (editPlanDraft.shifts || []).map(shift => ({
-      ...shift,
-      task: getTaskPersistedName(shift.task),
-      tasks: getTaskPersistedName(shift.tasks || shift.task),
-    }));
+    const persistedShifts = (editPlanDraft.shifts || []).map(serializeWorkerPlanShift);
     await postJsonWithSnapshot(tab, applyEndpoint, {
       worker: editPlanDraft.worker,
       shifts: persistedShifts,
@@ -2020,6 +2005,11 @@ async function saveModalChanges() {
   }
 }
 
+function isDraftGapShift(shift) {
+  const rowType = String(shift?.row_type || '').toLowerCase();
+  return rowType === 'gap' || rowType === 'gap_segment' || shift?.is_gap_entry === true;
+}
+
 function syncEditPlanDraftFromModal() {
   if (!currentEditEntry || !editPlanDraft) return;
   const { tab, groupIdx } = currentEditEntry;
@@ -2036,7 +2026,12 @@ function syncEditPlanDraftFromModal() {
 
     const taskName = taskEl?.value || shift.task || '';
     const taskConfig = getTaskConfigByName(taskName);
-    const isGapTask = taskConfig?.type === 'gap';
+    const previousTaskName = String(shift.task || shift.tasks || '').trim();
+    const taskSelectionChanged = Boolean(taskEl) && String(taskName || '').trim() !== previousTaskName;
+    const currentIsGapShift = isDraftGapShift(shift);
+    const shouldTreatAsGap = taskSelectionChanged && taskConfig
+      ? taskConfig.type === 'gap'
+      : currentIsGapShift;
 
     const updates = {};
     if (taskName) updates.tasks = taskName;
@@ -2046,10 +2041,14 @@ function syncEditPlanDraftFromModal() {
     if (trainingEl) updates.training = trainingEl.checked;
     if (countsEl) updates.counts_for_hours = countsEl.checked;
 
-    if (taskConfig) {
-      updates.row_type = isGapTask ? 'gap' : 'shift';
-      updates.training = isGapTask ? false : Boolean(updates.training);
-      updates.counts_for_hours = isGapTask ? getGapCountsForHours(taskName) : Boolean(updates.counts_for_hours);
+    if (taskSelectionChanged && taskConfig) {
+      updates.row_type = shouldTreatAsGap ? 'gap' : 'shift';
+      updates.counts_for_hours = shouldTreatAsGap ? getGapCountsForHours(taskName) : Boolean(updates.counts_for_hours);
+    }
+    if (shouldTreatAsGap) {
+      updates.training = false;
+    } else if (updates.training !== undefined) {
+      updates.training = Boolean(updates.training);
     }
 
     if (Object.keys(updates).length) {
@@ -2061,7 +2060,7 @@ function syncEditPlanDraftFromModal() {
       SKILLS.forEach(skill => {
         const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
         if (!skillUpdatesByMod[modKey]) skillUpdatesByMod[modKey] = {};
-        if (isGapTask) {
+        if (shouldTreatAsGap) {
           skillUpdatesByMod[modKey][skill] = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, -1, false);
           if (el) el.value = '-1';
           return;
@@ -2120,9 +2119,13 @@ function updateModalSaveButtonLabel() {
   }
 
   if (modalMode === 'edit-plan') {
-    const hasPendingDraft = typeof hasEditPlanPendingChanges === 'function' && hasEditPlanPendingChanges();
-    saveButton.textContent = hasPendingDraft ? 'Save Edits*' : 'Save Edits';
-    saveButton.title = hasPendingDraft ? '* Pending changes in this edit dialog' : '';
+    const changeCount = typeof getEditPlanPendingChangeCount === 'function'
+      ? getEditPlanPendingChangeCount()
+      : (hasEditPlanPendingChanges() ? 1 : 0);
+    saveButton.textContent = changeCount > 0
+      ? `Save Edits (${changeCount} change${changeCount !== 1 ? 's' : ''})`
+      : 'Save Edits';
+    saveButton.title = changeCount > 0 ? 'Pending changes in this edit dialog' : '';
   }
 }
 

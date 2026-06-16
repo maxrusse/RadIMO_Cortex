@@ -790,10 +790,20 @@ def replace_worker_schedule_all(
     *,
     target_date: Optional[date] = None,
     create_only: bool = False,
+    target_modalities: Optional[List[str]] = None,
 ) -> tuple:
-    """Replace one worker across every modality as one persisted transaction."""
+    """Replace one worker across selected modalities as one persisted transaction."""
     data_store = staged_modality_data if use_staged else modality_data
     canonical_id = get_canonical_worker_id(worker_name)
+    modalities_to_replace = [
+        modality for modality in (target_modalities or allowed_modalities)
+        if modality in allowed_modalities
+    ]
+    if not modalities_to_replace:
+        return False, None, {
+            'code': 'invalid_plan',
+            'message': 'No valid modalities selected for worker replacement.',
+        }
 
     with _state.lock:
         if create_only:
@@ -812,7 +822,7 @@ def replace_worker_schedule_all(
         candidate_dfs: Dict[str, pd.DataFrame] = {}
         result_by_modality: Dict[str, dict] = {}
         try:
-            for modality in allowed_modalities:
+            for modality in modalities_to_replace:
                 candidate_df, info = _build_replaced_worker_schedule_df(
                     modality,
                     worker_name,
@@ -835,7 +845,7 @@ def replace_worker_schedule_all(
                 'last_modified': data_store[modality].get('last_modified'),
                 'last_prepped_at': data_store[modality].get('last_prepped_at'),
             }
-            for modality in allowed_modalities
+            for modality in modalities_to_replace
         }
         tracking_before = {
             key: copy.deepcopy(global_worker_data.get(key))

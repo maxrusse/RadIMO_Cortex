@@ -138,7 +138,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
-    def test_xray_page_shows_thorax_notfall_mdh_kinder_and_hides_other_buttons(
+    def test_xray_page_shows_cvt_notfall_mdh_kinder_and_hides_other_buttons(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -147,17 +147,16 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/?modality=xray")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'id="special-btn-xray-normal"', response.data)
-        self.assertIn(b'Thorax', response.data)
+        self.assertNotIn(b'id="special-btn-xray-normal"', response.data)
+        self.assertIn(b'id="skill-btn-cvt"', response.data)
         self.assertIn(b'id="skill-btn-notfall"', response.data)
         self.assertIn(b'id="skill-btn-mdh"', response.data)
         self.assertIn(b'id="skill-btn-kinder"', response.data)
         self.assertNotIn(b'id="skill-btn-privat"', response.data)
         self.assertNotIn(b'id="skill-btn-gyn"', response.data)
         self.assertNotIn(b'id="skill-btn-aou"', response.data)
-        self.assertNotIn(b'id="skill-btn-cvt"', response.data)
         self.assertLess(
-            response.data.index(b'id="special-btn-xray-normal"'),
+            response.data.index(b'id="skill-btn-cvt"'),
             response.data.index(b'id="skill-btn-notfall"'),
         )
 
@@ -360,7 +359,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes._record_cross_pool_flow", return_value=False)
     @patch("routes.usage_logger.record_skill_modality_usage")
     @patch("routes.usage_logger.check_and_export_at_scheduled_time")
-    def test_xray_normal_special_task_routes_to_cvt_only(
+    def test_xray_cvt_regular_route_uses_regular_cvt_assignment(
         self,
         _mock_export,
         _mock_usage,
@@ -377,14 +376,14 @@ class TestHealthEndpoints(unittest.TestCase):
             "xray",
         )
 
-        response = self.client.get("/api/xray/xray-normal")
+        response = self.client.get("/api/xray/cvt")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(mock_get_worker.call_args.kwargs["target_skill_modalities"], [("cvt", "xray")])
+        self.assertIsNone(mock_get_worker.call_args.kwargs["target_skill_modalities"])
         self.assertEqual(mock_get_worker.call_args.kwargs["role"], "cvt")
-        self.assertFalse(mock_get_worker.call_args.kwargs["allow_overflow"])
+        self.assertTrue(mock_get_worker.call_args.kwargs["allow_overflow"])
         self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
-        self.assertFalse(mock_get_special_weight.call_args.kwargs["strict"])
+        mock_get_special_weight.assert_not_called()
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_no_overflow", return_value=True)
@@ -440,6 +439,81 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertIn("manual_adjustment", script)
         self.assertIn("davon manuelle Anpassung", script)
+
+    def test_prep_edit_modal_keeps_add_shift_collapsed_and_labels_tab_context(self) -> None:
+        with open("static/js/prep_next_day.render.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("Edit Worker (${tab === 'today' ? 'Today' : 'Tomorrow'})", script)
+        self.assertIn("<details class=\"edit-modal-add-shift\"", script)
+        self.assertIn("<summary style=\"cursor:pointer; font-weight: 600; color: #155724;\">+ Add New Shift / Gap</summary>", script)
+        self.assertNotIn("<label style=\"font-weight: 600; color: #155724;\">+ Add New Shift / Gap</label>", script)
+
+    def test_prep_edit_modal_does_not_reclassify_unchanged_rows_from_task_config(self) -> None:
+        with open("static/js/prep_next_day.actions.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("function isDraftGapShift(shift)", script)
+        self.assertIn("const taskSelectionChanged =", script)
+        self.assertIn("const shouldTreatAsGap =", script)
+        self.assertIn("taskSelectionChanged && taskConfig", script)
+        self.assertNotIn("const isGapTask = taskConfig?.type === 'gap';", script)
+
+    def test_quick_edit_worker_plan_is_modality_scoped(self) -> None:
+        with open("static/js/prep_next_day.actions.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("function ensurePendingInlineChange(", script)
+        self.assertIn("function buildInlineChangeKey(tab, modKey, rowIndex, groupIdx, shiftIdx)", script)
+        self.assertIn("const workerKey = `${groupIdx}:${group?.worker || 'unknown-worker'}`;", script)
+        self.assertIn("const rowKey = rowIndex === -1 ? 'new' : `row-${rowIndex}`;", script)
+        self.assertIn("function getQuickEditChangedModalities(changes)", script)
+        self.assertIn("function filterWorkerPlanShiftModalities(shift, targetModalities)", script)
+        self.assertIn("const targetSet = new Set(targetModalities);", script)
+        self.assertIn("function buildQuickEditWorkerPlanPayload(", script)
+        self.assertIn("const modalities = getQuickEditChangedModalities(changes);", script)
+        self.assertIn(".map(shift => filterWorkerPlanShiftModalities(shift, modalities))", script)
+        self.assertIn(".filter(shift => Object.keys(shift.modalities || {}).length > 0)", script)
+        self.assertIn("modalities: planPayload.modalities", script)
+        self.assertNotIn("const key = `${modKey}-${modData.row_index}`;", script)
+
+    def test_quick_edit_count_units_are_field_level_not_row_level(self) -> None:
+        with open("static/js/prep_next_day.state.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("function getPendingChangeUnits(change)", script)
+        self.assertIn("const updateCount = Object.keys(change.updates || {}).length;", script)
+        self.assertNotIn("if (change.isDelete || change.isNew)", script)
+
+    def test_delete_all_worker_uses_worker_plan_not_row_index_loop(self) -> None:
+        with open("static/js/prep_next_day.actions.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("async function deleteWorkerEntries(", script)
+        self.assertIn("shifts: []", script)
+        self.assertIn("worker_revision: group.worker_revision || getWorkerRevision(tab, group.worker)", script)
+        self.assertNotIn("async function deleteEntry(", script)
+        self.assertNotIn("Sort by row_index descending", script)
+
+    def test_edit_modal_draft_uses_same_shift_source_as_table(self) -> None:
+        with open("static/js/prep_next_day.state.js", "r", encoding="utf-8") as js_file:
+            script = js_file.read()
+
+        self.assertIn("function setEditPlanDraftFromGroup(group, options = {})", script)
+        self.assertIn("const sourceShifts = getTableShifts(group);", script)
+        self.assertNotIn("const sourceShifts = group.modalShiftsArray || group.shiftsArray || [];", script)
+
+    def test_edit_modal_save_label_counts_exact_diff_units(self) -> None:
+        with open("static/js/prep_next_day.state.js", "r", encoding="utf-8") as js_file:
+            state_script = js_file.read()
+        with open("static/js/prep_next_day.actions.js", "r", encoding="utf-8") as js_file:
+            actions_script = js_file.read()
+
+        self.assertIn("function getEditPlanPendingChangeCount()", state_script)
+        self.assertIn("function countSkillMapChanges(beforeSkills = {}, afterSkills = {})", state_script)
+        self.assertIn("count += countSkillMapChanges(", state_script)
+        self.assertIn("normalizeEditPlanShiftsForComparison(getTableShifts(group))", state_script)
+        self.assertIn("Save Edits (${changeCount} change${changeCount !== 1 ? 's' : ''})", actions_script)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_balance_summary_route_redirects_to_performance(self, _mock_admin) -> None:
