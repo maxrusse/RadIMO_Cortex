@@ -62,7 +62,7 @@ modalities:
     nav_color: '#2f8c7a'
     hover_color: '#247060'
     background_color: '#e3f3ef'
-    hidden_skills: [gyn, aou, cvt]
+    hidden_skills: [gyn, aou, cvt, privat]
 
 # =============================================================================
 # SKILLS
@@ -132,6 +132,15 @@ skills:
     special: true             # Musculoskeletal & skin subspecialty
     display_order: 3
     slug: mdh
+  kinder:
+    label: Kinder
+    tooltip: Kinderradiologie
+    button_color: '#6b73c8'
+    text_color: '#ffffff'
+    special: false
+    display_order: 6
+    slug: kinder
+    valid_modalities: [xray]
 
 # =============================================================================
 # SPECIAL TASKS
@@ -182,13 +191,13 @@ special_tasks:
   #   allow_overflow: false
   #   display_order: 121
   - name: xray-normal
-    label: Normal
+    label: Thorax
     base_skill: cvt
     target_skill_modalities:
       - cvt_xray
     modalities_dashboards: [xray]
     skill_dashboards: []
-    allow_overflow: true
+    allow_overflow: false
     display_order: -1
     button_color: '#3f8f82'
     text_color: '#ffffff'
@@ -210,6 +219,16 @@ synthetic_shifts:
   - worker_name: "Notfallarzt (NDOC)"
     use_shift: "Notfall Spätdienst"
     weekdays: [workdays]
+  - worker_name: "Kinderarzt (KDOC)"
+    label: "Kinderarzt"
+    weekdays: [workdays]
+    times:
+      default: "07:30-16:30"
+    skill_overrides:
+      all: -1
+      kinder_ct: 1
+      kinder_mr: 1
+      kinder_xray: 1
 
 # =============================================================================
 # WORKER ROSTER BASELINES
@@ -260,6 +279,29 @@ worker_roster:
     privat_ct: 0
     privat_mr: -1
     privat_xray: -1
+  KDOC:
+    full_name: "Kinderarzt (KDOC)"
+    aou_ct: -1
+    aou_mr: -1
+    aou_xray: -1
+    cvt_ct: -1
+    cvt_mr: -1
+    cvt_xray: -1
+    gyn_ct: -1
+    gyn_mr: -1
+    gyn_xray: -1
+    kinder_ct: 1
+    kinder_mr: 1
+    kinder_xray: 1
+    mdh_ct: -1
+    mdh_mr: -1
+    mdh_xray: -1
+    notfall_ct: -1
+    notfall_mr: -1
+    notfall_xray: -1
+    privat_ct: -1
+    privat_mr: -1
+    privat_xray: -1
 
 # =============================================================================
 # NO OVERFLOW (STRICT MODE) COMBINATIONS
@@ -276,6 +318,9 @@ worker_roster:
 #   - cvt_ct          # Cardiac CT - specialists only
 #   - cvt_mr          # Cardiac MR - specialists only
 no_overflow:
+  - kinder_ct
+  - kinder_mr
+  - kinder_xray
   - privat_ct
   - privat_mr
   - privat_xray
@@ -516,7 +561,7 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-16:15"
+        default: "13:00-16:15"
       skill_overrides:
         xray: -1
         gyn_xray: 1
@@ -598,8 +643,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:30"
-        Freitag: "12:00-15:15"
+        default: "13:00-15:30"
+        Freitag: "13:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: 0
@@ -623,8 +668,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:30"
-        Freitag: "12:00-15:15"
+        default: "13:00-15:30"
+        Freitag: "13:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: 0
@@ -648,8 +693,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:30"
-        Freitag: "12:00-15:15"
+        default: "13:00-15:30"
+        Freitag: "13:00-15:15"
       modifier: 1.0
       skill_overrides:
         all: 0
@@ -755,8 +800,8 @@ vendor_mappings:
       type: "shift"
       day_part: NM
       times:
-        default: "12:00-15:30"
-        Freitag: "12:00-15:15"
+        default: "13:00-15:30"
+        Freitag: "13:00-15:15"
       modifier: 1.2
       skill_overrides:
         all: 0
@@ -931,7 +976,7 @@ vendor_mappings:
       label: "Gyn kommt spät"
       type: "shift"
       times:
-        default: "07:30-12:00"
+        default: "07:30-13:00"
       modifier:
         default: 1.0
         Freitag: 2.0
@@ -956,7 +1001,7 @@ vendor_mappings:
       label: "Notfall kommt spät"
       type: "shift"
       times:
-        default: "07:30-12:00"
+        default: "07:30-13:00"
       counts_for_hours: false
       skill_overrides:
         all: -1

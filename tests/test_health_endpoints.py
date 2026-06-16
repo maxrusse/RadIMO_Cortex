@@ -138,7 +138,7 @@ class TestHealthEndpoints(unittest.TestCase):
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
-    def test_xray_page_shows_normal_notfall_privat_mdh_and_hides_other_specialty_buttons(
+    def test_xray_page_shows_thorax_notfall_mdh_kinder_and_hides_other_buttons(
         self,
         _mock_visibility,
         _mock_special_visibility,
@@ -148,15 +148,41 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="special-btn-xray-normal"', response.data)
+        self.assertIn(b'Thorax', response.data)
         self.assertIn(b'id="skill-btn-notfall"', response.data)
-        self.assertIn(b'id="skill-btn-privat"', response.data)
         self.assertIn(b'id="skill-btn-mdh"', response.data)
+        self.assertIn(b'id="skill-btn-kinder"', response.data)
+        self.assertNotIn(b'id="skill-btn-privat"', response.data)
         self.assertNotIn(b'id="skill-btn-gyn"', response.data)
         self.assertNotIn(b'id="skill-btn-aou"', response.data)
         self.assertNotIn(b'id="skill-btn-cvt"', response.data)
         self.assertLess(
             response.data.index(b'id="special-btn-xray-normal"'),
             response.data.index(b'id="skill-btn-notfall"'),
+        )
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_special_task_strict_button_visible", return_value=False)
+    @patch("routes.is_strict_button_visible", return_value=False)
+    def test_kinder_button_is_xray_only(
+        self,
+        _mock_visibility,
+        _mock_special_visibility,
+        _mock_access,
+    ) -> None:
+        ct_response = self.client.get("/?modality=ct")
+        mr_response = self.client.get("/?modality=mr")
+        xray_response = self.client.get("/?modality=xray")
+
+        self.assertEqual(ct_response.status_code, 200)
+        self.assertEqual(mr_response.status_code, 200)
+        self.assertEqual(xray_response.status_code, 200)
+        self.assertNotIn(b'id="skill-btn-kinder"', ct_response.data)
+        self.assertNotIn(b'id="skill-btn-kinder"', mr_response.data)
+        self.assertIn(b'id="skill-btn-kinder"', xray_response.data)
+        self.assertLess(
+            xray_response.data.index(b'id="skill-btn-mdh"'),
+            xray_response.data.index(b'id="skill-btn-kinder"'),
         )
 
     @patch("routes.is_access_protection_enabled", return_value=False)
@@ -356,6 +382,7 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_get_worker.call_args.kwargs["target_skill_modalities"], [("cvt", "xray")])
         self.assertEqual(mock_get_worker.call_args.kwargs["role"], "cvt")
+        self.assertFalse(mock_get_worker.call_args.kwargs["allow_overflow"])
         self.assertFalse(mock_update.call_args.kwargs["strict_mode"])
         self.assertFalse(mock_get_special_weight.call_args.kwargs["strict"])
 

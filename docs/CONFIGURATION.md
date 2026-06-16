@@ -342,12 +342,12 @@ Special task weights are managed in the **Weight Matrix** admin page (`/button-w
 **Current xray setup in this repo:**
 ```yaml
 - name: xray-normal
-  label: Normal
+  label: Thorax
   base_skill: cvt
   target_skill_modalities:
     - cvt_xray
   modalities_dashboards: [xray]
-  allow_overflow: true
+  allow_overflow: false
 ```
 
 - The xray dashboard shows MDH again.

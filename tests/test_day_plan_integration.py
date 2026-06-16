@@ -802,6 +802,86 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
+    def test_real_config_defines_kdoc_workday_shift_and_roster(self) -> None:
+        kinder_skill = APP_CONFIG["skills"]["kinder"]
+        self.assertEqual(kinder_skill["label"], "Kinder")
+        self.assertEqual(kinder_skill["display_order"], 6)
+
+        kdoc_shift = next(
+            entry
+            for entry in APP_CONFIG["synthetic_shifts"]
+            if entry.get("worker_name") == "Kinderarzt (KDOC)"
+        )
+        self.assertEqual(kdoc_shift["weekdays"], ["workdays"])
+        self.assertEqual(kdoc_shift["times"]["default"], "07:30-16:30")
+        self.assertEqual(kdoc_shift["skill_overrides"]["all"], -1)
+        for modality in allowed_modalities:
+            self.assertEqual(kdoc_shift["skill_overrides"][f"kinder_{modality}"], 1)
+
+        kdoc_roster = APP_CONFIG["worker_roster"]["KDOC"]
+        for modality in allowed_modalities:
+            self.assertEqual(kdoc_roster[f"kinder_{modality}"], 1)
+        for skill in SKILL_COLUMNS:
+            if skill == "kinder":
+                continue
+            for modality in allowed_modalities:
+                self.assertEqual(kdoc_roster[f"{skill}_{modality}"], -1)
+
+    def test_real_config_materializes_kdoc_on_workdays_only(self) -> None:
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(
+                    [
+                        "Datum",
+                        "Tageszeit",
+                        "Beschreibung der Aktivität",
+                        "Name des Mitarbeiters",
+                        "Personalnummer",
+                        "Code des Mitarbeiters",
+                    ]
+                )
+                writer.writerow(["14.06.2026", "VM", "Other Day", "Alice", "A1", "A1"])
+
+            worker_management.worker_skill_json_roster.clear()
+
+            def _fake_save(roster, create_backup=True):
+                worker_management.worker_skill_json_roster.clear()
+                worker_management.worker_skill_json_roster.update(roster)
+                return True
+
+            with patch("data_manager.worker_management.load_worker_skill_json", return_value={}), \
+                 patch("data_manager.worker_management.save_worker_skill_json", side_effect=_fake_save):
+                monday = build_working_hours_from_medweb(
+                    csv_path,
+                    datetime(2026, 6, 15),
+                    APP_CONFIG,
+                )
+                saturday = build_working_hours_from_medweb(
+                    csv_path,
+                    datetime(2026, 6, 20),
+                    APP_CONFIG,
+                )
+
+            for modality in allowed_modalities:
+                monday_kdoc = monday[modality][
+                    monday[modality]["PPL"] == "Kinderarzt (KDOC)"
+                ]
+                self.assertEqual(len(monday_kdoc), 1)
+                self.assertEqual(monday_kdoc.iloc[0]["start_time"].strftime("%H:%M"), "07:30")
+                self.assertEqual(monday_kdoc.iloc[0]["end_time"].strftime("%H:%M"), "16:30")
+                self.assertEqual(str(monday_kdoc.iloc[0]["kinder"]), "1")
+                for skill in SKILL_COLUMNS:
+                    if skill != "kinder":
+                        self.assertEqual(str(monday_kdoc.iloc[0][skill]), "-1")
+
+                self.assertNotIn(modality, saturday)
+        finally:
+            worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
     def test_gap_presets_include_gyn_and_notfall_blockers(self) -> None:
         rules = APP_CONFIG.get("medweb_mapping", {}).get("rules", [])
         labels = {str(rule.get("label", "")).strip(): rule for rule in rules}
@@ -810,7 +890,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertIn(label, labels)
             rule = labels[label]
             self.assertEqual(rule.get("type"), "shift")
-            self.assertEqual(rule.get("times", {}).get("default"), "07:30-12:00")
+            self.assertEqual(rule.get("times", {}).get("default"), "07:30-13:00")
             self.assertFalse(bool(rule.get("counts_for_hours", False)))
             self.assertTrue(bool(rule.get("training", True)))
             self.assertEqual(rule.get("skill_overrides", {}).get("all"), -1)
@@ -1140,19 +1220,23 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertFalse(spaet_rule.get("segments"))
         self.assertEqual(spaet_rule["skill_overrides"]["all"], 0)
         expected = [
-            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "12:00-15:30"),
-            ("SBZ: Cardio/Vaskulär/Thorax", "SBZ: Cardio/Vaskulär/Thorax NM", "12:00-15:30"),
-            ("SBZ: MSK/Derma/HNO", "SBZ: MSK/Derma/HNO NM", "12:00-15:30"),
+            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "13:00-15:30", 1.0),
+            ("SBZ: Cardio/Vaskulär/Thorax", "SBZ: Cardio/Vaskulär/Thorax NM", "13:00-15:30", 1.0),
+            ("SBZ: MSK/Derma/HNO", "SBZ: MSK/Derma/HNO NM", "13:00-15:30", 1.0),
+            ("SBZ: FÄ", "SBZ: FÄ NM", "13:00-15:30", 1.2),
         ]
 
-        for activity, expected_label, expected_time in expected:
+        for activity, expected_label, expected_time, expected_modifier in expected:
             with self.subTest(activity=activity):
                 nm_rule = match_mapping_rule(activity, rules, day_part="NM")
                 self.assertIsNotNone(nm_rule)
                 self.assertEqual(nm_rule["label"], expected_label)
                 self.assertEqual(nm_rule["day_part"], "NM")
                 self.assertEqual(nm_rule["times"]["default"], expected_time)
-                self.assertAlmostEqual(float(nm_rule.get("modifier", 1.0)), 1.0)
+                self.assertAlmostEqual(
+                    float(nm_rule.get("modifier", 1.0)),
+                    expected_modifier,
+                )
                 self.assertEqual(nm_rule["skill_overrides"]["all"], 0)
                 self.assertEqual(nm_rule["skill_overrides"]["gyn_ct"], -1)
                 self.assertEqual(nm_rule["skill_overrides"]["notfall_ct"], -1)
@@ -1161,7 +1245,10 @@ class TestDayPlanIntegration(unittest.TestCase):
                 base_rule = match_mapping_rule(activity, rules, day_part="VM")
                 self.assertIsNotNone(base_rule)
                 self.assertEqual(base_rule["times"]["default"], "07:30-15:30")
-                self.assertAlmostEqual(float(base_rule.get("modifier", 1.0)), 1.0)
+                self.assertAlmostEqual(
+                    float(base_rule.get("modifier", 1.0)),
+                    expected_modifier,
+                )
                 self.assertIn("VMNM", base_rule.get("day_parts", []))
                 self.assertTrue(bool(base_rule.get("training", True)))
 
@@ -1179,7 +1266,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertIsNotNone(nm_rule)
         self.assertEqual(nm_rule["label"], "Chir Assistent NM")
         self.assertEqual(nm_rule["day_part"], "NM")
-        self.assertEqual(nm_rule["times"]["default"], "12:00-16:15")
+        self.assertEqual(nm_rule["times"]["default"], "13:00-16:15")
 
         self.assertIsNotNone(base_rule)
         self.assertEqual(base_rule["times"]["default"], "07:30-16:15")
@@ -1212,7 +1299,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertEqual(len(manke_rows), 2)
             chir_row = manke_rows[manke_rows["tasks"] == "Chir Assistent NM"].iloc[0]
             dienst_row = manke_rows[manke_rows["tasks"] == "Röntgendienst"].iloc[0]
-            self.assertEqual(chir_row["TIME"], "12:00-16:15")
+            self.assertEqual(chir_row["TIME"], "13:00-16:15")
             self.assertEqual(dienst_row["TIME"], "16:15-19:45")
         finally:
             worker_management.worker_skill_json_roster.clear()
