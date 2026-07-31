@@ -961,6 +961,22 @@ class TestDayPlanIntegration(unittest.TestCase):
                 ]
                 self.assertEqual(shortcut_keys, [])
 
+    def test_real_medweb_board_names_match_current_export_and_keep_gap_windows(self) -> None:
+        rules = APP_CONFIG["medweb_mapping"]["rules"]
+        expected = {
+            "Mult. Myelom Board (Mo 15:15)": ("Montag", ["12:00-16:30"]),
+            "Kopf-Hals-Board (Mo 15:00)": ("Montag", ["12:00-15:45"]),
+            "Sarkom/Haut/Knochen-Board (Mi 14:00)": ("Mittwoch", ["07:30-15:45"]),
+        }
+
+        for activity_name, (weekday, gap_window) in expected.items():
+            with self.subTest(activity_name=activity_name):
+                rule = match_mapping_rule(activity_name, rules, day_part="NM")
+                self.assertIsNotNone(rule)
+                self.assertEqual(rule.get("type"), "gap")
+                self.assertEqual(rule.get("times", {}).get(weekday), gap_window)
+                self.assertEqual(rule.get("skill_overrides", {}).get("all"), -1)
+
     def test_segmented_shift_rule_applies_time_sliced_skill_overrides(self) -> None:
         config = {
             "medweb_mapping": {

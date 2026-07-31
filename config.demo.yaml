@@ -933,7 +933,7 @@ vendor_mappings:
     #   skill_overrides:
     #     all: -1
 
-    - match: "Mult. Myelom Board (Mo 15:30)"
+    - match: "Mult. Myelom Board (Mo 15:15)"
       label: "Myelom-Board"
       type: "gap"
       day_parts: [VM, VMNM, NM]
@@ -997,7 +997,7 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
-    - match: "Kopf-Hals-Board (Mo 15:30)"
+    - match: "Kopf-Hals-Board (Mo 15:00)"
       label: "Kopf-Hals-Board"
       type: "gap"
       day_parts: [VM, VMNM, NM]
@@ -1007,7 +1007,7 @@ vendor_mappings:
       skill_overrides:
         all: -1
 
-    - match: "Sarkom/Haut/Knochen-Board (Mi 14:30)"
+    - match: "Sarkom/Haut/Knochen-Board (Mi 14:00)"
       label: "Sarkom-Board"
       type: "gap"
       day_parts: [VM, VMNM, NM]
