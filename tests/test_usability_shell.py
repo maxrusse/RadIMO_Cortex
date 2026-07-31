@@ -160,6 +160,14 @@ def test_legacy_surfaces_are_not_part_of_the_current_version():
     assert not Path('templates/admin_files_v2.html').exists()
     assert not Path('templates/admin_logs_v2.html').exists()
 
+    app_source = Path('app.py').read_text(encoding='utf-8')
+    file_ops_source = Path('data_manager/file_ops.py').read_text(encoding='utf-8')
+    assert 'Cortex_{mod.upper()}_live.json' not in app_source
+    assert 'attempt_initialize_data' not in app_source
+    assert 'def attempt_initialize_data' not in file_ops_source
+    assert 'def initialize_data(' not in file_ops_source
+    assert 'def quarantine_file' not in file_ops_source
+
     assert normalize_skill_mod_key('ct_mdh') == 'ct_mdh'
     assert _normalize_no_overflow(['ct_mdh']) == set()
     assert _select_day_times({'monday': '08:00-12:00'}, 'Montag') is None

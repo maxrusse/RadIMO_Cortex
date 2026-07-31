@@ -18,7 +18,7 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across CT, 
 - Two-level fallback for high availability
 - Master CSV integration for monthly schedule management
 - Admin system for skills, live-day changes, next-day planning, corrections, weights, files, logs, and settings
-- Worker skill roster admin portal with simplified JSON management
+- Worker skill roster admin portal with matrix-based management
 - GAP handling (split shifts) for meetings and boards
 - Smart skill filtering on planning and Schedule views
 - Special tasks for custom sub-workflows with separate tracking
@@ -32,13 +32,20 @@ RadIMO Cortex orchestrates workload distribution for radiology teams across CT, 
 ### Installation
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 cp config.demo.yaml config.yaml  # First checkout only; set live credentials locally
-python scripts/ops_check.py  # Check system readiness
-python scripts/gen_test_data.py --scenario all  # Generate deterministic test fixtures (optional)
-python scripts/apply_demo_data.py  # Prepare deterministic UI demo data
-python scripts/capture_screenshots.py  # Generate training screenshots + manifest
-flask --app app run --debug  # Start application
+.venv/bin/python scripts/ops_check.py  # Check system readiness
+.venv/bin/flask --app app run --debug  # Start application
+```
+
+Optional development fixtures write into ignored runtime folders. Run them only
+when it is safe to replace local schedule, roster, and weight state:
+
+```bash
+.venv/bin/python scripts/gen_test_data.py --scenario all
+.venv/bin/python scripts/apply_demo_data.py
+.venv/bin/python scripts/capture_screenshots.py
 ```
 
 ### Access Points
@@ -48,7 +55,7 @@ flask --app app run --debug  # Start application
 |------|-----|-------------|
 | Live | `/` | Assignment by modality (CT/MR/X-ray) |
 | Skill View | `/by-skill` | Assignment by skill (Notfall, CVT, MDH, etc.) |
-| Schedule | `/timetable` | Visualize shifts and gaps |
+| Schedule | `/timetable` | Visualize shifts, gaps, and filters |
 
 If basic access protection is enabled, users authenticate via `/access-login` before reaching the operational pages.
 Admin pages require a session via `/login` when `admin_access_protection_enabled` is true.
@@ -64,7 +71,11 @@ Admin pages require a session via `/login` when `admin_access_protection_enabled
 | Skills | `/skill-roster` | Edit worker skills |
 | Weights | `/button-weights` | Configure button and special-task weights |
 | Import | `/upload` | Upload Master CSV and run `HARD RELOAD TODAY` |
-| Tools | `/admin/tools` | Settings, files, logs, readiness, and runtime reload |
+| Tools | `/admin/tools` | Operational overview and admin shortcuts |
+
+The primary admin navigation contains Analysis, Workload, Today, Planning,
+Schedule, and Live. The **Tools** menu contains Overview, Settings, Corrections,
+Skills, Weights, Import, Files, Logs, and Status.
 
 ---
 
@@ -126,15 +137,12 @@ Where each control lives:
 ### Navigation & UI Features
 
 **Cortex layout** - Unified navigation across all pages:
-- **Live** (`/`) - Main assignment view with modality/skill toggle
+- **Live** (`/`) - Main assignment view by modality
+- **Skill View** (`/by-skill`) - Main assignment view by skill
 - **Schedule** (`/timetable`) - Visual timeline of shifts and gaps
-- **Skills** (`/skill-roster`) - Manage worker capabilities
 - **Today** (`/prep-today`) - Live edits for the current day
 - **Planning** (`/prep-tomorrow`) - Staged edits for a selected workday
-- **Workload** (`/worker-load`) - Detailed balance views
-- **Weights** (`/button-weights`) - Configure button and special-task weights
-- **Import** (`/upload`) - Master CSV upload and `HARD RELOAD TODAY`
-- **Tools** (`/admin/tools`) - Settings, files, logs, status, and runtime operations
+- **Tools menu** - Corrections, Skills, Weights, Import, Files, Logs, Settings, and Status
 
 ### Master CSV Semantics
 
@@ -153,18 +161,17 @@ RadIMO_Cortex/
 ├── routes.py                   # Route and API definitions
 ├── balancer.py                 # Load balancing logic
 ├── config.py                   # Config loader and normalization
-├── config.demo.yaml            # Tracked demo configuration; passwords are non-secret demo values
-├── config.yaml                 # Ignored deployment configuration created from the demo file
+├── config.demo.yaml            # Tracked template with non-secret demo values
+├── config.yaml                 # Ignored local runtime configuration copied from the template
 ├── requirements.txt            # Python dependencies
 ├── gunicorn_config.py          # Gunicorn server configuration
 ├── data/                       # Persistent data files (auto-created)
 │   ├── worker_skill_roster.json  # Worker skill roster
 │   ├── button_weights.json       # Button weights for skills/special tasks
 │   ├── fairness_state.json       # Application state persistence
-│   └── backups/                  # Automatic backups (rotated, n=5)
+│   └── backups/                  # Rotated roster and weight backups
 │       ├── worker_skill_roster_*.json
-│       ├── button_weights_*.json
-│       └── fairness_state_*.json
+│       └── button_weights_*.json
 ├── uploads/                    # Runtime schedule data
 │   └── backups/                # Schedule backups (staged/live/scheduled)
 ├── logs/                       # Application logs and usage stats
@@ -184,10 +191,13 @@ RadIMO_Cortex/
 │   ├── utils.py                # Utility functions and logging
 │   └── usage_logger.py         # Usage tracking
 ├── scripts/                    # Development and utility scripts
-│   ├── ops_check.py            # Pre-deployment checks
-│   └── gen_test_data.py        # Scenario generator for deterministic test data
-│   ├── apply_demo_data.py      # Prepare demo CSV + demo weights + load/preload
-│   └── capture_screenshots.py  # Playwright screenshots for main pages
+│   ├── ops_check.py            # Readiness checks
+│   ├── gen_test_data.py        # Scenario generator for deterministic test data
+│   ├── apply_demo_data.py      # Replaces local runtime state with demo data
+│   ├── capture_screenshots.py  # Playwright screenshot packs
+│   ├── replay_distribution_day.py
+│   ├── simulate_distribution_counterfactual.py
+│   └── generate_worker_team_plot.py
 ├── test_data/                  # Test and demo data
 │   ├── demo/                   # Shared demo fixtures (e.g. button weights)
 │   └── generated/              # Scenario-generated deterministic fixtures
@@ -216,7 +226,6 @@ RadIMO_Cortex/
 | [API.md](docs/API.md) | REST API endpoints |
 | [ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Admin pages and skill roster |
 | [INSTALL_UBUNTU.md](docs/INSTALL_UBUNTU.md) | Ubuntu server installation and intranet deployment guide |
-| [HANDOVER.txt](docs/HANDOVER.txt) | Operational handover, restart, reset, and incident response notes |
 | [USAGE_LOGGING.md](docs/USAGE_LOGGING.md) | Usage statistics and export workflow |
 | [TEST_DATA.md](docs/TEST_DATA.md) | Scenario-based generated test data workflow |
 | [SCREENSHOTS.md](docs/SCREENSHOTS.md) | Training screenshot workflow and scene catalog |
@@ -237,7 +246,7 @@ Validates: config file, admin password, upload folder, modalities, skills, medwe
 
 ## Security
 
-- **Local configuration**: Copy `config.demo.yaml` to the ignored `config.yaml`; never commit live credentials
+- **Local configuration**: Copy tracked `config.demo.yaml` to ignored `config.yaml`; never commit live credentials
 - **Admin password**: Replace the demo value in `config.yaml` before live use (enforced when `admin_access_protection_enabled` is true)
 - **Access password**: Optional access login for non-admin pages (`access_protection_enabled`)
 - **Session-based auth**: Admin routes protected by login when enabled
@@ -246,8 +255,6 @@ Validates: config file, admin password, upload folder, modalities, skills, medwe
 ---
 
 ## Version
-
-**RadIMO Cortex v20** - Current production version
 
 For more information, see [EULA.txt](static/EULA.txt) or contact **Dr. M. Russe**.
 

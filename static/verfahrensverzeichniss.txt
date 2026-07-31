@@ -18,8 +18,8 @@ Beschreibung:
 2. Verzeichnis der IT-Komponenten
 ------------------------------------------------------------
 Projektverzeichnis:
-  /workspace/RadIMO_Cortex (Entwicklung/Container)
-  /nfs/norasys/notebooks/russe/RadIMO_Cortex (Standard-Produktion)
+  /home/dpxuser/radimo_dev (Entwicklung)
+  /opt/radimo (Produktion)
 
 Wichtige Dateien und Verzeichnisse:
   - app.py                → Haupteinstiegspunkt (Flask)
@@ -27,8 +27,9 @@ Wichtige Dateien und Verzeichnisse:
   - balancer.py           → Zuweisungslogik (Load-Balancing)
   - state_manager.py      → Zentraler State & Locking
   - data_manager/         → CSV-Parsing, Persistenz, Scheduler
-  - config.yaml           → Zentrale Konfiguration (Skills, Modalitäten, Mapping)
-  - worker_skill_roster.json → Permanente Skill-Matrix
+  - config.demo.yaml      → Versionierte Beispielkonfiguration
+  - config.yaml           → Lokale aktive Konfiguration (Skills, Modalitäten, Mapping)
+  - data/worker_skill_roster.json → Permanente Skill-Matrix
   - templates/            → HTML-UI (Admin & Planung)
   - static/               → CSS/JS/Assets, Verfahrensverzeichnis
   - uploads/              → Master-CSV & Backups
@@ -46,6 +47,7 @@ Software-Stack (requirements.txt):
   - PyYAML >= 6.0
   - pytz >= 2023.3
   - gunicorn >= 21.2.0
+  - gevent >= 24.2.1
   - APScheduler >= 3.10.0
 
 3. Datenverarbeitung und Backup-Strategie
@@ -58,18 +60,18 @@ Verarbeitung (config-gesteuert):
   - Parsing der CSV inkl. Mapping-Regeln (medweb_mapping).
   - Schichtzeiten aus config.yaml.
   - GAP-Handling: Meetings/Boards erzeugen Shift-Splitting.
-  - Skill-Matrix (worker_skill_roster.json) überschreibt
+  - Skill-Matrix (data/worker_skill_roster.json) überschreibt
     Standardzuordnungen; skill_overrides aus CSV möglich.
 
 Automatisierung:
   - Tages-Reset (daily_reset_time) lädt Live-Daten neu.
-  - Auto-Preload (auto_preload_time) bereitet den nächsten
-    Arbeitstag für /prep-tomorrow vor.
+  - Planning-Daten werden für den nächsten Arbeitstag gespeichert und bei Bedarf geladen.
   - Logik in data_manager/scheduled_tasks.py.
 
 Backup-Strategie:
   - Backups bei kritischen Zustandsänderungen.
-  - Ablage in uploads/backups/.
+  - Schedule-/Admin-Dateibackups in uploads/backups/.
+  - Skill- und Gewichtsbackups in data/backups/.
   - Wiederherstellung über integrierte Persistenz.
 
 4. Zuweisungslogik (Kurzüberblick)

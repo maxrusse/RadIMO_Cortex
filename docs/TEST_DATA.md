@@ -82,7 +82,9 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ## Demo Data (Screenshots / Manual UI)
 
 Use `scripts/apply_demo_data.py` to create a deterministic live/staged dataset
-that matches the default `config.yaml` mapping rules.
+that matches the local `config.yaml` mapping rules. This is a local development
+operation: it replaces the Master CSV, worker roster, and button weights in the
+ignored runtime folders.
 
 ```bash
 python scripts/apply_demo_data.py
@@ -90,6 +92,7 @@ python scripts/apply_demo_data.py
 
 This writes:
 - `uploads/master_medweb.csv`
+- `data/worker_skill_roster.json`
 - `data/button_weights.json` (from `test_data/demo/button_weights_demo.json`)
 
 Then it triggers:
@@ -114,13 +117,18 @@ Default output folder:
 1. Start app locally (`flask --app app run --debug`).
 2. Open admin page `/upload`.
 3. Upload `test_data/generated/<scenario>/master_medweb.csv`.
-4. Use **Reset Today** and inspect `/`, `/timetable`, `/prep-today`.
-5. If needed, temporarily replace `data/worker_skill_roster.json` with scenario roster fixture.
+4. Use **HARD RELOAD TODAY** and inspect `/`, `/timetable`, and `/prep-today`.
+5. For a scenario roster, back up the current `data/worker_skill_roster.json`,
+   replace it with the scenario fixture, then use **Tools → Files → Reload** (or
+   restart the app) before testing. Restore the original runtime file afterward.
 
 ---
 
 ## Notes
 
 - Generated fixtures are deterministic for the same scenario + date.
+- `config.overlay.yaml` documents the scenario parser/balancer assumptions; it
+  is not loaded automatically by the application. Apply equivalent settings to a
+  disposable local `config.yaml` when manually reproducing a scenario.
 - The gap behavior in current tests is intentional: removing a gap does not auto-merge/fill shift segments.
 - `test_data/demo/` is the canonical demo fixture location.
