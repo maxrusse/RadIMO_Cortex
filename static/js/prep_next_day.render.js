@@ -349,7 +349,7 @@ function renderTable(tab) {
         let workerHtml = `<span class="worker-name ${isDuplicate ? 'duplicate' : ''}"${warningTitle}>${escapedWorker}</span>${duplicateBadge}`;
         // Add quick break button at worker level (today tab only)
         if (tab === 'today') {
-          workerHtml += `<button type="button" class="btn-quick-gap" onclick="onQuickGap30('${tab}', ${gIdx})" title="${quickBreakDisabled ? 'Exit Quick Edit before adding a break' : `Add ${QUICK_BREAK.duration_minutes}-min break NOW`}" ${quickBreakDisabled ? 'disabled' : ''}>☕</button>`;
+          workerHtml += `<button type="button" class="btn-quick-gap" onclick="onQuickGap30('${tab}', ${gIdx})" title="${quickBreakDisabled ? 'Exit Quick Edit before adding a break' : `Add ${QUICK_BREAK.duration_minutes}-min break now`}" ${quickBreakDisabled ? 'disabled' : ''}>☕</button>`;
         }
         tr.innerHTML += `<td rowspan="${totalRows}" style="vertical-align: middle;">${workerHtml}</td>`;
       }
@@ -430,12 +430,14 @@ function renderTable(tab) {
         const skillClass = getSkillClass(val);
         const borderClass = getSkillBorderClass(val);
         if (isEditMode) {
+          const disabledAttr = isGap ? ' disabled' : '';
           return `<td class="${cellClass}" style="background:${cellBg};">
             <input type="text" class="grid-input skill-value-input ${borderClass}" value="${displayVal}"
               data-tab="${tab}" data-mod="${modKey}" data-row="${modData.row_index}"
+              data-row-uid="${escapeHtml(modData.row_uid || '')}" data-edit-key="${escapeHtml(modData.edit_key || '')}"
               data-skill="${skill}" data-gidx="${gIdx}" data-sidx="${shiftIdx}"
               data-skill-value="${displayVal}"
-              onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)">
+              onblur="validateAndSaveSkill(this)" onkeydown="handleSkillKeydown(event, this)"${disabledAttr}>
           </td>`;
         } else {
           return `<td class="${cellClass}" style="background:${cellBg};"><span class="grid-badge skill-val ${skillClass}">${displayVal}</span></td>`;
@@ -484,7 +486,7 @@ function renderTable(tab) {
           tr.innerHTML += `
             <td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
               <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
-              <button class="btn btn-small btn-danger" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete All">Del</button>
+              <button class="btn btn-small btn-danger" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete all">Delete</button>
             </td>`;
         }
       }
@@ -492,7 +494,12 @@ function renderTable(tab) {
       tbody.appendChild(tr);
     });
 
-    visibleGroups.push({ ...group, shiftsArray: shiftsToRender });
+    visibleGroups.push({
+      ...group,
+      tableShiftsArray: shiftsToRender,
+      modalShiftsArray: shiftsToRender,
+      shiftsArray: shiftsToRender
+    });
   });
 
   if (filterActive && tbody.children.length === 0) {
@@ -583,7 +590,7 @@ function renderEditModalContent() {
 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.5rem;">
   <div style="flex: 1; min-width: 180px;">
     <label style="font-size: 0.75rem; color: #666; display: block;">Shift / Task</label>
-    <select id="edit-shift-${shiftIdx}-task" onchange="onEditShiftTaskChange(${shiftIdx}, this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;" ${isEditable ? '' : 'disabled'}>
+    <select id="edit-shift-${shiftIdx}-task" ${shiftIdx === 0 ? 'data-initial-focus' : ''} onchange="onEditShiftTaskChange(${shiftIdx}, this.value)" style="width: 100%; padding: 0.4rem; font-size: 0.85rem;" ${isEditable ? '' : 'disabled'}>
       ${renderTaskOptionsWithGroups(shift.task || '', true, false, null, { start: shift.start_time, end: shift.end_time })}
     </select>
   </div>
@@ -673,10 +680,11 @@ function renderEditModalContent() {
       html += `<tr>
       <td class="modality-header" style="color:${navColor}; font-weight:600;">${mod.toUpperCase()}
         <input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowindex" value="${rowIndex}">
+        <input type="hidden" id="edit-shift-${shiftIdx}-${modKey}-rowuid" value="${escapeHtml(data.row_uid || '')}">
       </td>`;
 
       SKILLS.forEach(skill => {
-        const val = data.skills[skill] !== undefined ? data.skills[skill] : (isGapEntry ? -1 : 0);
+        const val = data.skills[skill] !== undefined ? data.skills[skill] : -1;
         const selectId = `edit-shift-${shiftIdx}-${modKey}-skill-${skill}`;
         const onchangeHandler = `updateShiftSkillFromModal(${shiftIdx}, '${modKey}', '${skill}', this.value)`;
         html += `<td>${renderSkillSelect(selectId, val, onchangeHandler, { disabled: !isEditable })}</td>`;
@@ -806,7 +814,7 @@ function renderAddWorkerModalContent(containerId = addWorkerModalState.container
   html += `<div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
     <div class="form-group" style="margin-bottom: 0;">
       <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Worker Name</label>
-      <input type="text" id="add-worker-name-input" value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Müller, Anna (AM)"
+      <input type="text" id="add-worker-name-input" data-initial-focus value="${escapeHtml(currentWorkerName)}" placeholder="e.g. Müller, Anna (AM)"
              list="worker-list-datalist" autocomplete="off" onchange="onAddWorkerNameChange()"
              style="width: 100%; max-width: 300px; padding: 0.5rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px;">
       <div style="margin-top: 0.4rem; font-size: 0.75rem; color: #666;">

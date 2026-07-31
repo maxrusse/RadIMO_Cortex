@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | {{ modality_labels[modality] }} Dashboard{% endblock %}
+{% block title %}RadIMO Cortex | {{ modality_labels[modality] }} Live{% endblock %}
 
 {% block styles %}
     :root {
@@ -53,7 +53,7 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       grid-auto-rows: 1fr;
       gap: 1rem;
-      border: 4px solid;
+      border: 4px solid var(--modality-nav, var(--primary-color));
       border-radius: 8px;
       padding: 0.5rem;
       margin-bottom: 1rem;
@@ -108,6 +108,7 @@
 
     .skill-main-btn {
       flex: 1 1 auto;
+      border-left: 7px solid rgba(0, 0, 0, 0.2);
     }
 
     .skill-strict-btn {
@@ -343,8 +344,8 @@
 {% block body_attrs %} data-modality="{{ modality }}"{% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | ' ~ modality_labels[modality] ~ ' Dashboard' %}
-  {% set header_subtitle = 'Intelligent Radiology Orchestration' %}
+  {% set header_title = 'RadIMO Cortex | ' ~ modality_labels[modality] ~ ' Live' %}
+  {% set header_subtitle = 'Live assignment' %}
   {% set header_mode = 'scoped' %}
   {% set active_page = 'dashboard' %}
   {% set header_nav = namespace(links=[]) %}
@@ -358,7 +359,7 @@
   {% set selector_links %}
     {% for mod in modality_order %}
     <a href="{{ url_for('routes.index', modality=mod) }}" data-modality="{{ mod }}"
-      class="selector-link{% if modality == mod %} selector-link--active{% endif %}">
+      class="selector-link{% if modality == mod %} selector-link--active{% endif %}"{% if modality == mod %} aria-current="page"{% endif %}>
       {{ modality_labels[mod] }}
     </a>
     {% endfor %}
@@ -381,7 +382,7 @@
           {% if item.show_strict_button %}
           <button type="button"
             class="btn assignment-btn skill-strict-btn"
-            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true)"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true, {{ 'true' if item.manual_strict_select else 'false' }})"
             aria-label="Strikte Zuweisung"
             title="Strikte Zuweisung">
             *
@@ -402,7 +403,7 @@
           {% if item.show_strict_button %}
           <button type="button"
             class="btn assignment-btn skill-strict-btn"
-            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true)"
+            onclick="getNextAssignment('{{ item.slug }}', '{{ item.label }}', true, {{ 'true' if item.manual_strict_select else 'false' }})"
             aria-label="Strikte Zuweisung"
             title="Strikte Zuweisung">
             *
@@ -412,6 +413,7 @@
         {% endif %}
       {% endfor %}
     </div>
+    {% include 'partials/strict_worker_select_modal.html' %}
     <div id="result"></div>
     <div class="clipboard-note">
       <div>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</div>
@@ -443,10 +445,10 @@
 
   <!-- Edit Info Modal -->
   {% if is_admin %}
-  <div class="modal-overlay" id="editModal">
+  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
     <div class="modal-content">
-      <h2>Hinweise bearbeiten</h2>
-      <textarea id="infoTextarea" placeholder="Jede Zeile wird als separater Hinweis angezeigt..."></textarea>
+      <h2 id="editModalTitle">Hinweise bearbeiten</h2>
+      <textarea id="infoTextarea" data-initial-focus placeholder="Jede Zeile wird als separater Hinweis angezeigt..."></textarea>
       <p class="modal-hint">Jede Zeile wird als separater Hinweis angezeigt. Leere Zeilen werden ignoriert.</p>
       <div class="modal-buttons">
         <button class="btn-cancel" onclick="closeEditModal()">Abbrechen</button>
@@ -471,6 +473,8 @@
     </div>
   </div>
 
+  <script src="{{ url_for('static', filename='js/assignment_ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/strict_worker_select.js') }}"></script>
   <script>
     (function injectDynamicStyles() {
       const modality = "{{ modality }}";
@@ -488,7 +492,10 @@
       document.querySelectorAll('.header-selector .selector-link').forEach(a => {
         const mod = a.getAttribute('data-modality');
         if (modalities[mod]) {
-          a.style.borderColor = modalities[mod].nav_color;
+          const color = modalities[mod].nav_color;
+          a.style.setProperty('--selector-color', color);
+          a.style.setProperty('--selector-soft-bg', `${color}18`);
+          a.style.setProperty('--selector-active-text', '#ffffff');
         }
       });
 
@@ -503,6 +510,8 @@
     })();
 
     let requestInProgress = false;
+    let requestSettled = true;
+    let cooldownFinished = true;
     let timerInterval, lastClickTime, disableTimeout;
     let currentModality = "{{ modality }}";
     let lastSkillUsed = "";
@@ -520,31 +529,60 @@
     // Button visibility is now controlled by config only (valid_skills)
     // No dynamic hiding based on worker availability
 
-    function getNextAssignment(skillSlug, skillLabel, forceStrict = false) {
+    function getNextAssignment(skillSlug, skillLabel, forceStrict = false, manualSelect = false) {
       if (requestInProgress) return;
+      if (forceStrict && manualSelect) {
+        const encodedSkill = encodeURIComponent(skillSlug);
+        const popupSkillLabel = StrictWorkerSelect.skillLabel(skillSlug, skillLabel || skillSlug);
+        StrictWorkerSelect.open({
+          contextText: `${popupSkillLabel} · ${currentModality.toUpperCase()}*`,
+          autoLabel: 'Normal / automatisch',
+          candidatesUrl: `/api/${currentModality}/${encodedSkill}/strict/candidates`,
+          manualUrl: `/api/${currentModality}/${encodedSkill}/strict/manual`,
+          onAutoAssign: () => executeAssignment(skillSlug, skillLabel, true),
+          onManualStart: () => {
+            lastSkillUsed = skillLabel || skillSlug;
+            setButtonsDisabled(true);
+          },
+          onManualSuccess: data => {
+            showResult(data.selected_person || '', skillLabel || skillSlug);
+            setButtonsDisabled(false);
+          },
+          onManualError: error => {
+            showAssignmentError(error, skillLabel || skillSlug, true);
+            setButtonsDisabled(false);
+          }
+        });
+        return;
+      }
+      executeAssignment(skillSlug, skillLabel, forceStrict);
+    }
+
+    function executeAssignment(skillSlug, skillLabel, forceStrict = false) {
       lastSkillUsed = skillLabel || skillSlug;
       setButtonsDisabled(true);
       const encodedSkill = encodeURIComponent(skillSlug);
       const strictSuffix = forceStrict ? ('/' + 'strict') : '';
       const endpoint = `/api/${currentModality}/${encodedSkill}${strictSuffix}`;
-      fetch(endpoint)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-          }
-          return response.json();
-        })
+      AssignmentUI.request(endpoint)
         .then(data => {
-          if (data.error) {
-            throw new Error(data.error);
-          }
           showResult(data.selected_person || '', skillLabel || skillSlug);
         })
         .catch(e => {
           console.error("API error:", e);
-          showResult('', skillLabel || skillSlug);
-          setButtonsDisabled(false);
-        });
+          showAssignmentError(e, skillLabel || skillSlug, forceStrict);
+        })
+        .finally(() => setButtonsDisabled(false));
+    }
+
+    function showAssignmentError(error, context, forceStrict = false) {
+      const message = window.RadimoI18n?.language === 'en' ? 'Assignment failed' : 'Zuweisung fehlgeschlagen';
+      const detail = AssignmentUI.message(error, { strict: forceStrict });
+      document.getElementById('result').innerHTML = `
+        <div class="result-panel result-panel--error" role="alert">
+          <div class="assigned-person">${escapeHtml(message)}</div>
+          <div class="assigned-context">${escapeHtml(context || lastSkillUsed)} · ${escapeHtml(detail)}</div>
+        </div>`;
     }
 
     function showResult(person, skill) {
@@ -605,46 +643,31 @@
     }
 
     async function copyTextToClipboard(text) {
-      // Use modern Clipboard API with fallback
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(text);
-          return;
-        } catch (e) {
-          console.warn('Clipboard API failed, using fallback:', e);
-        }
-      }
-      // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.left = "-9999px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand('copy');
-      } catch (e) {
-        console.error('Fallback clipboard copy failed:', e);
-      }
-      document.body.removeChild(textarea);
+      await navigator.clipboard.writeText(text);
     }
 
-    // Disable buttons for 3 seconds after click (no text overlay)
+    // Keep the minimum cooldown, but never unlock before the request has settled.
     function setButtonsDisabled(disabled) {
-      if (!disabled && requestInProgress) return;
-      requestInProgress = disabled;
-      document.querySelectorAll('.assignment-btn').forEach(btn => {
-        btn.disabled = disabled;
-      });
-      if (disableTimeout) clearTimeout(disableTimeout);
       if (disabled) {
+        requestInProgress = true;
+        requestSettled = false;
+        cooldownFinished = false;
+        document.querySelectorAll('.assignment-btn').forEach(btn => { btn.disabled = true; });
+        if (disableTimeout) clearTimeout(disableTimeout);
         disableTimeout = setTimeout(() => {
-          requestInProgress = false;
-          document.querySelectorAll('.assignment-btn').forEach(btn => {
-            btn.disabled = false;
-          });
+          cooldownFinished = true;
+          unlockButtonsIfReady();
         }, 3000);
+      } else {
+        requestSettled = true;
+        unlockButtonsIfReady();
       }
+    }
+
+    function unlockButtonsIfReady() {
+      if (!requestSettled || !cooldownFinished) return;
+      requestInProgress = false;
+      document.querySelectorAll('.assignment-btn').forEach(btn => { btn.disabled = false; });
     }
 
     // Info Text Edit Functions

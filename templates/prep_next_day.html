@@ -2,11 +2,11 @@
 
 {% set page_mode = initial_tab|default('today') %}
 {% if page_mode == 'today' %}
-  {% set page_title = 'RadIMO Cortex | Change Today' %}
+  {% set page_title = 'RadIMO Cortex | Today' %}
 {% elif page_mode == 'tomorrow' %}
-  {% set page_title = 'RadIMO Cortex | Prep Tomorrow' %}
+  {% set page_title = 'RadIMO Cortex | Planning' %}
 {% else %}
-  {% set page_title = 'RadIMO Cortex | Change Today / Prep Tomorrow' %}
+  {% set page_title = 'RadIMO Cortex | Schedule Edit' %}
 {% endif %}
 
 {% block title %}{{ page_title }}{% endblock %}
@@ -52,11 +52,16 @@
 
     /* Table Styles */
     .table-container {
-      overflow: visible;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
     }
 
     .edit-table {
-      width: 100%;
+      width: max-content;
+      min-width: 100%;
       border-collapse: collapse;
       font-size: 0.78rem;
     }
@@ -1096,10 +1101,11 @@
 
     #message-container {
       position: fixed;
-      top: 1rem;
+      top: auto;
+      bottom: 1rem;
       right: 1rem;
       z-index: 1200;
-      width: min(440px, calc(100vw - 2rem));
+      width: min(380px, calc(100vw - 2rem));
       display: flex;
       flex-direction: column;
       gap: 0.55rem;
@@ -1112,7 +1118,7 @@
       border-radius: 4px;
       display: block;
       box-shadow: 0 8px 24px rgba(15, 39, 64, 0.16);
-      pointer-events: auto;
+      pointer-events: none;
     }
 
     .message.success {
@@ -1187,7 +1193,7 @@
     .modal-overlay {
       display: none;
       position: fixed;
-      top: 0;
+      top: var(--prep-overlay-top, 8rem);
       left: 0;
       right: 0;
       bottom: 0;
@@ -1244,7 +1250,7 @@
     .break-popup-overlay {
       display: none;
       position: fixed;
-      top: 0;
+      top: var(--prep-overlay-top, 8rem);
       left: 0;
       right: 0;
       bottom: 0;
@@ -1447,6 +1453,43 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
 
+    .shift-bar__label {
+      position: absolute;
+      inset: 0 5px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 0.64rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+    }
+
+    .shift-bar--multi {
+      border-color: #b7c2cc;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 1px rgba(15, 42, 67, 0.1);
+    }
+
+    .shift-bar__label--multi {
+      inset: 2px 3px;
+      gap: 6px;
+      text-shadow: none;
+    }
+
+    .shift-bar__skill-label {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 3px;
+      flex: 0 0 auto;
+      font-size: 0.69rem;
+      line-height: 1;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    }
+
     .shift-bar--neutral {
       background: #e0e0e0;
       border-style: dashed;
@@ -1542,15 +1585,18 @@
 {% endblock %}
 
 {% block content %}
+  <style>
+    .app-header { position: sticky; top: 0.5rem; z-index: 1300; }
+  </style>
   {% if page_mode == 'today' %}
-    {% set header_title = 'RadIMO Cortex | Change Today' %}
-    {% set header_subtitle = "Manage today's schedule (live edits)" %}
+    {% set header_title = 'RadIMO Cortex | Today' %}
+    {% set header_subtitle = 'Live schedule' %}
   {% elif page_mode == 'tomorrow' %}
-    {% set header_title = 'RadIMO Cortex | Staging Page - Preparation for Next Day' %}
-    {% set header_subtitle = "Stage the selected day's schedule and manage staged edits" %}
+    {% set header_title = 'RadIMO Cortex | Planning' %}
+    {% set header_subtitle = 'Next-day planning' %}
   {% else %}
-    {% set header_title = 'RadIMO Cortex | Change Today / Prep Tomorrow' %}
-    {% set header_subtitle = "Manage current schedule or prepare tomorrow's schedule" %}
+    {% set header_title = 'RadIMO Cortex | Schedule Edit' %}
+    {% set header_subtitle = 'Edit live or planned schedules' %}
   {% endif %}
   {% set header_mode = 'global' %}
   {% set header_nav = namespace(links=[]) %}
@@ -1654,7 +1700,7 @@
   {% elif page_mode == 'tomorrow' %}
   <div id="content-tomorrow" class="tab-content active">
     <div class="tomorrow-banner">
-      <h2>STAGING PAGE - Preparation for Next Day</h2>
+      <h2>Planning</h2>
       <p class="prep-banner-copy">Selected day is staged here.</p>
     </div>
 
@@ -1771,21 +1817,21 @@
   {% endif %}
 
   <!-- Edit Modal -->
-  <div class="modal-overlay" id="edit-modal">
+  <div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal">
       <h3 id="modal-title">Edit Worker</h3>
       <div id="modal-content"></div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close onclick="closeModal()">Close</button>
         <button type="button" class="btn btn-success" id="modal-save-button" style="display: none;" onclick="saveModalAction()">Add Worker</button>
       </div>
     </div>
   </div>
 
   <!-- Break Duration Popup -->
-  <div class="break-popup-overlay" id="break-popup">
+  <div class="break-popup-overlay" id="break-popup" role="dialog" aria-modal="true" aria-labelledby="break-popup-title">
     <div class="break-popup">
-      <h4>☕ Break Duration</h4>
+      <h4 id="break-popup-title">☕ Break Duration</h4>
       <div class="break-presets">
         <button type="button" onclick="selectBreakPreset(15)">15 min</button>
         <button type="button" onclick="selectBreakPreset(30)">30 min</button>
@@ -1793,7 +1839,7 @@
         <button type="button" onclick="selectBreakPreset(60)">60 min</button>
       </div>
       <div class="break-custom">
-        <input type="number" id="break-custom-minutes" placeholder="Custom minutes" min="1" max="480" oninput="clearBreakPresets()">
+        <input type="number" id="break-custom-minutes" data-initial-focus placeholder="Custom minutes" min="1" max="480" oninput="clearBreakPresets()">
       </div>
       <div class="break-popup-actions">
         <button class="btn btn-secondary" onclick="closeBreakPopup()">Cancel</button>

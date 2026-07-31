@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pprint import pprint
 
-import app
 from config import APP_CONFIG, SKILL_TEMPLATES
 from routes import run_operational_checks
 

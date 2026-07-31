@@ -27,11 +27,10 @@ from lib.utils import (
     gap_row_mask,
     merge_intervals,
 )
-from data_manager import (
+from data_manager import global_worker_data, modality_data
+from data_manager.worker_management import (
     get_canonical_worker_id,
     get_roster_modifier_raw,
-    global_worker_data,
-    modality_data,
 )
 from state_manager import get_state
 
@@ -1030,6 +1029,115 @@ def _get_worker_multi_target(
     )
 
     return candidate, best_specialist['skill'], best_specialist['modality']
+
+
+def get_strict_assignment_candidates(
+    current_dt: datetime,
+    role='normal',
+    modality=default_modality,
+    target_skill_modalities=None,
+) -> list[dict]:
+    """
+    List active specialist candidates for a strict assignment.
+
+    The list is intended for manual strict-button selection. It follows the
+    same eligibility boundary as strict routing: active shift rows only, no gap
+    rows, and skill value 1/'w' only. For a single requested skill it also
+    applies the configured exclusion filters used by strict auto-assignment.
+    """
+    global_hours_map = calculate_global_work_hours_now(current_dt)
+
+    def weighted_ratio(person):
+        canonical_id = get_canonical_worker_id(person)
+        hours_worked = global_hours_map.get(canonical_id, 0.0)
+        weighted_count = get_global_weighted_count(canonical_id)
+        if hours_worked <= 0:
+            return 0.0 if weighted_count <= 0 else float('inf')
+        return weighted_count / hours_worked
+
+    if target_skill_modalities:
+        search_targets = list(target_skill_modalities)
+        apply_exclusions = False
+    else:
+        role_lower = str(role or '').lower()
+        if role_lower not in ROLE_MAP:
+            role_lower = 'normal'
+        primary_skill = ROLE_MAP[role_lower]
+        search_targets = [(primary_skill, modality)]
+        apply_exclusions = True
+
+    candidates = []
+    occurrence_counts: dict[tuple[str, str, str, str], int] = {}
+
+    for skill, source_modality in search_targets:
+        if source_modality not in modality_data:
+            continue
+
+        d = modality_data[source_modality]
+        if d['working_hours_df'] is None:
+            continue
+
+        active_df = _filter_active_rows(d['working_hours_df'], current_dt)
+        if active_df is None or active_df.empty or skill not in active_df.columns:
+            continue
+
+        filtered_df = active_df[
+            active_df[skill].apply(lambda v: skill_value_to_numeric(v) == 1)
+        ]
+
+        if apply_exclusions:
+            for skill_to_exclude in EXCLUDE_SKILLS.get(skill, []):
+                if skill_to_exclude in filtered_df.columns:
+                    filtered_df = filtered_df[
+                        filtered_df[skill_to_exclude].apply(
+                            lambda v: skill_value_to_numeric(v) < 1
+                        )
+                    ]
+                if filtered_df.empty:
+                    break
+
+        if filtered_df.empty:
+            continue
+
+        for row_index, row in filtered_df.iterrows():
+            person = row.get('PPL')
+            if pd.isna(person):
+                continue
+            person = str(person)
+            if not person.strip():
+                continue
+            canonical_id = get_canonical_worker_id(person)
+            occurrence_key = (source_modality, skill, str(row_index), canonical_id)
+            occurrence = occurrence_counts.get(occurrence_key, 0)
+            occurrence_counts[occurrence_key] = occurrence + 1
+
+            candidate_row = row.copy()
+            candidate_row['__modality_source'] = source_modality
+            candidate_row['__selection_ratio'] = weighted_ratio(person)
+            candidate_row['__is_weighted'] = is_weighted_skill(candidate_row.get(skill))
+            candidate_row['__skill_source'] = skill
+
+            candidates.append({
+                'candidate_key': f"{source_modality}:{skill}:{row_index}:{occurrence}:{canonical_id}",
+                'candidate': candidate_row,
+                'person': person,
+                'canonical_id': canonical_id,
+                'skill': skill,
+                'modality': source_modality,
+                'row_index': row_index,
+                'ratio': candidate_row['__selection_ratio'],
+                'is_weighted': candidate_row['__is_weighted'],
+                'skill_value': candidate_row.get(skill),
+            })
+
+    return sorted(
+        candidates,
+        key=lambda item: (
+            item.get('ratio', float('inf')),
+            str(item.get('person', '')),
+            str(item.get('candidate_key', '')),
+        ),
+    )
 
 
 def get_next_available_worker(

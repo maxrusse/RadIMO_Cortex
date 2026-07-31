@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | Performance{% endblock %}
+{% block title %}RadIMO Cortex | Analysis{% endblock %}
 
 {% block styles %}
   {% include 'partials/admin_theme.html' %}
@@ -264,11 +264,11 @@
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Performance' %}
-  {% set header_subtitle = 'Tagesübersicht zu Last, Treibern und Overflow-Unterstützung' %}
+  {% set header_title = 'RadIMO Cortex | Analysis' %}
+  {% set header_subtitle = 'Load & overflow' %}
   {% set header_mode = 'global' %}
   {% set header_global_label = 'Gesamtansicht' %}
-  {% set active_page = 'balance_summary' %}
+  {% set active_page = 'performance' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
@@ -357,5 +357,5 @@
 
 </div>
 
-<script src="{{ url_for('static', filename='js/balance_summary.js') }}?v=20260426-performance-cleanup"></script>
+<script src="{{ url_for('static', filename='js/performance.js') }}?v=20260722-current"></script>
 {% endblock %}

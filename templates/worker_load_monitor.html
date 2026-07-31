@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | Balance{% endblock %}
+{% block title %}RadIMO Cortex | Workload{% endblock %}
 
 {% block styles %}
     {% include 'partials/admin_theme.html' %}
@@ -643,8 +643,8 @@
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Balance' %}
-  {% set header_subtitle = 'Real-time load tracking' %}
+  {% set header_title = 'RadIMO Cortex | Workload' %}
+  {% set header_subtitle = 'Live workload' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'balance_detail' %}
   {% set header_nav = namespace(links=[]) %}
@@ -722,7 +722,7 @@
         <thead>
           <tr>
             <th class="sortable" data-sort="name" onclick="sortTable('global', 'name')">Worker</th>
-            <th class="sortable" data-sort="balance_weight" onclick="sortTable('global', 'balance_weight')">Balance</th>
+            <th class="sortable" data-sort="balance_weight" onclick="sortTable('global', 'balance_weight')">Load</th>
             <th class="sortable" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">MA</th>
             <th class="sortable" data-sort="weight" onclick="sortTable('global', 'weight')">Total Weight</th>
             <th class="sortable" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>

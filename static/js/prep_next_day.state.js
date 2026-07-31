@@ -19,24 +19,6 @@ let lastAddedShiftMeta = null;
 let loadRequestId = { today: 0, tomorrow: 0 };
 let prepAutoRefreshInterval = { today: null, tomorrow: null };
 const GERMAN_WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-const ENGLISH_TO_GERMAN_WEEKDAYS = {
-  sunday: 'Sonntag',
-  monday: 'Montag',
-  tuesday: 'Dienstag',
-  wednesday: 'Mittwoch',
-  thursday: 'Donnerstag',
-  friday: 'Freitag',
-  saturday: 'Samstag'
-};
-const GERMAN_TO_ENGLISH_WEEKDAYS = {
-  Sonntag: 'sunday',
-  Montag: 'monday',
-  Dienstag: 'tuesday',
-  Mittwoch: 'wednesday',
-  Donnerstag: 'thursday',
-  Freitag: 'friday',
-  Samstag: 'saturday'
-};
 let prepTargetDate = CONFIG.prep_target_date || null;
 let prepTargetWeekday = CONFIG.prep_target_weekday_name || null;
 let prepTargetDateGerman = CONFIG.prep_target_date_german || null;
@@ -127,19 +109,10 @@ function getShiftTimes(taskConfig, targetDay) {
   return { start: start?.trim() || '07:00', end: end?.trim() || '15:00' };
 }
 
-function normalizeWeekdayName(targetDay) {
-  if (!targetDay || typeof targetDay !== 'string') return targetDay;
-  const normalized = targetDay.trim().toLowerCase();
-  return ENGLISH_TO_GERMAN_WEEKDAYS[normalized] || targetDay;
-}
-
 function resolveDayTimes(timesConfig, targetDay) {
   const times = timesConfig || {};
   if (Object.keys(times).length === 0) return null;
-  const normalizedDay = normalizeWeekdayName(targetDay);
-  if (normalizedDay && times[normalizedDay]) return times[normalizedDay];
-  const englishDay = GERMAN_TO_ENGLISH_WEEKDAYS[normalizedDay];
-  if (englishDay && times[englishDay]) return times[englishDay];
+  if (targetDay && times[targetDay]) return times[targetDay];
   return times.default || null;
 }
 
@@ -151,11 +124,8 @@ function resolveDayModifier(modifierConfig, targetDay, defaultValue = 1.0) {
     const parsed = parseFloat(modifierConfig);
     return Number.isNaN(parsed) ? defaultValue : parsed;
   }
-  const normalizedDay = normalizeWeekdayName(targetDay);
-  const englishDay = GERMAN_TO_ENGLISH_WEEKDAYS[normalizedDay];
   const rawValue = (
-    (normalizedDay && modifierConfig[normalizedDay] !== undefined) ? modifierConfig[normalizedDay] :
-    (englishDay && modifierConfig[englishDay] !== undefined) ? modifierConfig[englishDay] :
+    (targetDay && modifierConfig[targetDay] !== undefined) ? modifierConfig[targetDay] :
     modifierConfig.default
   );
   const parsed = parseFloat(rawValue);
@@ -281,10 +251,61 @@ function updateEditPlanDraftShiftSkills(shiftIdx, skillUpdatesByMod) {
   });
 }
 
+function ensureEditPlanDraftModality(shiftIdx, modKey) {
+  if (!editPlanDraft || !editPlanDraft.shifts) return null;
+  const shift = editPlanDraft.shifts[shiftIdx];
+  if (!shift) return null;
+  if (!shift.modalities) shift.modalities = {};
+  if (!shift.modalities[modKey]) {
+    const skills = {};
+    SKILLS.forEach(skill => {
+      skills[skill] = -1;
+    });
+    shift.modalities[modKey] = {
+      row_index: -1,
+      row_uid: null,
+      edit_key: null,
+      modifier: shift.modifier || 1.0,
+      baseSkills: cloneSkillMap(skills),
+      skills,
+      materialize: false
+    };
+  }
+  return shift.modalities[modKey];
+}
+
+function isSyntheticEmptyEditPlanModality(modData) {
+  if (!modData) return false;
+  const rowIndex = Number.isInteger(modData.row_index) ? modData.row_index : -1;
+  if (rowIndex >= 0 || modData.materialize === true) return false;
+  const skillMap = modData.baseSkills || modData.skills || {};
+  return SKILLS.every(skill => normalizeSkillValueJS(skillMap?.[skill]) === -1);
+}
+
+function pruneSyntheticEmptyEditPlanModalities(shiftIdx) {
+  if (!editPlanDraft || !editPlanDraft.shifts) return;
+  const shift = editPlanDraft.shifts[shiftIdx];
+  if (!shift || !shift.modalities) return;
+  Object.entries(shift.modalities).forEach(([modKey, modData]) => {
+    if (isSyntheticEmptyEditPlanModality(modData)) {
+      delete shift.modalities[modKey];
+    }
+  });
+}
+
+function pruneSyntheticEmptyEditPlanDraft() {
+  if (!editPlanDraft || !Array.isArray(editPlanDraft.shifts)) return;
+  editPlanDraft.shifts.forEach((_shift, shiftIdx) => {
+    pruneSyntheticEmptyEditPlanModalities(shiftIdx);
+  });
+}
+
 function updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, value, trainingEnabled = null) {
   if (!editPlanDraft || !editPlanDraft.shifts) return null;
   const shift = editPlanDraft.shifts[shiftIdx];
-  if (!shift || !shift.modalities || !shift.modalities[modKey]) return null;
+  if (!shift) return null;
+  const ensuredModData = ensureEditPlanDraftModality(shiftIdx, modKey);
+  if (!ensuredModData) return null;
   const modData = shift.modalities[modKey];
   if (!modData.baseSkills) {
     modData.baseSkills = cloneSkillMap(modData.skills || {});
@@ -813,6 +834,7 @@ function normalizeEditPlanShiftForComparison(shift = {}) {
   const normalizedModalities = {};
   Object.keys(shift.modalities || {}).sort().forEach(modKey => {
     const modData = shift.modalities?.[modKey] || {};
+    if (isSyntheticEmptyEditPlanModality(modData)) return;
     normalizedModalities[modKey] = {
       row_index: typeof modData.row_index === 'number' ? modData.row_index : -1,
       baseSkills: normalizeEditPlanSkillMap(modData.baseSkills || modData.skills || {}),

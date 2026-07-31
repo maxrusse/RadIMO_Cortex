@@ -1,168 +1,95 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block title %}RadIMO Cortex | Logs{% endblock %}
 
 {% block styles %}
-    {% include 'partials/admin_theme.html' %}
-
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.55rem 0.9rem;
-      border-radius: 6px;
-      border: 0;
-      text-decoration: none;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .btn-primary {
-      background: #004892;
-      color: #fff;
-    }
-
-    .btn-primary:hover {
-      background: #003b78;
-    }
-
-    .btn-secondary {
-      background: #6c757d;
-      color: #fff;
-    }
-
-    .btn-secondary:hover {
-      background: #5a6268;
-    }
-
-    .btn-outline {
-      background: #fff;
-      color: #004892;
-      border: 1px solid #cbd5e1;
-    }
-
-    .btn-outline:hover {
-      background: #f8fafc;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1rem;
-    }
-
-    .log-item {
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 1rem;
-      background: #fff;
-    }
-
-    .log-item h3 {
-      margin: 0 0 0.35rem 0;
-      font-size: 1rem;
-    }
-
-    .log-meta {
-      color: #5f6b7a;
-      font-size: 0.88rem;
-      margin-bottom: 0.75rem;
-      line-height: 1.4;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 0.2rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 700;
-      margin-left: 0.35rem;
-    }
-
-    .badge-ok {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .badge-missing {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
-    .hint {
-      color: #5f6b7a;
-      font-size: 0.9rem;
-      line-height: 1.5;
-    }
+  {% include 'partials/admin_theme.html' %}
+  body { max-width: 1600px; }
+  .log-controls { display: flex; gap: 0.45rem; align-items: end; flex-wrap: wrap; margin-bottom: 0.55rem; }
+  .log-controls label { display: grid; gap: 0.2rem; font-size: 0.73rem; color: #52677a; font-weight: 700; }
+  .log-controls input[type='number'] { width: 88px; min-height: 30px; padding: 0.3rem; border: 1px solid var(--ops-line-strong); border-radius: 4px; font: inherit; }
+  .log-controls .hint { flex: 1 1 300px; margin-left: 0.2rem; }
+  .log-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
+  .log-card h3 { margin: 0; font-size: 0.92rem; color: var(--ops-ink); }
+  .log-head { display: flex; justify-content: space-between; gap: 0.4rem; }
+  .log-card .ops-path { margin: 0.38rem 0; }
+  .toolbar { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.45rem; }
+  .source-select { display: flex; gap: 0.3rem; align-items: center; color: #334e68; font-size: 0.73rem; font-weight: 700; }
+  .preview-card { margin-top: 0.55rem; padding: 0; overflow: hidden; }
+  .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; }
+  .preview-head { padding: 0.58rem 0.65rem 0; }
+  .preview-head h2 { margin: 0; font-size: 0.92rem; color: var(--ops-ink); }
+  #log-preview {
+    min-height: 290px; max-height: 58vh; overflow: auto; margin: 0; padding: 0.7rem;
+    border-radius: 0; background: var(--ops-code); color: #dbeafe;
+    font: 0.7rem/1.48 ui-monospace, SFMono-Regular, Consolas, monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .hint { color: #5f7182; font-size: 0.76rem; line-height: 1.4; }
+  @media (max-width: 950px) { .log-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Logs' %}
-  {% set header_subtitle = 'Admin-only log downloads for Gunicorn and RadIMO runtime logs' %}
+  {% set header_subtitle = 'Preview & download' %}
   {% set header_mode = 'global' %}
-  {% set active_page = 'logs' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <section class="card">
-    <div class="toolbar">
-      <a class="btn btn-primary" href="{{ default_tail_url }}">Download current logs, last 5000 lines</a>
-      <a class="btn btn-secondary" href="{{ default_full_url }}">Download full rotating logs</a>
+  {% set present_logs = sources|selectattr('exists')|list|length %}
+  <div class="ops-shell">
+  <div class="ops-page-head">
+    <div>
+      <div class="ops-eyebrow">Diagnostics</div>
+      <h2>Live log workstation</h2>
     </div>
-    <div class="hint">
-      The downloads are protected by the admin login. The default archive includes the Gunicorn log and the RadIMO app log.
-      Use the full archive if you want the rotated files as well.
-    </div>
+    <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>
+  </div>
+
+  <section class="ops-panel log-controls" aria-label="Log controls">
+    <label>Preview lines<input id="preview-lines" type="number" min="20" max="1000" step="20" value="120"></label>
+    <label>Download tail lines<input id="download-lines" type="number" min="1" max="50000" step="100" value="5000"></label>
+    <a class="btn" id="download-selected-tail" href="{{ default_tail_url }}">Download selected tails</a>
+    <a class="btn btn-secondary" id="download-selected-full" href="{{ default_full_url }}">Download selected full logs</a>
   </section>
 
-  <div class="grid">
+  <section class="log-grid" aria-label="Log sources">
     {% for source in sources %}
-    <article class="log-item">
-      <h3>
-        {{ source.label }}
-        <span class="badge {{ 'badge-ok' if source.exists else 'badge-missing' }}">
-          {{ 'present' if source.exists else 'missing' }}
-        </span>
-      </h3>
-      <div class="log-meta">
-        File: {{ source.filename }}<br>
-        {% if source.size_bytes is not none %}
-        Size: {{ source.size_bytes }} bytes
-        {% else %}
-        Size: unavailable
-        {% endif %}
+    <article class="ops-card log-card" data-log-source="{{ source.key }}" data-preview-url="{{ source.preview_url }}">
+      <div class="log-head">
+        <h3>{{ source.label }}</h3>
+        <span class="ops-badge {{ '' if source.exists else 'ops-badge--missing' }}">{{ 'live' if source.exists else 'missing' }}</span>
+      </div>
+      <code class="ops-path">{{ source.path }}</code>
+      <div class="ops-meta">
+        <span>{{ source.size_bytes if source.size_bytes is not none else '—' }} bytes</span>
+        <span>{{ source.modified or 'unavailable' }}</span>
+        <span>{{ source.rotated_count }} rotated</span>
       </div>
       <div class="toolbar">
-        <a class="btn btn-outline" href="{{ source.download_tail_url }}">Tail 2000 lines</a>
-        <a class="btn btn-outline" href="{{ source.download_full_url }}">Full rotating set</a>
+        <label class="source-select"><input type="checkbox" data-source-check="{{ source.key }}" checked> Include</label>
+        <button type="button" class="btn" data-preview-source="{{ source.key }}" {{ 'disabled' if not source.exists else '' }}>Preview tail</button>
+        <a class="btn btn-outline" href="{{ source.download_tail_url }}">Tail ZIP</a>
+        <a class="btn btn-outline" href="{{ source.download_full_url }}">Full ZIP</a>
       </div>
     </article>
     {% endfor %}
+  </section>
+
+  <section class="ops-panel preview-card">
+    <div class="preview-head">
+      <div><h2 id="preview-title">Log preview</h2><div class="hint" id="preview-meta">Select a source above. Preview is read-only.</div></div>
+      <div class="toolbar">
+        <button type="button" class="btn btn-outline" id="refresh-preview" disabled>Refresh</button>
+        <button type="button" class="btn btn-outline" id="copy-preview" disabled>Copy</button>
+      </div>
+    </div>
+    <pre id="log-preview">No log selected.</pre>
+  </section>
   </div>
+
+  <script id="admin-logs-config" type="application/json">{{ sources|tojson }}</script>
+  <script src="{{ url_for('static', filename='js/admin_logs.js') }}"></script>
 {% endblock %}

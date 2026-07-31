@@ -1,22 +1,22 @@
 {
   "scenarios": [
     {
-      "path": "test_data\\generated\\baseline_multimodality",
+      "path": "test_data/generated/baseline_multimodality",
       "scenario": "baseline_multimodality",
       "target_date": "2026-01-23"
     },
     {
-      "path": "test_data\\generated\\fallback_and_no_overflow",
+      "path": "test_data/generated/fallback_and_no_overflow",
       "scenario": "fallback_and_no_overflow",
       "target_date": "2026-01-23"
     },
     {
-      "path": "test_data\\generated\\overlap_with_gap",
+      "path": "test_data/generated/overlap_with_gap",
       "scenario": "overlap_with_gap",
       "target_date": "2026-01-23"
     },
     {
-      "path": "test_data\\generated\\weighted_worker",
+      "path": "test_data/generated/weighted_worker",
       "scenario": "weighted_worker",
       "target_date": "2026-01-23"
     }

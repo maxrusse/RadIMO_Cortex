@@ -18,7 +18,6 @@ from config import (
     MODALITY_SETTINGS,
     allowed_modalities_map,
     skill_columns_map,
-    BALANCER_SETTINGS,
     WORKER_SKILL_ROSTER_PATH,
     get_worker_name_display_style,
     selection_logger,
@@ -125,14 +124,7 @@ def build_worker_name_mapping(roster: Dict[str, Any]) -> Dict[str, str]:
 
 def load_worker_skill_json() -> Dict[str, Any]:
     """Load worker skill roster from JSON file."""
-    from data_manager.json_manager import load_json, migrate_file_to_data_dir
-
-    # Migrate from old location if needed (root level worker_skill_roster.json)
-    import os
-    old_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'worker_skill_roster.json')
-    if os.path.exists(old_path) and not os.path.exists(WORKER_SKILL_ROSTER_PATH):
-        migrate_file_to_data_dir(old_path, WORKER_SKILL_ROSTER_PATH)
-        selection_logger.info("Migrated worker_skill_roster.json to data/ folder")
+    from data_manager.json_manager import load_json
 
     data = load_json(WORKER_SKILL_ROSTER_PATH, default={})
 
@@ -178,18 +170,7 @@ def build_valid_skills_map() -> Dict[str, List[str]]:
 
 
 def normalize_skill_mod_key(key: str) -> str:
-    """
-    Normalize skill_modality key to canonical format: "skill_modality".
-
-    Accepts both "skill_modality" and "modality_skill" formats.
-    Returns canonical "skill_modality" format with case-insensitive matching.
-
-    Examples:
-        "mdh_ct" -> "mdh_ct"
-        "ct_mdh" -> "mdh_ct"
-        "MSK-HAUT_CT" -> "mdh_ct"  (case-insensitive)
-        "notfall_mr" -> "notfall_mr"
-    """
+    """Normalize a canonical skill_modality key case-insensitively."""
     if '_' not in key:
         return key
 
@@ -199,17 +180,10 @@ def normalize_skill_mod_key(key: str) -> str:
 
     part1_lower, part2_lower = parts[0].lower(), parts[1].lower()
 
-    # Check if part1 is a skill and part2 is a modality
     skill1 = skill_columns_map.get(part1_lower)
     mod2 = allowed_modalities_map.get(part2_lower)
     if skill1 and mod2:
-        return f"{skill1}_{mod2}"  # skill_modality format
-
-    # Check if part1 is a modality and part2 is a skill (reversed)
-    mod1 = allowed_modalities_map.get(part1_lower)
-    skill2 = skill_columns_map.get(part2_lower)
-    if mod1 and skill2:
-        return f"{skill2}_{mod1}"  # Normalize to skill_modality
+        return f"{skill1}_{mod2}"
 
     # Unknown format - return as-is
     return key
@@ -271,7 +245,6 @@ def _build_medweb_worker_candidate(
     *,
     name_col: str,
     personalnummer_col: str,
-    code_col: str,
     activity_col: str,
     rules: List[dict],
     display_style: str = 'first_last_id',
@@ -284,22 +257,20 @@ def _build_medweb_worker_candidate(
 
     employee_name = row.get(name_col, '')
     employee_personalnummer = row.get(personalnummer_col, '')
-    employee_code = row.get(code_col, '')
 
-    if pd.isna(employee_name) and pd.isna(employee_personalnummer) and pd.isna(employee_code):
+    if pd.isna(employee_name) and pd.isna(employee_personalnummer):
         return None
 
     employee_name = '' if pd.isna(employee_name) else str(employee_name).strip()
     employee_personalnummer = '' if pd.isna(employee_personalnummer) else str(employee_personalnummer).strip()
-    employee_code = '' if pd.isna(employee_code) else str(employee_code).strip()
 
     if employee_name and (employee_name.startswith('!') or 'findet nicht statt' in employee_name.lower()):
         return None
 
-    if not employee_name and not employee_personalnummer and not employee_code:
+    if not employee_name and not employee_personalnummer:
         return None
 
-    worker_code = employee_personalnummer or employee_code
+    worker_code = employee_personalnummer
     full_name = (
         f"{employee_name} ({worker_code})"
         if employee_name and worker_code else
@@ -323,7 +294,6 @@ def _build_medweb_worker_candidate(
             style=display_style,
         ),
         'employee_name': employee_name,
-        'employee_code': employee_code,
         'employee_personalnummer': employee_personalnummer,
         'auto_import_eligible': auto_import_eligible,
         'source_activity': activity_desc,
@@ -346,12 +316,10 @@ def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> 
     cols = vendor_mapping.get('columns', {
         'employee_name': 'Name des Mitarbeiters',
         'employee_personalnummer': 'Personalnummer',
-        'employee_code': 'Code des Mitarbeiters',
         'activity': 'Beschreibung der Aktivität',
     })
     name_col = cols.get('employee_name', 'Name des Mitarbeiters')
     personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer')
-    code_col = cols.get('employee_code', 'Code des Mitarbeiters')
     activity_col = cols.get('activity', 'Beschreibung der Aktivität')
 
     import os
@@ -368,7 +336,6 @@ def get_missing_csv_worker_candidates(csv_path: str, config: Dict[str, Any]) -> 
             row,
             name_col=name_col,
             personalnummer_col=personalnummer_col,
-            code_col=code_col,
             activity_col=activity_col,
             rules=rules,
             display_style=display_style,
@@ -469,38 +436,6 @@ def ensure_workers_in_skill_roster(worker_names: Iterable[str]) -> Tuple[int, Li
         save_worker_skill_json(roster)
 
     return added_count, added_workers
-
-
-def get_roster_modifier(canonical_id: str) -> float:
-    """
-    Get worker's 'w' modifier from skill roster.
-
-    Returns the 'modifier' field from the worker's roster entry.
-    This modifier is only applied to 'w' (weighted/training) assignments.
-    Defaults to balancer default_w_modifier if not set.
-
-    Args:
-        canonical_id: Worker's canonical ID
-
-    Returns:
-        Modifier value (float), defaults to balancer default
-    """
-    # Ensure roster is loaded
-    if not worker_skill_json_roster:
-        load_worker_skill_json()
-
-    worker_data = worker_skill_json_roster.get(canonical_id, {})
-    default_modifier = BALANCER_SETTINGS.get('default_w_modifier', 1.0)
-    modifier = worker_data.get('modifier', default_modifier)
-
-    try:
-        modifier = float(modifier)
-        if modifier <= 0:
-            modifier = default_modifier
-    except (TypeError, ValueError):
-        modifier = default_modifier
-
-    return modifier
 
 
 def get_roster_modifier_raw(canonical_id: str) -> Optional[float]:
@@ -618,12 +553,10 @@ def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -
     cols = vendor_mapping.get('columns', {
         'employee_name': 'Name des Mitarbeiters',
         'employee_personalnummer': 'Personalnummer',
-        'employee_code': 'Code des Mitarbeiters',
         'activity': 'Beschreibung der Aktivität',
     })
     name_col = cols.get('employee_name', 'Name des Mitarbeiters')
     personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer')
-    code_col = cols.get('employee_code', 'Code des Mitarbeiters')
     activity_col = cols.get('activity', 'Beschreibung der Aktivität')
 
     read_attempts = [
@@ -647,12 +580,12 @@ def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -
 
     if (
         name_col not in csv_df.columns
-        or code_col not in csv_df.columns
+        or personalnummer_col not in csv_df.columns
         or activity_col not in csv_df.columns
     ):
         raise ValueError(
             "CSV missing worker columns: expected "
-            f"'{name_col}', '{code_col}', and '{activity_col}'"
+            f"'{name_col}', '{personalnummer_col}', and '{activity_col}'"
         )
 
     roster = load_worker_skill_json()
@@ -668,20 +601,17 @@ def auto_populate_skill_roster_from_csv(csv_path: str, config: Dict[str, Any]) -
             continue
 
         employee_name = row.get(name_col, '')
-        employee_code = row.get(code_col, '')
-
         employee_personalnummer = row.get(personalnummer_col, '')
-        if pd.isna(employee_name) and pd.isna(employee_personalnummer) and pd.isna(employee_code):
+        if pd.isna(employee_name) and pd.isna(employee_personalnummer):
             continue
 
         employee_name = '' if pd.isna(employee_name) else str(employee_name).strip()
         employee_personalnummer = '' if pd.isna(employee_personalnummer) else str(employee_personalnummer).strip()
-        employee_code = '' if pd.isna(employee_code) else str(employee_code).strip()
 
-        if not employee_name and not employee_personalnummer and not employee_code:
+        if not employee_name and not employee_personalnummer:
             continue
 
-        worker_code = employee_personalnummer or employee_code
+        worker_code = employee_personalnummer
         full_name = (
             f"{employee_name} ({worker_code})"
             if employee_name and worker_code else
@@ -765,8 +695,9 @@ def get_worker_skill_mod_combinations(
     worker_data = worker_roster[canonical_id]
     result = _build_skill_mod_map(0)
 
-    # Apply roster values (normalize keys)
-    for key, value in worker_data.items():
+    # Apply roster values. Roster accepts the same shortcuts as shift overrides
+    # so compact synthetic workers can use all: -1 plus explicit opt-ins.
+    for key, value in expand_skill_overrides(worker_data).items():
         normalized_key = normalize_skill_mod_key(key)
         if normalized_key in result:
             result[normalized_key] = value
@@ -816,7 +747,7 @@ def expand_skill_overrides(rule_overrides: dict) -> dict:
                 expanded[f"{skill}_{canonical_mod}"] = value
             continue
 
-        # Otherwise, it's a full skill_modality key - normalize it
+        # Otherwise, it must be a canonical full skill_modality key.
         normalized_key = normalize_skill_mod_key(key)
         expanded[normalized_key] = value
 

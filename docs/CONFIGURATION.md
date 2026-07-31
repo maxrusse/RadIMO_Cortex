@@ -1,18 +1,19 @@
 # RadIMO Configuration Reference
 
-Complete reference for `config.yaml` settings, synchronized with the current defaults.
+Complete reference for `config.yaml` settings, synchronized with the tracked `config.demo.yaml` defaults.
 
 ---
 
 ## Overview
 
-RadIMO uses a single `config.yaml` file for all configuration. Changes require application restart unless otherwise noted.
+RadIMO uses a single local `config.yaml` file for runtime configuration. On a fresh checkout, create it with `cp config.demo.yaml config.yaml`, then replace the explicitly marked demo credentials before live use. The local file is ignored by Git so deployment secrets are not published. Changes require application restart unless otherwise noted.
 
 ```yaml
 # Main sections
-admin_password: "..."           # Admin login
+admin_password: "radimo"        # DEMO ONLY - change for live
+default_language: de            # Default UI language: de or en
 skill_roster_auto_import: true # Auto-add new workers to roster JSON
-modalities: {...}               # CT, MR, XRAY, Mammo definitions
+modalities: {...}               # CT, MR, and X-ray definitions
 skills: {...}                   # Skill definitions, UI ordering
 ...
 ```
@@ -23,7 +24,8 @@ skills: {...}                   # Skill definitions, UI ordering
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `admin_password` | string | `change_pw_for_live` | Password for all admin routes |
+| `admin_password` | string | `radimo` | Non-secret demo password for admin routes; change in local `config.yaml` before live use |
+| `default_language` | string | `de` | Global UI language for all pages (`de` or `en`) |
 | `skill_roster_auto_import` | boolean | `true` | When loading CSV, auto-add missing workers to the Skill Matrix JSON |
 
 ---
@@ -66,14 +68,7 @@ modalities:
     nav_color: '#239b56'
     hover_color: '#1d7a48'
     background_color: '#e0f2e9'
-    hidden_skills: [gyn, aou, cvt]  # MDH is shown again on xray
-  mammo:
-    label: Mammo
-    nav_color: '#e91e63'
-    hover_color: '#c2185b'
-    background_color: '#fce4ec'
-    valid_skills: [notfall, privat, gyn]  # Optional whitelist
-    # hidden_skills: [gyn, aou, cvt] # Optional blacklist
+    hidden_skills: [gyn, aou, privat]
 ```
 
 **Visibility filters (optional):**
@@ -112,18 +107,20 @@ skills:
     button_color: '#e91e63'
     text_color: '#ffffff'
     special: true
-    # valid_modalities: [mammo, mr]  # Optional: only show on these modalities
+    # valid_modalities: [ct, mr]     # Optional: only show on these modalities
     # hidden_modalities: [xray]      # Optional: hide on these modalities
     display_order: 2
     slug: gyn
 
-  paed:
-    label: Päd
-    button_color: '#4caf50'
+  kinder:
+    label: Kinder
+    tooltip: Kinderradiologie
+    button_color: '#4f46a5'
     text_color: '#ffffff'
-    special: true
-    display_order: 3
-    slug: paed
+    special: false
+    display_order: 6
+    slug: kinder
+    valid_modalities: [xray]
 
   mdh:
     label: MDH
@@ -205,10 +202,6 @@ no_overflow:
 
 **Format:** `Skill_Modality` (same as `skill_overrides` in shift rules)
 
-The config loader also accepts the reversed alias `Modality_Skill` and normalizes
-it to canonical `Skill_Modality` internally. For example, `xray_notfall` becomes
-`notfall_xray`.
-
 **How it works:**
 1. When assignment is requested for a listed combo, `allow_overflow` is forced to `false`
 2. Only workers with skill=1 or 'w' are eligible
@@ -227,10 +220,16 @@ Buttons are hidden by default and must be enabled per button.
 
 ```yaml
 strict_button_visibility:
-  cvt_ct: true
-  cvt_mr: true
+  cvt_ct:
+    visible: true
+    manual_select: true
+  cvt_mr:
+    visible: true
+    manual_select: true
   mdh_ct: true
-  mdh_mr: true
+  mdh_mr:
+    visible: true
+    manual_select: true
   ct-herz_ct: true
   mr-herz_mr: true
 ```
@@ -241,10 +240,18 @@ strict_button_visibility:
 
 This is dashboard-level UI behavior, not per-worker behavior.
 
+Entries can be either `key: true` or an object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `visible` | boolean | Renders the strict `*` button. Defaults to true when an object is used. |
+| `manual_select` | boolean | Opens a worker selector first. The first dropdown option is `Normal / automatisch`, which calls the same `/strict` auto-selection route as the plain star button. Name choices call the strict manual assignment route and are limited to currently active strict specialists. |
+
 **Behavior:**
 1. Visibility is UI-only; it does not change routing by itself
 2. Clicking the visible `*` button calls `/api/{modality}/{role}/strict`
 3. That explicit strict path uses both specialist-only routing and strict weights
+4. With `manual_select: true`, the user can either keep automatic strict selection via `Normal / automatisch` or assign one of the currently available strict candidates by name.
 
 ## Specialist Fallback Routes (Group Merge, Specialist-Only)
 
@@ -352,8 +359,7 @@ Special task weights are managed in the **Weight Matrix** admin page (`/button-w
 
 - The xray dashboard shows MDH again.
 - `mdh_xray` runs in no-overflow mode without a visible strict `*` button.
-- The NDOC roster/shifts use the `xray_notfall` alias, which normalizes to
-  `notfall_xray`.
+- The NDOC roster/shifts use the canonical `notfall_xray` key.
 
 ---
 
@@ -567,7 +573,7 @@ balancer:
     notfall: []      # No exclusions
     privat: []
     gyn: []
-    paed: []
+    kinder: []
     mdh: []
     aou: []
     cvt: []     # Example: cvt: [mdh] means CVT work excludes MDH specialists
@@ -583,7 +589,7 @@ The system prioritizes specialists while using pooled workers (skill=0) as backu
    - Include workers with skill≥0 (excludes skill=-1)
    - Apply shift end buffer for overflow pool (`disable_overflow_at_shift_end_minutes`)
    - Apply warm-start release policy using shift-start minutes + min-count
-   - Apply exclusion rules (e.g., notfall_ct team won't get mammo_gyn)
+   - Apply exclusion rules (e.g., `notfall_ct` workers can be excluded from `gyn_ct`)
 
 2. **Split into pools:**
    - **Specialists:** skill=1 or 'w' (trained for this work)
@@ -647,7 +653,6 @@ vendor_mappings:
       date: "Datum"
       activity: "Beschreibung der Aktivität"
       employee_name: "Name des Mitarbeiters"
-      employee_code: "Code des Mitarbeiters"
       day_part: "Tageszeit"  # Optional: VM/NM import column for rule filters
 
     # Rules for mapping activities to shifts/gaps
@@ -664,13 +669,13 @@ vendor_mappings:
         default: "13:00-21:00"
         Freitag: "13:00-19:00"
       skill_overrides:
+        all: -1
         notfall_ct: 1
         privat_ct: 1
         mdh_ct: 0
         aou_ct: 0
         cvt_ct: 0
         gyn_ct: 0
-        paed_ct: 0
 
     - match: "CT Assistent"
       type: "shift"
@@ -678,6 +683,7 @@ vendor_mappings:
         default: "07:00-15:00"
         Freitag: "07:00-13:00"
       skill_overrides:
+        all: -1
         notfall_ct: 1
         privat_ct: 1
         mdh_ct: 0
@@ -690,6 +696,7 @@ vendor_mappings:
         Freitag: "07:00-13:00"
       modifier: 0.3  # Very low-yield shift (~30% capacity, e.g., protected non-RadIMO time)
       skill_overrides:
+        all: -1
         notfall_mr: w
         privat_mr: 0
 
@@ -700,6 +707,7 @@ vendor_mappings:
         default: "07:00-15:00"
         Freitag: "07:00-13:00"
       skill_overrides:
+        all: -1
         mdh_ct: 1
         mdh_mr: 1
         mdh_xray: 1
@@ -713,6 +721,7 @@ vendor_mappings:
       label: "Aufklärung"
       counts_for_hours: false  # Administrative task
       skill_overrides:
+        all: -1
         notfall_ct: 0  # Minimal skill, just to have a modality
 
     # ===========================================
@@ -744,13 +753,13 @@ vendor_mappings:
 
 **First match wins.** Order rules from specific to general.
 
-### Skill Override Shortcuts
+### Skill Override Shape
 
-The `skill_overrides` field supports shortcuts:
-- `all: -1` → all Skill×Modality combinations = -1
-- `mdh: 1` → all mdh_* combinations = 1 (mdh_ct, mdh_mr, etc.)
-- `ct: 1` → all *_ct combinations = 1 (notfall_ct, mdh_ct, etc.)
-- `xray: -1` → all *_xray combinations = -1
+Use the same explicit shape for editable live rules:
+- Start every shift/gap with `all: -1`
+- Add active/included Skill×Modality pairs as `1`
+- Add support/passive pairs as `0`
+- Avoid skill-only or modality-only shortcuts such as `mdh: 1` or `xray: -1` in admin-edited config
 
 ### Weighted/Assisted Workers
 
@@ -759,6 +768,7 @@ Use `skill_overrides: {Skill_mod: w}` plus a `modifier` (0.3–1.5):
 - match: "MDH Anfänger"
   modifier: 0.3  # Very low-yield shift (~30% capacity, e.g., protected non-RadIMO time)
   skill_overrides:
+    all: -1
     mdh_ct: w
     mdh_xray: w
 ```
@@ -773,7 +783,6 @@ Use `skill_overrides: {Skill_mod: w}` plus a `modifier` (0.3–1.5):
 Times support day-specific overrides:
 - `default`: Monday-Thursday (or all days if no day-specific override)
 - `Montag`, `Dienstag`, `Mittwoch`, `Donnerstag`, `Freitag`: Day overrides
-- English weekday keys (`monday` ... `friday`) are also accepted for legacy configs
 
 Gaps support multiple time blocks per day (arrays):
 ```yaml
@@ -823,17 +832,26 @@ parts that change.
   times:
     default: "11:30-20:00"   # optional top-level summary time for admin display
   skill_overrides:
-    all: 0
-    notfall: -1
+    all: -1
+    aou_ct: 1
+    aou_mr: 1
+    cvt_ct: 0
+    cvt_mr: 0
   segments:
     - times:
         default: "11:30-15:45"
       skill_overrides:
-        gyn: -1
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
     - times:
         default: "15:45-20:00"
       skill_overrides:
-        gyn: 0
+        all: -1
+        aou_ct: 1
+        aou_mr: 1
+        cvt_ct: 0
+        cvt_mr: 0
 ```
 
 This produces two shift segments from one matched CSV activity. The same `segments` shape is
@@ -847,8 +865,6 @@ Defines Skill×Modality combinations for each worker. The worker roster is store
 
 **Format:** `"skill_modality": value` (e.g., `"mdh_ct": 0`)
 
-Both `"skill_modality"` and `"modality_skill"` formats are accepted and normalized automatically.
-
 **Automatic backups:** Changes are automatically backed up to `data/backups/` with rotation (keeps last 5 backups).
 
 ### Example (data/worker_skill_roster.json)
@@ -859,11 +875,9 @@ Both `"skill_modality"` and `"modality_skill"` formats are accepted and normaliz
     "mdh_ct": 0,
     "mdh_mr": 0,
     "mdh_xray": 0,
-    "mdh_mammo": 0,
     "notfall_ct": 0,
     "notfall_mr": 0,
-    "notfall_xray": 0,
-    "notfall_mammo": 0
+    "notfall_xray": 0
   },
   "DEMO1": {
     "cvt_ct": 0,
@@ -894,13 +908,13 @@ Both `"skill_modality"` and `"modality_skill"` formats are accepted and normaliz
 When combining roster values with vendor CSV `skill_overrides`:
 
 1. **Worker roster** - baseline for all Skill×Modality pairs
-2. **Vendor rule skill_overrides** - overrides only specified combinations
+2. **Vendor rule skill_overrides** - starts from `all: -1`, then applies explicit `1`/`0` combinations
 3. **Roster -1 (hard exclude)** - always wins, cannot be overridden
 
 **Example:**
 - Worker roster: `{"mdh_ct": 0, "mdh_mr": 0, "gyn_ct": 0, "gyn_mr": 0}`
-- CSV rule assigns "Gyn Team" with `skill_overrides: {"gyn_ct": 1, "gyn_mr": 1}`
-- Result: Gyn → 1, MDH stays 0 (passive baseline remains passive unless the shift assigns it)
+- CSV rule assigns "Gyn Team" with `skill_overrides: {"all": -1, "gyn_ct": 1, "gyn_mr": 1, "mdh_ct": 0}`
+- Result: Gyn → 1, MDH CT → 0 support, other unlisted combinations → -1
 - If roster had `"mdh_ct": -1`, it stays -1 (hard exclude wins)
 
 ---
@@ -921,11 +935,6 @@ modalities:
   xray:
     label: X-ray
     nav_color: '#239b56'
-  mammo:
-    label: Mammo
-    nav_color: '#e91e63'
-    valid_skills: [notfall, privat, gyn]
-
 skills:
   notfall:
     label: Notfall
@@ -937,6 +946,10 @@ skills:
     label: CVT
     special: true
     display_order: 7
+  kinder:
+    label: Kinder
+    display_order: 6
+    valid_modalities: [xray]
 
 button_weights: (managed in data/button_weights.json)
 
@@ -959,7 +972,6 @@ vendor_mappings:
       date: "Datum"
       activity: "Beschreibung der Aktivität"
       employee_name: "Name des Mitarbeiters"
-      employee_code: "Code des Mitarbeiters"
     rules:
       - match: "CT Assistent"
         type: "shift"

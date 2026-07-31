@@ -8,13 +8,10 @@ from flask import Flask
 # Local imports
 from config import APP_CONFIG
 from routes import routes
-from data_manager import (
-    load_state,
-    check_and_perform_daily_reset,
-    allowed_modalities,
-    attempt_initialize_data,
-    load_unified_live_backup,
-)
+from config import allowed_modalities
+from data_manager.file_ops import attempt_initialize_data, load_unified_live_backup
+from data_manager.scheduled_tasks import check_and_perform_daily_reset
+from data_manager.state_persistence import load_state
 from state_manager import StateManager
 from lib.utils import selection_logger
 

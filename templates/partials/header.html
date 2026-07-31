@@ -1,24 +1,40 @@
 <header class="app-header">
   <div class="app-header__main">
     <div class="app-header__branding">
-      <h1 class="app-header__title">{{ header_title }}</h1>
+      <h1 class="app-header__title">{{ header_title|default('RadIMO Cortex') }}</h1>
       {% if header_subtitle %}
       <p class="app-header__subtitle">{{ header_subtitle }}</p>
       {% endif %}
     </div>
     <div class="app-header__actions">
       {% if is_access_protection_enabled and has_basic_access %}
-      <a href="{{ url_for('routes.logout', modality=modality|default('ct')) }}" class="basic-auth-logout" title="Abmelden">×</a>
+      <a href="{{ url_for('routes.logout', modality=modality|default('ct')) }}" class="basic-auth-logout" title="Abmelden" aria-label="Logout">×</a>
       {% endif %}
       {% if header_links %}
-      <nav class="app-nav">
+      <nav class="app-nav" aria-label="Primary navigation">
         {% for link in header_links %}
         <a href="{{ link.href }}"
-          class="nav-link{% if link.active %} nav-link--active{% endif %}{% if link.pill %} nav-link--pill{% endif %}{% if link.accent %} nav-link--accent{% endif %}">
+          class="nav-link{% if link.active %} nav-link--active{% endif %}{% if link.pill %} nav-link--pill{% endif %}{% if link.accent %} nav-link--accent{% endif %}"{% if link.active %} aria-current="page"{% endif %}>
           {{ link.label }}
         </a>
         {% endfor %}
       </nav>
+      {% endif %}
+      {% if is_admin %}
+      <details class="system-menu">
+        <summary aria-label="Admin tools">Tools</summary>
+        <div class="system-menu__panel">
+          <a href="{{ url_for('routes.admin_tools_page') }}"{% if active_tool == 'overview' %} aria-current="page"{% endif %}>Overview</a>
+          <a href="{{ url_for('routes.admin_settings_page') }}"{% if active_tool == 'settings' %} aria-current="page"{% endif %}>Settings</a>
+          <a href="{{ url_for('routes.manual_adjustments_page', modality=_mod|default('ct')) }}"{% if active_page == 'manual_adjustments' %} aria-current="page"{% endif %}>Corrections</a>
+          <a href="{{ url_for('routes.skill_roster_page', modality=_mod|default('ct')) }}"{% if active_page == 'skill_matrix' %} aria-current="page"{% endif %}>Skills</a>
+          <a href="{{ url_for('routes.button_weights_page', modality=_mod|default('ct')) }}"{% if active_page == 'button_weights' %} aria-current="page"{% endif %}>Weights</a>
+          <a href="{{ url_for('routes.upload_file', modality=_mod|default('ct')) }}"{% if active_page == 'upload' %} aria-current="page"{% endif %}>Import</a>
+          <a href="{{ url_for('routes.admin_files_page') }}"{% if active_tool == 'files' %} aria-current="page"{% endif %}>Files</a>
+          <a href="{{ url_for('routes.admin_logs_page') }}"{% if active_tool == 'logs' %} aria-current="page"{% endif %}>Logs</a>
+          <a href="{{ url_for('routes.status_page') }}"{% if active_tool == 'status' %} aria-current="page"{% endif %}>Status</a>
+        </div>
+      </details>
       {% endif %}
     </div>
   </div>
@@ -36,7 +52,7 @@
       {% endif %}
       <div class="header-context__links">
         {% for item in view_toggle_items %}
-        <a href="{{ item.href }}" class="nav-link nav-link--pill{% if item.active %} nav-link--active{% endif %}">
+        <a href="{{ item.href }}" class="nav-link nav-link--pill{% if item.active %} nav-link--active{% endif %}"{% if item.active %} aria-current="page"{% endif %}>
           {{ item.label }}
         </a>
         {% endfor %}

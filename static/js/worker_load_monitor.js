@@ -35,13 +35,13 @@ let sortState = {
   for (const [mod, settings] of Object.entries(MODALITY_SETTINGS)) {
     const navColor = settings.nav_color || '#6c757d';
     css += `.badge-${mod}{background:${navColor};}`;
-    css += `.mod-header-${mod}{background:${navColor};color:white;}`;
+    css += `.load-table .mod-header-${mod}{background:${navColor}!important;color:white!important;border-bottom:4px solid rgba(0,0,0,.22);}`;
   }
   for (const [skill, settings] of Object.entries(SKILL_SETTINGS)) {
     const btnColor = settings.button_color || '#6c757d';
     const textColor = settings.text_color || '#ffffff';
     const safeSkill = skill.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    css += `.skill-header-${safeSkill}{background:${btnColor};color:${textColor};}`;
+    css += `.load-table .skill-header-${safeSkill}{background:${btnColor}!important;color:${textColor}!important;border-radius:999px 999px 0 0;}`;
   }
   style.textContent = css;
   document.head.appendChild(style);
@@ -986,7 +986,7 @@ function renderFlowDataState(data) {
 }
 
 function loadFlowData() {
-  return fetch('/api/flow-balance/data')
+  return fetch('/api/performance/data')
     .then(function(response) {
       if (!response.ok) throw new Error(`Flow data request failed (${response.status})`);
       return response.json();

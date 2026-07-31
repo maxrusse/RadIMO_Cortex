@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block title %}RadIMO Cortex | Tools{% endblock %}
+
+{% block styles %}
+  {% include 'partials/admin_theme.html' %}
+  body { max-width: 1500px; }
+  .workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
+  .workspace-card { display: flex; flex-direction: column; min-height: 118px; }
+  .workspace-card__head { display: flex; justify-content: space-between; align-items: start; gap: 0.5rem; }
+  .workspace-card h3 { margin: 0; color: var(--ops-ink); font-size: 0.94rem; }
+  .workspace-card .ops-actions { margin-top: auto; padding-top: 0.55rem; }
+  .workspace-card .ops-path { margin-top: 0.4rem; }
+  .workspace-paths { display: grid; gap: 0.22rem; margin-top: 0.4rem; }
+  .workspace-code { color: var(--ops-primary); font: 700 0.68rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .runtime-card { border-color: #e5c6b2; background: linear-gradient(145deg, #fff 0%, #fff9f4 100%); }
+  .runtime-reload { background: #a33a16 !important; color: #fff !important; }
+  .runtime-message { min-height: 1.2rem; margin-top: 0.4rem; font-size: 0.78rem; font-weight: 700; }
+  .runtime-message.success { color: #197347; }
+  .runtime-message.error { color: #b42318; }
+  @media (max-width: 1000px) {
+    .workspace-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 680px) {
+    .workspace-grid { grid-template-columns: 1fr; }
+    .workspace-card { min-height: 0; }
+  }
+{% endblock %}
+
+{% block content %}
+  {% set header_title = 'RadIMO Cortex | Tools' %}
+  {% set header_subtitle = 'Admin tools' %}
+  {% set header_mode = 'global' %}
+  {% set header_nav = namespace(links=[]) %}
+  {% include 'partials/header_links.html' %}
+  {% set header_links = header_nav.links %}
+  {% include 'partials/header.html' %}
+
+  {% set ready_ok = readiness_http_status == 200 %}
+  {% set present_files = files_manifest.targets|selectattr('exists')|list|length %}
+  {% set present_logs = log_sources|selectattr('exists')|list|length %}
+
+  <div class="ops-shell">
+    <div class="ops-page-head">
+      <div>
+        <div class="ops-eyebrow">Operations console</div>
+        <h2>Live system control</h2>
+      </div>
+      <div class="ops-actions">
+        <a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_settings_page') }}">Settings</a>
+        <a class="ops-button" href="{{ url_for('routes.upload_file') }}">Import</a>
+      </div>
+    </div>
+
+    <section class="ops-metric-grid" aria-label="System overview">
+      <article class="ops-metric">
+        <span class="ops-metric__label">Runtime readiness</span>
+        <strong class="ops-metric__value {{ 'ops-metric__value--ok' if ready_ok else 'ops-metric__value--error' }}">{{ 'READY' if ready_ok else 'NOT READY' }}</strong>
+      </article>
+      <article class="ops-metric">
+        <span class="ops-metric__label">Managed files</span>
+        <strong class="ops-metric__value">{{ present_files }}/{{ files_manifest.targets|length }}</strong>
+      </article>
+      <article class="ops-metric">
+        <span class="ops-metric__label">Recoverable backups</span>
+        <strong class="ops-metric__value">{{ files_manifest.managed_backups|length }}</strong>
+      </article>
+      <article class="ops-metric">
+        <span class="ops-metric__label">Log sources</span>
+        <strong class="ops-metric__value">{{ present_logs }}/{{ log_sources|length }}</strong>
+      </article>
+    </section>
+
+    <section class="workspace-grid">
+      <article class="ops-card workspace-card">
+        <div class="workspace-card__head"><h3>Files</h3><span class="ops-badge">{{ present_files }} online</span></div>
+        <code class="ops-path">{{ app_root }}</code>
+        <div class="ops-actions"><a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_files_page') }}">Open Files</a></div>
+      </article>
+      <article class="ops-card workspace-card">
+        <div class="workspace-card__head"><h3>Logs</h3><span class="ops-badge">{{ present_logs }} online</span></div>
+        <div class="workspace-paths">{% for source in log_sources %}<code class="workspace-code">{{ source.label }} · {{ source.rotated_count }} rotated</code>{% endfor %}</div>
+        <div class="ops-actions"><a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_logs_page') }}">Open Logs</a></div>
+      </article>
+      <article class="ops-card workspace-card">
+        <div class="workspace-card__head"><h3>Status</h3><span class="ops-badge {{ '' if ready_ok else 'ops-badge--error' }}">{{ 'ready' if ready_ok else 'attention' }}</span></div>
+        <div class="ops-actions">
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.status_page') }}">Open Status</a>
+          <a class="ops-button ops-button--outline" href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
+        </div>
+      </article>
+      <article class="ops-card workspace-card runtime-card">
+        <div class="workspace-card__head"><h3>Application runtime</h3><span class="ops-badge ops-badge--warning">controlled</span></div>
+        <div class="ops-actions"><button class="ops-button runtime-reload" id="runtime-reload" type="button">Reload app</button></div>
+        <div class="runtime-message" id="runtime-message" role="status" aria-live="polite"></div>
+      </article>
+      <article class="ops-card workspace-card">
+        <div class="workspace-card__head"><h3>Configuration</h3><span class="ops-badge">structured</span></div>
+        <div class="ops-actions">
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_settings_page') }}">Settings</a>
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.skill_roster_page') }}">Skills</a>
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.button_weights_page') }}">Weights</a>
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.manual_adjustments_page') }}">Corrections</a>
+        </div>
+      </article>
+      <article class="ops-card workspace-card">
+        <div class="workspace-card__head"><h3>Schedule data</h3><span class="ops-badge">operational</span></div>
+        <div class="ops-actions">
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.upload_file') }}">Import</a>
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_today') }}">Today</a>
+          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_tomorrow') }}">Planning</a>
+        </div>
+      </article>
+    </section>
+
+  </div>
+  <script src="{{ url_for('static', filename='js/admin_tools.js') }}"></script>
+{% endblock %}

@@ -9,7 +9,7 @@ function toggleDisplayOrder() {
     const btn = document.getElementById(id);
     if (btn) {
       btn.textContent = newText;
-      btn.title = newTitle;
+      btn.title = window.RadimoI18n?.t(newTitle) || newTitle;
     }
   });
   renderTable('today');
@@ -138,6 +138,12 @@ function syncSkillValueControlClass(el, value = null) {
 // Toggle inline edit mode
 async function toggleEditMode(tab) {
   const wasActive = editMode[tab];
+  if (wasActive && Object.keys(pendingChanges[tab] || {}).length > 0) {
+    const discard = confirm(window.RadimoI18n?.language === 'en'
+      ? 'Discard unsaved quick-edit changes and exit edit mode?'
+      : 'Ungespeicherte Schnelländerungen verwerfen und den Bearbeitungsmodus verlassen?');
+    if (!discard) return;
+  }
   editMode[tab] = !editMode[tab];
   pendingChanges[tab] = {};  // Reset pending changes
   applyEditModeUI(tab);
@@ -154,9 +160,13 @@ async function toggleEditMode(tab) {
 // Track inline skill change (supports adding new modalities with rowIndex=-1)
 function buildInlineRowChange(tab, modKey, rowIndex, groupIdx, shiftIdx) {
   const group = Number.isInteger(groupIdx) ? entriesData[tab]?.[groupIdx] : null;
+  const shift = group ? getTableShifts(group)?.[shiftIdx] : null;
+  const modData = shift?.modalities?.[modKey] || null;
   return {
     modality: modKey,
     row_index: rowIndex,
+    verify_row_uid: modData?.row_uid || null,
+    edit_key: modData?.edit_key || null,
     groupIdx,
     shiftIdx,
     verify_ppl: group?.worker,
@@ -188,15 +198,19 @@ function onInlineSkillChange(tab, modKey, rowIndex, skill, value, groupIdx, shif
   const change = ensurePendingInlineChange(tab, modKey, rowIndex, groupIdx, shiftIdx);
 
   change.updates[skill] = normalizedVal;
-  if (isWeightedSkill(normalizedVal)) {
+  if (isWeightedSkill(normalizedVal) && el?.nextElementSibling) {
     const currentWeight = el?.nextElementSibling ? parseFloat(el.nextElementSibling.value || '1.0') : 1.0;
     change.updates['Modifier'] = currentWeight;
-  } else {
+  } else if (!isWeightedSkill(normalizedVal)) {
     delete change.updates['Modifier'];
   }
 
   if (el && el.nextElementSibling) {
     el.nextElementSibling.style.display = isWeightedSkill(normalizedVal) ? '' : 'none';
+  }
+
+  if (isNoopNewQuickEditChange(change)) {
+    delete pendingChanges[tab][buildInlineChangeKey(tab, modKey, rowIndex, groupIdx, shiftIdx)];
   }
 
   updateSaveButtonCount(tab);
@@ -364,13 +378,14 @@ function getQuickEditChangeGroup(tab, change) {
 function ensureQuickEditPlanModality(shift, modKey, options = {}) {
   if (!shift.modalities) shift.modalities = {};
   if (!shift.modalities[modKey]) {
-    const defaultSkillValue = shift.is_gap_entry ? -1 : 0;
     const skills = {};
     SKILLS.forEach(skill => {
-      skills[skill] = defaultSkillValue;
+      skills[skill] = -1;
     });
     shift.modalities[modKey] = {
       row_index: -1,
+      row_uid: null,
+      edit_key: null,
       modifier: shift.modifier || 1.0,
       materialize: options.materialize === true,
       skills
@@ -425,6 +440,11 @@ function applyQuickEditChangeToPlan(tab, shifts, change) {
       modData.skills[field] = normalizeSkillValueJS(value);
     }
   });
+  if (modData.row_index === undefined || modData.row_index < 0) {
+    modData.materialize = SKILLS.some(
+      skill => normalizeSkillValueJS(modData.skills?.[skill]) !== -1
+    );
+  }
 }
 
 function serializeWorkerPlanShift(shift) {
@@ -496,15 +516,72 @@ function groupQuickEditChangesByWorker(tab, changeEntries) {
   return grouped;
 }
 
+function isNoopNewQuickEditChange(change) {
+  if (!change || change.isDelete) return false;
+  if (!(change.isNew || change.materialize || change.row_index === -1)) return false;
+  const updates = change.updates || {};
+  const fields = Object.keys(updates);
+  if (fields.length === 0) return true;
+  return fields.every(field => (
+    SKILLS.includes(field) && normalizeSkillValueJS(updates[field]) === -1
+  ));
+}
+
+function canSaveQuickEditChangeAsRowUpdate(change) {
+  if (!change || change.isDelete || change.isNew || change.materialize) return false;
+  if (!Number.isInteger(change.row_index) || change.row_index < 0) return false;
+  if (!change.modality) return false;
+  const fields = Object.keys(change.updates || {});
+  if (fields.length === 0) return false;
+  return fields.every(field => SKILLS.includes(field) || field === 'Modifier');
+}
+
+function splitQuickEditChangesForSave(changes) {
+  const structuralEntries = changes.filter(({ change }) => !canSaveQuickEditChangeAsRowUpdate(change));
+  if (structuralEntries.length === 0) {
+    return { planEntries: [], rowEntries: changes };
+  }
+
+  const planModalities = new Set(getQuickEditChangedModalities(structuralEntries));
+  const planEntries = [];
+  const rowEntries = [];
+  changes.forEach(entry => {
+    const modKey = String(entry.change?.modality || '').toLowerCase();
+    if (!canSaveQuickEditChangeAsRowUpdate(entry.change) || planModalities.has(modKey)) {
+      planEntries.push(entry);
+    } else {
+      rowEntries.push(entry);
+    }
+  });
+  return { planEntries, rowEntries };
+}
+
 async function saveInlineChanges(tab) {
-  const changeEntries = Object.entries(pendingChanges[tab] || {});
+  const allChangeEntries = Object.entries(pendingChanges[tab] || {});
+  const noopNewKeys = [];
+  const changeEntries = [];
+  allChangeEntries.forEach(([key, change]) => {
+    if (isNoopNewQuickEditChange(change)) {
+      noopNewKeys.push(key);
+    } else {
+      changeEntries.push([key, change]);
+    }
+  });
+  noopNewKeys.forEach(key => {
+    delete pendingChanges[tab][key];
+  });
+
   if (changeEntries.length === 0) {
     updateSaveInlineStatus(tab, 'No changes to save', 'error');
+    updateSaveButtonCount(tab);
     return;
   }
   const applyEndpoint = tab === 'today'
     ? '/api/live-schedule/apply-worker-plan'
     : '/api/prep-next-day/apply-worker-plan';
+  const updateEndpoint = tab === 'today'
+    ? '/api/live-schedule/update-row'
+    : '/api/prep-next-day/update-row';
 
   // Collect errors instead of throwing on first failure
   const errors = [];
@@ -518,24 +595,57 @@ async function saveInlineChanges(tab) {
     return;
   }
 
-  for (const { group, changes, keys, units } of groupedChanges.values()) {
+  for (const { group, changes } of groupedChanges.values()) {
     try {
-      const planPayload = buildQuickEditWorkerPlanPayload(tab, group, changes);
-      const result = await postJsonWithSnapshot(tab, applyEndpoint, {
-        worker: group.worker,
-        shifts: planPayload.shifts,
-        modalities: planPayload.modalities,
-        worker_revision: group.worker_revision || getWorkerRevision(tab, group.worker),
-      }, {
-        conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
-        includeSnapshotVersion: false,
-      });
-      if (result?.worker_revision) {
-        if (!workerRevisions[tab]) workerRevisions[tab] = {};
-        workerRevisions[tab][group.worker] = result.worker_revision;
+      const { planEntries, rowEntries } = splitQuickEditChangesForSave(changes);
+      let currentWorkerRevision = group.worker_revision || getWorkerRevision(tab, group.worker);
+      if (planEntries.length > 0) {
+        const planPayload = buildQuickEditWorkerPlanPayload(tab, group, planEntries);
+        if (planPayload.shifts.length === 0 && planEntries.every(({ change }) => isNoopNewQuickEditChange(change))) {
+          planEntries.forEach(({ key }) => succeededKeys.add(key));
+        } else {
+          const result = await postJsonWithSnapshot(tab, applyEndpoint, {
+            worker: group.worker,
+            shifts: planPayload.shifts,
+            modalities: planPayload.modalities,
+            worker_revision: currentWorkerRevision,
+          }, {
+            conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
+            includeSnapshotVersion: false,
+          });
+          if (result?.worker_revision) {
+            if (!workerRevisions[tab]) workerRevisions[tab] = {};
+            workerRevisions[tab][group.worker] = result.worker_revision;
+            currentWorkerRevision = result.worker_revision;
+          }
+          planEntries.forEach(({ key, change }) => {
+            successCount += getPendingChangeUnits(change);
+            succeededKeys.add(key);
+          });
+        }
       }
-      successCount += units;
-      keys.forEach(key => succeededKeys.add(key));
+
+      for (const { key, change } of rowEntries) {
+        const result = await postJsonWithSnapshot(tab, updateEndpoint, {
+          modality: change.modality,
+          row_index: change.row_index,
+          verify_ppl: group.worker,
+          verify_row_uid: change.verify_row_uid || null,
+          worker_revision: currentWorkerRevision,
+          updates: change.updates || {},
+        }, {
+          reloadOnConflict: true,
+          includeSnapshotVersion: false,
+          conflictMessage: 'Schedule changed in the background. Latest version was reloaded. Review pending edits and save again.',
+        });
+        if (!workerRevisions[tab]) workerRevisions[tab] = {};
+        if (group.worker && result?.worker_revision) {
+          workerRevisions[tab][group.worker] = result.worker_revision;
+          currentWorkerRevision = result.worker_revision;
+        }
+        successCount += getPendingChangeUnits(change);
+        succeededKeys.add(key);
+      }
     } catch (fetchError) {
       errors.push(fetchError.message || 'Unknown error');
       if (fetchError.isConflict) {
@@ -744,22 +854,23 @@ function updatePrepSelectionControls() {
   const lockMessage = locked
     ? 'Exit Quick Edit before changing or reloading the selected date.'
     : 'Select a date to load staged tomorrow data.';
+  const localizedLockMessage = window.RadimoI18n?.t(lockMessage) || lockMessage;
 
   const inputEl = document.getElementById('prep-target-date');
   if (inputEl) {
     inputEl.disabled = locked;
-    inputEl.title = lockMessage;
+    inputEl.title = localizedLockMessage;
   }
 
   document.querySelectorAll('[data-prep-date-step]').forEach(btn => {
     btn.disabled = locked;
-    btn.title = lockMessage;
+    btn.title = localizedLockMessage;
   });
 
   const reloadBtn = document.querySelector('.reload-selected-date-btn');
   if (reloadBtn) {
     reloadBtn.disabled = locked;
-    reloadBtn.title = lockMessage;
+    reloadBtn.title = localizedLockMessage;
   }
 }
 
@@ -1391,11 +1502,20 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
   const shift = shifts[shiftIdx];
   if (!shift) return;
 
-  const modData = shift.modalities[modKey];
+  const modData = ensureEditPlanDraftModality(shiftIdx, modKey);
   if (!modData) return;
   const normalizedValue = normalizeSkillValueJS(value);
   const effectiveValue = updateEditPlanDraftShiftSkill(shiftIdx, modKey, skill, normalizedValue);
-  markDraftModalityMaterialized(shiftIdx, modKey);
+  const hasPersistedRow = Number.isInteger(modData.row_index) && modData.row_index >= 0;
+  const hasMaterializedSkill = SKILLS.some(
+    skillName => normalizeSkillValueJS(modData.baseSkills?.[skillName] ?? modData.skills?.[skillName]) !== -1
+  );
+  if (hasPersistedRow || hasMaterializedSkill) {
+    markDraftModalityMaterialized(shiftIdx, modKey);
+  } else {
+    modData.materialize = false;
+    pruneSyntheticEmptyEditPlanModalities(shiftIdx);
+  }
   const skillSelect = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
   if (skillSelect && effectiveValue !== null && effectiveValue !== undefined) {
     skillSelect.value = displaySkillValue(effectiveValue);
@@ -1715,14 +1835,16 @@ async function addShiftFromModal() {
         skills,
         baseSkills,
         row_index: -1,
+        row_uid: null,
+        edit_key: null,
         modifier,
         materialize: true
       };
     });
 
-      editPlanDraft.shifts = [
-        ...(editPlanDraft.shifts || []),
-        {
+    editPlanDraft.shifts = [
+      ...(editPlanDraft.shifts || []),
+      {
         start_time: startTime,
         end_time: endTime,
         modifier,
@@ -1741,75 +1863,7 @@ async function addShiftFromModal() {
     return;
   }
 
-  const addWorkerEndpoint = tab === 'today' ? '/api/live-schedule/add-worker' : '/api/prep-next-day/add-worker';
-  const addGapEndpoint = tab === 'today' ? '/api/live-schedule/add-gap' : '/api/prep-next-day/add-gap';
-
-  try {
-    if (isGap) {
-      const rowIndexByModality = new Map();
-      group.allEntries.forEach(entry => {
-        if (entry.row_index !== undefined && entry.row_index !== null && entry.row_index >= 0) {
-          if (!rowIndexByModality.has(entry.modality)) {
-            rowIndexByModality.set(entry.modality, entry.row_index);
-          }
-        }
-      });
-
-      if (rowIndexByModality.size === 0) {
-        throw new Error('No existing row index found for this worker; reload and try again.');
-      }
-
-      for (const [modality, rowIndex] of rowIndexByModality.entries()) {
-        await postJsonWithSnapshot(tab, addGapEndpoint, {
-          modality,
-          row_index: rowIndex,
-          verify_ppl: group.worker,
-          gap_type: getTaskPersistedName(taskName),
-          gap_start: startTime,
-          gap_end: endTime,
-          gap_counts_for_hours: countsForHours
-        }, {
-          reloadOnConflict: true,
-        });
-      }
-    } else {
-      for (const modKey of selectedModalities) {
-        const skills = {};
-        SKILLS.forEach(skill => {
-          const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
-          skills[skill] = normalizeSkillValueJS(el ? el.value : 0);
-        });
-        await postJsonWithSnapshot(tab, addWorkerEndpoint, {
-          modality: modKey,
-          worker_data: {
-            PPL: group.worker,
-            start_time: startTime,
-            end_time: endTime,
-            Modifier: modifier,
-            counts_for_hours: countsForHours,
-            training: trainingEnabled,
-            tasks: taskName,
-            row_type: 'shift',
-            materialize: true,
-            ...skills
-          }
-        }, {
-          reloadOnConflict: true,
-        });
-      }
-    }
-    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${getWorkerDisplayName(group.worker)}`);
-
-    lastAddedShiftMeta = { worker: group.worker, shiftKey: addedShiftKey };
-    await loadData();
-    // Re-render modal to show updated shifts instead of closing
-    renderEditModalContent();
-  } catch (error) {
-    if (error.isConflict) {
-      return;
-    }
-    showMessage('error', error.message);
-  }
+  showMessage('error', 'Unexpected modal mode. Reopen the edit dialog and try again.');
 }
 
 function onEditGapTypeChange() {
@@ -1841,123 +1895,6 @@ function onEditGapTypeChange() {
   }
 }
 
-function applySkillValues(skillMap = {}) {
-  SKILLS.forEach(skill => {
-    if (skillMap[skill] !== undefined) {
-      const el = document.getElementById(`edit-skill-${skill}`);
-      if (el) {
-        el.value = skillMap[skill];
-      }
-    }
-  });
-}
-
-
-// Apply worker skill preset for a specific modality
-function applyWorkerSkillPresetForModality(workerName, modKey) {
-  const workerRoster = WORKER_SKILLS[workerName];
-  if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${getWorkerDisplayName(workerName)}`);
-    return;
-  }
-
-  // Roster structure is modality-scoped: { modality: { skill: value } }
-  const modalitySkills = workerRoster[modKey] || {};
-
-  SKILLS.forEach(skill => {
-    const el = document.getElementById(`edit-${modKey}-skill-${skill}`);
-    if (el && modalitySkills[skill] !== undefined) {
-      // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
-      const val = modalitySkills[skill];
-      const effectiveValue = val > 0 ? 0 : val;
-      el.value = displaySkillValue(effectiveValue);
-      syncSkillValueControlClass(el, effectiveValue);
-    }
-  });
-}
-
-// Apply worker skill preset for a specific modality in a specific shift
-function applyWorkerSkillPresetForShiftModality(groupIdx, shiftIdx, modKey) {
-  const { tab } = currentEditEntry || {};
-  const group = entriesData[tab]?.[groupIdx];
-  const workerName = group?.worker;
-  const workerRoster = workerName ? WORKER_SKILLS[workerName] : null;
-  if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${workerName ? getWorkerDisplayName(workerName) : 'worker'}`);
-    return;
-  }
-
-  // Roster structure is modality-scoped: { modality: { skill: value } }
-  const modalitySkills = workerRoster[modKey] || {};
-
-  SKILLS.forEach(skill => {
-    const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-    if (el && modalitySkills[skill] !== undefined) {
-      // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
-      const val = modalitySkills[skill];
-      const effectiveValue = val > 0 ? 0 : val;
-      el.value = displaySkillValue(effectiveValue);
-      syncSkillValueControlClass(el, effectiveValue);
-    }
-  });
-}
-
-// Apply preset from config to all modalities in a shift
-async function applyPresetToShift(shiftIdx, taskName) {
-  if (!taskName) return;
-
-  const task = getTaskConfigByName(taskName);
-  if (!task) {
-    showMessage('error', `Preset not found: ${taskName}`);
-    return;
-  }
-
-  const { tab, groupIdx } = currentEditEntry || {};
-  const group = entriesData[tab]?.[groupIdx];
-  if (!group) return;
-
-  const shift = getModalShifts(group)[shiftIdx];
-  if (!shift) return;
-  try {
-    await refreshEditShiftFromPreview(shiftIdx, taskName, shift.training !== false);
-  } catch (error) {
-    showMessage('error', error.message);
-  }
-}
-
-// Apply worker roster skills to all modalities in a shift
-function applyWorkerRosterToShift(shiftIdx) {
-  const { tab, groupIdx } = currentEditEntry || {};
-  const group = entriesData[tab]?.[groupIdx];
-  if (!group) return;
-
-  const workerRoster = WORKER_SKILLS[group.worker];
-  if (!workerRoster) {
-    showMessage('error', `No skill preset found for ${getWorkerDisplayName(group.worker)}`);
-    return;
-  }
-
-  const shift = getModalShifts(group)[shiftIdx];
-  if (!shift) return;
-
-  // Apply skills to all modalities in this shift
-  // Roster structure is modality-scoped: { modality: { skill: value } }
-  Object.keys(shift.modalities).forEach(modKey => {
-    const modalitySkills = workerRoster[modKey] || {};
-
-    SKILLS.forEach(skill => {
-      const el = document.getElementById(`edit-shift-${shiftIdx}-${modKey}-skill-${skill}`);
-      if (el && modalitySkills[skill] !== undefined) {
-        // Limit roster presets to 0/-1; positive values are reserved for manual/CSV edits
-        const val = modalitySkills[skill];
-        const effectiveValue = val > 0 ? 0 : val;
-        el.value = displaySkillValue(effectiveValue);
-        syncSkillValueControlClass(el, effectiveValue);
-      }
-    });
-  });
-}
-
 async function saveModalChanges() {
   if (!currentEditEntry) return;
 
@@ -1980,6 +1917,12 @@ async function saveModalChanges() {
   const modalState = captureModalState();
   try {
     syncEditPlanDraftFromModal();
+    pruneSyntheticEmptyEditPlanDraft();
+    if (typeof getEditPlanPendingChangeCount === 'function' && getEditPlanPendingChangeCount() === 0) {
+      showMessage('info', 'No changes to save');
+      applyModalEditModeUI();
+      return;
+    }
     const persistedShifts = (editPlanDraft.shifts || []).map(serializeWorkerPlanShift);
     await postJsonWithSnapshot(tab, applyEndpoint, {
       worker: editPlanDraft.worker,
@@ -1990,7 +1933,7 @@ async function saveModalChanges() {
       includeSnapshotVersion: false,
     });
     clearEditPlanDraft();
-    closeModal();
+    closeModal(true);
     showMessage('success', 'Worker entries updated');
     await loadData();
   } catch (error) {
@@ -2083,7 +2026,16 @@ function syncEditPlanDraftFromModal() {
   });
 }
 
-function closeModal() {
+function closeModal(force = false) {
+  const hasDraft = modalMode === 'edit-plan'
+    ? hasEditPlanPendingChanges()
+    : (modalMode === 'add-worker' && addWorkerModalState.tasks.length > 0);
+  if (!force && hasDraft) {
+    const discard = confirm(window.RadimoI18n?.language === 'en'
+      ? 'Discard the unsaved dialog changes?'
+      : 'Ungespeicherte Änderungen in diesem Dialog verwerfen?');
+    if (!discard) return;
+  }
   document.getElementById('edit-modal').classList.remove('show');
   currentEditEntry = null;
   clearEditPlanDraft();
@@ -2102,7 +2054,6 @@ function setModalMode(mode) {
   } else if (mode === 'edit-plan') {
     saveButton.className = 'btn btn-primary';
   } else {
-    // Edit mode: all edits are live, no Save button needed
     saveButton.style.display = 'none';
   }
   applyModalEditModeUI();
@@ -2386,6 +2337,8 @@ async function saveAddWorkerModal() {
         modalities[modKey] = {
           skills: { ...(modSkills || {}) },
           row_index: -1,
+          row_uid: null,
+          edit_key: null,
           materialize: true
         };
       });
@@ -2409,7 +2362,7 @@ async function saveAddWorkerModal() {
       reloadOnConflict: true,
     });
 
-    closeModal();
+    closeModal(true);
     showMessage('success', `${getWorkerDisplayName(workerId)} added`);
     await loadData();
   } catch (error) {
@@ -2485,10 +2438,14 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
     // Create standalone gap intent rows atomically across modalities.
     const addEndpoint = tab === 'today' ? '/api/live-schedule/add-gap-batch' : '/api/prep-next-day/add-gap-batch';
     const rowIndexByModality = new Map();
+    const rowUidByModality = new Map();
     group.allEntries.forEach(entry => {
       if (entry.row_index !== undefined && entry.row_index !== null && entry.row_index >= 0) {
         if (!rowIndexByModality.has(entry.modality)) {
           rowIndexByModality.set(entry.modality, entry.row_index);
+          if (entry.row_uid) {
+            rowUidByModality.set(entry.modality, entry.row_uid);
+          }
         }
       }
     });
@@ -2499,6 +2456,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
 
     await postJsonWithSnapshot(tab, addEndpoint, {
       row_index_map: Object.fromEntries(rowIndexByModality.entries()),
+      row_uid_map: Object.fromEntries(rowUidByModality.entries()),
       verify_ppl: group.worker,
       gap_type: gapType,
       gap_start: gapStart,
@@ -2682,7 +2640,16 @@ function showMessage(type, message) {
   setTimeout(() => { container.innerHTML = ''; }, 5000);
 }
 
+function updatePrepOverlayTop() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+  const bottom = Math.max(0, header.getBoundingClientRect().bottom);
+  document.documentElement.style.setProperty('--prep-overlay-top', `${Math.ceil(bottom + 8)}px`);
+}
+
 // Initialize edit mode UI and load current tab (lazy loading)
+updatePrepOverlayTop();
+window.addEventListener('resize', updatePrepOverlayTop);
 applyEditModeUI(currentTab);
 loadTabData(currentTab);
 if (currentTab === 'today') {

@@ -128,7 +128,7 @@ If `no_overflow` applies, routing becomes specialist-only but the request still 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| modality | path | Modality slug from `config.yaml` (e.g., `ct`, `mr`, `xray`, `mammo`) |
+| modality | path | Modality slug from `config.yaml` (`ct`, `mr`, or `xray`) |
 | skill | path | Skill slug from `config.yaml` (e.g., `notfall`, `cvt`) |
 
 **Example:**
@@ -278,22 +278,25 @@ GET /api/live-schedule/data
 POST /api/live-schedule/update-row
 ```
 
-### Add Live Worker
+### Apply Live Worker Plan
 
 ```http
-POST /api/live-schedule/add-worker
+POST /api/live-schedule/apply-worker-plan
 ```
 
-### Delete Live Worker
+The worker's complete plan is the mutation unit. Send an empty `shifts` list to
+remove the worker from the selected modalities.
+
+### Create Live Worker Plan
 
 ```http
-POST /api/live-schedule/delete-worker
+POST /api/live-schedule/create-worker-plan
 ```
 
-### Add Live GAP (Split Shift)
+### Add Live GAP Across Modalities
 
 ```http
-POST /api/live-schedule/add-gap
+POST /api/live-schedule/add-gap-batch
 ```
 
 ---
@@ -314,22 +317,24 @@ Returns staged schedules for all modalities plus `last_prepped_at` when availabl
 POST /api/prep-next-day/update-row
 ```
 
-### Add Staged Worker
+### Apply Staged Worker Plan
 
 ```http
-POST /api/prep-next-day/add-worker
+POST /api/prep-next-day/apply-worker-plan
 ```
 
-### Delete Staged Worker
+Send an empty `shifts` list to remove the worker from the selected modalities.
+
+### Create Staged Worker Plan
 
 ```http
-POST /api/prep-next-day/delete-worker
+POST /api/prep-next-day/create-worker-plan
 ```
 
-### Add Staged GAP
+### Add Staged GAP Across Modalities
 
 ```http
-POST /api/prep-next-day/add-gap
+POST /api/prep-next-day/add-gap-batch
 ```
 
 ---

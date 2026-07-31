@@ -16,7 +16,8 @@ From the current repository:
 - Flask app entrypoint: `app.py`
 - Gunicorn entrypoint: `app:app`
 - Gunicorn config: `gunicorn_config.py`
-- Runtime config: `config.yaml`
+- Config template: `config.demo.yaml`
+- Runtime config: local, ignored `config.yaml` created from the template
 - Persistent runtime folders: `data/`, `uploads/`, `logs/`
 - Health endpoints: `/healthz`, `/readyz`, `/status`
 
@@ -69,6 +70,15 @@ sudo chown -R svc-radimo:svc-radimo /opt/radimo
 
 Do not rely on a developer home directory for the live service.
 
+Create the deployment-local configuration if it was not supplied separately:
+
+```bash
+sudo -u svc-radimo cp /opt/radimo/config.demo.yaml /opt/radimo/config.yaml
+sudo chmod 600 /opt/radimo/config.yaml
+```
+
+`config.yaml` is intentionally ignored by Git. Do not add the live file or its credentials to the repository.
+
 ---
 
 ## 3. Create the Python Environment
@@ -107,9 +117,9 @@ Usually you do **not** need to copy:
 
 ---
 
-## 5. Rotate Secrets Before Go-Live
+## 5. Replace Demo Credentials Before Go-Live
 
-Edit `config.yaml` on the new server and change:
+The tracked demo file uses the intentionally public password `radimo`. Edit the local `config.yaml` on the new server and change:
 - `secret_key`
 - `admin_password`
 - `access_password` if basic access should be enabled

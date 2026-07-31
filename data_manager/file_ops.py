@@ -22,7 +22,6 @@ from config import (
     APP_CONFIG,
     SKILL_COLUMNS,
     UPLOAD_FOLDER,
-    SKILL_ROSTER_AUTO_IMPORT,
     selection_logger,
 )
 from lib.utils import (
@@ -43,6 +42,11 @@ from data_manager.worker_management import (
     get_worker_skill_mod_combinations,
 )
 from state_manager import StateManager
+
+
+def _skill_roster_auto_import_enabled() -> bool:
+    """Read the live config value instead of retaining an import-time Boolean."""
+    return bool(APP_CONFIG.get('skill_roster_auto_import', True))
 
 # Get state references
 _state = StateManager.get_instance()
@@ -354,7 +358,7 @@ def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list, i
     d['info_texts'] = info_texts or []
     d['info_texts_by_skill'] = info_texts_by_skill or {}
 
-    if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
+    if _skill_roster_auto_import_enabled() and not df.empty:
         auto_populate_skill_roster({modality: df})
 
 
@@ -724,7 +728,7 @@ def initialize_data(file_path: str, modality: str) -> None:
             d['info_texts'] = data.get('info_texts', [])
             d['info_texts_by_skill'] = data.get('info_texts_by_skill', {})
 
-            if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
+            if _skill_roster_auto_import_enabled() and not df.empty:
                 auto_populate_skill_roster({modality: df})  # Returns tuple, ignore here
 
         except Exception as e:

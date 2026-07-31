@@ -356,7 +356,7 @@ function loadSummaryData() {
       if (!response.ok) throw new Error(`Worker-Last konnte nicht geladen werden (${response.status})`);
       return response.json();
     }),
-    fetch('/api/flow-balance/data').then(function(response) {
+    fetch('/api/performance/data').then(function(response) {
       if (!response.ok) throw new Error(`Flow-Daten konnten nicht geladen werden (${response.status})`);
       return response.json();
     }),
@@ -378,13 +378,13 @@ function loadSummaryData() {
     renderLeaderSections(workerPayload, flowPayload);
     renderDailyLoadCharts(dailyLoadPayload);
     if (results.every(function(result) { return result.status !== 'fulfilled'; })) {
-      throw new Error('Performance-Daten konnten nicht geladen werden.');
+      throw new Error('Analysis data could not be loaded.');
     }
   }).catch(function(error) {
-    console.error('Performance-Daten konnten nicht geladen werden:', error);
+    console.error('Analysis data could not be loaded:', error);
     const container = document.getElementById('summary-overview');
     if (container) {
-      container.innerHTML = `<div class="summary-card-empty">${escapeHtml(error.message || 'Performance-Daten konnten nicht geladen werden.')}</div>`;
+      container.innerHTML = `<div class="summary-card-empty">${escapeHtml(error.message || 'Analysis data could not be loaded.')}</div>`;
     }
   });
 }

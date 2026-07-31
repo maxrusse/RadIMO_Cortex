@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | {{ skill_labels[skill] }} Dashboard{% endblock %}
+{% block title %}RadIMO Cortex | {{ skill_labels[skill] }} Live{% endblock %}
 
 {% block styles %}
     :root {
@@ -103,6 +103,8 @@
 
     .modality-main-btn {
       flex: 1 1 auto;
+      border: 3px solid rgba(255, 255, 255, 0.82);
+      background-image: none;
     }
 
     .modality-strict-btn {
@@ -307,8 +309,8 @@
 {% block body_attrs %} data-skill="{{ skill }}"{% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | ' ~ skill_labels[skill] ~ ' Dashboard' %}
-  {% set header_subtitle = 'Intelligent Radiology Orchestration' %}
+  {% set header_title = 'RadIMO Cortex | ' ~ skill_labels[skill] ~ ' Live' %}
+  {% set header_subtitle = 'Live assignment' %}
   {% set header_mode = 'scoped' %}
   {% set active_page = 'dashboard' %}
   {% set header_nav = namespace(links=[]) %}
@@ -322,7 +324,7 @@
   {% set selector_links %}
     {% for skill_def in skill_definitions %}
     <a href="{{ url_for('routes.index_by_skill', skill=skill_def.slug, modality=modality) }}" data-skill="{{ skill_def.name }}"
-      class="selector-link{% if skill == skill_def.name %} selector-link--active{% endif %}">
+      class="selector-link{% if skill == skill_def.name %} selector-link--active{% endif %}"{% if skill == skill_def.name %} aria-current="page"{% endif %}>
       {{ skill_def.label }}
     </a>
     {% endfor %}
@@ -342,7 +344,7 @@
         {% if mod_key in regular_strict_button_modalities %}
         <button type="button"
           class="btn assignment-btn modality-strict-btn"
-          onclick="getNextAssignment('{{ mod_key }}', true)"
+          onclick="getNextAssignment('{{ mod_key }}', true, {{ 'true' if mod_key in manual_strict_select_modalities else 'false' }})"
           aria-label="Strikte Zuweisung"
           title="Strikte Zuweisung">
           *
@@ -375,6 +377,7 @@
       {% endfor %}
       {% endif %}
     </div>
+    {% include 'partials/strict_worker_select_modal.html' %}
     <div id="result"></div>
     <div class="clipboard-note">
       <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
@@ -414,9 +417,9 @@
   </section>
 
   {% if is_admin %}
-  <div class="modal-overlay" id="editModal">
+  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
     <div class="modal-content">
-      <h2>Hinweise bearbeiten</h2>
+      <h2 id="editModalTitle">Hinweise bearbeiten</h2>
       <p style="margin:0.25rem 0 0.5rem; color:#666; font-size:0.9rem;">Ein Eintrag pro Modalität für den aktuell gewählten Skill.</p>
       <div id="infoEditorRows" style="display:grid; gap:0.6rem;"></div>
       <div class="modal-buttons">
@@ -430,7 +433,7 @@
   <!-- Footer -->
   <div class="footer">
     <div id="lastAssignment" class="last-assignment"></div>
-    <div class="footer-meta">RadIMO v17 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a>
+    <div class="footer-meta">RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum &amp; EULA</a>
       {% if show_probe_badges %}
       <a href="{{ url_for('routes.status_page') }}"
         class="probe-badge probe-badge--{{ health_badge_status }}"
@@ -442,6 +445,8 @@
     </div>
   </div>
 
+  <script src="{{ url_for('static', filename='js/assignment_ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/strict_worker_select.js') }}"></script>
   <script>
     const currentSkill = "{{ skill }}";
     const skillDefinitions = JSON.parse('{{ skill_definitions|tojson|safe }}');
@@ -462,7 +467,10 @@
         const sName = a.getAttribute('data-skill');
         const sDef = skillDefinitions.find(sd => sd.name === sName);
         if (sDef) {
-          a.style.borderColor = sDef.button_color;
+          const color = sDef.button_color;
+          a.style.setProperty('--selector-color', color);
+          a.style.setProperty('--selector-soft-bg', `${color}18`);
+          a.style.setProperty('--selector-active-text', sDef.text_color || '#ffffff');
         }
       });
 
@@ -482,6 +490,8 @@
     })();
 
     let requestInProgress = false;
+    let requestSettled = true;
+    let cooldownFinished = true;
     let timerInterval, lastClickTime, disableTimeout;
     const currentSkillDef = skillDefinitions.find(s => s.name === currentSkill);
     const currentSkillSlug = currentSkillDef?.slug || (currentSkill || '').toLowerCase();
@@ -502,31 +512,51 @@
     // Button visibility is now controlled by config only
     // All modality buttons are always visible
 
-    function getNextAssignment(modality, forceStrict = false) {
+    function getNextAssignment(modality, forceStrict = false, manualSelect = false) {
       if (requestInProgress) return;
+      if (forceStrict && manualSelect) {
+        const encodedSkill = encodeURIComponent(currentSkillSlug);
+        const modalityLabel = modalities[modality]?.label || modality.toUpperCase();
+        const popupSkillLabel = StrictWorkerSelect.skillLabel(currentSkillSlug, currentSkillLabel);
+        StrictWorkerSelect.open({
+          contextText: `${modalityLabel} · ${popupSkillLabel}*`,
+          autoLabel: 'Normal / automatisch',
+          candidatesUrl: `/api/${modality}/${encodedSkill}/strict/candidates`,
+          manualUrl: `/api/${modality}/${encodedSkill}/strict/manual`,
+          onAutoAssign: () => executeAssignment(modality, true),
+          onManualStart: () => {
+            lastModalityUsed = modality;
+            setButtonsDisabled(true);
+          },
+          onManualSuccess: data => {
+            showResult(data.selected_person || '', modality);
+            setButtonsDisabled(false);
+          },
+          onManualError: error => {
+            showAssignmentError(error, modality, null, true);
+            setButtonsDisabled(false);
+          }
+        });
+        return;
+      }
+      executeAssignment(modality, forceStrict);
+    }
+
+    function executeAssignment(modality, forceStrict = false) {
       lastModalityUsed = modality;
       setButtonsDisabled(true);
       const encodedSkill = encodeURIComponent(currentSkillSlug);
       const strictSuffix = forceStrict ? ('/' + 'strict') : '';
       const endpoint = `/api/${modality}/${encodedSkill}${strictSuffix}`;
-      fetch(endpoint)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-          }
-          return response.json();
-        })
+      AssignmentUI.request(endpoint)
         .then(data => {
-          if (data.error) {
-            throw new Error(data.error);
-          }
           showResult(data.selected_person || '', modality);
         })
         .catch(e => {
           console.error("API error:", e);
-          showResult('', modality);
-          setButtonsDisabled(false);
-        });
+          showAssignmentError(e, modality, null, forceStrict);
+        })
+        .finally(() => setButtonsDisabled(false));
     }
 
     function getSpecialAssignment(modality, taskSlug, taskLabel, forceStrict = false) {
@@ -536,24 +566,27 @@
       const encodedTask = encodeURIComponent(taskSlug);
       const strictSuffix = forceStrict ? ('/' + 'strict') : '';
       const endpoint = `/api/${modality}/${encodedTask}${strictSuffix}`;
-      fetch(endpoint)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-          }
-          return response.json();
-        })
+      AssignmentUI.request(endpoint)
         .then(data => {
-          if (data.error) {
-            throw new Error(data.error);
-          }
           showResult(data.selected_person || '', modality, taskLabel);
         })
         .catch(e => {
           console.error("API error:", e);
-          showResult('', modality, taskLabel);
-          setButtonsDisabled(false);
-        });
+          showAssignmentError(e, modality, taskLabel, forceStrict);
+        })
+        .finally(() => setButtonsDisabled(false));
+    }
+
+    function showAssignmentError(error, modality, contextLabel = null, forceStrict = false) {
+      const modalityLabel = modalities[modality]?.label || modality || lastModalityUsed;
+      const context = contextLabel ? `${modalityLabel} · ${contextLabel}` : modalityLabel;
+      const message = window.RadimoI18n?.language === 'en' ? 'Assignment failed' : 'Zuweisung fehlgeschlagen';
+      const detail = AssignmentUI.message(error, { strict: forceStrict });
+      document.getElementById('result').innerHTML = `
+        <div class="result-panel result-panel--error" role="alert">
+          <div class="assigned-person">${escapeHtml(message)}</div>
+          <div class="assigned-context">${escapeHtml(context)} · ${escapeHtml(detail)}</div>
+        </div>`;
     }
 
     function showResult(person, modality, contextLabel = null) {
@@ -611,46 +644,31 @@
     }
 
     async function copyTextToClipboard(text) {
-      // Use modern Clipboard API with fallback
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(text);
-          return;
-        } catch (e) {
-          console.warn('Clipboard API failed, using fallback:', e);
-        }
-      }
-      // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.style.position = "fixed";
-      textarea.style.left = "-9999px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand('copy');
-      } catch (e) {
-        console.error('Fallback clipboard copy failed:', e);
-      }
-      document.body.removeChild(textarea);
+      await navigator.clipboard.writeText(text);
     }
 
-    // Disable buttons for 3 seconds after click (no text overlay)
+    // Keep the minimum cooldown, but never unlock before the request has settled.
     function setButtonsDisabled(disabled) {
-      if (!disabled && requestInProgress) return;
-      requestInProgress = disabled;
-      document.querySelectorAll('.assignment-btn').forEach(btn => {
-        btn.disabled = disabled;
-      });
-      if (disableTimeout) clearTimeout(disableTimeout);
       if (disabled) {
+        requestInProgress = true;
+        requestSettled = false;
+        cooldownFinished = false;
+        document.querySelectorAll('.assignment-btn').forEach(btn => { btn.disabled = true; });
+        if (disableTimeout) clearTimeout(disableTimeout);
         disableTimeout = setTimeout(() => {
-          requestInProgress = false;
-          document.querySelectorAll('.assignment-btn').forEach(btn => {
-            btn.disabled = false;
-          });
+          cooldownFinished = true;
+          unlockButtonsIfReady();
         }, 3000);
+      } else {
+        requestSettled = true;
+        unlockButtonsIfReady();
       }
+    }
+
+    function unlockButtonsIfReady() {
+      if (!requestSettled || !cooldownFinished) return;
+      requestInProgress = false;
+      document.querySelectorAll('.assignment-btn').forEach(btn => { btn.disabled = false; });
     }
 
     function renderInfoTextsAll() {

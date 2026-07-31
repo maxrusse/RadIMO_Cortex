@@ -191,7 +191,7 @@ def _write_demo_master_csv(target: date, preload: date) -> dict[str, int]:
                 "Datum",
                 "Beschreibung der Aktivität",
                 "Name des Mitarbeiters",
-                "Code des Mitarbeiters",
+                "Personalnummer",
                 "Tageszeit",
             ]
         )

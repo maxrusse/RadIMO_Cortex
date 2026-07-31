@@ -1,11 +1,7 @@
 """
 Centralized JSON data file management module.
 
-This module provides:
-- Centralized file paths for all JSON data files
-- Automatic backup rotation (n backups on changes)
-- Legacy entry cleanup methods for each JSON type
-- Thread-safe file operations with atomic writes
+This module provides centralized paths, backup rotation, and atomic JSON I/O.
 """
 import os
 import json
@@ -14,7 +10,7 @@ import glob as glob_module
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
-from typing import Dict, Any, List, Optional
+from typing import Any, Optional
 
 # -----------------------------------------------------------
 # File Path Configuration
@@ -147,44 +143,6 @@ def save_json(
                 except OSError:
                     pass
             return False
-
-
-# -----------------------------------------------------------
-# Migration Helpers
-# -----------------------------------------------------------
-
-def migrate_file_to_data_dir(old_path: str, new_path: str) -> bool:
-    """
-    Migrate a file from old location to new data directory.
-
-    Args:
-        old_path: Current file path
-        new_path: New path in data directory
-
-    Returns:
-        True if migration was successful or file didn't exist
-    """
-    if not os.path.exists(old_path):
-        return True
-
-    ensure_data_dirs()
-
-    try:
-        # Don't overwrite if new file already exists
-        if os.path.exists(new_path):
-            # Keep the newer file
-            old_mtime = os.path.getmtime(old_path)
-            new_mtime = os.path.getmtime(new_path)
-            if old_mtime > new_mtime:
-                shutil.copy2(old_path, new_path)
-        else:
-            shutil.copy2(old_path, new_path)
-
-        # Remove old file after successful copy
-        os.remove(old_path)
-        return True
-    except OSError:
-        return False
 
 
 # Ensure directories exist on module load

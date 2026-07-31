@@ -11,7 +11,8 @@ import yaml
 
 from balancer import get_next_available_worker
 from config import SKILL_COLUMNS, allowed_modalities
-from data_manager import global_worker_data, modality_data, worker_management
+from data_manager import global_worker_data, modality_data
+import data_manager.worker_management as worker_management
 from data_manager.csv_parser import build_working_hours_from_medweb
 from lib.utils import normalize_skill_value
 from state_manager import get_state
