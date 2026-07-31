@@ -3,7 +3,7 @@ medweb_mapping:
     date: Datum
     activity: Beschreibung der Aktivität
     employee_name: Name des Mitarbeiters
-    employee_code: Code des Mitarbeiters
+    employee_personalnummer: Personalnummer
   rules:
   - match: Privat Specialist Shift
     type: shift

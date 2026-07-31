@@ -1,15 +1,14 @@
 """
 Schedule CRUD operations module.
 
-This module handles:
-- Row-level schedule updates (update, add, delete)
-- Gap rows (independent entries that override shift availability)
-- Worker tracking reconciliation
-- Overlapping shift resolution
+This module handles row-level edits, atomic cross-modality worker plans,
+gap-batch insertion, worker tracking reconciliation, and overlap resolution.
 """
 import copy
+import hashlib
+import json
 from datetime import datetime, time, date
-from typing import Optional, Dict, List, Tuple
+from typing import Any, Optional, Dict, List, Tuple
 
 import pandas as pd
 
@@ -20,6 +19,7 @@ from config import (
 )
 from lib.utils import (
     TIME_FORMAT,
+    format_time_value,
     is_weighted_skill,
     normalize_skill_value,
     get_local_now,
@@ -28,6 +28,7 @@ from lib.utils import (
     merge_intervals,
     strip_builder_fields,
     coerce_bool,
+    skill_value_to_display,
 )
 from state_manager import StateManager
 from data_manager.file_ops import (
@@ -42,6 +43,11 @@ _state = StateManager.get_instance()
 global_worker_data = _state.global_worker_data
 modality_data = _state.modality_data
 staged_modality_data = _state.staged_modality_data
+def _coerce_row_index(row_index: object) -> Optional[int]:
+    try:
+        return int(row_index)
+    except (TypeError, ValueError):
+        return None
 
 
 def _validate_row_index(df: pd.DataFrame, row_index: int) -> bool:
@@ -49,6 +55,119 @@ def _validate_row_index(df: pd.DataFrame, row_index: int) -> bool:
     if df is None:
         return False
     return row_index in df.index
+
+
+def _parse_row_tasks(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(task).strip() for task in value if str(task).strip()]
+    if isinstance(value, str) and value:
+        return [task.strip() for task in value.split(',') if task.strip()]
+    return []
+
+
+def _get_counts_for_hours_value(row: Any) -> bool:
+    value = row.get('counts_for_hours', True)
+    try:
+        if pd.isna(value):
+            return True
+    except Exception:
+        pass
+    coerced = coerce_bool(value)
+    return True if coerced is None else bool(coerced)
+
+
+def _normalize_identity_row_type(row_type: Any) -> str:
+    return 'gap' if _is_gap_row_type(row_type) else 'shift'
+
+
+def build_schedule_row_uid(modality: str, row: Any) -> str:
+    """Build a deterministic content fingerprint for row-level edit guards."""
+    raw_row_type = row.get('row_type', 'shift')
+    row_type = _normalize_identity_row_type(raw_row_type)
+    training = coerce_bool(row.get('training'))
+    if training is None:
+        training = row_type != 'gap'
+    modifier = row.get('Modifier', 1.0)
+    try:
+        modifier = float(modifier) if pd.notnull(modifier) else 1.0
+    except (TypeError, ValueError):
+        modifier = 1.0
+    payload = {
+        'modality': str(modality or '').lower(),
+        'PPL': str(row.get('PPL', '') or ''),
+        'start_time': format_time_value(row.get('start_time')),
+        'end_time': format_time_value(row.get('end_time')),
+        'Modifier': modifier,
+        'tasks': _parse_row_tasks(row.get('tasks', '')),
+        'counts_for_hours': _get_counts_for_hours_value(row),
+        'row_type': row_type,
+        'training': bool(training),
+        'skills': {
+            skill: skill_value_to_display(row.get(skill, None))
+            for skill in SKILL_COLUMNS
+        },
+    }
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True, separators=(',', ':'))
+    return hashlib.sha1(encoded.encode('utf-8')).hexdigest()
+
+
+def _verify_row_identity(
+    df: pd.DataFrame,
+    row_index: int,
+    modality: str,
+    verify_ppl: Optional[str] = None,
+    verify_row_uid: Optional[str] = None,
+) -> bool:
+    if not _validate_row_index(df, row_index):
+        return False
+    row = df.loc[row_index]
+    if verify_ppl and str(row.get('PPL')) != str(verify_ppl):
+        return False
+    if verify_row_uid:
+        return build_schedule_row_uid(modality, row) == str(verify_row_uid)
+    return True
+
+
+def _resolve_verified_row_index(
+    df: pd.DataFrame,
+    modality: str,
+    row_index: object,
+    verify_ppl: Optional[str] = None,
+    verify_row_uid: Optional[str] = None,
+) -> Tuple[bool, Optional[int], str]:
+    row_index_int = _coerce_row_index(row_index)
+    expected_uid = str(verify_row_uid or '').strip()
+
+    if row_index_int is not None and _verify_row_identity(
+        df,
+        row_index_int,
+        modality,
+        verify_ppl=verify_ppl,
+        verify_row_uid=expected_uid or None,
+    ):
+        return True, row_index_int, ''
+
+    if expected_uid:
+        matches: List[int] = []
+        if df is not None:
+            for idx, row in df.iterrows():
+                if verify_ppl and str(row.get('PPL')) != str(verify_ppl):
+                    continue
+                if build_schedule_row_uid(modality, row) == expected_uid:
+                    matches.append(int(idx))
+        if len(matches) == 1:
+            return True, matches[0], ''
+        if len(matches) > 1:
+            return False, None, 'Row match is ambiguous. Reload before saving.'
+        return False, None, 'Row changed or no longer exists. Reload before saving.'
+
+    if row_index_int is None:
+        return False, None, 'Invalid row index'
+    if not _validate_row_index(df, row_index_int):
+        return False, None, 'Invalid row index'
+    if verify_ppl and str(df.loc[row_index_int, 'PPL']) != str(verify_ppl):
+        return False, None, 'Row mismatch: Schedule has changed. Please reload.'
+    return True, row_index_int, ''
 
 
 def _ensure_row_type_column(df: pd.DataFrame) -> None:
@@ -234,30 +353,6 @@ def build_day_plan_rows(rows: List[dict], target_date: date) -> List[dict]:
     return built_rows
 
 
-def _recalculate_worker_shift_durations(df: pd.DataFrame, worker_name: str) -> None:
-    if df is None or df.empty:
-        return
-    _ensure_row_type_column(df)
-    worker_rows = df[df['PPL'] == worker_name]
-    if worker_rows.empty:
-        return
-    for idx, row in worker_rows[~worker_rows['row_type'].apply(_is_gap_row_type)].iterrows():
-        start = row.get('start_time')
-        end = row.get('end_time')
-        if pd.isna(start) or pd.isna(end):
-            df.at[idx, 'shift_duration'] = 0.0
-            df.at[idx, 'counts_for_hours'] = False
-            continue
-        if not _is_valid_time_window(start, end):
-            df.at[idx, 'shift_duration'] = 0.0
-            df.at[idx, 'counts_for_hours'] = False
-            continue
-        total_minutes = _time_to_minutes(end) - _time_to_minutes(start)
-        df.at[idx, 'shift_duration'] = round(total_minutes / 60.0, 4)
-        if total_minutes <= 0:
-            df.at[idx, 'counts_for_hours'] = False
-
-
 def _coerce_bool(value: Optional[object]) -> Optional[bool]:
     """Normalize various truthy/falsey inputs into a bool or None."""
     if value is None:
@@ -288,6 +383,102 @@ def _get_staged_target_date() -> date:
             except ValueError:
                 continue
     return get_next_workday().date()
+
+
+def _is_in_place_row_update(updates: dict) -> bool:
+    """Return True when a row update cannot affect segmentation/order."""
+    if not isinstance(updates, dict) or not updates:
+        return False
+    in_place_fields = set(SKILL_COLUMNS) | {'Modifier'}
+    return all(field in in_place_fields for field in updates)
+
+
+def _apply_in_place_schedule_row_update(
+    modality: str,
+    row_index: int,
+    updates: dict,
+    use_staged: bool,
+    verify_ppl: Optional[str] = None,
+    verify_row_uid: Optional[str] = None,
+) -> tuple:
+    """Apply skill/modifier updates without rebuilding the worker row set."""
+    data_dict = _get_schedule_data_dict(modality, use_staged)
+
+    with _state.lock:
+        df = data_dict['working_hours_df']
+        _ensure_row_type_column(df)
+
+        resolved, row_index_int, error = _resolve_verified_row_index(
+            df,
+            modality,
+            row_index,
+            verify_ppl=verify_ppl,
+            verify_row_uid=verify_row_uid,
+        )
+        if not resolved or row_index_int is None:
+            return False, error or 'Invalid row index'
+
+        worker_name = df.at[row_index_int, 'PPL']
+        if verify_ppl and str(worker_name) != str(verify_ppl):
+            return False, 'Row mismatch: Schedule has changed. Please reload.'
+
+        state_before = {
+            'working_hours_df': df.copy(deep=True),
+            'worker_modifiers': copy.deepcopy(data_dict.get('worker_modifiers', {})),
+            'total_work_hours': copy.deepcopy(data_dict.get('total_work_hours', {})),
+            'last_modified': data_dict.get('last_modified'),
+            'last_prepped_at': data_dict.get('last_prepped_at'),
+        }
+        tracking_before = {
+            key: copy.deepcopy(global_worker_data.get(key))
+            for key in ('assignments_per_mod', 'weighted_counts', 'manual_weight_totals')
+        }
+
+        try:
+            is_gap_row = _is_gap_row_type(df.at[row_index_int, 'row_type'])
+            training = coerce_bool(df.at[row_index_int, 'training']) if 'training' in df.columns else None
+            if training is None:
+                training = not is_gap_row
+            for col, value in updates.items():
+                if col in SKILL_COLUMNS:
+                    normalized_value = normalize_skill_value(value)
+                    if is_gap_row or (training is False and is_weighted_skill(normalized_value)):
+                        normalized_value = -1
+                    df.at[row_index_int, col] = normalized_value
+                elif col == 'Modifier':
+                    df.at[row_index_int, col] = float(value)
+
+            data_dict['total_work_hours'] = _calculate_total_work_hours(df)
+            if use_staged:
+                modified_at = get_local_now()
+                data_dict['last_modified'] = modified_at
+                data_dict['last_prepped_at'] = modified_at.strftime('%d.%m.%Y %H:%M')
+            else:
+                invalidate_work_hours_cache(modality)
+                reconcile_live_worker_tracking(modality)
+
+            persist_schedule_snapshot(use_staged=use_staged)
+            return True, {'reindexed': False}
+        except Exception as exc:
+            data_dict['working_hours_df'] = state_before['working_hours_df']
+            data_dict['worker_modifiers'] = state_before['worker_modifiers']
+            data_dict['total_work_hours'] = state_before['total_work_hours']
+            data_dict['last_modified'] = state_before['last_modified']
+            data_dict['last_prepped_at'] = state_before['last_prepped_at']
+            if not use_staged:
+                invalidate_work_hours_cache(modality)
+            for key, previous in tracking_before.items():
+                global_worker_data[key] = previous
+            selection_logger.error(
+                "Failed to persist in-place %s schedule update for %s/%s row %s; rolled back: %s",
+                "staged" if use_staged else "live",
+                modality,
+                worker_name,
+                row_index_int,
+                exc,
+                exc_info=True,
+            )
+            return False, 'Schedule could not be persisted. No changes were applied.'
 
 
 def _get_active_worker_names(df: Optional[pd.DataFrame]) -> set:
@@ -470,6 +661,7 @@ def _update_schedule_row(
     updates: dict,
     use_staged: bool,
     verify_ppl: Optional[str] = None,
+    verify_row_uid: Optional[str] = None,
 ) -> tuple:
     """Update a single row in the schedule.
 
@@ -482,20 +674,39 @@ def _update_schedule_row(
     df = data_dict['working_hours_df']
     _ensure_row_type_column(df)
 
-    if not _validate_row_index(df, row_index):
-        return False, 'Invalid row index'
+    if not isinstance(updates, dict):
+        return False, 'Invalid updates'
+
+    resolved, row_index_int, error = _resolve_verified_row_index(
+        df,
+        modality,
+        row_index,
+        verify_ppl=verify_ppl,
+        verify_row_uid=verify_row_uid,
+    )
+    if not resolved or row_index_int is None:
+        return False, error or 'Invalid row index'
 
     try:
         if 'PPL' in updates:
             return False, 'Worker renames are only allowed in the skill roster'
-        worker_name = df.at[row_index, 'PPL']
+        worker_name = df.at[row_index_int, 'PPL']
         if verify_ppl and str(worker_name) != str(verify_ppl):
             return False, 'Row mismatch: Schedule has changed. Please reload.'
+        if _is_in_place_row_update(updates):
+            return _apply_in_place_schedule_row_update(
+                modality,
+                row_index_int,
+                updates,
+                use_staged,
+                verify_ppl=verify_ppl,
+                verify_row_uid=verify_row_uid,
+            )
         worker_rows = df[df['PPL'] == worker_name].copy()
         rows_with_index = [(idx, row.to_dict()) for idx, row in worker_rows.iterrows()]
 
         for idx, row in rows_with_index:
-            if idx != row_index:
+            if idx != row_index_int:
                 continue
             for col, value in updates.items():
                 if col in ['start_time', 'end_time']:
@@ -531,7 +742,7 @@ def _update_schedule_row(
         raw_rows = []
         updated_row = None
         for idx, row in rows_with_index:
-            if idx == row_index:
+            if idx == row_index_int:
                 updated_row = row
             else:
                 raw_rows.append(row)
@@ -570,106 +781,17 @@ def update_schedule_row(
     updates: dict,
     use_staged: bool,
     verify_ppl: Optional[str] = None,
+    verify_row_uid: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for updating a schedule row."""
-    return _update_schedule_row(modality, row_index, updates, use_staged, verify_ppl=verify_ppl)
-
-
-def _add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) -> tuple:
-    """Add a new worker row to the schedule.
-
-    Returns:
-        (success: bool, row_index_or_info: int or dict, error: str or None)
-        On success: (True, {'row_index': int, 'reindexed': bool}, None)
-        On failure: (False, None, error_message)
-    """
-    data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
-
-    try:
-        ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
-        row_type = worker_data.get('row_type', 'shift')
-        if _is_gap_row_type(row_type):
-            row_type = 'gap'
-        training = _coerce_bool(worker_data.get('training'))
-        new_row = {
-            'PPL': ppl_name,
-            'start_time': datetime.strptime(worker_data.get('start_time', '07:00'), TIME_FORMAT).time(),
-            'end_time': datetime.strptime(worker_data.get('end_time', '15:00'), TIME_FORMAT).time(),
-            'Modifier': float(worker_data.get('Modifier', 1.0)),
-            'row_type': row_type,
-            'training': False if row_type == 'gap' else (training if training is not None else True),
-        }
-
-        # Only add TIME if the existing df has TIME column (for consistency)
-        if df is not None and 'TIME' in df.columns:
-            new_row['TIME'] = f"{new_row['start_time'].strftime(TIME_FORMAT)}-{new_row['end_time'].strftime(TIME_FORMAT)}"
-
-        for skill in SKILL_COLUMNS:
-            default_value = -1 if row_type == 'gap' else 0
-            new_row[skill] = normalize_skill_value(worker_data.get(skill, default_value))
-
-        tasks = worker_data.get('tasks', [])
-        if isinstance(tasks, list):
-            new_row['tasks'] = ', '.join(tasks)
-        else:
-            new_row['tasks'] = tasks or ''
-
-        start_dt = datetime.combine(datetime.today(), new_row['start_time'])
-        end_dt = datetime.combine(datetime.today(), new_row['end_time'])
-        # Same-day only: duration is 0 if end <= start
-        if end_dt > start_dt and row_type != 'gap':
-            new_row['shift_duration'] = (end_dt - start_dt).total_seconds() / 3600
-        else:
-            new_row['shift_duration'] = 0.0
-
-        counts_for_hours = worker_data.get('counts_for_hours', row_type != 'gap')
-        coerced = _coerce_bool(counts_for_hours)
-        new_row['counts_for_hours'] = coerced if coerced is not None else row_type != 'gap'
-        existing_rows = []
-        if df is not None and not df.empty:
-            existing_rows = df[df['PPL'] == ppl_name].to_dict('records')
-        raw_rows = existing_rows + [new_row]
-
-        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
-        success, info, error = _replace_worker_schedule(
-            modality,
-            ppl_name,
-            raw_rows,
-            use_staged=use_staged,
-            target_date=target_date,
-        )
-        if not success:
-            return False, None, error
-
-        new_df = data_dict['working_hours_df']
-        new_idx = None
-        if new_df is not None and not new_df.empty:
-            if row_type == 'gap':
-                row_type_mask = new_df['row_type'].apply(_is_gap_row_type)
-            else:
-                row_type_mask = ~new_df['row_type'].apply(_is_gap_row_type)
-            matches = new_df[
-                (new_df['PPL'] == ppl_name) &
-                row_type_mask &
-                (new_df['start_time'] == new_row['start_time']) &
-                (new_df['end_time'] == new_row['end_time']) &
-                (new_df['tasks'] == new_row['tasks'])
-            ]
-            if not matches.empty:
-                new_idx = int(matches.index[-1])
-
-        return True, {'row_index': new_idx, 'reindexed': info.get('reindexed', False)}, None
-
-    except ValueError as e:
-        return False, None, f'Invalid time format: {e}'
-    except Exception as e:
-        return False, None, str(e)
-
-
-def add_worker_to_schedule(modality: str, worker_data: dict, use_staged: bool) -> tuple:
-    """Public wrapper for adding a worker to a schedule."""
-    return _add_worker_to_schedule(modality, worker_data, use_staged)
+    return _update_schedule_row(
+        modality,
+        row_index,
+        updates,
+        use_staged,
+        verify_ppl=verify_ppl,
+        verify_row_uid=verify_row_uid,
+    )
 
 
 def _replace_worker_schedule(
@@ -776,11 +898,6 @@ def _build_replaced_worker_schedule_df(
 
     reindexed = original_worker_count != len(plan_rows)
     return df, {'reindexed': reindexed}
-
-
-def replace_worker_schedule(modality: str, worker_name: str, rows: list, use_staged: bool) -> tuple:
-    """Public wrapper for replacing a worker schedule."""
-    return _replace_worker_schedule(modality, worker_name, rows, use_staged)
 
 
 def replace_worker_schedule_all(
@@ -898,143 +1015,6 @@ def replace_worker_schedule_all(
         return True, {'modalities': result_by_modality}, None
 
 
-def _delete_worker_from_schedule(modality: str, row_index: int, use_staged: bool, verify_ppl: Optional[str] = None) -> tuple:
-    """Delete a worker row from the schedule."""
-    data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
-
-    try:
-        row_index_int = int(row_index)
-    except (TypeError, ValueError):
-        return False, None, 'Invalid row index'
-
-    if not _validate_row_index(df, row_index_int):
-        return False, None, 'Invalid row index'
-
-    try:
-        worker_name = df.loc[row_index_int, 'PPL']
-
-        if verify_ppl and str(worker_name) != str(verify_ppl):
-            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
-
-        remaining_rows = df.drop(index=row_index_int).reset_index(drop=True)
-        worker_rows = remaining_rows[remaining_rows['PPL'] == worker_name].to_dict('records')
-        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
-        success, _, error = _replace_worker_schedule(
-            modality,
-            worker_name,
-            worker_rows,
-            use_staged=use_staged,
-            target_date=target_date,
-        )
-        if not success:
-            return False, None, error
-        return True, worker_name, None
-
-    except Exception as e:
-        return False, None, str(e)
-
-
-def delete_worker_from_schedule(
-    modality: str,
-    row_index: int,
-    use_staged: bool,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Public wrapper for deleting a worker from a schedule."""
-    return _delete_worker_from_schedule(modality, row_index, use_staged, verify_ppl=verify_ppl)
-
-
-def _add_gap_to_schedule(
-    modality: str,
-    row_index: int,
-    gap_type: str,
-    gap_start: str,
-    gap_end: str,
-    use_staged: bool,
-    gap_counts_for_hours: Optional[bool] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Add a gap intent row for a worker (canonicalized to gap segments on rebuild)."""
-    data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
-
-    if not _validate_row_index(df, row_index):
-        return False, None, 'Invalid row index'
-
-    try:
-        _ensure_row_type_column(df)
-        worker_name = df.loc[row_index, 'PPL']
-        if verify_ppl and str(worker_name) != str(verify_ppl):
-            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
-
-        gap_start_time = datetime.strptime(gap_start, TIME_FORMAT).time()
-        gap_end_time = datetime.strptime(gap_end, TIME_FORMAT).time()
-
-        if gap_start_time >= gap_end_time:
-            return False, None, 'Gap start time must be before gap end time'
-
-        normalized_gap_counts = _coerce_bool(gap_counts_for_hours)
-        if normalized_gap_counts is None:
-            normalized_gap_counts = False
-
-        gap_row = {
-            'PPL': worker_name,
-            'start_time': gap_start_time,
-            'end_time': gap_end_time,
-            'Modifier': 1.0,
-            'tasks': gap_type,
-            'counts_for_hours': normalized_gap_counts,
-            'row_type': 'gap',
-        }
-        for skill in SKILL_COLUMNS:
-            gap_row[skill] = -1
-
-        existing_rows = df[df['PPL'] == worker_name].to_dict('records')
-        raw_rows = existing_rows + [gap_row]
-        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
-        success, _, error = _replace_worker_schedule(
-            modality,
-            worker_name,
-            raw_rows,
-            use_staged=use_staged,
-            target_date=target_date,
-        )
-        if not success:
-            return False, None, error
-        log_prefix = "STAGED: " if use_staged else ""
-        selection_logger.info(f"{log_prefix}Added gap ({gap_type}) for {worker_name} {gap_start}-{gap_end}")
-        return True, 'gap_added', None
-
-    except ValueError as e:
-        return False, None, f'Invalid time format: {e}'
-    except Exception as e:
-        return False, None, str(e)
-
-
-def add_gap_to_schedule(
-    modality: str,
-    row_index: int,
-    gap_type: str,
-    gap_start: str,
-    gap_end: str,
-    use_staged: bool,
-    gap_counts_for_hours: Optional[bool] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Public wrapper for adding a gap to a schedule."""
-    return _add_gap_to_schedule(
-        modality,
-        row_index,
-        gap_type,
-        gap_start,
-        gap_end,
-        use_staged,
-        gap_counts_for_hours=gap_counts_for_hours,
-        verify_ppl=verify_ppl,
-    )
-
-
 def add_gap_to_schedule_batch(
     row_index_map: dict,
     gap_type: str,
@@ -1043,6 +1023,7 @@ def add_gap_to_schedule_batch(
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
     verify_ppl: Optional[str] = None,
+    row_uid_map: Optional[dict] = None,
 ) -> tuple:
     """Public wrapper for adding a gap to multiple modality rows atomically."""
     return _add_gap_to_schedule_batch(
@@ -1053,6 +1034,7 @@ def add_gap_to_schedule_batch(
         use_staged,
         gap_counts_for_hours=gap_counts_for_hours,
         verify_ppl=verify_ppl,
+        row_uid_map=row_uid_map,
     )
 
 
@@ -1064,6 +1046,7 @@ def _add_gap_to_schedule_batch(
     use_staged: bool,
     gap_counts_for_hours: Optional[bool] = None,
     verify_ppl: Optional[str] = None,
+    row_uid_map: Optional[dict] = None,
 ) -> tuple:
     """Add a gap intent row for a worker across multiple modalities atomically."""
     if not row_index_map:
@@ -1094,18 +1077,21 @@ def _add_gap_to_schedule_batch(
                 return False, None, f'Invalid modality: {modality}'
             data_dict = data_dicts[modality_key]
             df = data_dict['working_hours_df']
+            verify_row_uid = (row_uid_map or {}).get(modality)
+            if verify_row_uid is None:
+                verify_row_uid = (row_uid_map or {}).get(modality_key)
 
-            try:
-                row_index_int = int(row_index)
-            except (TypeError, ValueError):
-                return False, None, 'Invalid row index'
-
-            if not _validate_row_index(df, row_index_int):
-                return False, None, 'Invalid row index'
+            resolved, row_index_int, error = _resolve_verified_row_index(
+                df,
+                modality_key,
+                row_index,
+                verify_ppl=verify_ppl,
+                verify_row_uid=verify_row_uid,
+            )
+            if not resolved or row_index_int is None:
+                return False, None, error or 'Invalid row index'
 
             row_worker = df.loc[row_index_int, 'PPL']
-            if verify_ppl and str(row_worker) != str(verify_ppl):
-                return False, None, 'Row mismatch: Schedule has changed. Please reload.'
             if worker_name is None:
                 worker_name = row_worker
             elif str(row_worker) != str(worker_name):
@@ -1155,205 +1141,3 @@ def _add_gap_to_schedule_batch(
         return False, None, f'Invalid time format: {e}'
     except Exception as e:
         return False, None, str(e)
-
-
-def _remove_gap_from_schedule(
-    modality: str,
-    row_index: int,
-    gap_index: Optional[int],
-    use_staged: bool,
-    gap_match: Optional[dict] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Remove a gap intent row from a worker's schedule."""
-    data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
-
-    if not _validate_row_index(df, row_index):
-        return False, None, 'Invalid row index'
-
-    try:
-        _ensure_row_type_column(df)
-        worker_name = df.loc[row_index, 'PPL']
-        if verify_ppl and str(worker_name) != str(verify_ppl):
-            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
-
-        if not gap_match:
-            return False, None, 'Gap match criteria required'
-
-        match_start = gap_match.get('start')
-        match_end = gap_match.get('end')
-        match_activity = gap_match.get('activity')
-
-        if not match_start or not match_end:
-            return False, None, 'Gap start and end are required'
-
-        start_time = datetime.strptime(match_start, TIME_FORMAT).time()
-        end_time = datetime.strptime(match_end, TIME_FORMAT).time()
-
-        gap_candidates = df[
-            (df['PPL'] == worker_name) &
-            (df['row_type'].apply(_is_gap_row_type)) &
-            (df['start_time'] == start_time) &
-            (df['end_time'] == end_time)
-        ]
-
-        if match_activity:
-            gap_candidates = gap_candidates[gap_candidates['tasks'] == match_activity]
-
-        if gap_candidates.empty:
-            return False, None, 'Gap not found for removal'
-
-        gap_row_idx = gap_candidates.index[0]
-        removed_gap = df.loc[gap_row_idx]
-        remaining_rows = df.drop(index=gap_row_idx).reset_index(drop=True)
-        worker_rows = remaining_rows[remaining_rows['PPL'] == worker_name].to_dict('records')
-        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
-        success, _, error = _replace_worker_schedule(
-            modality,
-            worker_name,
-            worker_rows,
-            use_staged=use_staged,
-            target_date=target_date,
-        )
-        if not success:
-            return False, None, error
-        log_prefix = "STAGED: " if use_staged else ""
-        selection_logger.info(
-            f"{log_prefix}Removed gap [{removed_gap.get('tasks', 'unknown')}] "
-            f"({match_start}-{match_end}) for {worker_name}"
-        )
-        return True, 'gap_removed', None
-
-    except Exception as e:
-        return False, None, str(e)
-
-
-def remove_gap_from_schedule(
-    modality: str,
-    row_index: int,
-    gap_index: Optional[int],
-    use_staged: bool,
-    gap_match: Optional[dict] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Public wrapper for removing a gap from a schedule."""
-    return _remove_gap_from_schedule(
-        modality,
-        row_index,
-        gap_index,
-        use_staged,
-        gap_match=gap_match,
-        verify_ppl=verify_ppl,
-    )
-
-
-def _update_gap_in_schedule(
-    modality: str,
-    row_index: int,
-    gap_index: Optional[int],
-    new_start: Optional[str],
-    new_end: Optional[str],
-    new_activity: Optional[str],
-    use_staged: bool,
-    new_counts_for_hours: Optional[bool] = None,
-    gap_match: Optional[dict] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Update a gap intent row in a worker's schedule."""
-    data_dict = _get_schedule_data_dict(modality, use_staged)
-    df = data_dict['working_hours_df']
-
-    if not _validate_row_index(df, row_index):
-        return False, None, 'Invalid row index'
-
-    try:
-        _ensure_row_type_column(df)
-        worker_name = df.loc[row_index, 'PPL']
-        if verify_ppl and str(worker_name) != str(verify_ppl):
-            return False, None, 'Row mismatch: Schedule has changed. Please reload.'
-
-        if not gap_match:
-            return False, None, 'Gap match criteria required'
-
-        match_start = gap_match.get('start')
-        match_end = gap_match.get('end')
-        match_activity = gap_match.get('activity')
-
-        if not match_start or not match_end:
-            return False, None, 'Gap start and end are required'
-
-        start_time = datetime.strptime(match_start, TIME_FORMAT).time()
-        end_time = datetime.strptime(match_end, TIME_FORMAT).time()
-
-        gap_candidates = df[
-            (df['PPL'] == worker_name) &
-            (df['row_type'].apply(_is_gap_row_type)) &
-            (df['start_time'] == start_time) &
-            (df['end_time'] == end_time)
-        ]
-        if match_activity:
-            gap_candidates = gap_candidates[gap_candidates['tasks'] == match_activity]
-        if gap_candidates.empty:
-            return False, None, 'Gap not found for update'
-
-        gap_row_idx = gap_candidates.index[0]
-
-        if new_start is not None:
-            df.at[gap_row_idx, 'start_time'] = datetime.strptime(new_start, TIME_FORMAT).time()
-        if new_end is not None:
-            df.at[gap_row_idx, 'end_time'] = datetime.strptime(new_end, TIME_FORMAT).time()
-        if new_activity is not None:
-            df.at[gap_row_idx, 'tasks'] = new_activity
-        normalized_gap_counts = _coerce_bool(new_counts_for_hours)
-        if normalized_gap_counts is not None:
-            df.at[gap_row_idx, 'counts_for_hours'] = normalized_gap_counts
-
-        worker_rows = df[df['PPL'] == worker_name].to_dict('records')
-        target_date = _get_staged_target_date() if use_staged else datetime.today().date()
-        success, _, error = _replace_worker_schedule(
-            modality,
-            worker_name,
-            worker_rows,
-            use_staged=use_staged,
-            target_date=target_date,
-        )
-        if not success:
-            return False, None, error
-        log_prefix = "STAGED: " if use_staged else ""
-        selection_logger.info(
-            f"{log_prefix}Updated gap ({match_start}-{match_end}) for {worker_name}"
-        )
-        return True, 'gap_updated', None
-
-    except ValueError as e:
-        return False, None, f'Invalid time format: {e}'
-    except Exception as e:
-        return False, None, str(e)
-
-
-def update_gap_in_schedule(
-    modality: str,
-    row_index: int,
-    gap_index: Optional[int],
-    new_start: Optional[str],
-    new_end: Optional[str],
-    new_activity: Optional[str],
-    use_staged: bool,
-    new_counts_for_hours: Optional[bool] = None,
-    gap_match: Optional[dict] = None,
-    verify_ppl: Optional[str] = None,
-) -> tuple:
-    """Public wrapper for updating a gap in a schedule."""
-    return _update_gap_in_schedule(
-        modality,
-        row_index,
-        gap_index,
-        new_start,
-        new_end,
-        new_activity,
-        use_staged,
-        new_counts_for_hours=new_counts_for_hours,
-        gap_match=gap_match,
-        verify_ppl=verify_ppl,
-    )

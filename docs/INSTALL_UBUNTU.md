@@ -1,10 +1,10 @@
 # Ubuntu Install Guide
 
-Deploy `radimo_dev` as **RadIMO Cortex** on a fresh Ubuntu server for intranet use.
+Deploy RadIMO Cortex on a fresh Ubuntu server for intranet use.
 
 This guide assumes:
 - a single Ubuntu host
-- the application code already exists in the `radimo_dev` folder
+- the application code will be deployed to `/opt/radimo`
 - users access the service inside a closed intranet
 - current runtime state should be copied from the existing instance
 
@@ -16,7 +16,8 @@ From the current repository:
 - Flask app entrypoint: `app.py`
 - Gunicorn entrypoint: `app:app`
 - Gunicorn config: `gunicorn_config.py`
-- Runtime config: `config.yaml`
+- Config template: `config.demo.yaml`
+- Runtime config: local, ignored `config.yaml` created from the template
 - Persistent runtime folders: `data/`, `uploads/`, `logs/`
 - Health endpoints: `/healthz`, `/readyz`, `/status`
 
@@ -69,13 +70,21 @@ sudo chown -R svc-radimo:svc-radimo /opt/radimo
 
 Do not rely on a developer home directory for the live service.
 
+Create the deployment-local configuration if it was not supplied separately:
+
+```bash
+sudo -u svc-radimo cp /opt/radimo/config.demo.yaml /opt/radimo/config.yaml
+sudo chmod 600 /opt/radimo/config.yaml
+```
+
+`config.yaml` is intentionally ignored by Git. Do not add the live file or its credentials to the repository.
+
 ---
 
 ## 3. Create the Python Environment
 
 ```bash
 sudo -u svc-radimo python3 -m venv /opt/radimo/.venv
-sudo -u svc-radimo /opt/radimo/.venv/bin/pip install --upgrade pip
 sudo -u svc-radimo /opt/radimo/.venv/bin/pip install -r /opt/radimo/requirements.txt
 ```
 
@@ -89,7 +98,8 @@ sudo -u svc-radimo /opt/radimo/.venv/bin/python -c "import flask, pandas, yaml, 
 
 ## 4. Copy Current Runtime State
 
-If the new server should start with the current live data, copy these paths from the existing instance:
+If the new server should start with the current live data, stop the source service
+or make a consistent backup first, then copy these paths from the existing instance:
 
 ```text
 data/worker_skill_roster.json
@@ -99,6 +109,9 @@ uploads/master_medweb.csv
 uploads/backups/
 ```
 
+Copy the deployment-local `config.yaml` separately and keep its permissions at
+`600`. Do not replace it with the tracked demo template during a normal update.
+
 Usually you do **not** need to copy:
 - `logs/`
 - `.pytest_cache/`
@@ -107,9 +120,9 @@ Usually you do **not** need to copy:
 
 ---
 
-## 5. Rotate Secrets Before Go-Live
+## 5. Replace Demo Credentials Before Go-Live
 
-Edit `config.yaml` on the new server and change:
+The tracked demo file uses the intentionally public password `radimo`. Edit the local `config.yaml` on the new server and change:
 - `secret_key`
 - `admin_password`
 - `access_password` if basic access should be enabled
@@ -174,7 +187,9 @@ Install nginx:
 sudo apt install -y nginx
 ```
 
-Change Gunicorn to listen only on localhost by overriding the bind setting in `gunicorn_config.py` or via the systemd `ExecStart` command. The target should be:
+The checked-in Gunicorn configuration listens on `0.0.0.0:5035`. For nginx, make
+Gunicorn listen only on localhost in the deployment copy (or override it in the
+systemd `ExecStart` command):
 
 ```text
 127.0.0.1:5035
@@ -222,7 +237,7 @@ If you later receive a real hostname, replace `server_name _;` with that intrane
 - `/readyz` returns HTTP `200`
 - `/status` renders correctly
 - admin login works with the rotated password
-- current roster and weights are visible in the UI
+- current roster and weights are visible in the Tools menu
 - current uploaded Master CSV is recognized
 - live or staged backups load as expected
 
@@ -230,7 +245,7 @@ If you later receive a real hostname, replace `server_name _;` with that intrane
 
 ## 9. Operational Notes
 
-- The app reads and writes local state from `data/` and `uploads/`; keep regular backups of those folders.
+- The app reads and writes local state from `data/`, `uploads/`, and `logs/`; keep regular backups of `data/` and `uploads/`, including the local `config.yaml` through your secure configuration backup process.
 - `readyz` is the correct probe for operational readiness because it runs the built-in checks.
 - If `readyz` fails, inspect the returned JSON and the application log in `logs/selection.log`.
 - If you later want TLS, SSO, or a stable hostname, extend the nginx option rather than exposing Gunicorn directly.

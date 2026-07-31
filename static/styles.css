@@ -50,6 +50,37 @@ body {
   margin: 0 auto;
 }
 
+.skip-link {
+  position: fixed;
+  top: 0.4rem;
+  left: 0.4rem;
+  z-index: 10000;
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  background: #0b4f78;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus { transform: translateY(0); }
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px #111827;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* ==========================================================================
    Card Component
    Used in: index.html, index_by_skill.html, timetable.html, upload.html, prep_next_day.html
@@ -171,4 +202,52 @@ body {
   background: #f8d7da;
   border: 1px solid #f5c6cb;
   color: #721c24;
+}
+
+/* ==========================================================================
+   Strict Worker Select Modal
+   ========================================================================== */
+.worker-select-modal {
+  width: min(560px, 92vw);
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.worker-select-modal h2 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.2rem;
+}
+
+.worker-select-modal p {
+  margin: 0 0 0.75rem 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.worker-select-modal select {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.worker-select-status {
+  min-height: 1.2rem;
+  margin-top: 0.6rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.worker-select-status.error {
+  color: #b00020;
+  font-weight: 600;
+}
+
+.result-panel--error {
+  border: 2px solid #b42318;
+  background: #fff1f0 !important;
+  color: #7a1c13;
 }

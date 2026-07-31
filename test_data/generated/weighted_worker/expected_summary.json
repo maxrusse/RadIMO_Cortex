@@ -2,47 +2,47 @@
   "assignment_checks": [],
   "modalities": {
     "ct": {
-      "row_count": 2,
-      "shift_segment_count": 2,
       "gap_segment_count": 0,
+      "row_count": 2,
+      "rows": [
+        {
+          "counts_for_hours": true,
+          "end": "16:00",
+          "ppl": "Dr. Regular Worker (RW01)",
+          "row_type": "shift_segment",
+          "skill_signature": "aou:1",
+          "start": "08:00",
+          "tasks": "Regular Abd Shift"
+        },
+        {
+          "counts_for_hours": true,
+          "end": "16:00",
+          "ppl": "Dr. Weighted Worker (WW01)",
+          "row_type": "shift_segment",
+          "skill_signature": "aou:w",
+          "start": "08:00",
+          "tasks": "Weighted Abd Shift"
+        }
+      ],
+      "shift_segment_count": 2,
       "workers": [
         "Dr. Regular Worker (RW01)",
         "Dr. Weighted Worker (WW01)"
-      ],
-      "rows": [
-        {
-          "ppl": "Dr. Regular Worker (RW01)",
-          "row_type": "shift_segment",
-          "start": "08:00",
-          "end": "16:00",
-          "tasks": "Regular Abd Shift",
-          "counts_for_hours": true,
-          "skill_signature": "aou:1"
-        },
-        {
-          "ppl": "Dr. Weighted Worker (WW01)",
-          "row_type": "shift_segment",
-          "start": "08:00",
-          "end": "16:00",
-          "tasks": "Weighted Abd Shift",
-          "counts_for_hours": true,
-          "skill_signature": "aou:w"
-        }
       ]
     },
     "mr": {
-      "row_count": 0,
-      "shift_segment_count": 0,
       "gap_segment_count": 0,
-      "workers": [],
-      "rows": []
+      "row_count": 0,
+      "rows": [],
+      "shift_segment_count": 0,
+      "workers": []
     },
     "xray": {
-      "row_count": 0,
-      "shift_segment_count": 0,
       "gap_segment_count": 0,
-      "workers": [],
-      "rows": []
+      "row_count": 0,
+      "rows": [],
+      "shift_segment_count": 0,
+      "workers": []
     }
   },
   "scenario": "weighted_worker",

@@ -36,7 +36,7 @@ def record_skill_modality_usage(skill: str, modality: str) -> None:
 
     Args:
         skill: The skill name (e.g., 'Notfall', 'Privat', 'MSK')
-        modality: The modality name (e.g., 'ct', 'mr', 'xray', 'mammo')
+        modality: The modality name (e.g., 'ct', 'mr', 'xray')
     """
     global _current_date
 
@@ -196,4 +196,3 @@ def check_and_export_at_scheduled_time() -> bool:
             return True
 
     return False
-

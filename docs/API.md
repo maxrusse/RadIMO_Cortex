@@ -1,427 +1,105 @@
 # RadIMO API Reference
 
-REST API endpoints for worker assignment and administration.
-
----
-
-## Authentication
-
-- **Operational assignment endpoints** are protected by basic access login when `access_protection_enabled` is true. Users authenticate via `/access-login`.
-- **Admin endpoints** require an admin session when `admin_access_protection_enabled` is true. Users authenticate via `/login`.
-
-When access protection is disabled, these endpoints are reachable without a session.
-
----
-
-## Health & Readiness
-
-### Liveness Probe
-
-```http
-GET /healthz
-```
-
-Public endpoint for process liveness. Returns HTTP `200` when the app is running.
-
-**Example response:**
-```json
-{
-  "status": "ok",
-  "service": "RadIMO Cortex",
-  "timestamp": "2026-02-10T12:34:56+01:00"
-}
-```
-
-### Readiness Probe
-
-```http
-GET /readyz
-```
-
-Public endpoint for readiness. Returns HTTP:
-- `200` when no operational check has status `ERROR`
-- `503` when at least one operational check has status `ERROR`
-
-`WARNING` checks do not fail readiness.
-
-**Example response:**
-```json
-{
-  "status": "ready",
-  "service": "RadIMO Cortex",
-  "timestamp": "2026-02-10T12:34:56+01:00",
-  "summary": {
-    "ok": 5,
-    "warning": 1,
-    "error": 0
-  },
-  "checks": [
-    {
-      "name": "Config File",
-      "status": "OK",
-      "detail": "APP_CONFIG is loaded and available"
-    }
-  ]
-}
-```
-
-### Human Status Page
-
-```http
-GET /status
-```
-
-Public HTML page for manual inspection. It shows:
-- current health/readiness badges
-- readiness check list
-- direct links to `/healthz` and `/readyz`
-
----
-
-## Admin Logs
-
-### Logs Dashboard
-
-```http
-GET /admin/logs
-```
-
-Admin-only HTML page with download links for:
-- the current Gunicorn log
-- the current RadIMO application log (`selection.log`)
-- the flow balance log
-
-### Download Logs Archive
-
-```http
-GET /admin/logs/download?sources=gunicorn,selection&scope=tail&lines=5000
-```
-
-Downloads a zip archive containing the selected log sources.
-
-Query parameters:
-- `sources`: comma-separated list of `gunicorn`, `selection`, `flow`, or `all`
-- `scope`: `tail` for the last `lines` entries from the current log file, or `full` for the rotated set
-- `lines`: number of lines to keep in tail mode, default `5000`
-
-Examples:
-- `GET /admin/logs/download` returns the default tail archive for `gunicorn` and `selection`
-- `GET /admin/logs/download?sources=all&scope=full` returns the full rotated archive for all supported logs
-
-Access control:
-- protected by the existing admin login session
-- if `admin_access_protection_enabled` is enabled in `config.yaml`, users must log in via `/login`
-
----
-
-## Worker Assignment
-
-### Assign Worker (with overflow)
-
-```http
-GET /api/{modality}/{skill}
-```
-
-Assigns a worker with overflow enabled unless the skill/modality is configured in `no_overflow`.
-If `no_overflow` applies, routing becomes specialist-only but the request still uses normal weights.
-
-**Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| modality | path | Modality slug from `config.yaml` (e.g., `ct`, `mr`, `xray`, `mammo`) |
-| skill | path | Skill slug from `config.yaml` (e.g., `notfall`, `cvt`) |
-
-**Example:**
-```bash
-curl http://localhost:5000/api/ct/cvt
-```
-
-**Response:**
-```json
-{
-  "selected_person": "Dr. Anna Müller (AM)",
-  "canonical_id": "AM",
-  "source_modality": "ct",
-  "skill_used": "cvt",
-  "is_weighted": false
-}
-```
-
-**Error response (no match):**
-```json
-{
-  "error": "No available worker found"
-}
-```
-
----
-
-### Assign Worker (strict, no overflow)
-
-```http
-GET /api/{modality}/{skill}/strict
-```
-
-Assigns a worker without overflow. Returns an error if no specialist is available.
-This explicit strict path also uses strict weights.
-
----
-
-## Master CSV Management (Admin)
-
-### Master CSV Status
-
-```http
-GET /api/master-csv-status
-```
-
-Check if `master_medweb.csv` exists and get its metadata.
-
-**Response (exists):**
-```json
-{
-  "exists": true,
-  "filename": "master_medweb.csv",
-  "modified": "21.12.2025 20:30",
-  "size": 12345
-}
-```
-
-**Response (missing):**
-```json
-{
-  "exists": false
-}
-```
-
----
-
-### Upload Master CSV
-
-```http
-POST /upload-master-csv
-```
-
-Upload a new monthly medweb file.
-
-Behavior:
-- Replaces the stored `master_medweb.csv`
-- Does **not** overwrite already staged `Prep Tomorrow` data by itself
-
-**Parameters:**
-- `file`: CSV file
-
----
-
-### Hard Reload Today from Master
-
-```http
-POST /load-today-from-master
-```
-
-Rebuilds today's live schedule using the current date and Master CSV.
-
-Behavior:
-- applies a safe runtime config reload first when possible
-- resets current live counters/flow state
-- persists the rebuilt live backup used on restart
-- does not touch staged tomorrow data
-
----
-
-### Preload / Prep Tomorrow from Master
-
-```http
-POST /preload-from-master
-```
-
-Rebuilds staged next-day data from the current Master CSV and refreshes scheduled/staged files.
-
-Behavior:
-- accepts an optional selected `target_date`
-- overwrites the staged plan for that selected target date
-- this is the normal way to refresh `Prep Tomorrow` after a new CSV upload
-
----
-
-## Info Texts (Admin)
-
-### Update Modality Info Text
-
-```http
-POST /api/edit_info
-```
-
-Update the info text for a modality.
-
-**Request:**
-```json
-{
-  "modality": "ct",
-  "info_text": "Line 1\nLine 2"
-}
-```
-
----
-
-## Live Schedule (Admin)
-
-### Get Live Data
-
-```http
-GET /api/live-schedule/data
-```
-
-### Update Live Row
-
-```http
-POST /api/live-schedule/update-row
-```
-
-### Add Live Worker
-
-```http
-POST /api/live-schedule/add-worker
-```
-
-### Delete Live Worker
-
-```http
-POST /api/live-schedule/delete-worker
-```
-
-### Add Live GAP (Split Shift)
-
-```http
-POST /api/live-schedule/add-gap
-```
-
----
-
-## Staged Schedule (Admin)
-
-### Get Staged Data
-
-```http
-GET /api/prep-next-day/data
-```
-
-Returns staged schedules for all modalities plus `last_prepped_at` when available.
-
-### Update Staged Row
-
-```http
-POST /api/prep-next-day/update-row
-```
-
-### Add Staged Worker
-
-```http
-POST /api/prep-next-day/add-worker
-```
-
-### Delete Staged Worker
-
-```http
-POST /api/prep-next-day/delete-worker
-```
-
-### Add Staged GAP
-
-```http
-POST /api/prep-next-day/add-gap
-```
-
----
-
-## Skill Matrix (Admin)
-
-### Get Skill Matrix
-
-```http
-GET /api/admin/skill_roster
-```
-
-Returns the worker roster, skills list, and modalities list.
-
-### Save Skill Matrix
-
-```http
-POST /api/admin/skill_roster
-```
-
-Persist roster changes to `worker_skill_roster.json`.
-
-### Import New Workers
-
-```http
-POST /api/admin/skill_roster/import_new
-```
-
-Scan current schedules for workers missing from the roster and add them with default skills.
-
----
-
-## Usage Statistics (Admin)
-
-### Get Current Usage Statistics
-
-```http
-GET /api/usage-stats/current
-```
-
-### Export Usage Statistics
-
-```http
-POST /api/usage-stats/export
-```
-
-### Reset Usage Statistics
-
-```http
-POST /api/usage-stats/reset
-```
-
-### Get Usage CSV File Info
-
-```http
-GET /api/usage-stats/file
-```
-
----
-
-## Worker Load (Admin)
-
-### Worker Load Data
-
-```http
-GET /api/worker-load/data
-```
-
-Returns worker load data used by the balance monitor.
-
-Key response fields:
-- `global_weight`: total weighted assignments per worker
-- `hours_worked_now`: cumulative worked hours up to now
-- `weight_per_hour`: `global_weight / hours_worked_now` for the simple view load bar
-
-Returns the worker load monitoring payload for the dashboard.
-
----
-
-## Error Responses
-
-All endpoints may return error responses:
+This reference describes the routes registered in `routes.py`. Routes guarded by
+`@access_required` require an access session only when
+`access_protection_enabled` is enabled. Routes guarded by `@admin_required`
+require an admin session only when `admin_access_protection_enabled` is enabled.
+Health routes are public.
+
+## Health
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/healthz` | Liveness JSON; returns `200` while the process runs. |
+| GET | `/readyz` | Readiness JSON; `200` unless an operational check is `ERROR`, then `503`. |
+| GET | `/status` | Public human-readable health and readiness page. |
+
+## Assignment
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/{modality}/{role}` | Automatic assignment using normal weights. |
+| GET | `/api/{modality}/{role}/strict` | Automatic specialist-only assignment using strict weights. |
+| GET | `/api/{modality}/{role}/strict/candidates` | Candidates for a strict manual-selection button. |
+| POST | `/api/{modality}/{role}/strict/manual` | Assign a strict candidate selected by the caller. |
+
+`modality` and `role` must be configured route slugs. A role may also be the
+slug of a configured special task. Normal assignment permits generalist
+overflow unless the corresponding `no_overflow` entry or special-task setting
+disables it. The explicit `/api/{modality}/{role}/strict` routes always disable overflow and use the
+strict weight table.
+
+Successful assignment responses contain `selected_person`, `canonical_id`,
+`source_modality`, `skill_used`, `is_weighted`, `task_label`, and
+`manual_selection`. Usage logging records the resolved `skill_used` and
+`source_modality`, not necessarily the requested special-task slug.
+
+For manual strict selection, send JSON with `candidate_key` (preferred) or an
+unambiguous `worker_id`:
 
 ```json
-{
-  "error": "Error description",
-  "success": false
-}
+{"candidate_key": "..."}
 ```
 
-HTTP status codes:
-- `400` - Bad request (invalid parameters)
-- `401` - Unauthorized (login required)
-- `404` - No matching worker (assignment endpoints)
-- `500` - Server error
+The candidates and manual routes return `404` when manual selection is not
+enabled for that button. Manual assignment returns `400` when neither selector
+is supplied and `409` when the requested candidate is no longer available.
+
+## Administration
+
+| Area | Routes |
+|---|---|
+| Login | `GET, POST /login`; `GET /logout`; `GET, POST /access-login`; `GET /access-logout` |
+| Settings | `GET /admin/settings`; `POST /api/admin/config/general`; `POST /api/admin/runtime/reload` |
+| Managed files | `GET /admin/files`; `GET /api/admin/files/manifest`; `GET /api/admin/files/download`; `POST /api/admin/files/upload`; `POST /api/admin/files/restore`; `POST /api/admin/files/reload` |
+| Logs | `GET /admin/logs`; `GET /api/admin/logs/tail`; `GET /admin/logs/download` |
+| Skills and weights | `GET, POST /api/admin/button_weights`; `GET, POST /api/admin/skill_roster`; `POST /api/admin/skill_roster/import_new`; `POST /api/admin/skill_roster/import_csv_worker` |
+
+The general-settings endpoint accepts only `default_language`, `timezone`,
+`worker_name_display_style`, `skill_roster_auto_import`,
+`access_protection_enabled`, and `admin_access_protection_enabled`. It never
+edits passwords or the secret key. It validates and backs up `config.yaml`,
+then attempts a runtime reload. Changing modalities, skills, or `secret_key`
+through the advanced YAML workflow requires an application restart.
+
+`POST /api/admin/runtime/reload` requires `{"confirmation":"reload"}` and
+returns `202` after scheduling a Gunicorn reload; it returns `409` when that
+operation is unavailable.
+
+For log downloads, `sources` accepts `gunicorn`, `selection`, `flow`, or
+`all`; `scope` is `tail` or `full`; `lines` is an integer. Invalid source,
+scope, or line values return `400`.
+
+## Schedules and CSV
+
+| Method | Route |
+|---|---|
+| GET | `/api/master-csv-status` |
+| POST | `/upload-master-csv`, `/load-today-from-master`, `/preload-from-master` |
+| GET | `/api/live-schedule/data`, `/api/prep-next-day/data` |
+| POST | `/api/live-schedule/update-row`, `/api/live-schedule/apply-worker-plan`, `/api/live-schedule/create-worker-plan`, `/api/live-schedule/resolve-task-preview`, `/api/live-schedule/add-gap-batch` |
+| POST | `/api/prep-next-day/update-row`, `/api/prep-next-day/apply-worker-plan`, `/api/prep-next-day/create-worker-plan`, `/api/prep-next-day/resolve-task-preview`, `/api/prep-next-day/add-gap-batch` |
+
+Worker-plan endpoints treat the full worker plan as the mutation unit; an empty
+`shifts` list removes that worker from the selected modalities. Staged-data
+requests accept `target_date` in `YYYY-MM-DD` form; invalid dates return `400`.
+
+## Monitoring and adjustments
+
+| Method | Route |
+|---|---|
+| GET | `/api/usage-stats/current`, `/api/usage-stats/file` |
+| POST | `/api/usage-stats/export`, `/api/usage-stats/reset` |
+| GET | `/api/performance/data`, `/api/worker-load/data`, `/api/worker-load/daily-load`, `/api/worker-load/recent-distributions` |
+| GET, POST | `/api/manual-adjustments` |
+
+## Error convention
+
+Errors are JSON with an `error` message. Some endpoints additionally return
+`success: false`; consumers must not assume that field is universal. Assignment
+exhaustion is semantic: it returns `404` with
+`{"error":"No available worker found","code":"no_worker_available"}`.
+Other common statuses are `400` for invalid input, `401` for required login,
+`403` for failed confirmation, `409` for a stale strict candidate or unavailable
+Gunicorn reload, `404` for absent resources/features, `500` for unexpected
+failures, and `503` only for failed readiness.

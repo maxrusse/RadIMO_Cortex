@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | Admin{% endblock %}
+{% block title %}RadIMO Cortex | Import{% endblock %}
 
 {% block styles %}
     {% include 'partials/admin_theme.html' %}
@@ -92,6 +92,14 @@
       .page-layout {
         grid-template-columns: 1fr;
       }
+
+      .upload-column {
+        order: 1;
+      }
+
+      .workflow-column {
+        order: 2;
+      }
     }
 
     .card h2 {
@@ -111,11 +119,6 @@
 
     .section-header h2 {
       margin-bottom: 0;
-    }
-
-    .section-subtitle {
-      color: #5f6b7a;
-      font-size: 0.9rem;
     }
 
     .workflow-box {
@@ -158,24 +161,8 @@
       margin-bottom: 0.2rem;
     }
 
-    .step-desc {
-      font-size: 0.85rem;
-      color: #666;
-    }
-
     .step:last-child {
       border-bottom: none;
-    }
-
-    .workflow-note {
-      margin-top: 0.85rem;
-      padding: 0.75rem 0.85rem;
-      border-radius: 6px;
-      border: 1px solid #e7b4ae;
-      background: #fff4f2;
-      color: #8b3028;
-      font-size: 0.84rem;
-      line-height: 1.45;
     }
 
     .upload-area {
@@ -244,13 +231,6 @@
       color: #203040;
     }
 
-    .upload-step-desc {
-      font-size: 0.84rem;
-      color: #5f6b7a;
-      line-height: 1.4;
-      min-height: 2.4em;
-    }
-
     .upload-step-action {
       display: inline-flex;
       align-items: center;
@@ -293,13 +273,6 @@
       padding: 0.5rem 0.9rem;
       font-size: 0.9rem;
       font-weight: 700;
-    }
-
-    .reset-box-note {
-      margin-top: 0.6rem;
-      font-size: 0.82rem;
-      line-height: 1.45;
-      color: #8b3028;
     }
 
     .upload-note {
@@ -354,6 +327,11 @@
       background: #eef4fb;
       border-color: #7aa3c8;
       color: #003670;
+    }
+
+    .file-picker-trigger:focus-visible {
+      outline: 3px solid rgba(0, 72, 146, 0.35);
+      outline-offset: 2px;
     }
 
     .file-picker-name {
@@ -540,11 +518,26 @@
 
     @media (max-width: 760px) {
       .upload-area {
-        padding: 1rem;
+        padding: 0.6rem;
       }
 
       .upload-flow-grid {
         grid-template-columns: 1fr;
+        gap: 0.4rem;
+      }
+
+      .upload-step {
+        min-height: 0;
+        padding: 0.5rem;
+      }
+
+      .upload-step-head {
+        min-height: 0;
+      }
+
+      .upload-step-action {
+        min-height: 40px;
+        padding: 0.55rem 0.75rem;
       }
     }
 
@@ -570,11 +563,72 @@
     .skill-column {
       text-align: center;
     }
+
+    /* Operations-console density overrides. */
+    body { max-width: 1600px; }
+    .page-layout {
+      grid-template-columns: minmax(230px, 0.62fr) minmax(620px, 2.38fr);
+      gap: 0.55rem;
+    }
+    .column { gap: 0.55rem; }
+    .card {
+      padding: 0.7rem;
+      margin-bottom: 0.55rem;
+      border: 1px solid var(--ops-line);
+      border-radius: var(--ops-radius);
+      box-shadow: var(--ops-shadow);
+    }
+    .section-header { gap: 0.1rem; margin-bottom: 0.55rem; }
+    .card h2 { margin: 0; padding: 0; border: 0; color: var(--ops-ink); font-size: 0.98rem; }
+    .workflow-box { padding: 0.35rem 0.65rem; border-radius: 6px; background: var(--ops-surface-soft); }
+    .step { grid-template-columns: 24px minmax(0, 1fr); gap: 0.55rem; padding: 0.48rem 0; }
+    .step-num { width: 22px; height: 22px; font-size: 0.72rem; background: var(--ops-primary); }
+    .step-title { margin: 0; font-size: 0.78rem; }
+    .upload-area { padding: 0.65rem; border: 1px solid var(--ops-line-strong); border-radius: 6px; background: var(--ops-surface-soft); }
+    .upload-panel, .upload-form-stack { gap: 0.55rem; }
+    .master-status { padding: 0.48rem 0.6rem; font-size: 0.75rem; border-radius: 5px; }
+    .upload-flow-grid { gap: 0.55rem; }
+    .upload-step { min-height: 132px; gap: 0.38rem; padding: 0.62rem; border-radius: 6px; }
+    .upload-step-head { min-height: 2.2rem; gap: 0.18rem; }
+    .upload-step-label { font-size: 0.65rem; letter-spacing: 0.06em; }
+    .upload-step-title { font-size: 0.84rem; }
+    .upload-step-action { min-height: 34px; padding: 0.42rem 0.62rem; border-radius: 4px; font-size: 0.77rem; }
+    .file-picker-name { min-height: 1.8rem; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+    .upload-info-note { padding: 0.48rem 0.58rem; font-size: 0.72rem; line-height: 1.35; }
+    .reset-box {
+      max-width: none;
+      display: grid;
+      grid-template-columns: minmax(155px, 1fr) auto;
+      grid-template-areas:
+        "warning action"
+        "title action";
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.52rem 0.62rem;
+      border-radius: 6px;
+    }
+    .reset-box-title { grid-area: title; margin: 0; font-size: 0.75rem; }
+    .danger-zone-label { grid-area: warning; font-size: 0.64rem; }
+    .reset-box .btn { grid-area: action; min-height: 34px; padding: 0.35rem 0.7rem; font-size: 0.73rem; }
+    #message-container { margin-bottom: 0.55rem; }
+    .message { padding: 0.55rem 0.65rem; margin-bottom: 0.55rem; font-size: 0.76rem; }
+    .admin-footer { margin-top: 0.55rem; }
+    @media (max-width: 1100px) {
+      .page-layout { grid-template-columns: 1fr; }
+      .upload-column { order: 1; }
+      .workflow-column { order: 2; }
+    }
+    @media (max-width: 760px) {
+      .reset-box {
+        grid-template-columns: 1fr;
+        grid-template-areas: "warning" "title" "note" "action";
+      }
+    }
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Admin' %}
-  {% set header_subtitle = 'CSV Management & System' %}
+  {% set header_title = 'RadIMO Cortex | Import' %}
+  {% set header_subtitle = 'CSV & system' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'upload' %}
   {% set header_nav = namespace(links=[]) %}
@@ -582,10 +636,22 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
+  <div class="ops-shell">
+  <div class="ops-page-head">
+    <div>
+      <div class="ops-eyebrow">Source data</div>
+      <h2>Master CSV intake</h2>
+    </div>
+    <div class="ops-actions">
+      <a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_files_page') }}">Open files</a>
+      <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_tomorrow') }}">Planning</a>
+    </div>
+  </div>
+
   <div id="message-container"></div>
 
   <div class="page-layout">
-    <div class="column">
+    <div class="column workflow-column">
       <!-- Workflow Overview -->
       <div class="card">
         <div class="section-header">
@@ -597,44 +663,37 @@
               <div class="step-num">1</div>
               <div>
                 <div class="step-title">Master CSV</div>
-                <div class="step-desc">Gesamten Dienstplan als CSV hochladen.</div>
               </div>
             </div>
             <div class="step">
               <div class="step-num">2</div>
               <div>
-                <div class="step-title">Prep Tomorrow</div>
-                <div class="step-desc">Vorbereitung für morgen (Staging).</div>
+                <div class="step-title">Planning</div>
               </div>
             </div>
             <div class="step">
               <div class="step-num">3</div>
               <div>
                 <div class="step-title">Auto-Live</div>
-                <div class="step-desc">Staged → Live erfolgt automatisch um {{ scheduler_config.daily_reset_time }} Uhr.</div>
+                <div>{{ scheduler_config.daily_reset_time }} Uhr</div>
               </div>
             </div>
             <div class="step">
               <div class="step-num">4</div>
               <div>
-                <div class="step-title">Change Today</div>
-                <div class="step-desc">In-Day Anpassungen ohne Reset der Zähler durchführen.</div>
+                <div class="step-title">Today</div>
               </div>
             </div>
-          </div>
-          <div class="workflow-note">
-            <strong>Hard Reload Today</strong> bleibt bewusst separat rechts als Reset-Aktion. Nur verwenden, wenn der heutige Plan komplett auf den Master-Stand zurückgesetzt werden soll.
           </div>
         </div>
       </div>
     </div>
 
-    <div class="column">
+    <div class="column upload-column">
       <!-- Master CSV Upload -->
       <div class="card">
         <div class="section-header">
           <h2>Master CSV Upload</h2>
-          <div class="section-subtitle">Export öffnen und die aktuelle Master-Datei hochladen.</div>
         </div>
 
         <div class="upload-area">
@@ -651,7 +710,6 @@
                     <div class="upload-step-head">
                       <div class="upload-step-label">1. Export</div>
                       <div class="upload-step-title">MedSpace öffnen</div>
-                      <div class="upload-step-desc">Aktuelle Master-CSV in MedSpace erzeugen.</div>
                     </div>
                     <a
                       class="external-action-link upload-step-action"
@@ -665,9 +723,9 @@
                     <div class="upload-step-head">
                       <div class="upload-step-label">2. Datei auswählen</div>
                       <div class="upload-step-title">Medweb CSV wählen</div>
-                      <div class="upload-step-desc">Die exportierte Datei vom Rechner auswählen.</div>
                     </div>
-                    <label class="file-picker-trigger upload-step-action" for="master-csv-file">Datei auswählen</label>
+                    <label class="file-picker-trigger upload-step-action" for="master-csv-file" role="button" tabindex="0"
+                      onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();document.getElementById('master-csv-file').click();}">Datei auswählen</label>
                     <div class="file-picker-name" id="master-file-name">Keine Datei ausgewählt</div>
                     <input class="file-input-hidden" type="file" id="master-csv-file" name="file" accept=".csv" required>
                   </div>
@@ -675,7 +733,6 @@
                     <div class="upload-step-head">
                       <div class="upload-step-label">3. Hochladen</div>
                       <div class="upload-step-title">Master aktualisieren</div>
-                      <div class="upload-step-desc">Gespeicherte Master-Datei ersetzen und für weitere Schritte bereitlegen.</div>
                     </div>
                     <button type="submit" class="btn btn-primary primary-upload-btn upload-step-action" id="master-upload-btn">
                       Master-CSV hochladen
@@ -684,8 +741,8 @@
                 </div>
                 <div class="upload-info-note">
                   <strong>Hinweis:</strong> Upload Master CSV ersetzt nur die gespeicherte Master-Datei.
-                  Eine bereits vorbereitete <strong>Prep Tomorrow</strong>-Planung bleibt bestehen, bis du
-                  <strong>Prep Tomorrow</strong> für das gewünschte Datum erneut lädst.
+                  Eine bereits vorbereitete <strong>Planning</strong>-Planung bleibt bestehen, bis du
+                  <strong>Planning</strong> für das gewünschte Datum erneut lädst.
                 </div>
                 <div class="upload-divider"></div>
                 <div class="reset-box">
@@ -694,9 +751,6 @@
                   <button class="btn btn-danger" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
                     HARD RELOAD TODAY
                   </button>
-                  <div class="reset-box-note">
-                    Setzt den heutigen Plan auf den aktuellen Master-Stand zurück und startet die Zähler neu. Nur für echte Tages-Resets verwenden.
-                  </div>
                 </div>
               </div>
             </form>
@@ -710,6 +764,7 @@
     <a href="{{ url_for('static', filename='verfahrensverzeichniss.txt') }}" target="_blank" rel="noopener">
       Verfahrensverzeichnis
     </a>
+  </div>
   </div>
 
   <script>

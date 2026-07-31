@@ -5,9 +5,11 @@ import re
 import yaml
 import copy
 import logging
+from zoneinfo import ZoneInfo
 from logging.handlers import RotatingFileHandler
 from typing import Dict, Any, List, Tuple, Optional, Set
 from lib.utils import (
+    coerce_bool,
     coerce_float,
     coerce_int,
     selection_logger
@@ -60,6 +62,7 @@ DEFAULT_ADMIN_ACCESS_PROTECTION_ENABLED = False
 DEFAULT_SECRET_KEY = 'super_secret_key_for_dev'  # Change this in production
 DEFAULT_TIMEZONE = 'Europe/Berlin'  # Default timezone for all date/time operations
 DEFAULT_WORKER_NAME_DISPLAY_STYLE = 'first_last_id'
+DEFAULT_LANGUAGE = 'de'
 
 DEFAULT_BALANCER = {
     'enabled': True,
@@ -107,8 +110,11 @@ def _slugify(value: str) -> str:
     return slug.strip('-')
 
 
-def _build_app_config() -> Dict[str, Any]:
-    raw_config = _load_raw_config()
+def _build_app_config(raw_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    raw_config = _load_raw_config() if raw_config is None else copy.deepcopy(raw_config)
+    default_language = str(raw_config.get('default_language', DEFAULT_LANGUAGE)).strip().lower()
+    if default_language not in {'de', 'en'}:
+        default_language = DEFAULT_LANGUAGE
     config: Dict[str, Any] = {
         'admin_password': raw_config.get('admin_password', DEFAULT_ADMIN_PASSWORD),
         'access_password': raw_config.get('access_password', DEFAULT_ACCESS_PASSWORD),
@@ -122,6 +128,7 @@ def _build_app_config() -> Dict[str, Any]:
         ),
         'secret_key': raw_config.get('secret_key', DEFAULT_SECRET_KEY),
         'timezone': raw_config.get('timezone', DEFAULT_TIMEZONE),
+        'default_language': default_language,
     }
 
     # Load modalities directly from config.yaml (no hardcoded defaults)
@@ -358,18 +365,46 @@ def _build_runtime_config_state(config: Dict[str, Any]) -> Dict[str, Any]:
         ),
     }
 
+
+def validate_config_candidate(raw_config: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Fully normalize and validate an uploaded config without changing runtime state."""
+    if not isinstance(raw_config, dict):
+        raise ValueError('Config must contain a YAML mapping/object')
+
+    raw_modalities = raw_config.get('modalities')
+    raw_skills = raw_config.get('skills')
+    if not isinstance(raw_modalities, dict) or not raw_modalities:
+        raise ValueError('Config must define at least one modality')
+    if not isinstance(raw_skills, dict) or not raw_skills:
+        raise ValueError('Config must define at least one skill')
+    if any(not isinstance(value, dict) for value in raw_modalities.values()):
+        raise ValueError('Every modality config must be a mapping/object')
+    if any(not isinstance(value, dict) for value in raw_skills.values()):
+        raise ValueError('Every skill config must be a mapping/object')
+
+    default_language = str(raw_config.get('default_language', DEFAULT_LANGUAGE)).strip().lower()
+    if default_language not in {'de', 'en'}:
+        raise ValueError("default_language must be 'de' or 'en'")
+
+    try:
+        ZoneInfo(str(raw_config.get('timezone', DEFAULT_TIMEZONE)))
+    except Exception as exc:
+        raise ValueError(f"Invalid timezone: {raw_config.get('timezone')}") from exc
+
+    normalized = _build_app_config(raw_config)
+    runtime_state = _build_runtime_config_state(normalized)
+    slugs = list(runtime_state['skill_slug_map'].values())
+    if len(set(slugs)) != len(slugs):
+        raise ValueError('Skill slugs must be unique')
+    return normalized, runtime_state
+
 def _resolve_skill(key_lower: str) -> Optional[str]:
     """Resolve a lowercase skill key to its canonical name via slug or direct match."""
     return ROLE_MAP.get(key_lower) or SKILL_LABEL_MAP.get(key_lower) or skill_columns_map.get(key_lower)
 
 
 def _resolve_skill_modality_pair(key: str) -> Optional[Tuple[str, str]]:
-    """
-    Resolve a skill_modality key to canonical (skill, modality) tuple.
-
-    Tries both orderings: skill_mod and mod_skill.
-    Returns None if the key cannot be resolved.
-    """
+    """Resolve a canonical skill_modality key."""
     key_lower = key.lower().strip()
     if '_' not in key_lower:
         return None
@@ -378,14 +413,8 @@ def _resolve_skill_modality_pair(key: str) -> Optional[Tuple[str, str]]:
     if len(parts) != 2:
         return None
 
-    # Try skill_mod first
     skill = _resolve_skill(parts[0])
     mod = allowed_modalities_map.get(parts[1])
-
-    # Try mod_skill if first attempt failed
-    if not (skill and mod):
-        skill = _resolve_skill(parts[1])
-        mod = allowed_modalities_map.get(parts[0])
 
     if skill and mod:
         return (skill, mod)
@@ -567,22 +596,52 @@ def _normalize_strict_button_visibility(
     Expected input:
       strict_button_visibility:
         cvt_ct: true
+        cvt_mr:
+          visible: true
+          manual_select: true
         ct-herz_ct: true
     """
     normalized: Dict[str, Set[str]] = {
         'regular': set(),
         'special': set(),
+        'manual_regular': set(),
+        'manual_special': set(),
     }
     if not isinstance(raw_map, dict):
         return normalized
 
     for key, value in raw_map.items():
-        if not value or not isinstance(key, str):
+        if not isinstance(key, str):
+            continue
+
+        manual_select = False
+        if isinstance(value, dict):
+            visible_raw = value.get('visible', value.get('show', True))
+            visible = coerce_bool(visible_raw)
+            if visible is None:
+                visible = bool(visible_raw)
+            manual_raw = (
+                value.get('manual_select')
+                if 'manual_select' in value
+                else value.get('worker_select')
+                if 'worker_select' in value
+                else value.get('name_select')
+            )
+            manual_select = bool(coerce_bool(manual_raw))
+        else:
+            visible = coerce_bool(value)
+            if visible is None:
+                visible = bool(value)
+
+        if not visible:
             continue
 
         regular_pair = _resolve_skill_modality_pair(key)
         if regular_pair:
-            normalized['regular'].add(f"{regular_pair[0]}_{regular_pair[1]}")
+            normalized_key = f"{regular_pair[0]}_{regular_pair[1]}"
+            normalized['regular'].add(normalized_key)
+            if manual_select:
+                normalized['manual_regular'].add(normalized_key)
             continue
 
         special_pair = _resolve_special_task_modality_pair(
@@ -591,7 +650,10 @@ def _normalize_strict_button_visibility(
             modalities_map=modalities_map,
         )
         if special_pair:
-            normalized['special'].add(f"{special_pair[0]}_{special_pair[1]}")
+            normalized_key = f"{special_pair[0]}_{special_pair[1]}"
+            normalized['special'].add(normalized_key)
+            if manual_select:
+                normalized['manual_special'].add(normalized_key)
             continue
 
         selection_logger.warning(
@@ -609,8 +671,7 @@ def _normalize_exclude_skills(raw_exclude_skills: Dict[str, List[str]]) -> Dict[
     Supports:
     - Skill only: msk → MSK (all MSK_* combinations)
     - Modality only: ct → all *_ct combinations
-    - skill_mod: msk_ct → MSK_ct
-    - mod_skill: ct_msk → MSK_ct
+    - skill_mod: mdh_ct → mdh_ct
 
     Returns: {canonical_skill_name: [canonical_excluded_skills]}
     """
@@ -661,15 +722,7 @@ EXCLUDE_SKILLS = _normalize_exclude_skills(raw_exclude_skills)
 
 
 def _normalize_no_overflow(raw_list: list) -> set:
-    """
-    Normalize no_overflow list to canonical Skill_Modality format.
-
-    Supports:
-    - Skill_Modality: cvt_ct → cvt_ct
-    - Modality_Skill: ct_cvt → cvt_ct
-
-    Returns: set of canonical 'Skill_modality' strings
-    """
+    """Normalize no_overflow entries in canonical Skill_Modality format."""
     result = set()
 
     for item in raw_list:
@@ -684,15 +737,7 @@ def _normalize_no_overflow(raw_list: list) -> set:
 
 # Normalize per-button weights
 def _normalize_button_weights(raw_map: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Normalize per-button weights to canonical Skill_Modality keys.
-
-    Supports:
-    - Skill_Modality: cvt_ct → cvt_ct
-    - Modality_Skill: ct_cvt → cvt_ct
-
-    Returns: dict with "normal" and "strict" maps of canonical keys to weights
-    """
+    """Normalize button weights using canonical Skill_Modality keys."""
     result: Dict[str, Any] = {
         'normal': {},
         'strict': {},
@@ -801,6 +846,8 @@ STRICT_BUTTON_VISIBILITY = _normalize_strict_button_visibility(_raw_strict_butto
 APP_CONFIG['strict_button_visibility'] = {
     'regular': sorted(STRICT_BUTTON_VISIBILITY['regular']),
     'special': sorted(STRICT_BUTTON_VISIBILITY['special']),
+    'manual_regular': sorted(STRICT_BUTTON_VISIBILITY['manual_regular']),
+    'manual_special': sorted(STRICT_BUTTON_VISIBILITY['manual_special']),
 }
 
 
@@ -818,8 +865,7 @@ def reload_runtime_config() -> Dict[str, Any]:
     global BUTTON_WEIGHTS
 
     try:
-        new_config = _build_app_config()
-        new_state = _build_runtime_config_state(new_config)
+        new_config, new_state = validate_config_candidate(_load_raw_config())
     except Exception as exc:
         selection_logger.warning("Runtime config reload skipped due to parse error: %s", exc)
         return {
@@ -850,6 +896,13 @@ def reload_runtime_config() -> Dict[str, Any]:
                 f'({sorted(current_skills)} -> {sorted(new_skills)})'
             ),
             'reason': 'skills_changed',
+        }
+
+    if new_config.get('secret_key') != APP_CONFIG.get('secret_key'):
+        return {
+            'applied': False,
+            'message': 'Secret key changed and requires restart',
+            'reason': 'secret_key_changed',
         }
 
     APP_CONFIG.clear()
@@ -907,9 +960,19 @@ def reload_runtime_config() -> Dict[str, Any]:
     STRICT_BUTTON_VISIBILITY['special'].update(
         new_state['strict_button_visibility']['special']
     )
+    STRICT_BUTTON_VISIBILITY['manual_regular'].clear()
+    STRICT_BUTTON_VISIBILITY['manual_regular'].update(
+        new_state['strict_button_visibility']['manual_regular']
+    )
+    STRICT_BUTTON_VISIBILITY['manual_special'].clear()
+    STRICT_BUTTON_VISIBILITY['manual_special'].update(
+        new_state['strict_button_visibility']['manual_special']
+    )
     APP_CONFIG['strict_button_visibility'] = {
         'regular': sorted(STRICT_BUTTON_VISIBILITY['regular']),
         'special': sorted(STRICT_BUTTON_VISIBILITY['special']),
+        'manual_regular': sorted(STRICT_BUTTON_VISIBILITY['manual_regular']),
+        'manual_special': sorted(STRICT_BUTTON_VISIBILITY['manual_special']),
     }
 
     BALANCER_SETTINGS.clear()
@@ -958,23 +1021,17 @@ def is_special_task_strict_button_visible(task_slug: str, modality: str) -> bool
     key = f"{str(task_slug or '').strip().lower()}_{normalize_modality(modality)}"
     return key in STRICT_BUTTON_VISIBILITY['special']
 
-def _migrate_button_weights() -> None:
-    """Migrate button_weights.json from uploads/ to data/ if needed."""
-    old_path = os.path.join(UPLOAD_FOLDER, 'button_weights.json')
-    if os.path.exists(old_path) and not os.path.exists(BUTTON_WEIGHTS_PATH):
-        try:
-            import shutil
-            shutil.copy2(old_path, BUTTON_WEIGHTS_PATH)
-            os.remove(old_path)
-            selection_logger.info("Migrated button_weights.json to data/ folder")
-        except OSError as exc:
-            selection_logger.warning("Failed to migrate button_weights.json: %s", exc)
 
+def is_strict_manual_select_enabled(skill: str, modality: str) -> bool:
+    key = f"{normalize_skill(skill)}_{normalize_modality(modality)}"
+    return key in STRICT_BUTTON_VISIBILITY['manual_regular']
+
+
+def is_special_task_strict_manual_select_enabled(task_slug: str, modality: str) -> bool:
+    key = f"{str(task_slug or '').strip().lower()}_{normalize_modality(modality)}"
+    return key in STRICT_BUTTON_VISIBILITY['manual_special']
 
 def load_button_weights() -> Dict[str, Any]:
-    # Migrate from old location if needed
-    _migrate_button_weights()
-
     try:
         with open(BUTTON_WEIGHTS_PATH, 'r', encoding='utf-8') as weight_file:
             data = json.load(weight_file)

@@ -21,7 +21,7 @@ import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,7 +94,6 @@ def build_origin_sequence(
         for team in origin_totals
     }
 
-    ordered_teams = list(origin_totals.keys())
     while len(sequence) < total_cases:
         eligible = [team for team, remaining_count in remaining.items() if remaining_count > 0]
         if not eligible:
@@ -905,7 +904,6 @@ def render_plot(
 
     worker_series = simulation["worker_series"]
     origin_summary = simulation["origin_summary"]
-    team_totals = simulation["team_totals"]
     final_loads = simulation["loads"]
     settings = simulation["settings"]
     rows = simulation["rows"]
@@ -914,7 +912,7 @@ def render_plot(
     worker_meta = {worker["name"]: worker for worker in simulation.get("workers", [])}
 
     worker_order = sorted(worker_series.keys())
-    legacy_colors = {
+    scenario_colors = {
         "A1": "#2f5d8a",
         "A2": "#6fa2d4",
         "B1": "#c47a2c",
@@ -931,8 +929,8 @@ def render_plot(
     def worker_color(worker_name: str) -> str:
         meta = worker_meta.get(worker_name, {})
         group = str(meta.get("group", ""))
-        if worker_name in legacy_colors:
-            return legacy_colors[worker_name]
+        if worker_name in scenario_colors:
+            return scenario_colors[worker_name]
         for prefix, color in realistic_colors.items():
             if group == prefix:
                 return color

@@ -38,6 +38,7 @@ uploads/
 !uploads/.gitkeep
 
 # Local override config files
+config.yaml
 *.local.yaml
 *.local.json
 

@@ -10,11 +10,12 @@ from pandas.testing import assert_frame_equal
 
 import routes
 from config import APP_CONFIG, SKILL_COLUMNS, allowed_modalities
-from data_manager import schedule_crud
-from data_manager import worker_management
+import data_manager.schedule_crud as schedule_crud
+import data_manager.worker_management as worker_management
 from data_manager.csv_parser import (
     _normalize_day_part_label,
     _normalize_rule_day_parts,
+    _resolve_synthetic_shift_entry,
     _rule_matches_day_part,
     build_ppl_from_row,
     build_working_hours_from_medweb,
@@ -40,7 +41,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -85,7 +86,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Tageszeit",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                     ]
                 )
                 writer.writerow(["23.01.2026", "VM", "Shift A", "Alice", "A1"])
@@ -102,7 +103,7 @@ class TestDayPlanIntegration(unittest.TestCase):
             with patch.object(schedule_crud, "persist_schedule_snapshot"):
                 base_skills = {skill: 0 for skill in SKILL_COLUMNS}
                 base_skills[skill_key] = 1
-                for worker_data in [
+                worker_rows = [
                     {
                         "PPL": worker_name,
                         "start_time": "08:00",
@@ -132,13 +133,14 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "row_type": "gap",
                         "counts_for_hours": False,
                     },
-                ]:
-                    success, _, error = schedule_crud._add_worker_to_schedule(
-                        self.modality,
-                        worker_data,
-                        use_staged=False,
-                    )
-                    self.assertTrue(success, msg=error)
+                ]
+                success, _, error = schedule_crud.replace_worker_schedule_all(
+                    worker_name,
+                    {self.modality: worker_rows},
+                    use_staged=False,
+                    target_modalities=[self.modality],
+                )
+                self.assertTrue(success, msg=error)
 
             edit_df = schedule_crud.modality_data[self.modality]["working_hours_df"]
 
@@ -185,10 +187,11 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_data[skill] = "w" if skill == weighted_skill else 0
 
         with patch.object(schedule_crud, "persist_schedule_snapshot"):
-            success, _, error = schedule_crud._add_worker_to_schedule(
-                self.modality,
-                worker_data,
+            success, _, error = schedule_crud.replace_worker_schedule_all(
+                worker_name,
+                {self.modality: [worker_data]},
                 use_staged=False,
+                target_modalities=[self.modality],
             )
 
         self.assertTrue(success, msg=error)
@@ -208,7 +211,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -234,7 +237,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Tageszeit",
                     ]
                 )
@@ -309,7 +312,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 "columns": {
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -333,7 +336,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     [
                         "Datum",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Beschreibung der Aktivität",
                     ]
                 )
@@ -367,7 +370,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 "columns": {
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -395,7 +398,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     [
                         "Datum",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Beschreibung der Aktivität",
                     ]
                 )
@@ -423,7 +426,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 "columns": {
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -443,7 +446,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     [
                         "Datum",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Beschreibung der Aktivität",
                     ]
                 )
@@ -471,7 +474,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 "columns": {
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -491,7 +494,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     [
                         "Datum",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Beschreibung der Aktivität",
                     ]
                 )
@@ -520,14 +523,13 @@ class TestDayPlanIntegration(unittest.TestCase):
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
 
-    def test_csv_import_prefers_personalnummer_over_code(self) -> None:
+    def test_csv_import_uses_personalnummer_as_worker_id(self) -> None:
         config = {
             "medweb_mapping": {
                 "columns": {
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
                     "employee_personalnummer": "Personalnummer",
-                    "employee_code": "Code des Mitarbeiters",
                 },
                 "rules": [
                     {
@@ -542,7 +544,6 @@ class TestDayPlanIntegration(unittest.TestCase):
             {
                 "Name des Mitarbeiters": "Alex Example",
                 "Personalnummer": "P123",
-                "Code des Mitarbeiters": "C12",
             }
         )
         self.assertEqual(build_ppl_from_row(row, config["medweb_mapping"]["columns"]), "Alex Example (P123)")
@@ -557,11 +558,10 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Name des Mitarbeiters",
                         "Personalnummer",
-                        "Code des Mitarbeiters",
                         "Beschreibung der Aktivität",
                     ]
                 )
-                writer.writerow(["23.01.2026", "Alex Example", "P123", "C12", "Shift A"])
+                writer.writerow(["23.01.2026", "Alex Example", "P123", "Shift A"])
 
             worker_management.worker_skill_json_roster.clear()
             with patch("data_manager.worker_management.load_worker_skill_json", return_value={}),                  patch("data_manager.worker_management.save_worker_skill_json") as mock_save:
@@ -574,13 +574,53 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertEqual(added_workers, ["P123"])
             saved_roster = mock_save.call_args.args[0]
             self.assertIn("P123", saved_roster)
-            self.assertNotIn("C12", saved_roster)
             self.assertEqual(saved_roster["P123"]["full_name"], "Alex Example (P123)")
             for skill in SKILL_COLUMNS:
                 for modality in allowed_modalities:
                     self.assertEqual(saved_roster["P123"][f"{skill}_{modality}"], -1)
         finally:
             worker_management.worker_skill_json_roster.clear()
+            os.unlink(csv_path)
+
+    def test_medweb_row_without_personalnummer_is_not_merged_into_unknown_worker(self) -> None:
+        target_date = datetime(2026, 1, 23)
+        config = {
+            "medweb_mapping": {
+                "columns": {
+                    "date": "Datum",
+                    "activity": "Beschreibung der Aktivität",
+                    "employee_name": "Name des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
+                },
+                "rules": [
+                    {
+                        "match": "Shift A",
+                        "type": "shift",
+                        "times": {"default": "08:00-16:00"},
+                        "skill_overrides": {f"{SKILL_COLUMNS[0]}_{self.modality}": 1},
+                    },
+                ],
+            },
+            "balancer": {"hours_counting": {"shift_default": True, "gap_default": False}},
+            "worker_roster": {},
+        }
+
+        fd, csv_path = tempfile.mkstemp(suffix=".csv")
+        os.close(fd)
+        try:
+            with open(csv_path, mode="w", encoding="utf-8", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([
+                    "Datum",
+                    "Name des Mitarbeiters",
+                    "Personalnummer",
+                    "Beschreibung der Aktivität",
+                ])
+                writer.writerow(["23.01.2026", "Alex Example", "", "Shift A"])
+
+            result = build_working_hours_from_medweb(csv_path, target_date, config)
+            self.assertNotIn(self.modality, result)
+        finally:
             os.unlink(csv_path)
 
     def test_synthetic_shift_loads_without_same_day_medweb_rows_and_seeds_roster(self) -> None:
@@ -596,7 +636,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [],
             },
@@ -605,7 +645,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 {
                     "worker_name": worker_name,
                     "label": "Gyn Summary",
-                    "weekdays": ["friday"],
+                    "weekdays": ["Freitag"],
                     "times": {"default": "07:30-15:45"},
                     "skill_overrides": {skill_override_key: 1},
                 }
@@ -623,7 +663,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                     ]
                 )
                 writer.writerow(["22.01.2026", "Other Day", "Alice", "A1"])
@@ -668,7 +708,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "date": "Datum",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -686,7 +726,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 {
                     "worker_name": worker_name,
                     "use_shift": "Gynarzt",
-                    "weekdays": ["friday"],
+                    "weekdays": ["Freitag"],
                 }
             ],
             "worker_roster": {},
@@ -702,7 +742,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                     ]
                 )
                 writer.writerow(["22.01.2026", "Other Day", "Alice", "A1"])
@@ -741,7 +781,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [],
             },
@@ -756,7 +796,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 {
                     "worker_name": worker_name,
                     "label": "Gynarzt-shift",
-                    "weekdays": ["friday"],
+                    "weekdays": ["Freitag"],
                     "times": {"default": "07:30-16:15"},
                     "skill_overrides": {"gyn_ct": 1},
                 }
@@ -773,7 +813,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                     ]
                 )
                 writer.writerow(["22.01.2026", "Other Day", "Alice", "A1"])
@@ -813,12 +853,18 @@ class TestDayPlanIntegration(unittest.TestCase):
             if entry.get("worker_name") == "Kinderarzt (KDOC)"
         )
         self.assertEqual(kdoc_shift["weekdays"], ["workdays"])
-        self.assertEqual(kdoc_shift["times"]["default"], "07:30-16:30")
-        self.assertEqual(kdoc_shift["skill_overrides"]["all"], -1)
-        for modality in allowed_modalities:
-            self.assertEqual(kdoc_shift["skill_overrides"][f"kinder_{modality}"], 1)
+        self.assertEqual(kdoc_shift["use_shift"], "Kinderarzt")
 
-        kdoc_roster = APP_CONFIG["worker_roster"]["KDOC"]
+        kdoc_effective_shift = _resolve_synthetic_shift_entry(APP_CONFIG, kdoc_shift)
+        self.assertEqual(kdoc_effective_shift["times"]["default"], "07:30-16:15")
+        self.assertEqual(kdoc_effective_shift["skill_overrides"]["all"], -1)
+        for modality in allowed_modalities:
+            self.assertEqual(kdoc_effective_shift["skill_overrides"][f"kinder_{modality}"], 1)
+
+        kdoc_roster = worker_management.get_worker_skill_mod_combinations(
+            "KDOC",
+            worker_management.get_merged_worker_roster(APP_CONFIG),
+        )
         for modality in allowed_modalities:
             self.assertEqual(kdoc_roster[f"kinder_{modality}"], 1)
         for skill in SKILL_COLUMNS:
@@ -840,10 +886,9 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
                         "Personalnummer",
-                        "Code des Mitarbeiters",
                     ]
                 )
-                writer.writerow(["14.06.2026", "VM", "Other Day", "Alice", "A1", "A1"])
+                writer.writerow(["14.06.2026", "VM", "Other Day", "Alice", "A1"])
 
             worker_management.worker_skill_json_roster.clear()
 
@@ -871,7 +916,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 ]
                 self.assertEqual(len(monday_kdoc), 1)
                 self.assertEqual(monday_kdoc.iloc[0]["start_time"].strftime("%H:%M"), "07:30")
-                self.assertEqual(monday_kdoc.iloc[0]["end_time"].strftime("%H:%M"), "16:30")
+                self.assertEqual(monday_kdoc.iloc[0]["end_time"].strftime("%H:%M"), "16:15")
                 self.assertEqual(str(monday_kdoc.iloc[0]["kinder"]), "1")
                 for skill in SKILL_COLUMNS:
                     if skill != "kinder":
@@ -902,6 +947,20 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_mr"), 1)
         self.assertEqual(notfall_rule.get("skill_overrides", {}).get("notfall_xray"), 1)
 
+    def test_real_medweb_config_uses_explicit_skill_override_shape(self) -> None:
+        rules = APP_CONFIG.get("medweb_mapping", {}).get("rules", [])
+        for rule in rules:
+            overrides = rule.get("skill_overrides")
+            if not isinstance(overrides, dict):
+                continue
+            with self.subTest(match=rule.get("match"), label=rule.get("label")):
+                self.assertEqual(overrides.get("all"), -1)
+                shortcut_keys = [
+                    key for key in overrides
+                    if key != "all" and "_" not in str(key)
+                ]
+                self.assertEqual(shortcut_keys, [])
+
     def test_segmented_shift_rule_applies_time_sliced_skill_overrides(self) -> None:
         config = {
             "medweb_mapping": {
@@ -909,7 +968,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "date": "Datum",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                     "day_part": "Tageszeit",
                 },
                 "rules": [
@@ -949,7 +1008,7 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(rule["segments"][0]["skill_overrides"][f"gyn_{self.modality}"], -1)
         self.assertEqual(rule["segments"][1]["skill_overrides"][f"gyn_{self.modality}"], 0)
 
-    def test_fa_fellow_alias_keeps_legacy_and_new_shift_names(self) -> None:
+    def test_fa_rules_keep_day_part_specific_shift_names(self) -> None:
         config = {
             "medweb_mapping": {
                 "rules": [
@@ -1048,7 +1107,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "date": "Datum",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                     "day_part": "Tageszeit",
                 },
                 "rules": [
@@ -1101,7 +1160,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Tageszeit",
                     ]
                 )
@@ -1218,15 +1277,39 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(spaet_rule["times"]["Freitag"], "15:15-19:30")
         self.assertFalse(bool(spaet_rule.get("training", True)))
         self.assertFalse(spaet_rule.get("segments"))
-        self.assertEqual(spaet_rule["skill_overrides"]["all"], 0)
+        self.assertEqual(spaet_rule["skill_overrides"]["all"], -1)
         expected = [
-            ("SBZ: Abdomen/Onko/Uro", "SBZ: Abdomen/Onko/Uro NM", "13:00-15:30", 1.0),
-            ("SBZ: Cardio/Vaskulär/Thorax", "SBZ: Cardio/Vaskulär/Thorax NM", "13:00-15:30", 1.0),
-            ("SBZ: MSK/Derma/HNO", "SBZ: MSK/Derma/HNO NM", "13:00-15:30", 1.0),
-            ("SBZ: FÄ", "SBZ: FÄ NM", "13:00-15:30", 1.2),
+            (
+                "SBZ: Abdomen/Onko/Uro",
+                "SBZ: Abdomen/Onko/Uro NM",
+                "13:00-15:30",
+                1.0,
+                {"aou_ct": 1, "aou_mr": 1, "cvt_ct": 0, "cvt_mr": 0, "mdh_ct": 0, "mdh_mr": 0},
+            ),
+            (
+                "SBZ: Cardio/Vaskulär/Thorax",
+                "SBZ: Cardio/Vaskulär/Thorax NM",
+                "13:00-15:30",
+                1.0,
+                {"cvt_ct": 1, "cvt_mr": 1, "aou_ct": 0, "aou_mr": 0, "mdh_ct": 0, "mdh_mr": 0},
+            ),
+            (
+                "SBZ: MSK/Derma/HNO",
+                "SBZ: MSK/Derma/HNO NM",
+                "13:00-15:30",
+                1.0,
+                {"mdh_ct": 1, "mdh_mr": 1, "aou_ct": 0, "aou_mr": 0, "cvt_ct": 0, "cvt_mr": 0},
+            ),
+            (
+                "SBZ: FÄ",
+                "SBZ: FÄ NM",
+                "13:00-15:30",
+                1.2,
+                {"aou_ct": 1, "aou_mr": 1, "cvt_ct": 1, "cvt_mr": 1, "mdh_ct": 1, "mdh_mr": 1},
+            ),
         ]
 
-        for activity, expected_label, expected_time, expected_modifier in expected:
+        for activity, expected_label, expected_time, expected_modifier, expected_overrides in expected:
             with self.subTest(activity=activity):
                 nm_rule = match_mapping_rule(activity, rules, day_part="NM")
                 self.assertIsNotNone(nm_rule)
@@ -1237,10 +1320,13 @@ class TestDayPlanIntegration(unittest.TestCase):
                     float(nm_rule.get("modifier", 1.0)),
                     expected_modifier,
                 )
-                self.assertEqual(nm_rule["skill_overrides"]["all"], 0)
-                self.assertEqual(nm_rule["skill_overrides"]["gyn_ct"], -1)
-                self.assertEqual(nm_rule["skill_overrides"]["notfall_ct"], -1)
-                self.assertEqual(nm_rule["skill_overrides"]["aou_xray"], -1)
+                self.assertEqual(nm_rule["skill_overrides"]["all"], -1)
+                expanded_nm = worker_management.expand_skill_overrides(nm_rule["skill_overrides"])
+                for key, expected_value in expected_overrides.items():
+                    self.assertEqual(expanded_nm[key], expected_value)
+                self.assertEqual(expanded_nm["gyn_ct"], -1)
+                self.assertEqual(expanded_nm["notfall_ct"], -1)
+                self.assertEqual(expanded_nm["aou_xray"], -1)
 
                 base_rule = match_mapping_rule(activity, rules, day_part="VM")
                 self.assertIsNotNone(base_rule)
@@ -1251,6 +1337,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                 )
                 self.assertIn("VMNM", base_rule.get("day_parts", []))
                 self.assertTrue(bool(base_rule.get("training", True)))
+                self.assertEqual(base_rule["skill_overrides"]["all"], -1)
 
                 vmnm_rule = match_mapping_rule(activity, rules, day_part="VMNM")
                 self.assertIsNotNone(vmnm_rule)
@@ -1266,14 +1353,20 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertIsNotNone(nm_rule)
         self.assertEqual(nm_rule["label"], "Chir Assistent NM")
         self.assertEqual(nm_rule["day_part"], "NM")
-        self.assertEqual(nm_rule["times"]["default"], "13:00-16:15")
+        self.assertEqual(nm_rule["times"]["default"], "13:00-15:30")
 
         self.assertIsNotNone(base_rule)
-        self.assertEqual(base_rule["times"]["default"], "07:30-16:15")
+        self.assertEqual(base_rule["times"]["default"], "07:30-15:30")
         self.assertIn("VMNM", base_rule.get("day_parts", []))
 
         self.assertIsNotNone(vmnm_rule)
-        self.assertEqual(vmnm_rule["times"]["default"], "07:30-16:15")
+        self.assertEqual(vmnm_rule["times"]["default"], "07:30-15:30")
+
+        for rule in (nm_rule, base_rule, vmnm_rule):
+            with self.subTest(rule=rule.get("label", rule.get("match"))):
+                self.assertEqual(rule["skill_overrides"]["aou_ct"], 0)
+                self.assertEqual(rule["skill_overrides"]["cvt_ct"], 0)
+                self.assertEqual(rule["skill_overrides"]["mdh_ct"], 0)
 
     def test_nm_only_chir_assistent_does_not_get_full_day(self) -> None:
         target_date = datetime(2026, 4, 27)
@@ -1299,8 +1392,8 @@ class TestDayPlanIntegration(unittest.TestCase):
             self.assertEqual(len(manke_rows), 2)
             chir_row = manke_rows[manke_rows["tasks"] == "Chir Assistent NM"].iloc[0]
             dienst_row = manke_rows[manke_rows["tasks"] == "Röntgendienst"].iloc[0]
-            self.assertEqual(chir_row["TIME"], "13:00-16:15")
-            self.assertEqual(dienst_row["TIME"], "16:15-19:45")
+            self.assertEqual(chir_row["TIME"], "13:00-15:30")
+            self.assertEqual(dienst_row["TIME"], "15:30-19:45")
         finally:
             worker_management.worker_skill_json_roster.clear()
             os.unlink(csv_path)
@@ -1316,7 +1409,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "date": "Datum",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                     "day_part": "Tageszeit",
                 },
                 "rules": [
@@ -1357,7 +1450,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Tageszeit",
                     ]
                 )
@@ -1390,7 +1483,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                     "day_part": "Tageszeit",
                     "activity": "Beschreibung der Aktivität",
                     "employee_name": "Name des Mitarbeiters",
-                    "employee_code": "Code des Mitarbeiters",
+                    "employee_personalnummer": "Personalnummer",
                 },
                 "rules": [
                     {
@@ -1437,7 +1530,7 @@ class TestDayPlanIntegration(unittest.TestCase):
                         "Datum",
                         "Beschreibung der Aktivität",
                         "Name des Mitarbeiters",
-                        "Code des Mitarbeiters",
+                        "Personalnummer",
                         "Tageszeit",
                     ]
                 )
@@ -1551,11 +1644,11 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertEqual(sum(1 for row in rows if row["row_type"] == "gap"), 2)
 
         with patch.object(schedule_crud, "persist_schedule_snapshot"):
-            success, _, error = schedule_crud.replace_worker_schedule(
-                self.modality,
+            success, _, error = schedule_crud.replace_worker_schedule_all(
                 worker_name,
-                rows,
+                {self.modality: rows},
                 use_staged=False,
+                target_modalities=[self.modality],
             )
 
         self.assertTrue(success, msg=error)
@@ -1603,11 +1696,11 @@ class TestDayPlanIntegration(unittest.TestCase):
         self.assertTrue(all(rows[0][skill] == -1 for skill in SKILL_COLUMNS))
 
         with patch.object(schedule_crud, "persist_schedule_snapshot"):
-            success, _, error = schedule_crud.replace_worker_schedule(
-                self.modality,
+            success, _, error = schedule_crud.replace_worker_schedule_all(
                 worker_name,
-                rows,
+                {self.modality: rows},
                 use_staged=False,
+                target_modalities=[self.modality],
             )
 
         self.assertTrue(success, msg=error)

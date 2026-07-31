@@ -6,24 +6,6 @@
 
 const TimelineFeed = (function() {
   const WEIGHTED_MARKERS = new Set(['w', 'W', 2, '2']);
-  const ENGLISH_TO_GERMAN_WEEKDAYS = {
-    sunday: 'Sonntag',
-    monday: 'Montag',
-    tuesday: 'Dienstag',
-    wednesday: 'Mittwoch',
-    thursday: 'Donnerstag',
-    friday: 'Freitag',
-    saturday: 'Samstag'
-  };
-  const GERMAN_TO_ENGLISH_WEEKDAYS = {
-    Sonntag: 'sunday',
-    Montag: 'monday',
-    Dienstag: 'tuesday',
-    Mittwoch: 'wednesday',
-    Donnerstag: 'thursday',
-    Freitag: 'friday',
-    Samstag: 'saturday'
-  };
 
   function getModalitiesList(modalities) {
     if (Array.isArray(modalities)) return modalities.map(mod => String(mod).toLowerCase());
@@ -54,19 +36,10 @@ const TimelineFeed = (function() {
     return window.WorkerNameUtils.buildSortKey(name);
   }
 
-  function normalizeWeekdayName(targetDay) {
-    if (!targetDay || typeof targetDay !== 'string') return targetDay;
-    const normalized = targetDay.trim().toLowerCase();
-    return ENGLISH_TO_GERMAN_WEEKDAYS[normalized] || targetDay;
-  }
-
   function resolveDayTimes(timesConfig, targetDay) {
     const times = timesConfig || {};
     if (Object.keys(times).length === 0) return null;
-    const normalizedDay = normalizeWeekdayName(targetDay);
-    if (normalizedDay && times[normalizedDay]) return times[normalizedDay];
-    const englishDay = GERMAN_TO_ENGLISH_WEEKDAYS[normalizedDay];
-    if (englishDay && times[englishDay]) return times[englishDay];
+    if (targetDay && times[targetDay]) return times[targetDay];
     return times.default || null;
   }
 
@@ -214,6 +187,8 @@ const TimelineFeed = (function() {
           worker: workerName,
           modality: mod,
           row_index: row.row_index,
+          row_uid: row.row_uid || null,
+          edit_key: row.row_uid ? `${mod}:${row.row_uid}` : `${mod}:row-${row.row_index}`,
           start_time: startTime,
           end_time: endTime,
           modifier: row.Modifier !== undefined ? row.Modifier : 1.0,
@@ -284,7 +259,18 @@ const TimelineFeed = (function() {
         const shiftKey = entry.is_gap_entry
           ? `${entry.start_time}-${entry.end_time}-gap-${taskKey}`
           : `${entry.start_time}-${entry.end_time}`;
-        const modalShiftKey = `${entry.start_time}-${entry.end_time}-${entry.is_gap_entry ? 'gap' : 'shift'}-${taskKey}`;
+        const modalShiftBaseKey = `${entry.start_time}-${entry.end_time}-${entry.is_gap_entry ? 'gap' : 'shift'}-${taskKey}`;
+        let modalShiftKey = modalShiftBaseKey;
+
+        // Same time/task across different modalities belongs to one visual row.
+        // A second row for the same modality must stay distinct, otherwise the
+        // full-worker edit popup would silently overwrite that duplicate entry.
+        if (grouped[workerName]?.modalShifts?.[modalShiftKey]?.modalities?.[mod]) {
+          const rowSuffix = entry.row_index !== undefined && entry.row_index !== null
+            ? entry.row_index
+            : (entry.row_uid || grouped[workerName].allEntries.length);
+          modalShiftKey = `${modalShiftBaseKey}#${mod}-${rowSuffix}`;
+        }
 
         if (!grouped[workerName].shifts[shiftKey]) {
           grouped[workerName].shifts[shiftKey] = {
@@ -316,11 +302,15 @@ const TimelineFeed = (function() {
         grouped[workerName].shifts[shiftKey].modalities[mod] = {
           skills: entry.skills,
           row_index: entry.row_index,
+          row_uid: entry.row_uid,
+          edit_key: entry.edit_key,
           modifier: entry.modifier
         };
         grouped[workerName].modalShifts[modalShiftKey].modalities[mod] = {
           skills: entry.skills,
           row_index: entry.row_index,
+          row_uid: entry.row_uid,
+          edit_key: entry.edit_key,
           modifier: entry.modifier
         };
 
@@ -358,6 +348,8 @@ const TimelineFeed = (function() {
             shift.modalities[modKey] = {
               skills: skillsByModality,
               row_index: -1,
+              row_uid: null,
+              edit_key: null,
               modifier: shift.modifier || 1.0,
               placeholder: true
             };

@@ -1,22 +1,247 @@
-    /* Admin header theme - shared by admin pages */
+    /* Compact operations-console system shared by admin pages. */
     :root {
-      --app-header-bg: #004892;
+      --ops-ink: #102a43;
+      --ops-muted: #61758a;
+      --ops-line: #ced9e4;
+      --ops-line-strong: #aebfd0;
+      --ops-surface: #ffffff;
+      --ops-surface-soft: #f4f7fa;
+      --ops-surface-blue: #edf5fb;
+      --ops-primary: #075a91;
+      --ops-primary-dark: #06466f;
+      --ops-success: #167a4b;
+      --ops-warning: #a85410;
+      --ops-danger: #b42318;
+      --ops-code: #0d1b2a;
+      --ops-radius: 7px;
+      --ops-shadow: 0 1px 2px rgba(15, 42, 67, 0.06);
+      --app-header-bg: linear-gradient(110deg, #073b66 0%, #075a91 100%);
       --app-header-text: #fff;
       --app-header-link-color: #fff;
-      --app-header-link-bg: rgba(255, 255, 255, 0.2);
-      --app-header-link-hover-bg: rgba(255, 255, 255, 0.3);
-      --app-header-link-active-bg: rgba(255, 255, 255, 0.4);
+      --app-header-link-bg: rgba(255, 255, 255, 0.12);
+      --app-header-link-hover-bg: rgba(255, 255, 255, 0.2);
+      --app-header-link-active-bg: rgba(255, 255, 255, 0.26);
       --app-header-link-active-color: #fff;
-      --app-subheader-bg: rgba(255, 255, 255, 0.2);
+      --app-subheader-bg: rgba(255, 255, 255, 0.13);
       --app-subheader-text: #fff;
-      --header-context-color: #e6eef8;
+      --header-context-color: #d9e9f6;
       --header-context-global-color: #fff;
-      --pill-bg: rgba(255, 255, 255, 0.2);
-      --pill-hover-bg: rgba(255, 255, 255, 0.3);
-      --pill-active-bg: rgba(255, 255, 255, 0.4);
+      --pill-bg: rgba(255, 255, 255, 0.12);
+      --pill-hover-bg: rgba(255, 255, 255, 0.2);
+      --pill-active-bg: rgba(255, 255, 255, 0.26);
       --pill-color: #fff;
       --pill-active-color: #fff;
-      --basic-auth-logout-bg: rgba(255, 255, 255, 0.2);
-      --basic-auth-logout-hover-bg: rgba(220, 53, 69, 0.5);
+      --basic-auth-logout-bg: rgba(255, 255, 255, 0.14);
+      --basic-auth-logout-hover-bg: rgba(220, 53, 69, 0.55);
       --basic-auth-logout-hover-color: #fff;
+    }
+
+    body {
+      background: #eef2f6;
+      color: var(--ops-ink);
+    }
+
+    .app-header {
+      border: 1px solid rgba(3, 35, 61, 0.24);
+      box-shadow: 0 2px 5px rgba(15, 42, 67, 0.14);
+    }
+
+    .ops-shell {
+      color: var(--ops-ink);
+      font-size: 0.84rem;
+    }
+
+    .ops-page-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1rem;
+      margin: 0 0 0.6rem;
+    }
+
+    .ops-eyebrow {
+      margin: 0 0 0.12rem;
+      color: var(--ops-primary);
+      font-size: 0.67rem;
+      font-weight: 850;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .ops-page-head h2,
+    .ops-section-title {
+      margin: 0;
+      color: var(--ops-ink);
+      letter-spacing: -0.01em;
+    }
+
+    .ops-page-head h2 { font-size: 1.08rem; }
+    .ops-section-title { font-size: 0.96rem; }
+
+    .ops-actions,
+    .ops-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+
+    .ops-shell .btn,
+    .ops-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 0.31rem 0.58rem;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: var(--ops-primary);
+      color: #fff;
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 780;
+      line-height: 1.15;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+    }
+
+    .ops-shell .btn:hover,
+    .ops-button:hover { background: var(--ops-primary-dark); transform: translateY(-1px); }
+    .ops-shell .btn:focus-visible,
+    .ops-button:focus-visible { outline: 2px solid rgba(7, 90, 145, 0.3); outline-offset: 2px; }
+    .ops-shell .btn:disabled,
+    .ops-button:disabled { opacity: 0.55; cursor: wait; transform: none; }
+    .ops-shell .btn-secondary,
+    .ops-button--secondary { background: #e8f0f6; color: #214967; border-color: #c5d4df; }
+    .ops-shell .btn-secondary:hover,
+    .ops-button--secondary:hover { background: #dce9f2; }
+    .ops-shell .btn-outline,
+    .ops-button--outline { background: #fff; color: var(--ops-primary); border-color: #9eb5c8; }
+    .ops-shell .btn-outline:hover,
+    .ops-button--outline:hover { background: var(--ops-surface-blue); border-color: #7599b6; }
+    .ops-shell .btn-danger,
+    .ops-button--danger { background: var(--ops-danger); color: #fff; }
+    .ops-shell .btn-danger:hover,
+    .ops-button--danger:hover { background: #8f1d14; }
+
+    .ops-panel,
+    .ops-card,
+    .ops-metric {
+      min-width: 0;
+      border: 1px solid var(--ops-line);
+      border-radius: var(--ops-radius);
+      background: var(--ops-surface);
+      box-shadow: var(--ops-shadow);
+    }
+
+    .ops-panel { padding: 0.7rem; }
+    .ops-card { padding: 0.68rem; }
+    .ops-metric { padding: 0.55rem 0.65rem; }
+
+    .ops-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .ops-metric__label {
+      color: var(--ops-muted);
+      font-size: 0.69rem;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.045em;
+    }
+
+    .ops-metric__value {
+      display: block;
+      margin-top: 0.12rem;
+      color: var(--ops-primary-dark);
+      font-size: 1.22rem;
+      font-weight: 850;
+      letter-spacing: -0.025em;
+    }
+
+    .ops-metric__value--ok { color: var(--ops-success); }
+    .ops-metric__value--error { color: var(--ops-danger); }
+
+    .ops-section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .ops-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      padding: 0.14rem 0.42rem;
+      border-radius: 999px;
+      background: #e7f7ee;
+      color: #146c43;
+      font-size: 0.66rem;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .ops-badge::before {
+      width: 0.38rem;
+      height: 0.38rem;
+      border-radius: 50%;
+      background: currentColor;
+      content: '';
+    }
+
+    .ops-badge--missing,
+    .ops-badge--error { background: #feeceb; color: var(--ops-danger); }
+    .ops-badge--warning { background: #fff3df; color: var(--ops-warning); }
+
+    .ops-path {
+      display: block;
+      padding: 0.28rem 0.4rem;
+      border-radius: 4px;
+      background: #f0f4f8;
+      color: #36536b;
+      font: 0.68rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .ops-meta {
+      display: flex;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      color: var(--ops-muted);
+      font-size: 0.69rem;
+    }
+
+    .ops-table-wrap { overflow: auto; max-height: 440px; }
+    .ops-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+    .ops-table th,
+    .ops-table td { padding: 0.4rem; border-bottom: 1px solid #e0e7ee; text-align: left; vertical-align: top; }
+    .ops-table th { position: sticky; top: 0; z-index: 1; background: #eaf0f5; color: #294b65; font-size: 0.68rem; letter-spacing: 0.025em; text-transform: uppercase; }
+
+    .ops-note {
+      border-left: 3px solid var(--ops-primary);
+      background: var(--ops-surface-blue);
+      color: #31546d;
+      padding: 0.42rem 0.55rem;
+      font-size: 0.73rem;
+      line-height: 1.38;
+    }
+
+    .ops-note--warning { border-left-color: var(--ops-warning); background: #fff7ea; color: #7b4618; }
+    .ops-note--danger { border-left-color: var(--ops-danger); background: #fff1f0; color: #84291f; }
+
+    @media (max-width: 900px) {
+      .ops-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ops-page-head { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (max-width: 580px) {
+      .ops-metric-grid { grid-template-columns: 1fr 1fr; }
+      .ops-shell .btn,
+      .ops-button { min-height: 34px; }
     }

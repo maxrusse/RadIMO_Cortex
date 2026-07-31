@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | Timetable{% endblock %}
+{% block title %}RadIMO Cortex | Schedule{% endblock %}
 
 {% block styles %}
     :root {
@@ -18,7 +18,7 @@
       /* 20:00 */
       --timeline-hours: 14;
       /* 20 - 6 */
-      --worker-col-width: 180px;
+      --worker-col-width: clamp(250px, 20vw, 310px);
       /* Width of worker name column */
     }
 
@@ -38,12 +38,25 @@
       display: flex;
       gap: 0.5rem;
       align-items: center;
-      margin-bottom: 1rem;
-      padding: 0.75rem;
+      margin-bottom: 0;
+      padding: 0.45rem;
       background: var(--card-bg);
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       flex-wrap: wrap;
+    }
+
+    .filter-toolbar {
+      display: flex;
+      gap: 0.45rem;
+      align-items: stretch;
+      margin-bottom: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-toolbar .skill-filter-bar {
+      box-shadow: none;
+      border: 1px solid #dbe2ea;
     }
 
     .skill-filter-bar label {
@@ -54,10 +67,10 @@
 
     .filter-btn {
       padding: 0.4rem 1rem;
-      border: 2px solid #ddd;
+      border: 2px solid var(--filter-color, #9ca3af);
       border-radius: 4px;
-      background: white;
-      color: #333;
+      background: color-mix(in srgb, var(--filter-color, #64748b) 8%, white);
+      color: var(--filter-color, #334155);
       cursor: pointer;
       font-size: 0.9rem;
       transition: all 0.2s;
@@ -71,9 +84,11 @@
     }
 
     .filter-btn.active {
-      background: #004892;
-      color: white;
-      border-color: #004892;
+      background: var(--filter-color, #004892);
+      color: var(--filter-active-text, white);
+      border-color: var(--filter-color, #004892);
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25), 0 0 0 2px #fff, 0 0 0 4px var(--filter-color, #004892);
+      font-weight: 800;
     }
 
     /* Timeline container */
@@ -138,9 +153,9 @@
     }
 
     .worker-name-cell {
-      padding: 0.5rem;
-      font-size: 0.85rem;
-      font-weight: 500;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.8rem;
+      font-weight: 650;
       background: #fff;
       border-bottom: 1px solid #eee;
       display: flex;
@@ -150,6 +165,9 @@
       z-index: 5;
       min-height: 36px;
       transition: opacity 0.15s ease-in-out;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .worker-timeline {
@@ -178,10 +196,11 @@
     /* Shift bars */
     .shift-bar {
       position: absolute;
-      top: 4px;
-      height: 28px;
+      top: 5px;
+      height: 26px;
       border-radius: 4px;
-      border: 1px solid rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(0, 0, 0, 0.18);
+      box-shadow: 0 1px 1px rgba(15, 42, 67, 0.12);
       cursor: default;
       overflow: hidden;
       transition: opacity 0.15s;
@@ -190,6 +209,43 @@
     .shift-bar:hover {
       z-index: 2;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .shift-bar__label {
+      position: absolute;
+      inset: 0 6px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 0.67rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    }
+
+    .shift-bar--multi {
+      border-color: #b7c2cc;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 1px rgba(15, 42, 67, 0.1);
+    }
+
+    .shift-bar__label--multi {
+      inset: 2px 3px;
+      gap: 6px;
+      text-shadow: none;
+    }
+
+    .shift-bar__skill-label {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 3px;
+      flex: 0 0 auto;
+      font-size: 0.72rem;
+      line-height: 1;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
     }
 
     .shift-bar--neutral {
@@ -207,13 +263,7 @@
       cursor: default;
       overflow: hidden;
       transition: opacity 0.15s;
-      background: repeating-linear-gradient(
-        45deg,
-        #9e9e9e,
-        #9e9e9e 4px,
-        #bdbdbd 4px,
-        #bdbdbd 8px
-      );
+      background: #a8afb7;
       border: 1px dashed #757575;
       opacity: 0.85;
     }
@@ -277,13 +327,7 @@
     }
 
     .legend-box.legend-gap {
-      background: repeating-linear-gradient(
-        45deg,
-        #9e9e9e,
-        #9e9e9e 4px,
-        #bdbdbd 4px,
-        #bdbdbd 8px
-      );
+      background: #a8afb7;
       border: 1px dashed #757575;
     }
 
@@ -317,8 +361,8 @@
 {% block body_attrs %} data-modality="{{ modality }}"{% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Timetable' %}
-  {% set header_subtitle = 'Intelligent Radiology Orchestration' %}
+  {% set header_title = 'RadIMO Cortex | Schedule' %}
+  {% set header_subtitle = 'Schedule overview' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'timetable' %}
   {% set header_nav = namespace(links=[]) %}
@@ -326,6 +370,7 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
+  <div class="filter-toolbar">
   <!-- Skill Filter Bar -->
   <div class="skill-filter-bar" id="skillFilterBar">
     <label>Skill:</label>
@@ -351,6 +396,7 @@
     </a>
     {% endfor %}
   </div>
+  </div>
 
   <div class="card">
     <div class="timeline-wrapper">
@@ -374,7 +420,6 @@
     </div>
   </div>
 
-  <a href="{{ url_for('routes.index', modality=modality) }}" class="back-button">Zurück zur Hauptseite</a>
 
   <!-- Shared timeline / worker-name helpers -->
   <script src="{{ url_for('static', filename='js/worker_name_utils.js') }}"></script>
@@ -390,7 +435,6 @@
       skillColumns: {{ skill_columns|tojson|safe }},
       skillSlugMap: {{ skill_slug_map|tojson|safe }},
       skillColorMap: {{ skill_color_map|tojson|safe }},
-      modColorMap: {{ modality_color_map|tojson|safe }},
       taskRoles: {{ task_roles|tojson|safe }},
       workerSkills: {{ worker_skills|tojson|safe }},
       workerNameDisplayStyle: {{ worker_name_display_style|tojson|safe }},

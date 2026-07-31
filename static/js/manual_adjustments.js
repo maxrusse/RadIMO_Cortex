@@ -40,6 +40,13 @@ function setStatus(message, type = '') {
   status.className = `status ${type || ''}`.trim();
 }
 
+function setModalStatus(message, type = '') {
+  const status = document.getElementById('manual-modal-status');
+  if (!status) return;
+  status.textContent = message || '';
+  status.className = `status ${type || ''}`.trim();
+}
+
 async function fetchManualAdjustmentData() {
   const response = await fetch('/api/manual-adjustments');
   const payload = await response.json();
@@ -59,7 +66,25 @@ function renderWorkers() {
     return;
   }
 
-  tbody.innerHTML = manualWorkers.map(worker => {
+  const query = (document.getElementById('manual-worker-filter')?.value || '').trim().toLocaleLowerCase();
+  const adjustedOnly = Boolean(document.getElementById('manual-adjusted-only')?.checked);
+  const visibleWorkers = manualWorkers.filter(worker => {
+    const matchesQuery = !query || `${worker.name || ''} ${worker.canonical_id || ''}`.toLocaleLowerCase().includes(query);
+    const hasCorrection = Number(worker.manual_adjustment || 0) !== 0;
+    return matchesQuery && (!adjustedOnly || hasCorrection);
+  });
+  const count = document.getElementById('manual-filter-count');
+  if (count) {
+    count.textContent = window.RadimoI18n?.language === 'en'
+      ? `${visibleWorkers.length} of ${manualWorkers.length}`
+      : `${visibleWorkers.length} von ${manualWorkers.length}`;
+  }
+  if (!visibleWorkers.length) {
+    tbody.innerHTML = '<tr><td colspan="6">No workers match the filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = visibleWorkers.map(worker => {
     const ma = Number(worker.manual_adjustment || 0);
     const encodedWorkerId = encodeURIComponent(worker.canonical_id || '');
     return `<tr>
@@ -120,7 +145,7 @@ function openManualAdjustmentModal(workerId) {
   document.getElementById('manual-reason').value = '';
   document.getElementById('manual-admin-password').value = '';
   document.getElementById('manual-adjustment-modal').classList.add('show');
-  setTimeout(() => document.getElementById('manual-delta')?.focus(), 0);
+  setModalStatus('');
 }
 
 function openManualAdjustmentModalByEncoded(workerId) {
@@ -142,6 +167,20 @@ async function submitManualAdjustment() {
     reason: document.getElementById('manual-reason').value.trim(),
     admin_password: document.getElementById('manual-admin-password').value,
   };
+  const requiredFields = [
+    ['manual-reason', payload.reason],
+    ['manual-admin-name', payload.admin_name],
+    ['manual-admin-password', payload.admin_password],
+  ];
+  const missing = requiredFields.find(([, value]) => !value);
+  if (missing) {
+    setModalStatus(
+      window.RadimoI18n?.language === 'en' ? 'Please complete all required fields.' : 'Bitte alle Pflichtfelder ausfüllen.',
+      'error'
+    );
+    document.getElementById(missing[0])?.focus();
+    return;
+  }
 
   try {
     if (submitButton) submitButton.disabled = true;
@@ -160,8 +199,10 @@ async function submitManualAdjustment() {
     renderLog();
     closeManualAdjustmentModal();
     setStatus('Manual adjustment published.', 'success');
+    setModalStatus('');
   } catch (error) {
-    setStatus(error.message, 'error');
+    setModalStatus(error.message, 'error');
+    document.getElementById('manual-admin-password')?.focus();
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
@@ -179,6 +220,11 @@ async function initializeManualAdjustments() {
 }
 
 document.addEventListener('DOMContentLoaded', initializeManualAdjustments);
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('manual-worker-filter')?.addEventListener('input', renderWorkers);
+  document.getElementById('manual-adjusted-only')?.addEventListener('change', renderWorkers);
+});
+document.addEventListener('radimo:languagechange', renderWorkers);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
     closeManualAdjustmentModal();

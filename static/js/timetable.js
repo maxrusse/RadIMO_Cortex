@@ -10,7 +10,6 @@ let TimetableConfig = {
   skillColumns: [],
   skillSlugMap: {},
   skillColorMap: {},
-  modColorMap: {},
   taskRoles: [],
   workerSkills: {},
   targetWeekday: '',
@@ -48,10 +47,9 @@ function injectDynamicStyles() {
   // Add styles for modality filter buttons
   document.querySelectorAll('#modalityFilterBar a').forEach(function(anchor) {
     const mod = anchor.getAttribute('data-modality');
-    if (modalities[mod] && mod === currentModality) {
-      anchor.style.background = modalities[mod].nav_color;
-      anchor.style.borderColor = modalities[mod].nav_color;
-      anchor.style.color = 'white';
+    if (modalities[mod]) {
+      const color = modalities[mod].nav_color;
+      anchor.style.setProperty('--filter-color', color);
     }
   });
 
@@ -62,7 +60,9 @@ function injectDynamicStyles() {
       return skill.slug === skillSlug;
     });
     if (skillDef) {
-      button.style.borderLeft = `4px solid ${skillDef.button_color}`;
+      const color = skillDef.button_color;
+      button.style.setProperty('--filter-color', color);
+      button.style.setProperty('--filter-active-text', skillDef.text_color || '#ffffff');
     }
   });
 
@@ -90,7 +90,7 @@ function isValidTimelineEntry(entry, skillColumns) {
   if (!entry.start_time || !entry.end_time) return false;
   const rowType = (entry.row_type || '').toString().toLowerCase();
   if (rowType === 'gap' || rowType === 'gap_segment') return true;
-  return TimelineChart.hasAnyVisibleSkill(entry, skillColumns);
+  return TimelineChart.hasAnyActiveSkill(entry, skillColumns);
 }
 
 /**
@@ -151,8 +151,16 @@ function buildTimeline() {
   });
 
   // Filter out empty entries after shared normalization
+  const workersWithActiveShifts = new Set(timelineData.filter(function(entry) {
+    const rowType = String(entry.row_type || '').toLowerCase();
+    const isGap = rowType === 'gap' || rowType === 'gap_segment';
+    return !isGap && TimelineChart.hasAnyActiveSkill(entry, skillColumns);
+  }).map(function(entry) {
+    return entry.PPL || entry.worker;
+  }));
   const filteredData = timelineData.filter(function(entry) {
-    return isValidTimelineEntry(entry, skillColumns);
+    const worker = entry.PPL || entry.worker;
+    return workersWithActiveShifts.has(worker) && isValidTimelineEntry(entry, skillColumns);
   });
 
   if (filteredData.length === 0) {

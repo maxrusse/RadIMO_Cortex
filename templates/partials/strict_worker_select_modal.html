@@ -1,0 +1,12 @@
+<div class="modal-overlay" id="workerSelectModal" role="dialog" aria-modal="true" aria-labelledby="workerSelectTitle">
+  <div class="worker-select-modal">
+    <h2 id="workerSelectTitle">Radiologen wählen</h2>
+    <p id="workerSelectContext">Strikte Zuweisung</p>
+    <select id="workerSelectChoice" data-initial-focus></select>
+    <div id="workerSelectStatus" class="worker-select-status"></div>
+    <div class="modal-buttons">
+      <button type="button" class="btn-cancel" onclick="StrictWorkerSelect.close()">Abbrechen</button>
+      <button type="button" class="btn-save" id="workerSelectConfirm" data-dialog-submit onclick="StrictWorkerSelect.confirm()">Zuweisen</button>
+    </div>
+  </div>
+</div>

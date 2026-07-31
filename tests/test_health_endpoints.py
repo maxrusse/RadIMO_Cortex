@@ -137,6 +137,23 @@ class TestHealthEndpoints(unittest.TestCase):
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
+    @patch("routes.is_strict_manual_select_enabled", side_effect=lambda skill, modality: skill == "cvt" and modality == "ct")
+    @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill in {"cvt", "mdh"} and modality == "ct")
+    def test_index_page_marks_only_configured_strict_button_for_manual_select(
+        self,
+        _mock_visibility,
+        _mock_manual_visibility,
+        _mock_special_visibility,
+        _mock_access,
+    ) -> None:
+        response = self.client.get("/?modality=ct")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"getNextAssignment('cvt', 'CVT', true, true)", response.data)
+        self.assertIn(b"getNextAssignment('mdh', 'MDH', true, false)", response.data)
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_special_task_strict_button_visible", return_value=False)
     @patch("routes.is_strict_button_visible", return_value=False)
     def test_xray_page_shows_cvt_notfall_mdh_kinder_and_hides_other_buttons(
         self,
@@ -259,6 +276,111 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'aria-label="Strikte Zuweisung"', response.data)
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_strict_manual_select_enabled", side_effect=lambda skill, modality: skill == "cvt" and modality in {"ct", "mr"})
+    @patch("routes.is_strict_button_visible", side_effect=lambda skill, modality: skill == "cvt" and modality in {"ct", "mr"})
+    def test_skill_page_marks_configured_modalities_for_manual_select(
+        self,
+        _mock_visibility,
+        _mock_manual_visibility,
+        _mock_access,
+    ) -> None:
+        response = self.client.get("/by-skill?skill=cvt")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"getNextAssignment('ct', true, true)", response.data)
+        self.assertIn(b"getNextAssignment('mr', true, true)", response.data)
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_strict_manual_select_enabled", return_value=True)
+    @patch("routes.get_modality_weighted_count", return_value=0.5)
+    @patch("routes.get_global_weighted_count", return_value=1.25)
+    @patch("routes.get_strict_assignment_candidates")
+    def test_strict_candidate_endpoint_returns_available_workers(
+        self,
+        mock_candidates,
+        _mock_global_weight,
+        _mock_modality_weight,
+        _mock_manual_visibility,
+        _mock_access,
+    ) -> None:
+        mock_candidates.return_value = [
+            {
+                "candidate_key": "ct:cvt:0:0:TT",
+                "person": "Tester (TT)",
+                "canonical_id": "TT",
+                "skill": "cvt",
+                "modality": "ct",
+                "ratio": 0.25,
+                "is_weighted": False,
+                "candidate": {"PPL": "Tester (TT)", "Modifier": 1.0, "cvt": 1},
+            }
+        ]
+
+        response = self.client.get("/api/ct/cvt/strict/candidates")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["skill"], "cvt")
+        self.assertEqual(payload["candidates"][0]["candidate_key"], "ct:cvt:0:0:TT")
+        self.assertEqual(payload["candidates"][0]["worker_id"], "TT")
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.is_strict_manual_select_enabled", return_value=True)
+    @patch("routes.get_strict_assignment_candidates")
+    @patch("routes.update_global_assignment", return_value="TT")
+    @patch("routes.save_state")
+    @patch("routes._record_distribution_request")
+    @patch("routes._record_cross_pool_flow")
+    @patch("routes._record_distribution_stats")
+    @patch("routes._record_recent_distribution")
+    @patch("routes.usage_logger.record_skill_modality_usage")
+    @patch("routes.usage_logger.check_and_export_at_scheduled_time")
+    def test_strict_manual_assignment_records_selected_candidate(
+        self,
+        _mock_export,
+        _mock_usage,
+        _mock_recent,
+        _mock_stats,
+        _mock_flow,
+        _mock_request,
+        _mock_save,
+        mock_update,
+        mock_candidates,
+        _mock_manual_visibility,
+        _mock_access,
+    ) -> None:
+        mock_candidates.return_value = [
+            {
+                "candidate_key": "ct:cvt:0:0:TT",
+                "person": "Tester (TT)",
+                "canonical_id": "TT",
+                "skill": "cvt",
+                "modality": "ct",
+                "ratio": 0.25,
+                "is_weighted": False,
+                "candidate": {
+                    "PPL": "Tester (TT)",
+                    "Modifier": 1.0,
+                    "cvt": 1,
+                    "__is_weighted": False,
+                    "__skill_source": "cvt",
+                },
+            }
+        ]
+
+        response = self.client.post(
+            "/api/ct/cvt/strict/manual",
+            json={"candidate_key": "ct:cvt:0:0:TT"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["selected_person"], "Tester (TT)")
+        self.assertTrue(payload["manual_selection"])
+        self.assertTrue(mock_update.call_args.kwargs["strict_mode"])
+        self.assertEqual(mock_update.call_args.args[:3], ("Tester (TT)", "cvt", "ct"))
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_no_overflow", return_value=True)
@@ -417,11 +539,11 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertFalse(mock_get_worker.call_args.kwargs["allow_overflow"])
 
     @patch("routes.has_admin_access", return_value=True)
-    def test_balance_summary_page_renders_management_sections(self, _mock_admin) -> None:
+    def test_performance_page_renders_management_sections(self, _mock_admin) -> None:
         response = self.client.get("/performance")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Performance", response.data)
+        self.assertIn(b"Analysis", response.data)
         self.assertIn("Tageslast".encode("utf-8"), response.data)
         self.assertIn("Lasttreiber".encode("utf-8"), response.data)
         self.assertIn("Gesamtansicht".encode("utf-8"), response.data)
@@ -431,10 +553,10 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'id="leaders-overflow"', response.data)
         self.assertNotIn(b"Top Skills / Hour", response.data)
         self.assertNotIn(b"Top Modalities / Hour", response.data)
-        self.assertIn(b'js/balance_summary.js', response.data)
+        self.assertIn(b'js/performance.js', response.data)
 
-    def test_balance_summary_js_labels_manual_adjustment_component(self) -> None:
-        with open("static/js/balance_summary.js", "r", encoding="utf-8") as js_file:
+    def test_performance_js_labels_manual_adjustment_component(self) -> None:
+        with open("static/js/performance.js", "r", encoding="utf-8") as js_file:
             script = js_file.read()
 
         self.assertIn("manual_adjustment", script)
@@ -514,13 +636,6 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn("count += countSkillMapChanges(", state_script)
         self.assertIn("normalizeEditPlanShiftsForComparison(getTableShifts(group))", state_script)
         self.assertIn("Save Edits (${changeCount} change${changeCount !== 1 ? 's' : ''})", actions_script)
-
-    @patch("routes.has_admin_access", return_value=True)
-    def test_balance_summary_route_redirects_to_performance(self, _mock_admin) -> None:
-        response = self.client.get("/balance-summary?modality=mr")
-
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/performance?modality=mr", response.location)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_simple_mode_renders_global_table_without_extra_summary_blocks(self, _mock_admin) -> None:
@@ -618,7 +733,7 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/manual-adjustments")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Adjust Weight", response.data)
+        self.assertIn(b"Corrections", response.data)
         self.assertIn(b"Your name", response.data)
         self.assertIn(b'id="manual-worker-body"', response.data)
         self.assertIn(b'js/manual_adjustments.js', response.data)
@@ -633,7 +748,7 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn(b"Adjust Weight", response.data)
+        self.assertNotIn(b"Corrections", response.data)
         self.assertIn(b"Admin", response.data)
 
     def test_manual_adjustments_page_requires_admin_session(self) -> None:
@@ -1066,7 +1181,6 @@ class TestHealthEndpoints(unittest.TestCase):
 
             generic_path = f"{backups_dir}/Cortex_ALL_staged.json"
             target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
-
             with open(generic_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
@@ -1298,8 +1412,6 @@ class TestHealthEndpoints(unittest.TestCase):
             os.makedirs(staged_days_dir, exist_ok=True)
 
             generic_path = f"{backups_dir}/Cortex_ALL_staged.json"
-            target_path = f"{staged_days_dir}/Cortex_ALL_staged_{target_date.isoformat()}.json"
-
             with open(generic_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
@@ -1380,6 +1492,62 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b'taskRoles:', response.data)
         self.assertIn(b'workerSkills:', response.data)
 
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.persist_schedule_snapshot")
+    @patch("routes.backup_dataframe")
+    @patch("routes.save_state")
+    def test_edit_info_persists_without_loaded_schedule(
+        self,
+        mock_save_state,
+        mock_backup_dataframe,
+        mock_persist_schedule_snapshot,
+        _mock_admin,
+    ) -> None:
+        modality = allowed_modalities[0]
+        data = routes_module.modality_data[modality]
+        original_df = data.get("working_hours_df")
+        original_info = list(data.get("info_texts", []))
+        try:
+            data["working_hours_df"] = None
+            data["info_texts"] = []
+
+            response = self.client.post(
+                "/api/edit_info",
+                json={"modality": modality, "info_text": "Line 1\nLine 2"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertTrue(payload["success"])
+            self.assertEqual(data["info_texts"], ["Line 1", "Line 2"])
+            mock_save_state.assert_called_once()
+            mock_persist_schedule_snapshot.assert_called_once_with(use_staged=False)
+            mock_backup_dataframe.assert_not_called()
+        finally:
+            data["working_hours_df"] = original_df
+            data["info_texts"] = original_info
+
+    @patch("routes.has_admin_access", return_value=True)
+    @patch("routes.persist_schedule_snapshot", side_effect=OSError("disk full"))
+    @patch("routes.save_state")
+    def test_edit_info_reports_persistence_failure(
+        self,
+        _mock_save_state,
+        _mock_persist_schedule_snapshot,
+        _mock_admin,
+    ) -> None:
+        modality = allowed_modalities[0]
+
+        response = self.client.post(
+            "/api/edit_info",
+            json={"modality": modality, "info_text": "Line 1"},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        payload = response.get_json()
+        self.assertFalse(payload["success"])
+        self.assertIn("disk full", payload["error"])
+
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.get_next_available_worker")
     @patch("routes.update_global_assignment", return_value="TT")
@@ -1407,6 +1575,20 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(mock_update.call_args.kwargs["strict_mode"])
+
+    @patch("routes.is_access_protection_enabled", return_value=False)
+    @patch("routes.get_specialist_fallback_targets", return_value=[])
+    @patch("routes.get_next_available_worker", return_value=None)
+    def test_empty_strict_assignment_has_semantic_no_worker_code(
+        self,
+        _mock_get_worker,
+        _mock_fallback_targets,
+        _mock_access,
+    ) -> None:
+        response = self.client.get("/api/ct/mdh/strict")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["code"], "no_worker_available")
 
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes.persist_live_backup")

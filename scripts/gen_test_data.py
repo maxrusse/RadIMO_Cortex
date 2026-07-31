@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# ruff: noqa: E402
 """
 Generate deterministic scenario-based test data for parser and assignment tests.
 
@@ -30,7 +31,8 @@ if str(ROOT) not in sys.path:
 
 from balancer import get_next_available_worker
 from config import SKILL_COLUMNS, allowed_modalities
-from data_manager import global_worker_data, modality_data, worker_management
+from data_manager import global_worker_data, modality_data
+import data_manager.worker_management as worker_management
 from data_manager.csv_parser import build_working_hours_from_medweb
 from lib.utils import normalize_skill_value
 from state_manager import get_state
@@ -41,7 +43,7 @@ CSV_COLUMNS = {
     "date": "Datum",
     "activity": "Beschreibung der Aktivität",
     "employee_name": "Name des Mitarbeiters",
-    "employee_code": "Code des Mitarbeiters",
+    "employee_personalnummer": "Personalnummer",
 }
 
 
@@ -234,8 +236,8 @@ def _scenario_definitions() -> dict[str, dict[str, Any]]:
             "rows": [
                 {"code": "BM01", "name": "Dr. Base CT", "activity": "Baseline CT Notfall"},
                 {"code": "BM02", "name": "Dr. Base MR", "activity": "Baseline MR Privat"},
-                {"code": "BM03", "name": "Dr. Base XR", "activity": "Baseline XRAY Paed"},
-                {"code": "BM04", "name": "Dr. Base MM", "activity": "Baseline Mammo Gyn"},
+                {"code": "BM03", "name": "Dr. Base XR", "activity": "Baseline XRAY Kinder"},
+                {"code": "BM04", "name": "Dr. Base CT Gyn", "activity": "Baseline CT Gyn"},
             ],
             "rules": [
                 {
@@ -253,18 +255,18 @@ def _scenario_definitions() -> dict[str, dict[str, Any]]:
                     "skill_overrides": {_skill_mod("privat", "mr"): 1},
                 },
                 {
-                    "match": "Baseline XRAY Paed",
+                    "match": "Baseline XRAY Kinder",
                     "type": "shift",
-                    "label": "Baseline XRAY Paed",
+                    "label": "Baseline XRAY Kinder",
                     "times": {"default": "08:00-16:00"},
-                    "skill_overrides": {_skill_mod("paed", "xray"): 1},
+                    "skill_overrides": {_skill_mod("kinder", "xray"): 1},
                 },
                 {
-                    "match": "Baseline Mammo Gyn",
+                    "match": "Baseline CT Gyn",
                     "type": "shift",
-                    "label": "Baseline Mammo Gyn",
+                    "label": "Baseline CT Gyn",
                     "times": {"default": "08:00-16:00"},
-                    "skill_overrides": {_skill_mod("gyn", "mammo"): 1},
+                    "skill_overrides": {_skill_mod("gyn", "ct"): 1},
                 },
             ],
             "roster": {
@@ -278,11 +280,11 @@ def _scenario_definitions() -> dict[str, dict[str, Any]]:
                 ),
                 "BM03": _build_roster_entry(
                     "Dr. Base XR (BM03)",
-                    overrides={_skill_mod("paed", "xray"): 1},
+                    overrides={_skill_mod("kinder", "xray"): 1},
                 ),
                 "BM04": _build_roster_entry(
-                    "Dr. Base MM (BM04)",
-                    overrides={_skill_mod("gyn", "mammo"): 1},
+                    "Dr. Base CT Gyn (BM04)",
+                    overrides={_skill_mod("gyn", "ct"): 1},
                 ),
             },
             "assignment_checks": [],
@@ -466,11 +468,12 @@ def _generate_one_scenario(
     with csv_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
+            lineterminator="\n",
             fieldnames=[
                 CSV_COLUMNS["date"],
                 CSV_COLUMNS["activity"],
                 CSV_COLUMNS["employee_name"],
-                CSV_COLUMNS["employee_code"],
+                CSV_COLUMNS["employee_personalnummer"],
             ],
         )
         writer.writeheader()
@@ -479,7 +482,7 @@ def _generate_one_scenario(
                 CSV_COLUMNS["date"]: _format_german_date(target_date),
                 CSV_COLUMNS["activity"]: row["activity"],
                 CSV_COLUMNS["employee_name"]: row["name"],
-                CSV_COLUMNS["employee_code"]: row["code"],
+                CSV_COLUMNS["employee_personalnummer"]: row["code"],
             })
 
     roster_path.write_text(

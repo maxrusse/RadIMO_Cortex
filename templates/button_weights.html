@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}RadIMO Cortex | Button Weights{% endblock %}
+{% block title %}RadIMO Cortex | Weights{% endblock %}
 
 {% block styles %}
     {% include 'partials/admin_theme.html' %}
@@ -94,12 +94,22 @@
     .matrix-table th.skill-col {
       text-align: left;
       min-width: 100px;
+      background: #7c3f12;
+      color: #fff;
     }
 
     .matrix-table td.skill-name {
       text-align: left;
       font-weight: 500;
-      background: #fafafa;
+      background: #fff1df;
+      color: #6f350d;
+      border-left: 4px solid #d97706;
+    }
+
+    .matrix-table th:not(.skill-col) {
+      background: #1e5d7b;
+      color: #fff;
+      border-bottom: 4px solid #0f3d56;
     }
 
     .matrix-table td.invalid {
@@ -132,6 +142,7 @@
       font-size: 0.9rem;
       display: none;
       z-index: 1000;
+      pointer-events: none;
     }
     .status-message.success {
       background: #d4edda;
@@ -146,8 +157,8 @@
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Button Weights' %}
-  {% set header_subtitle = 'Configure normal and strict weighting per skill x modality' %}
+  {% set header_title = 'RadIMO Cortex | Weights' %}
+  {% set header_subtitle = 'Assignment weights' %}
   {% set header_mode = 'global' %}
   {% set active_page = 'button_weights' %}
   {% set header_nav = namespace(links=[]) %}
@@ -185,9 +196,6 @@
   </section>
   <section class="card">
     <div style="margin-bottom:0.35rem; font-weight:600;">Special Tasks</div>
-    <div style="margin-bottom:0.75rem; color:#6c757d; font-size:0.85rem;">
-      Dashboard visibility (modalities) and skill × modality mapping for special tasks.
-    </div>
     <div style="overflow-x:auto;">
       <table class="matrix-table">
         <thead>
@@ -206,6 +214,7 @@
     let skills = [];
     let modalities = [];
     let specialTasks = [];
+    let isDirty = false;
     const validSkillsMap = JSON.parse('{{ valid_skills_map|tojson|safe }}');
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -213,13 +222,17 @@
     });
 
     function setMode(mode) {
+      captureCurrentMode();
       currentMode = mode;
       document.getElementById('mode-normal').className = mode === 'normal' ? 'btn btn-mode-normal' : 'btn btn-mode-inactive';
       document.getElementById('mode-strict').className = mode === 'strict' ? 'btn btn-mode-strict' : 'btn btn-mode-inactive';
       renderMatrix();
     }
 
-    async function loadWeights() {
+    async function loadWeights(force = false) {
+      if (isDirty && !force && !confirm(window.RadimoI18n?.language === 'en'
+        ? 'Discard unsaved weight changes and reload?'
+        : 'Ungespeicherte Gewichtsänderungen verwerfen und neu laden?')) return;
       try {
         const response = await fetch('/api/admin/button_weights');
         if (!response.ok) throw new Error(`Server error: ${response.status}`);
@@ -230,6 +243,7 @@
         skills = data.skills || [];
         modalities = data.modalities || [];
         specialTasks = data.special_tasks || [];
+        isDirty = false;
         renderMatrix();
         showStatus('Loaded', 'success');
       } catch (err) {
@@ -277,8 +291,10 @@
           input.className = 'weight-input';
           input.dataset.skill = skill;
           input.dataset.modality = mod;
+          input.setAttribute('aria-label', `Weight: ${skill} · ${mod.toUpperCase()} · ${currentMode}`);
           const value = weights[currentMode]?.[key];
           input.value = value !== undefined ? value : '';
+          input.addEventListener('input', () => { isDirty = true; });
           cell.appendChild(input);
           row.appendChild(cell);
         });
@@ -289,8 +305,8 @@
       specialHeader.innerHTML = `
         <th class="skill-col">Task</th>
         <th>Base Skill</th>
-        <th>Modality Dashboards</th>
-        <th>Skill Dashboards</th>
+        <th>Modality views</th>
+        <th>Skill views</th>
         <th>Target Skill × Modality</th>
         <th>Overflow</th>
         <th>Weight</th>
@@ -345,6 +361,7 @@
         input.dataset.task = task.slug;
         input.dataset.type = 'special';
         input.dataset.modalities = JSON.stringify(weightMods.map(mod => mod.toLowerCase()));
+        input.setAttribute('aria-label', `Weight: ${task.label || task.name || task.slug} · ${currentMode}`);
 
         const taskWeights = weights.special?.[currentMode] || {};
         const taskModalityWeights = weightMods
@@ -353,6 +370,7 @@
         const allSame = taskModalityWeights.length > 0
           && taskModalityWeights.every(value => value === taskModalityWeights[0]);
         input.value = allSame ? taskModalityWeights[0] : '';
+        input.addEventListener('input', () => { isDirty = true; });
 
         if (!weightMods.length) {
           input.disabled = true;
@@ -365,7 +383,26 @@
       });
     }
 
+    function captureCurrentMode() {
+      weights[currentMode] = {};
+      weights.special = weights.special || { normal: {}, strict: {} };
+      weights.special[currentMode] = {};
+      document.querySelectorAll('.weight-input').forEach(input => {
+        if (input.disabled || input.value.trim() === '') return;
+        const value = parseFloat(input.value);
+        if (Number.isNaN(value)) return;
+        if (input.dataset.type === 'special') {
+          JSON.parse(input.dataset.modalities || '[]').forEach(modality => {
+            weights.special[currentMode][`${input.dataset.task}_${modality}`] = value;
+          });
+        } else {
+          weights[currentMode][`${input.dataset.skill}_${input.dataset.modality}`] = value;
+        }
+      });
+    }
+
     async function saveWeights() {
+      captureCurrentMode();
       const payload = { normal: {}, strict: {}, special: { normal: {}, strict: {} } };
       document.querySelectorAll('.weight-input').forEach(input => {
         const type = input.dataset.type || 'skill';
@@ -404,11 +441,18 @@
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Save failed');
         weights = payload;
+        isDirty = false;
         showStatus('Saved', 'success');
       } catch (err) {
         showStatus(err.message, 'error');
       }
     }
+
+    window.addEventListener('beforeunload', event => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
 
     function showStatus(message, type) {
       const status = document.getElementById('statusMessage');

@@ -35,19 +35,8 @@ from data_manager.schedule_crud import build_day_plan_rows
 
 
 DEFAULT_SHIFT_RANGE = (time(7, 0), time(15, 0))
-GERMAN_TO_ENGLISH_WEEKDAYS = {
-    "Montag": "monday",
-    "Dienstag": "tuesday",
-    "Mittwoch": "wednesday",
-    "Donnerstag": "thursday",
-    "Freitag": "friday",
-    "Samstag": "saturday",
-    "Sonntag": "sunday",
-}
-ENGLISH_TO_GERMAN_WEEKDAYS = {
-    english: german for german, english in GERMAN_TO_ENGLISH_WEEKDAYS.items()
-}
 DEFAULT_SYNTHETIC_WORKDAYS = {"Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"}
+ALL_WEEKDAYS = DEFAULT_SYNTHETIC_WORKDAYS | {"Samstag", "Sonntag"}
 
 
 def _default_shift_ranges() -> List[Tuple[time, time]]:
@@ -151,9 +140,6 @@ def _select_day_times(
 ) -> Optional[Any]:
     if weekday_name in times_config:
         return times_config[weekday_name]
-    english_day = GERMAN_TO_ENGLISH_WEEKDAYS.get(weekday_name)
-    if english_day and english_day in times_config:
-        return times_config[english_day]
     if 'default' in times_config:
         return times_config['default']
     return None
@@ -168,9 +154,6 @@ def _select_day_config_value(
         return value_config if value_config is not None else default
     if weekday_name in value_config:
         return value_config[weekday_name]
-    english_day = GERMAN_TO_ENGLISH_WEEKDAYS.get(weekday_name)
-    if english_day and english_day in value_config:
-        return value_config[english_day]
     if 'default' in value_config:
         return value_config['default']
     return default
@@ -199,7 +182,7 @@ def _find_mapping_rule_by_name(config: dict, name: Any) -> Optional[dict]:
 
 
 def _resolve_synthetic_shift_entry(config: dict, entry: dict) -> dict:
-    shift_ref = entry.get('use_shift') or entry.get('task_role') or entry.get('shift_role')
+    shift_ref = entry.get('use_shift')
     if not shift_ref:
         return entry
 
@@ -541,7 +524,7 @@ def _effective_rule_segments(
     *,
     rule_type: str,
 ) -> List[dict]:
-    """Return normalized effective rule segments for legacy and segmented rules."""
+    """Expand a rule into its effective configured segments."""
     raw_segments = rule.get('segments')
     if raw_segments is None:
         return [rule]
@@ -611,17 +594,16 @@ def _effective_rule_segments(
 
 
 def build_ppl_from_row(row: pd.Series, cols: Optional[dict] = None) -> str:
-    """Build PPL string from CSV row."""
+    """Build a worker label from the authoritative Personalnummer identity."""
     name_col = cols.get('employee_name', 'Name des Mitarbeiters') if cols else 'Name des Mitarbeiters'
     personalnummer_col = cols.get('employee_personalnummer', 'Personalnummer') if cols else 'Personalnummer'
-    code_col = cols.get('employee_code', 'Code des Mitarbeiters') if cols else 'Code des Mitarbeiters'
     name = '' if pd.isna(row.get(name_col, '')) else str(row.get(name_col, '')).strip()
     if not name:
         name = 'Unknown'
     personalnummer = '' if pd.isna(row.get(personalnummer_col, '')) else str(row.get(personalnummer_col, '')).strip()
-    code = '' if pd.isna(row.get(code_col, '')) else str(row.get(code_col, '')).strip()
-    worker_id = personalnummer or code or 'UNK'
-    return f"{name} ({worker_id})"
+    if not personalnummer:
+        raise ValueError('Missing Personalnummer')
+    return f"{name} ({personalnummer})"
 
 
 def _coerce_bool_like(value: Any, default: bool) -> bool:
@@ -657,16 +639,12 @@ def _normalize_synthetic_weekdays(raw_value: Any) -> Set[str]:
             continue
         lowered = token.lower()
         if lowered in {'all', 'daily', 'everyday'}:
-            return set(GERMAN_TO_ENGLISH_WEEKDAYS.keys())
+            return set(ALL_WEEKDAYS)
         if lowered in {'workday', 'workdays', 'weekday', 'weekdays'}:
             result.update(DEFAULT_SYNTHETIC_WORKDAYS)
             continue
-        if token in GERMAN_TO_ENGLISH_WEEKDAYS:
+        if token in ALL_WEEKDAYS:
             result.add(token)
-            continue
-        german = ENGLISH_TO_GERMAN_WEEKDAYS.get(lowered)
-        if german:
-            result.add(german)
     return result
 
 
@@ -755,8 +733,7 @@ def build_working_hours_from_medweb(
         'date': 'Datum',
         'activity': 'Beschreibung der Aktivität',
         'employee_name': 'Name des Mitarbeiters',
-        'employee_personalnummer': 'Personalnummer',
-        'employee_code': 'Code des Mitarbeiters'
+        'employee_personalnummer': 'Personalnummer'
     })
 
     medweb_df['Datum_parsed'] = medweb_df[cols.get('date', 'Datum')].apply(parse_german_date)
@@ -814,7 +791,15 @@ def build_working_hours_from_medweb(
             unmatched_activities.append(activity_desc)
             continue
 
-        ppl_str = build_ppl_from_row(row, cols=cols)
+        try:
+            ppl_str = build_ppl_from_row(row, cols=cols)
+        except ValueError:
+            selection_logger.warning(
+                "Skipping matched Medweb row without Personalnummer: activity=%s name=%s",
+                activity_desc,
+                row.get(cols.get('employee_name', 'Name des Mitarbeiters'), ''),
+            )
+            continue
         canonical_id = get_canonical_worker_id(ppl_str)
         rule_type = rule.get('type', 'shift')
         effective_segments = _effective_rule_segments(rule, rule_type=rule_type)

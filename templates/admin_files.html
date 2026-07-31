@@ -1,371 +1,164 @@
 {% extends "base.html" %}
 
-{% block extra_head %}
+{% block title %}RadIMO Cortex | Files{% endblock %}
+
+{% block styles %}
   {% include 'partials/admin_theme.html' %}
-  <style>
-    .files-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    .card {
-      background: #fff;
-      border: 1px solid #d8dee8;
-      border-radius: 10px;
-      padding: 1rem 1.1rem;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-    }
-    .meta {
-      color: #516072;
-      font-size: 0.95rem;
-      line-height: 1.45;
-      margin: 0.6rem 0 0.9rem;
-    }
-    .toolbar {
-      display: flex;
-      gap: 0.55rem;
-      flex-wrap: wrap;
-      margin-top: 0.8rem;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      border: 1px solid transparent;
-      padding: 0.55rem 0.9rem;
-      cursor: pointer;
-      text-decoration: none;
-      font-weight: 600;
-    }
-    .btn-primary {
-      background: #0f5aa6;
-      color: #fff;
-    }
-    .btn-secondary {
-      background: #eef3f8;
-      color: #17324d;
-      border-color: #d8dee8;
-    }
-    .btn-outline {
-      background: #fff;
-      color: #17324d;
-      border-color: #c4cfdb;
-    }
-    .btn-danger {
-      background: #b42318;
-      color: #fff;
-    }
-    .btn:disabled {
-      opacity: 0.65;
-      cursor: wait;
-    }
-    .form-stack {
-      display: grid;
-      gap: 0.75rem;
-      margin-top: 0.9rem;
-    }
-    .form-stack label {
-      display: block;
-      font-weight: 600;
-      color: #17324d;
-      margin-bottom: 0.25rem;
-    }
-    .form-stack input {
-      width: 100%;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 0.55rem 0.65rem;
-      font: inherit;
-      box-sizing: border-box;
-    }
-    .page-note {
-      background: #f6f8fb;
-      border: 1px solid #d8dee8;
-      border-radius: 10px;
-      padding: 0.9rem 1rem;
-      color: #334155;
-    }
-    .message {
-      border-radius: 8px;
-      padding: 0.8rem 0.95rem;
-      margin: 1rem 0 0;
-      font-weight: 600;
-    }
-    .message.success {
-      background: #ecfdf3;
-      color: #166534;
-      border: 1px solid #a7f3d0;
-    }
-    .message.error {
-      background: #fef2f2;
-      color: #991b1b;
-      border: 1px solid #fecaca;
-    }
-    .badge {
-      display: inline-block;
-      padding: 0.16rem 0.45rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      margin-left: 0.45rem;
-    }
-    .badge-ok {
-      background: #dcfce7;
-      color: #166534;
-    }
-    .badge-missing {
-      background: #fef2f2;
-      color: #991b1b;
-    }
-    .staged-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 0.8rem;
-      font-size: 0.95rem;
-    }
-    .staged-table th,
-    .staged-table td {
-      border-bottom: 1px solid #e2e8f0;
-      text-align: left;
-      padding: 0.55rem 0.4rem;
-      vertical-align: top;
-    }
-    .staged-table th {
-      color: #475569;
-      font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .small {
-      font-size: 0.85rem;
-      color: #64748b;
-    }
-  </style>
+  body { max-width: 1600px; }
+  .section-jumps {
+    position: sticky;
+    top: 0.35rem;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0.28rem;
+    border: 1px solid var(--ops-line);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.97);
+  }
+  .section-jumps a {
+    padding: 0.3rem 0.55rem;
+    border-radius: 4px;
+    color: var(--ops-primary);
+    font-size: 0.72rem;
+    font-weight: 750;
+    text-decoration: none;
+  }
+  .section-jumps a:hover,
+  .section-jumps a:focus-visible { background: #eaf1f6; }
+  #managed-files-grid,
+  #staged-days,
+  #recoverable-backups { scroll-margin-top: 4rem; }
+  .files-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
+  .managed-card,
+  .wide-card {
+    background: #fff;
+    border: 1px solid var(--ops-line);
+    border-radius: var(--ops-radius);
+    padding: 0.68rem;
+    min-width: 0;
+    box-shadow: var(--ops-shadow);
+  }
+  .managed-card { border-top: 3px solid #86abc6; }
+  .wide-card { margin-top: 0.55rem; overflow: hidden; }
+  .card-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: flex-start; }
+  .card-head h2 { margin: 0; font-size: 0.94rem; color: var(--ops-ink); }
+  .badge {
+    padding: 0.14rem 0.4rem; border-radius: 999px; font-size: 0.65rem; font-weight: 850;
+    white-space: nowrap;
+  }
+  .badge-ok { background: #dcfce7; color: #166534; }
+  .badge-missing { background: #fee2e2; color: #991b1b; }
+  .path {
+    display: block; padding: 0.3rem 0.4rem; border-radius: 4px; background: #f1f5f9;
+    color: #36536b; font: 0.67rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-wrap: anywhere;
+  }
+  .meta-row { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.32rem; color: var(--ops-muted); font-size: 0.68rem; }
+  .toolbar { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; margin-top: 0.45rem; }
+  details.upload-panel { margin-top: 0.5rem; border-top: 1px solid #e2e8f0; padding-top: 0.4rem; }
+  details.upload-panel summary { cursor: pointer; font-size: 0.76rem; font-weight: 750; color: #31546d; }
+  .upload-form { display: grid; gap: 0.4rem; margin-top: 0.45rem; }
+  .upload-form input[type='file'], .upload-form input[type='date'] {
+    width: 100%; padding: 0.38rem; border: 1px solid #cbd5e1; border-radius: 4px; font: inherit; font-size: 0.76rem;
+  }
+  .ack { display: flex; gap: 0.35rem; align-items: flex-start; color: #5b4a32; font-size: 0.73rem; line-height: 1.3; }
+  .message { padding: 0.55rem 0.7rem; margin-bottom: 0.65rem; border-radius: 5px; font-size: 0.82rem; font-weight: 700; }
+  .message.success { background: #ecfdf3; border: 1px solid #a7f3d0; color: #166534; }
+  .message.warning { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
+  .message.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .table-wrap { width: 100%; max-width: 100%; overflow: auto; max-height: 440px; }
+  .files-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .files-table th, .files-table td { padding: 0.38rem; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  .files-table th { position: sticky; top: 0; background: #eaf0f5; color: #294b65; z-index: 1; font-size: .67rem; text-transform: uppercase; letter-spacing: .025em; }
+  .files-table code { font-size: 0.69rem; overflow-wrap: anywhere; }
+  .section-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; }
+  .section-head h2 { margin: 0; font-size: 0.94rem; color: var(--ops-ink); }
+  .section-note { color: #64748b; font-size: 0.75rem; }
+  .editor-backdrop {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(15, 23, 42, 0.62); padding: 1rem; z-index: 1000;
+  }
+  .editor-backdrop.show { display: flex; }
+  .editor-panel {
+    width: min(1100px, 96vw); height: min(780px, 92vh); display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0.5rem;
+    background: #fff; border-radius: 8px; padding: 0.75rem; box-shadow: 0 18px 50px rgba(0,0,0,.35);
+  }
+  .editor-panel h2 { margin: 0; font-size: 1rem; }
+  .editor-meta { color: #64748b; font-size: 0.74rem; }
+  #managed-file-editor {
+    width: 100%; height: 100%; resize: none; padding: 0.6rem; border: 1px solid #94a3b8;
+    border-radius: 5px; font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+    tab-size: 2;
+  }
+  @media (max-width: 1050px) { .files-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 680px) { .files-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Files' %}
-  {% set header_subtitle = 'Admin-only export and overwrite for config, skill roster, and backup snapshots' %}
+  {% set header_subtitle = 'Edit, reload & recover' %}
   {% set header_mode = 'global' %}
-  {% set active_page = 'files' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <section class="page-note">
-    Upload overwrite always creates a backup first. Config uploads try a safe runtime reload; if structural settings changed, the file is still saved and the response will tell you that a restart is required.
-  </section>
-
-  <div id="message-container"></div>
-
-  <div class="files-grid">
-    <section class="card" id="card-config"></section>
-    <section class="card" id="card-skill-roster"></section>
-    <section class="card" id="card-live-backup"></section>
-    <section class="card" id="card-staged-days" style="grid-column: 1 / -1;"></section>
+  <div class="ops-shell">
+  <div class="ops-page-head">
+    <div>
+      <div class="ops-eyebrow">Recovery workspace</div>
+      <h2>Managed files & snapshots</h2>
+    </div>
+  <nav class="section-jumps" aria-label="File sections">
+    <a href="#managed-files-grid">Managed files</a>
+    <a href="#staged-days">Staging</a>
+    <a href="#recoverable-backups">Backups</a>
+  </nav>
   </div>
 
-  <script>
-    let manifest = {{ manifest|tojson }};
+  <section class="ops-metric-grid" aria-label="File inventory">
+    <article class="ops-metric"><span class="ops-metric__label">Managed files</span><strong class="ops-metric__value">{{ manifest.targets|length }}</strong></article>
+    <article class="ops-metric"><span class="ops-metric__label">Available</span><strong class="ops-metric__value ops-metric__value--ok">{{ manifest.targets|selectattr('exists')|list|length }}</strong></article>
+    <article class="ops-metric"><span class="ops-metric__label">Staged snapshots</span><strong class="ops-metric__value">{{ manifest.staged_days|length }}</strong></article>
+    <article class="ops-metric"><span class="ops-metric__label">Recoverable backups</span><strong class="ops-metric__value">{{ manifest.managed_backups|length }}</strong></article>
+  </section>
 
-    function showMessage(kind, text) {
-      const container = document.getElementById('message-container');
-      container.innerHTML = `<div class="message ${kind}">${text}</div>`;
-    }
+  <div id="message-container" role="status" aria-live="polite"></div>
+  <section id="managed-files-grid" class="files-grid"></section>
 
-    function formatMeta(entry) {
-      const statusBadge = `<span class="badge ${entry.exists ? 'badge-ok' : 'badge-missing'}">${entry.exists ? 'present' : 'missing'}</span>`;
-      const sizeText = entry.size_bytes != null ? `${entry.size_bytes} bytes` : 'unavailable';
-      const modifiedText = entry.modified || 'unavailable';
-      return `
-        <div class="meta">
-          <div><strong>${entry.filename}</strong>${statusBadge}</div>
-          <div>Modified: ${modifiedText}</div>
-          <div>Size: ${sizeText}</div>
-        </div>
-      `;
-    }
+  <section class="wide-card" id="staged-days">
+    <div class="section-head">
+      <div><h2>Prep days / staged snapshots</h2></div>
+    </div>
+    <div id="staged-days-content"></div>
+  </section>
 
-    function renderTargetCard(targetKey, uploadLabel, extraActionsHtml = '', extraFieldsHtml = '') {
-      const entry = (manifest.targets || []).find(item => item.key === targetKey);
-      const card = document.getElementById(`card-${targetKey.replace('_', '-')}`);
-      if (!entry || !card) return;
-      card.innerHTML = `
-        <h2>${entry.label}</h2>
-        ${formatMeta(entry)}
-        <div class="toolbar">
-          <a class="btn btn-outline" href="${entry.download_url}">Download current file</a>
-          ${extraActionsHtml}
-        </div>
-        <form class="form-stack" data-upload-target="${targetKey}">
-          ${extraFieldsHtml}
-          <div>
-            <label>${uploadLabel}</label>
-            <input type="file" name="file" required>
-          </div>
-          <div class="toolbar">
-            <button class="btn btn-primary" type="submit">Upload and overwrite</button>
-          </div>
-        </form>
-      `;
-    }
+  <section class="wide-card" id="recoverable-backups">
+    <div class="section-head">
+      <div><h2>Recoverable backups</h2><div class="section-note" id="backup-path-note"></div></div>
+      <button type="button" class="btn btn-outline" id="refresh-manifest-btn">Refresh</button>
+    </div>
+    <div id="managed-backups-content"></div>
+  </section>
 
-    function renderStagedDayCard() {
-      const currentTarget = manifest.current_staged_target_date || 'none';
-      const rows = (manifest.staged_days || []).map(entry => `
-        <tr>
-          <td>
-            <strong>${entry.name}</strong><br>
-            <span class="small">Target day: ${entry.target_date}${entry.is_current_target ? ' | current prep target' : ''}</span>
-          </td>
-          <td>${entry.modified || 'unavailable'}</td>
-          <td>${entry.size_bytes != null ? entry.size_bytes : 'unavailable'}</td>
-          <td>${entry.is_canonical ? 'active file' : (entry.suffix || 'archive')}</td>
-          <td>
-            <div class="toolbar">
-              <a class="btn btn-outline" href="${entry.download_url}">Download</a>
-              ${entry.is_canonical ? '' : `<button class="btn btn-secondary" type="button" data-restore-name="${entry.name}">Restore to active day</button>`}
-            </div>
-          </td>
-        </tr>
-      `).join('');
+  <div id="managed-editor-modal" class="editor-backdrop" role="dialog" aria-modal="true" aria-labelledby="managed-editor-title">
+    <div class="editor-panel">
+      <h2 id="managed-editor-title">Edit managed file</h2>
+      <div class="editor-meta" id="managed-editor-meta"></div>
+      <textarea id="managed-file-editor" data-initial-focus spellcheck="false"></textarea>
+      <div class="toolbar">
+        <button type="button" class="btn btn-secondary btn-cancel" id="managed-editor-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" data-dialog-submit id="managed-editor-save">Validate, back up &amp; apply</button>
+      </div>
+    </div>
+  </div>
+  </div>
 
-      document.getElementById('card-staged-days').innerHTML = `
-        <h2>Prep Days / Staged Snapshots</h2>
-        <div class="meta">
-          <div>Current staged target date: <strong>${currentTarget}</strong></div>
-          <div>Upload a unified staged-day snapshot to overwrite the canonical prep file for a selected date.</div>
-        </div>
-        <form class="form-stack" data-upload-target="staged_day">
-          <div>
-            <label>Target prep date</label>
-            <input type="date" name="target_date" value="${manifest.current_staged_target_date || ''}" required>
-          </div>
-          <div>
-            <label>Staged snapshot JSON</label>
-            <input type="file" name="file" required>
-          </div>
-          <div class="toolbar">
-            <button class="btn btn-primary" type="submit">Upload and overwrite staged day</button>
-          </div>
-        </form>
-        <table class="staged-table">
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Modified</th>
-              <th>Size</th>
-              <th>Type</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows || '<tr><td colspan="5">No staged-day snapshots found.</td></tr>'}
-          </tbody>
-        </table>
-      `;
-    }
-
-    function renderPage() {
-      renderTargetCard('config', 'Config YAML');
-      renderTargetCard('skill_roster', 'Skill roster JSON');
-      renderTargetCard(
-        'live_backup',
-        'Live unified backup JSON',
-        '<button class="btn btn-secondary" type="button" id="reload-live-backup-btn">Reload current live backup into runtime</button>'
-      );
-      renderStagedDayCard();
-      bindActions();
-    }
-
-    async function uploadManagedFile(target, formEl) {
-      const submitBtn = formEl.querySelector('button[type="submit"]');
-      const formData = new FormData(formEl);
-      formData.set('target', target);
-      submitBtn.disabled = true;
-      try {
-        const response = await fetch('/api/admin/files/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Upload failed');
-        }
-        manifest = result.manifest || manifest;
-        renderPage();
-        const details = result.reload && result.reload.message ? ` ${result.reload.message}` : '';
-        showMessage('success', `${result.message || 'Upload completed.'}${details}`);
-      } catch (error) {
-        showMessage('error', error.message || 'Upload failed');
-      } finally {
-        submitBtn.disabled = false;
-      }
-    }
-
-    async function restoreStagedDay(name) {
-      try {
-        const response = await fetch('/api/admin/files/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: 'staged_day', name }),
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Restore failed');
-        }
-        manifest = result.manifest || manifest;
-        renderPage();
-        showMessage('success', result.message || 'Staged day restored');
-      } catch (error) {
-        showMessage('error', error.message || 'Restore failed');
-      }
-    }
-
-    async function reloadLiveBackup() {
-      const btn = document.getElementById('reload-live-backup-btn');
-      if (btn) btn.disabled = true;
-      try {
-        const response = await fetch('/api/admin/files/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: 'live_backup' }),
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Reload failed');
-        }
-        manifest = result.manifest || manifest;
-        renderPage();
-        showMessage('success', result.message || 'Live backup reloaded');
-      } catch (error) {
-        showMessage('error', error.message || 'Reload failed');
-      } finally {
-        if (btn) btn.disabled = false;
-      }
-    }
-
-    function bindActions() {
-      document.querySelectorAll('form[data-upload-target]').forEach(formEl => {
-        formEl.addEventListener('submit', event => {
-          event.preventDefault();
-          uploadManagedFile(formEl.dataset.uploadTarget, formEl);
-        });
-      });
-
-      document.querySelectorAll('[data-restore-name]').forEach(btn => {
-        btn.addEventListener('click', () => restoreStagedDay(btn.dataset.restoreName));
-      });
-
-      const reloadLiveBtn = document.getElementById('reload-live-backup-btn');
-      if (reloadLiveBtn) {
-        reloadLiveBtn.addEventListener('click', reloadLiveBackup);
-      }
-    }
-
-    renderPage();
-  </script>
+  <script id="admin-files-config" type="application/json">{{ manifest|tojson }}</script>
+  <script src="{{ url_for('static', filename='js/admin_files.js') }}"></script>
 {% endblock %}

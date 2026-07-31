@@ -4,8 +4,7 @@ File operations module for backup, restore, and data loading.
 This module handles:
 - DataFrame backup to JSON
 - Loading staged/scheduled data files
-- Data initialization from JSON
-- File quarantine for corrupted files
+- Unified live-schedule initialization
 """
 import os
 import json
@@ -22,7 +21,6 @@ from config import (
     APP_CONFIG,
     SKILL_COLUMNS,
     UPLOAD_FOLDER,
-    SKILL_ROSTER_AUTO_IMPORT,
     selection_logger,
 )
 from lib.utils import (
@@ -43,6 +41,11 @@ from data_manager.worker_management import (
     get_worker_skill_mod_combinations,
 )
 from state_manager import StateManager
+
+
+def _skill_roster_auto_import_enabled() -> bool:
+    """Read the live config value instead of retaining an import-time Boolean."""
+    return bool(APP_CONFIG.get('skill_roster_auto_import', True))
 
 # Get state references
 _state = StateManager.get_instance()
@@ -354,7 +357,7 @@ def _set_live_modality_data(modality: str, df: pd.DataFrame, info_texts: list, i
     d['info_texts'] = info_texts or []
     d['info_texts_by_skill'] = info_texts_by_skill or {}
 
-    if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
+    if _skill_roster_auto_import_enabled() and not df.empty:
         auto_populate_skill_roster({modality: df})
 
 
@@ -665,75 +668,6 @@ def reload_staged_data_from_disk(target_date: Optional[date] = None) -> bool:
     return False
 
 
-def quarantine_file(file_path: str, reason: str) -> Optional[str]:
-    """
-    Move a defective file to quarantine directory.
-
-    Uses try/except instead of os.path.exists to prevent TOCTOU race condition
-    (file could be deleted between check and move).
-    """
-    if not file_path:
-        return None
-
-    invalid_dir = Path(UPLOAD_FOLDER) / 'invalid'
-    invalid_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    original = Path(file_path)
-    target = invalid_dir / f"{original.stem}_{timestamp}{original.suffix or '.json'}"
-
-    try:
-        shutil.move(str(original), str(target))
-        selection_logger.warning("Defekte Datei '%s' nach '%s' verschoben (%s)", file_path, target, reason)
-        return str(target)
-    except FileNotFoundError:
-        # File was already deleted - not an error, just log and return
-        selection_logger.debug("Datei '%s' existiert nicht mehr (bereits gelöscht)", file_path)
-        return None
-    except OSError as exc:
-        selection_logger.warning("Datei '%s' konnte nicht verschoben werden (%s): %s", file_path, reason, exc)
-        return None
-
-
-def initialize_data(file_path: str, modality: str) -> None:
-    """Initialize modality data from JSON file."""
-    # Import here to avoid circular imports
-    from data_manager.worker_management import (
-        invalidate_work_hours_cache,
-        auto_populate_skill_roster,
-    )
-
-    d = modality_data[modality]
-    global_worker_data['assignments_per_mod'][modality] = {}
-
-    with lock:
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            if 'working_hours' not in data:
-                raise ValueError("'working_hours' key not found in JSON")
-
-            df = _build_dataframe_from_records(data['working_hours'], modality, validate=True)
-
-            d['working_hours_df'] = df
-            # Invalidate work hours cache when data changes
-            invalidate_work_hours_cache(modality)
-            d['worker_modifiers'] = df.groupby('PPL')['Modifier'].first().to_dict() if not df.empty else {}
-            d['total_work_hours'] = _calculate_total_work_hours(df)
-
-            d['info_texts'] = data.get('info_texts', [])
-            d['info_texts_by_skill'] = data.get('info_texts_by_skill', {})
-
-            if SKILL_ROSTER_AUTO_IMPORT and not df.empty:
-                auto_populate_skill_roster({modality: df})  # Returns tuple, ignore here
-
-        except Exception as e:
-            error_message = f"Fehler beim Laden der JSON-Datei für Modality '{modality}': {str(e)}"
-            selection_logger.error(error_message)
-            selection_logger.exception("Stack trace:")
-            raise ValueError(error_message)
-
-
 def initialize_data_from_unified(file_path: str, *, context: str = '') -> bool:
     """Initialize all modalities from a unified schedule JSON file."""
     try:
@@ -830,24 +764,3 @@ def write_unified_scheduled_file(modality_dfs: dict, *, target_date: Optional[da
     with open(target_path, 'w', encoding='utf-8') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
     selection_logger.info("Unified scheduled file saved at %s", target_path)
-
-
-def attempt_initialize_data(
-    file_path: str,
-    modality: str,
-    *,
-    remove_on_failure: bool = False,
-    context: str = ''
-) -> bool:
-    """Attempt to initialize data with error handling."""
-    try:
-        initialize_data(file_path, modality)
-        return True
-    except Exception as exc:
-        selection_logger.error(
-            "Fehler beim Initialisieren der Datei %s für %s (%s): %s",
-            file_path, modality, context or 'runtime', exc,
-        )
-        if remove_on_failure:
-            quarantine_file(file_path, f"{context or 'runtime'}: {exc}")
-        return False

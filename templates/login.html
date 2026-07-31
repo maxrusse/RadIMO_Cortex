@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}RadIMO Cortex | {% if login_type == 'admin' %}Admin Login{% else %}Zugang{% endif %}{% endblock %}
+{% block title %}RadIMO Cortex | {% if login_type == 'admin' %}Admin{% else %}Access{% endif %}{% endblock %}
 
 {% block styles %}
     :root {
@@ -90,12 +90,12 @@
 {% block body_attrs %} data-modality="{{ modality }}"{% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | ' ~ ('Admin Login' if login_type == 'admin' else 'Zugang') %}
-  {% set header_subtitle = 'Admin Login' if login_type == 'admin' else 'Zugangskontrolle' %}
+  {% set header_title = 'RadIMO Cortex | ' ~ ('Admin' if login_type == 'admin' else 'Access') %}
+  {% set header_subtitle = 'Admin access' if login_type == 'admin' else 'Access control' %}
   {% set header_mode = 'scoped' %}
   {% set selector_links %}
     {% for mod in modality_order %}
-    <a href="{% if login_type == 'admin' %}{{ url_for('routes.login', modality=mod) }}{% else %}{{ url_for('routes.access_login', modality=mod) }}{% endif %}"
+    <a href="{% if login_type == 'admin' %}{{ url_for('routes.login', modality=mod, next=login_next|default('')) }}{% else %}{{ url_for('routes.access_login', modality=mod) }}{% endif %}"
       data-modality="{{ mod }}" class="selector-link{% if modality == mod %} selector-link--active{% endif %}">
       {{ modality_labels[mod] }}
     </a>
@@ -114,6 +114,7 @@
     <p class="error">{{ error }}</p>
     {% endif %}
     <form method="post">
+      {% if login_next %}<input type="hidden" name="next" value="{{ login_next }}">{% endif %}
       {% if not passwordless %}
       <input type="password" name="password" placeholder="Passwort" autofocus required>
       {% endif %}

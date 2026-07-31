@@ -8,8 +8,10 @@ import hashlib
 import json
 import os
 import re
+import signal
 import shutil
-from datetime import date, datetime
+import threading
+from datetime import date, datetime, time
 from functools import wraps
 from pathlib import Path
 from collections import deque
@@ -48,7 +50,6 @@ from config import (
     UPLOAD_FOLDER,
     WORKER_SKILL_ROSTER_PATH,
     selection_logger,
-    SKILL_ROSTER_AUTO_IMPORT,
     get_worker_name_display_style,
     normalize_modality,
     normalize_skill,
@@ -56,7 +57,9 @@ from config import (
     get_specialist_fallback_targets,
     is_strict_button_visible,
     is_special_task_strict_button_visible,
+    is_strict_manual_select_enabled,
     reload_runtime_config,
+    validate_config_candidate,
     load_button_weights,
     save_button_weights
 )
@@ -79,43 +82,48 @@ from data_manager import (
     staged_modality_data,
     global_worker_data,
     lock,
-    save_state,
+)
+from data_manager.state_persistence import save_state
+from data_manager.worker_management import (
     get_canonical_worker_id,
     load_worker_skill_json,
     save_worker_skill_json,
-    build_working_hours_from_medweb,
     build_valid_skills_map,
     build_worker_name_mapping,
     auto_populate_skill_roster,
     auto_populate_skill_roster_from_csv,
     get_missing_csv_worker_candidates,
     import_csv_worker_to_skill_roster,
-    load_staged_dataframe,
-    reload_staged_data_from_disk,
-    backup_dataframe,
-    persist_live_backup,
-    initialize_data_from_unified,
-    update_schedule_row,
-    add_worker_to_schedule,
-    delete_worker_from_schedule,
-    replace_worker_schedule_all,
-    add_gap_to_schedule,
-    add_gap_to_schedule_batch,
-    remove_gap_from_schedule,
-    update_gap_in_schedule,
-    preload_next_workday,
-    extract_modalities_from_skill_overrides,
-)
-from data_manager.csv_parser import compute_time_ranges, parse_gap_times
-from data_manager.worker_management import (
     apply_skill_overrides,
     expand_skill_overrides,
     get_all_workers_by_canonical_id,
     get_worker_skill_mod_combinations,
+    extract_modalities_from_skill_overrides,
 )
+from data_manager.file_ops import (
+    load_staged_dataframe,
+    reload_staged_data_from_disk,
+    backup_dataframe,
+    persist_schedule_snapshot,
+    persist_live_backup,
+    initialize_data_from_unified,
+)
+from data_manager.schedule_crud import (
+    build_schedule_row_uid,
+    update_schedule_row,
+    replace_worker_schedule_all,
+    add_gap_to_schedule_batch,
+)
+from data_manager.csv_parser import (
+    build_working_hours_from_medweb,
+    compute_time_ranges,
+    parse_gap_times,
+)
+from data_manager.scheduled_tasks import preload_next_workday
 from state_manager import StateManager
 from balancer import (
     get_next_available_worker,
+    get_strict_assignment_candidates,
     update_global_assignment,
     get_global_assignments,
     get_global_base_weighted_count,
@@ -160,38 +168,16 @@ LOG_SOURCE_DEFINITIONS: dict[str, dict[str, str]] = {
         'filename': 'flow_balance.log',
     },
 }
-LOG_SOURCE_ALIASES = {
-    'radimo': 'selection',
-    'app': 'selection',
-    'radimo-app': 'selection',
-    'gunicorn-log': 'gunicorn',
-    'selection-log': 'selection',
-    'flow-log': 'flow',
-}
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
 FLOW_UNRESOLVED_LABEL = 'Other / unresolved generalist'
 VALID_WORKER_THRESHOLD_HOURS = 1.0
 DAILY_LOAD_START_MINUTE = 7 * 60
 DAILY_LOAD_END_MINUTE = 21 * 60
-GERMAN_TO_ENGLISH_WEEKDAYS = {
-    "Montag": "monday",
-    "Dienstag": "tuesday",
-    "Mittwoch": "wednesday",
-    "Donnerstag": "thursday",
-    "Freitag": "friday",
-    "Samstag": "saturday",
-    "Sonntag": "sunday",
-}
-
-
 def _select_day_config_value(value_config: Any, weekday_name: str, default: Any = None) -> Any:
     if not isinstance(value_config, dict):
         return value_config if value_config is not None else default
     if weekday_name in value_config:
         return value_config[weekday_name]
-    english_day = GERMAN_TO_ENGLISH_WEEKDAYS.get(weekday_name)
-    if english_day and english_day in value_config:
-        return value_config[english_day]
     if 'default' in value_config:
         return value_config['default']
     return default
@@ -236,7 +222,7 @@ def _build_task_roles() -> list[dict[str, Any]]:
     for entry in APP_CONFIG.get('synthetic_shifts', []):
         if not isinstance(entry, dict):
             continue
-        if entry.get('use_shift') or entry.get('task_role') or entry.get('shift_role'):
+        if entry.get('use_shift'):
             continue
         show_in_task_dropdown = coerce_bool(entry.get('show_in_task_dropdown'))
         if show_in_task_dropdown is False:
@@ -603,6 +589,7 @@ def _handle_task_preview(use_staged: bool) -> Any:
 DEFAULT_LOG_SOURCES = ('gunicorn', 'selection')
 MAX_LOG_TAIL_LINES = 50_000
 ADMIN_FILE_BACKUP_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'admin_files'
+SKILL_ROSTER_BACKUP_DIR = Path(WORKER_SKILL_ROSTER_PATH).parent / 'backups'
 STAGED_DAY_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'staged_days'
 CONFIG_FILE_PATH = Path('config.yaml')
 STAGED_DAY_FILENAME_RE = re.compile(
@@ -620,7 +607,7 @@ def _file_stat_payload(path: Path) -> dict[str, Any]:
     if exists and stat_result is not None:
         modified = datetime.fromtimestamp(stat_result.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
     return {
-        'path': str(path),
+        'path': str(path.resolve()),
         'exists': exists,
         'size_bytes': stat_result.st_size if stat_result is not None else None,
         'modified': modified,
@@ -687,6 +674,8 @@ def _build_admin_files_manifest() -> dict[str, Any]:
             'label': 'Config YAML',
             'filename': CONFIG_FILE_PATH.name,
             'download_url': url_for('routes.admin_files_download', target='config'),
+            'format': 'YAML',
+            'editable': True,
             **_file_stat_payload(CONFIG_FILE_PATH),
         },
         {
@@ -694,6 +683,8 @@ def _build_admin_files_manifest() -> dict[str, Any]:
             'label': 'Skill Roster JSON',
             'filename': Path(WORKER_SKILL_ROSTER_PATH).name,
             'download_url': url_for('routes.admin_files_download', target='skill_roster'),
+            'format': 'JSON',
+            'editable': True,
             **_file_stat_payload(Path(WORKER_SKILL_ROSTER_PATH)),
         },
         {
@@ -701,6 +692,8 @@ def _build_admin_files_manifest() -> dict[str, Any]:
             'label': 'Live Unified Backup',
             'filename': live_backup_path.name,
             'download_url': url_for('routes.admin_files_download', target='live_backup'),
+            'format': 'JSON',
+            'editable': False,
             **_file_stat_payload(live_backup_path),
         },
     ]
@@ -708,12 +701,124 @@ def _build_admin_files_manifest() -> dict[str, Any]:
     return {
         'targets': targets,
         'staged_days': _list_staged_day_files(),
+        'managed_backups': _list_managed_file_backups(),
+        'backup_paths': {
+            'admin_files': str(ADMIN_FILE_BACKUP_DIR.resolve()),
+            'skill_roster': str(SKILL_ROSTER_BACKUP_DIR.resolve()),
+        },
         'current_staged_target_date': staged_current_target.isoformat() if staged_current_target else None,
+    }
+
+
+def _managed_backup_path(source: str, name: str) -> Path:
+    roots = {
+        'admin_files': ADMIN_FILE_BACKUP_DIR,
+        'skill_roster': SKILL_ROSTER_BACKUP_DIR,
+    }
+    root = roots.get(source)
+    if root is None:
+        raise ValueError('Unknown backup source')
+    safe_name = Path(name or '').name
+    if not safe_name or safe_name != name:
+        raise ValueError('Invalid backup file name')
+    path = root / safe_name
+    if path.parent.resolve() != root.resolve():
+        raise ValueError('Invalid backup path')
+    return path
+
+
+def _backup_restore_target(source: str, name: str) -> tuple[str, Optional[str]]:
+    if source == 'skill_roster' and re.match(r'^worker_skill_roster_\d{8}_\d{6}\.json$', name):
+        return 'skill_roster', None
+    if source == 'admin_files':
+        if re.match(r'^config_\d{8}_\d{6}\.ya?ml$', name):
+            return 'config', None
+        if re.match(r'^live_backup_\d{8}_\d{6}\.json$', name):
+            return 'live_backup', None
+        match = re.match(r'^staged_(\d{4}-\d{2}-\d{2})_\d{8}_\d{6}\.json$', name)
+        if match:
+            return 'staged_day', match.group(1)
+    raise ValueError('Backup file type is not restorable')
+
+
+def _list_managed_file_backups() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for source, root in (
+        ('admin_files', ADMIN_FILE_BACKUP_DIR),
+        ('skill_roster', SKILL_ROSTER_BACKUP_DIR),
+    ):
+        if not root.exists():
+            continue
+        for path in root.iterdir():
+            if not path.is_file() or path.suffix.lower() not in {'.json', '.yaml', '.yml'}:
+                continue
+            try:
+                target, target_date = _backup_restore_target(source, path.name)
+            except ValueError:
+                continue
+            entries.append({
+                'source': source,
+                'name': path.name,
+                'target': target,
+                'target_date': target_date,
+                'download_url': url_for(
+                    'routes.admin_files_download',
+                    target='managed_backup',
+                    source=source,
+                    name=path.name,
+                ),
+                **_file_stat_payload(path),
+            })
+    return sorted(entries, key=lambda entry: entry.get('modified') or '', reverse=True)
+
+
+def _restore_managed_file_backup(source: str, name: str) -> dict[str, Any]:
+    backup_path = _managed_backup_path(source, name)
+    if not backup_path.exists():
+        raise ValueError('Selected backup file does not exist')
+    target, target_date = _backup_restore_target(source, backup_path.name)
+    raw_bytes = backup_path.read_bytes()
+    if target == 'config':
+        result = _replace_config_file(raw_bytes)
+    elif target == 'skill_roster':
+        result = _replace_skill_roster_file(raw_bytes)
+    elif target == 'live_backup':
+        result = _replace_live_backup_file(raw_bytes)
+    elif target == 'staged_day' and target_date:
+        result = _replace_staged_day_file(raw_bytes, target_date)
+    else:
+        raise ValueError('Backup file type is not restorable')
+    return {
+        **result,
+        'message': f'Restored {backup_path.name}. {result.get("message", "")}'.strip(),
+        'restored_from': str(backup_path.resolve()),
     }
 
 
 def _ensure_admin_file_backup_dir() -> None:
     ADMIN_FILE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _atomic_write_bytes(target_path: Path, raw_bytes: bytes) -> None:
+    """Write a managed file atomically so readers never observe partial content."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = target_path.with_name(f'.{target_path.name}.upload.tmp')
+    try:
+        with temp_path.open('wb') as handle:
+            handle.write(raw_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, target_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _rollback_managed_file(target_path: Path, backup_path: Optional[Path]) -> None:
+    if backup_path and backup_path.exists():
+        _atomic_write_bytes(target_path, backup_path.read_bytes())
+    elif target_path.exists():
+        target_path.unlink()
 
 
 def _backup_existing_file(target_path: Path, *, label: Optional[str] = None) -> Optional[Path]:
@@ -744,6 +849,16 @@ def _validate_skill_roster_payload(raw_bytes: bytes) -> dict[str, Any]:
         raise ValueError(f'Invalid JSON: {exc}') from exc
     if not isinstance(parsed, dict):
         raise ValueError('Skill roster upload must contain a JSON object')
+    invalid_workers = [
+        str(worker_id)
+        for worker_id, worker_data in parsed.items()
+        if not isinstance(worker_id, str) or not isinstance(worker_data, dict)
+    ]
+    if invalid_workers:
+        raise ValueError(
+            'Every skill roster entry must map a worker ID to an object; invalid: '
+            + ', '.join(invalid_workers[:5])
+        )
     return parsed
 
 
@@ -764,15 +879,129 @@ def _validate_unified_backup_payload(raw_bytes: bytes) -> dict[str, Any]:
     return parsed
 
 
+GENERAL_CONFIG_FIELDS = (
+    'default_language',
+    'timezone',
+    'worker_name_display_style',
+    'skill_roster_auto_import',
+    'access_protection_enabled',
+    'admin_access_protection_enabled',
+)
+
+
+def _parse_admin_bool(value: Any, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in {'true', 'false'}:
+        return value.strip().lower() == 'true'
+    raise ValueError(f'{field_name} must be true or false')
+
+
+def _yaml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def _patch_top_level_yaml_scalars(raw_text: str, updates: dict[str, Any]) -> str:
+    """Patch selected top-level scalar keys without reformatting the whole YAML file."""
+    result = raw_text
+    for key, value in updates.items():
+        if key not in GENERAL_CONFIG_FIELDS:
+            raise ValueError(f'Unsupported general config field: {key}')
+        replacement = f'{key}: {_yaml_scalar(value)}\n'
+        pattern = re.compile(rf'^{re.escape(key)}\s*:[^\r\n]*(?:\r?\n|$)', re.MULTILINE)
+        if pattern.search(result):
+            result = pattern.sub(replacement, result, count=1)
+            continue
+
+        lines = result.splitlines(keepends=True)
+        insert_at = next(
+            (index for index, line in enumerate(lines) if line.strip() and not line.lstrip().startswith('#')),
+            len(lines),
+        )
+        lines.insert(insert_at, replacement)
+        result = ''.join(lines)
+    return result
+
+
+def _replace_general_config_settings(data: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError('Settings payload must be an object')
+
+    raw_bytes = CONFIG_FILE_PATH.read_bytes()
+    current = _validate_yaml_payload(raw_bytes)
+    default_language = str(data.get('default_language', current.get('default_language', 'de'))).strip().lower()
+    if default_language not in {'de', 'en'}:
+        raise ValueError("default_language must be 'de' or 'en'")
+    timezone_name = str(data.get('timezone', current.get('timezone', 'Europe/Berlin'))).strip()
+    if not timezone_name:
+        raise ValueError('timezone is required')
+    name_style = str(
+        data.get('worker_name_display_style', current.get('worker_name_display_style', 'first_last_id'))
+    ).strip()
+    if name_style not in {'first_last_id', 'last_first_id', 'raw'}:
+        raise ValueError('Unknown worker_name_display_style')
+
+    updates = {
+        'default_language': default_language,
+        'timezone': timezone_name,
+        'worker_name_display_style': name_style,
+        'skill_roster_auto_import': _parse_admin_bool(
+            data.get('skill_roster_auto_import', current.get('skill_roster_auto_import', True)),
+            'skill_roster_auto_import',
+        ),
+        'access_protection_enabled': _parse_admin_bool(
+            data.get('access_protection_enabled', current.get('access_protection_enabled', False)),
+            'access_protection_enabled',
+        ),
+        'admin_access_protection_enabled': _parse_admin_bool(
+            data.get(
+                'admin_access_protection_enabled',
+                current.get('admin_access_protection_enabled', False),
+            ),
+            'admin_access_protection_enabled',
+        ),
+    }
+    patched_text = _patch_top_level_yaml_scalars(raw_bytes.decode('utf-8'), updates)
+    result = _replace_config_file(patched_text.encode('utf-8'))
+    return {**result, 'settings': updates}
+
+
 def _replace_config_file(raw_bytes: bytes) -> dict[str, Any]:
-    _validate_yaml_payload(raw_bytes)
+    parsed = _validate_yaml_payload(raw_bytes)
+    _, candidate_state = validate_config_candidate(parsed)
+    structural_changes = []
+    if list(candidate_state['allowed_modalities']) != list(allowed_modalities):
+        structural_changes.append('modalities')
+    if set(candidate_state['skill_columns']) != set(SKILL_COLUMNS):
+        structural_changes.append('skills')
+    if parsed.get('secret_key', APP_CONFIG.get('secret_key')) != APP_CONFIG.get('secret_key'):
+        structural_changes.append('secret_key')
     backup_path = _backup_existing_file(CONFIG_FILE_PATH, label='config')
-    CONFIG_FILE_PATH.write_bytes(raw_bytes)
-    reload_result = reload_runtime_config()
+    _atomic_write_bytes(CONFIG_FILE_PATH, raw_bytes)
+    try:
+        reload_result = reload_runtime_config()
+        reload_reason = reload_result.get('reason')
+        expected_restart = reload_reason in {
+            'modalities_changed',
+            'skills_changed',
+            'secret_key_changed',
+        }
+        if not reload_result.get('applied') and not expected_restart:
+            raise ValueError(reload_result.get('message') or 'Runtime config reload failed')
+    except Exception:
+        _rollback_managed_file(CONFIG_FILE_PATH, backup_path)
+        reload_runtime_config()
+        raise
     return {
         'message': 'Config file replaced',
-        'backup_path': str(backup_path) if backup_path else None,
+        'path': str(CONFIG_FILE_PATH.resolve()),
+        'backup_path': str(backup_path.resolve()) if backup_path else None,
         'reload': reload_result,
+        'runtime_applied': bool(reload_result.get('applied')),
+        'restart_required': bool(structural_changes),
+        'structural_changes': structural_changes,
     }
 
 
@@ -782,6 +1011,9 @@ def _replace_skill_roster_file(raw_bytes: bytes) -> dict[str, Any]:
         raise ValueError('Failed to save skill roster')
     return {
         'message': 'Skill roster replaced',
+        'path': str(Path(WORKER_SKILL_ROSTER_PATH).resolve()),
+        'runtime_applied': True,
+        'restart_required': False,
     }
 
 
@@ -790,13 +1022,18 @@ def _replace_live_backup_file(raw_bytes: bytes) -> dict[str, Any]:
     live_path = Path(state.unified_schedule_paths['live'])
     _validate_unified_backup_payload(raw_bytes)
     backup_path = _backup_existing_file(live_path, label='live_backup')
-    live_path.parent.mkdir(parents=True, exist_ok=True)
-    live_path.write_bytes(raw_bytes)
+    _atomic_write_bytes(live_path, raw_bytes)
     if not initialize_data_from_unified(str(live_path), context='admin_file_upload'):
-        raise ValueError('Live backup file replaced, but runtime reload failed')
+        _rollback_managed_file(live_path, backup_path)
+        if backup_path:
+            initialize_data_from_unified(str(live_path), context='admin_file_upload_rollback')
+        raise ValueError('Live backup upload rejected; runtime reload failed and the original file was restored')
     return {
         'message': 'Live backup replaced and reloaded',
-        'backup_path': str(backup_path) if backup_path else None,
+        'path': str(live_path.resolve()),
+        'backup_path': str(backup_path.resolve()) if backup_path else None,
+        'runtime_applied': True,
+        'restart_required': False,
     }
 
 
@@ -805,16 +1042,23 @@ def _replace_staged_day_file(raw_bytes: bytes, target_date_str: str) -> dict[str
     target_path = STAGED_DAY_DIR / f'Cortex_ALL_staged_{parsed_target.isoformat()}.json'
     _validate_unified_backup_payload(raw_bytes)
     backup_path = _backup_existing_file(target_path, label=f'staged_{parsed_target.isoformat()}')
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_bytes(raw_bytes)
+    _atomic_write_bytes(target_path, raw_bytes)
     reloaded = False
     current_target = _get_current_staged_target_date()
     if current_target == parsed_target:
         reloaded = reload_staged_data_from_disk(target_date=parsed_target)
+        if not reloaded:
+            _rollback_managed_file(target_path, backup_path)
+            if backup_path:
+                reload_staged_data_from_disk(target_date=parsed_target)
+            raise ValueError('Staged-day upload rejected; reload failed and the original file was restored')
     return {
         'message': f'Staged day {parsed_target.isoformat()} replaced',
-        'backup_path': str(backup_path) if backup_path else None,
+        'path': str(target_path.resolve()),
+        'backup_path': str(backup_path.resolve()) if backup_path else None,
         'reloaded': reloaded,
+        'runtime_applied': reloaded,
+        'restart_required': False,
     }
 
 
@@ -824,16 +1068,28 @@ def _restore_staged_day_file(source_name: str) -> dict[str, Any]:
         raise ValueError('Selected staged day snapshot does not exist')
     parsed = _parse_staged_day_filename(source_path.name)
     target_path = STAGED_DAY_DIR / f"Cortex_ALL_staged_{parsed['target_date']}.json"
+    raw_bytes = source_path.read_bytes()
+    _validate_unified_backup_payload(raw_bytes)
     backup_path = _backup_existing_file(target_path, label=f"staged_{parsed['target_date']}")
-    shutil.copy2(source_path, target_path)
+    _atomic_write_bytes(target_path, raw_bytes)
     parsed_target = date.fromisoformat(parsed['target_date'])
     reloaded = False
     if _get_current_staged_target_date() == parsed_target:
         reloaded = reload_staged_data_from_disk(target_date=parsed_target)
+        if not reloaded:
+            _rollback_managed_file(target_path, backup_path)
+            if backup_path:
+                reload_staged_data_from_disk(target_date=parsed_target)
+            raise ValueError(
+                'Staged-day restore rejected; reload failed and the original file was restored'
+            )
     return {
         'message': f"Restored {source_path.name} to active staged snapshot for {parsed['target_date']}",
-        'backup_path': str(backup_path) if backup_path else None,
+        'path': str(target_path.resolve()),
+        'backup_path': str(backup_path.resolve()) if backup_path else None,
         'reloaded': reloaded,
+        'runtime_applied': reloaded,
+        'restart_required': False,
     }
 
 def _modality_has_active_skills(mod_data: dict) -> bool:
@@ -862,6 +1118,19 @@ def _plan_modality_should_materialize(shift: dict, mod_data: dict, row_index: An
 def _validate_modality(modality: str, data_store: dict) -> Optional[Any]:
     if modality not in data_store:
         return jsonify({'error': 'Invalid modality'}), 400
+    return None
+
+
+def _validate_assignment_path(modality: str, role: str) -> Optional[Any]:
+    """Reject unknown assignment URLs before normalization can hide bad input."""
+    raw_modality = str(modality or '').strip().lower()
+    if raw_modality not in allowed_modalities:
+        return jsonify({'error': 'Not found'}), 404
+
+    raw_role = str(role or '').strip()
+    canonical_skill = normalize_skill(raw_role)
+    if canonical_skill not in SKILL_COLUMNS and raw_role.lower() not in SPECIAL_TASKS_MAP:
+        return jsonify({'error': 'Not found'}), 404
     return None
 
 
@@ -956,24 +1225,50 @@ def _parse_worker_plan_modalities(value: Any) -> tuple[Optional[list[str]], Opti
     return target_modalities, None
 
 
+def _is_row_uid_guarded_in_place_update(updates: Any, verify_row_uid: Any) -> bool:
+    if verify_row_uid in (None, '') or not isinstance(updates, dict) or not updates:
+        return False
+    in_place_fields = set(SKILL_COLUMNS) | {'Modifier'}
+    return all(field in in_place_fields for field in updates)
+
+
 def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> Any:
     data = request.json
     modality = data.get('modality')
     row_index = data.get('row_index')
     updates = data.get('updates', {})
     verify_ppl = data.get('verify_ppl')
+    verify_row_uid = data.get('verify_row_uid')
     target_date = None
     if use_staged:
         target_date, staged_error = _prepare_staged_mutation(data)
         if staged_error:
             return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if snapshot_error:
-        return snapshot_error
+
+    row_uid_guarded_update = _is_row_uid_guarded_in_place_update(updates, verify_row_uid)
+    has_worker_revision = data.get('worker_revision') not in (None, '')
+    if has_worker_revision and not verify_ppl:
+        return jsonify({'error': 'verify_ppl is required with worker_revision'}), 400
+
+    worker_revision_error = None
+    if has_worker_revision and not row_uid_guarded_update:
+        worker_revision_error = _check_worker_revision(
+            data.get('worker_revision'),
+            verify_ppl,
+            use_staged,
+            target_date=target_date if use_staged else None,
+        )
+    if worker_revision_error:
+        return worker_revision_error
+
+    if not has_worker_revision and not row_uid_guarded_update:
+        snapshot_error = _check_snapshot_version(
+            data.get('snapshot_version'),
+            use_staged,
+            target_date=target_date if use_staged else None,
+        )
+        if snapshot_error:
+            return snapshot_error
 
     data_store = staged_modality_data if use_staged else modality_data
     error = _validate_modality(modality, data_store)
@@ -986,6 +1281,7 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
         updates,
         use_staged=use_staged,
         verify_ppl=verify_ppl,
+        verify_row_uid=verify_row_uid,
     )
 
     if success:
@@ -995,6 +1291,7 @@ def _handle_update_row(use_staged: bool, log_message: Optional[str] = None) -> A
         return jsonify({
             'success': True,
             'schedule_reindexed': result.get('reindexed', False),
+            'worker_revision': _get_worker_revision(verify_ppl, use_staged) if verify_ppl else None,
             'snapshot_version': _get_snapshot_version(
                 use_staged,
                 target_date=target_date if use_staged else None,
@@ -1074,91 +1371,6 @@ def _handle_apply_worker_plan(use_staged: bool, *, create_only: bool = False) ->
     })
 
 
-def _handle_add_worker(
-    use_staged: bool,
-    post_success: Optional[Callable[[str, str], None]] = None,
-) -> Any:
-    data = request.json
-    modality = data.get('modality')
-    worker_data = data.get('worker_data', {})
-    target_date = None
-    if use_staged:
-        target_date, staged_error = _prepare_staged_mutation(data)
-        if staged_error:
-            return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if snapshot_error:
-        return snapshot_error
-
-    data_store = staged_modality_data if use_staged else modality_data
-    error = _validate_modality(modality, data_store)
-    if error:
-        return error
-
-    ppl_name = worker_data.get('PPL', 'Neuer Worker (NW)')
-    success, result, error = add_worker_to_schedule(modality, worker_data, use_staged=use_staged)
-
-    if success:
-        if post_success:
-            post_success(modality, ppl_name)
-        # result is {'row_index': int, 'reindexed': bool} on success
-        return jsonify({
-            'success': True,
-            'row_index': result.get('row_index'),
-            'schedule_reindexed': result.get('reindexed', False)
-            ,
-            'snapshot_version': _get_snapshot_version(
-                use_staged,
-                target_date=target_date if use_staged else None,
-            ),
-        })
-    return jsonify({'error': error}), 400
-
-
-def _handle_delete_worker(use_staged: bool, log_message: Optional[str] = None) -> Any:
-    data = request.json
-    modality = data.get('modality')
-    row_index = data.get('row_index')
-    verify_ppl = data.get('verify_ppl')
-    target_date = None
-    if use_staged:
-        target_date, staged_error = _prepare_staged_mutation(data)
-        if staged_error:
-            return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if snapshot_error:
-        return snapshot_error
-
-    data_store = staged_modality_data if use_staged else modality_data
-    error = _validate_modality(modality, data_store)
-    if error:
-        return error
-
-    success, worker_name, error = delete_worker_from_schedule(
-        modality, row_index, use_staged=use_staged, verify_ppl=verify_ppl
-    )
-
-    if success:
-        if log_message:
-            selection_logger.info(log_message.format(modality=modality, worker_name=worker_name))
-        return jsonify({
-            'success': True,
-            'snapshot_version': _get_snapshot_version(
-                use_staged,
-                target_date=target_date if use_staged else None,
-            ),
-        })
-    return jsonify({'error': error}), 400
-
-
 def _parse_tasks(value: Any) -> list[str]:
     if isinstance(value, list):
         return value
@@ -1176,7 +1388,7 @@ def _get_counts_for_hours(row: pd.Series, has_column: bool) -> bool:
     return bool(value)
 
 
-def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
+def _df_to_api_response(df: pd.DataFrame, modality: str = '') -> list[dict[str, Any]]:
     if df is None or df.empty:
         return []
 
@@ -1188,6 +1400,7 @@ def _df_to_api_response(df: pd.DataFrame) -> list[dict[str, Any]]:
     for idx, row in df.iterrows():
         worker_data = {
             'row_index': int(idx),
+            'row_uid': build_schedule_row_uid(modality, row),
             'PPL': row['PPL'],
             'start_time': format_time_value(row.get('start_time')),
             'end_time': format_time_value(row.get('end_time')),
@@ -1906,7 +2119,7 @@ def _iter_worker_revision_rows(use_staged: bool) -> list[dict[str, Any]]:
                 continue
             row_type = row.get('row_type', 'shift') if has_row_type else 'shift'
             normalized_row_type = str(row_type or 'shift').strip().lower()
-            is_gap_row = normalized_row_type == 'gap'
+            is_gap_row = normalized_row_type in {'gap', 'gap_segment'}
             training_value = coerce_bool(row.get('training')) if has_training else None
             if training_value is None:
                 training_value = not is_gap_row
@@ -2127,7 +2340,11 @@ def admin_required(f: Callable) -> Callable:
     def decorated(*args: Any, **kwargs: Any) -> Any:
         if not has_admin_access():
             modality = resolve_modality_from_request()
-            return redirect(url_for('routes.login', modality=modality))
+            return redirect(url_for(
+                'routes.login',
+                modality=modality,
+                next=request.full_path.rstrip('?'),
+            ))
         return f(*args, **kwargs)
     return decorated
 
@@ -2234,13 +2451,12 @@ def _normalize_log_sources(raw_sources: str | None) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for token in tokens:
-        source_key = LOG_SOURCE_ALIASES.get(token, token)
-        if source_key not in LOG_SOURCE_DEFINITIONS:
+        if token not in LOG_SOURCE_DEFINITIONS:
             raise ValueError(f'Unknown log source: {token}')
-        if source_key in seen:
+        if token in seen:
             continue
-        seen.add(source_key)
-        normalized.append(source_key)
+        seen.add(token)
+        normalized.append(token)
     return normalized or list(DEFAULT_LOG_SOURCES)
 
 
@@ -2306,6 +2522,33 @@ def _build_logs_archive_payload(source_keys: list[str], scope: str, lines: int) 
     return buffer, archive_name
 
 
+def _build_log_sources_manifest() -> list[dict[str, Any]]:
+    sources = []
+    for source_key, meta in LOG_SOURCE_DEFINITIONS.items():
+        base_path = _log_path(source_key)
+        rotated_paths = _rotated_log_paths(base_path)
+        sources.append({
+            'key': source_key,
+            'label': meta['label'],
+            'filename': meta['filename'],
+            'rotated_count': max(0, len(rotated_paths) - 1),
+            'preview_url': url_for('routes.admin_log_tail', source=source_key, lines=120),
+            'download_tail_url': url_for(
+                'routes.download_logs',
+                sources=source_key,
+                scope='tail',
+                lines=2000,
+            ),
+            'download_full_url': url_for(
+                'routes.download_logs',
+                sources=source_key,
+                scope='full',
+            ),
+            **_file_stat_payload(base_path),
+        })
+    return sources
+
+
 # -----------------------------------------------------------
 # Route Definitions
 # -----------------------------------------------------------
@@ -2325,6 +2568,7 @@ def inject_modality_settings() -> dict[str, Any]:
         'is_admin_protection_enabled': is_admin_protection_enabled(),
         'has_basic_access': has_basic_access(),
         'is_authenticated': is_authenticated(),
+        'default_language': APP_CONFIG.get('default_language', 'de'),
     }
     context.update(_build_probe_badge_context())
     return context
@@ -2375,6 +2619,10 @@ def index() -> Any:
                 'special': skill.get('special', False),
                 'display_order': skill.get('display_order', 999),
                 'show_strict_button': skill['name'] in regular_strict_button_skills,
+                'manual_strict_select': (
+                    skill['name'] in regular_strict_button_skills
+                    and is_strict_manual_select_enabled(skill['name'], modality)
+                ),
             }
             for skill in SKILL_TEMPLATES
             if skill['name'] in visible_skills
@@ -2480,12 +2728,17 @@ def index_by_skill() -> Any:
         mod for mod in visible_modalities
         if is_strict_button_visible(skill, mod)
     ]
+    manual_strict_select_modalities = [
+        mod for mod in regular_strict_button_modalities
+        if is_strict_manual_select_enabled(skill, mod)
+    ]
 
     return render_template(
         'index_by_skill.html',
         skill=skill,
         visible_modalities=visible_modalities,
         regular_strict_button_modalities=regular_strict_button_modalities,
+        manual_strict_select_modalities=manual_strict_select_modalities,
         special_task_buttons=special_task_buttons,
         info_texts=info_texts,
         info_texts_by_modality=info_texts_by_modality,
@@ -2507,7 +2760,7 @@ def timetable() -> Any:
         if df is not None:
             temp_df = df.copy()
             temp_df['_modality'] = mod
-            data_by_modality[mod] = _df_to_api_response(temp_df)
+            data_by_modality[mod] = _df_to_api_response(temp_df, mod)
         else:
             data_by_modality[mod] = []
 
@@ -2519,8 +2772,6 @@ def timetable() -> Any:
     # Skill slug/color maps for the frontend
     skill_slug_map = {s['name']: s['slug'] for s in SKILL_TEMPLATES}
     skill_color_map = {s['slug']: s['button_color'] for s in SKILL_TEMPLATES}
-    modality_color_map = {mod: settings.get('nav_color', '#004892') for mod, settings in MODALITY_SETTINGS.items()}
-
     return render_template(
         'timetable.html',
         modality=modality,
@@ -2529,7 +2780,6 @@ def timetable() -> Any:
         skill_columns=SKILL_COLUMNS,
         skill_slug_map=skill_slug_map,
         skill_color_map=skill_color_map,
-        modality_color_map=modality_color_map,
         task_roles=task_roles,
         worker_skills=worker_skills,
         worker_name_display_style=get_worker_name_display_style(),
@@ -2547,6 +2797,8 @@ def skill_roster_page() -> Any:
         'skill_roster.html',
         modality=modality,
         valid_skills_map=valid_skills_map,
+        modality_settings=MODALITY_SETTINGS,
+        skill_settings=SKILL_SETTINGS,
         default_w_modifier=default_w_modifier,
         worker_name_display_style=get_worker_name_display_style(),
         is_admin=True
@@ -2639,19 +2891,28 @@ def login() -> Any:
     modality = resolve_modality_from_request()
     error = None
     passwordless = not is_admin_protection_enabled()
+    requested_next = request.values.get('next', '')
+    login_next = requested_next if requested_next.startswith('/') and not requested_next.startswith('//') else ''
 
     if request.method == 'POST':
         if passwordless:
             # No password required - just proceed
-            return redirect(url_for('routes.prep_today'))
+            return redirect(login_next or url_for('routes.prep_today'))
         pw = request.form.get('password', '')
         if pw == get_admin_password():
             session['admin_logged_in'] = True
-            return redirect(url_for('routes.prep_today'))
+            return redirect(login_next or url_for('routes.prep_today'))
         else:
             error = "Falsches Passwort"
 
-    return render_template("login.html", error=error, modality=modality, login_type='admin', passwordless=passwordless)
+    return render_template(
+        "login.html",
+        error=error,
+        modality=modality,
+        login_type='admin',
+        passwordless=passwordless,
+        login_next=login_next,
+    )
 
 @routes.route('/logout')
 def logout() -> Any:
@@ -2739,43 +3000,163 @@ def status_page() -> Any:
         readiness_http_status=readiness_http_status,
         modality=resolve_modality_from_request(),
         is_admin=has_admin_access(),
+        active_tool='status',
     )
+
+
+def _schedule_gunicorn_reload(delay_seconds: float = 0.5) -> int:
+    """Schedule a Gunicorn worker reload without invoking a shell command."""
+    master_pid = os.getppid()
+    try:
+        command = Path(f'/proc/{master_pid}/cmdline').read_bytes().replace(b'\x00', b' ').decode(
+            'utf-8', errors='replace'
+        )
+    except OSError as exc:
+        raise RuntimeError('Unable to verify the application server process') from exc
+    if 'gunicorn' not in command.lower():
+        raise RuntimeError('Application reload is available only when running under Gunicorn')
+
+    timer = threading.Timer(delay_seconds, os.kill, args=(master_pid, signal.SIGHUP))
+    timer.daemon = True
+    timer.start()
+    return master_pid
+
+
+@routes.route('/admin/tools')
+@admin_required
+def admin_tools_page() -> Any:
+    readiness_payload, readiness_http_status = _build_readiness_payload(
+        context='admin_tools_page',
+        include_results=True,
+    )
+    return render_template(
+        'admin_tools.html',
+        readiness_payload=readiness_payload,
+        readiness_http_status=readiness_http_status,
+        files_manifest=_build_admin_files_manifest(),
+        log_sources=_build_log_sources_manifest(),
+        modality=resolve_modality_from_request(),
+        is_admin=True,
+        active_tool='overview',
+        app_root=str(Path.cwd().resolve()),
+    )
+
+
+@routes.route('/api/admin/runtime/reload', methods=['POST'])
+@admin_required
+def admin_runtime_reload() -> Any:
+    payload = request.get_json(silent=True) or {}
+    if payload.get('confirmation') != 'reload':
+        return jsonify({'success': False, 'error': 'Explicit reload confirmation is required'}), 400
+    try:
+        master_pid = _schedule_gunicorn_reload()
+    except RuntimeError as exc:
+        selection_logger.warning('Admin runtime reload rejected: %s', exc)
+        return jsonify({'success': False, 'error': str(exc)}), 409
+
+    selection_logger.warning('Admin requested Gunicorn application reload (master pid=%s)', master_pid)
+    return jsonify({
+        'success': True,
+        'message': 'Application reload requested',
+        'master_pid': master_pid,
+    }), 202
+
+
+@routes.route('/admin/settings')
+@admin_required
+def admin_settings_page() -> Any:
+    return render_template(
+        'admin_settings.html',
+        settings={
+            'default_language': APP_CONFIG.get('default_language', 'de'),
+            'timezone': APP_CONFIG.get('timezone', 'Europe/Berlin'),
+            'worker_name_display_style': APP_CONFIG.get('worker_name_display_style', 'first_last_id'),
+            'skill_roster_auto_import': bool(APP_CONFIG.get('skill_roster_auto_import', True)),
+            'access_protection_enabled': bool(APP_CONFIG.get('access_protection_enabled', False)),
+            'admin_access_protection_enabled': bool(
+                APP_CONFIG.get('admin_access_protection_enabled', False)
+            ),
+        },
+        config_file=_file_stat_payload(CONFIG_FILE_PATH),
+        is_admin=True,
+        active_tool='settings',
+    )
+
+
+@routes.route('/api/admin/config/general', methods=['POST'])
+@admin_required
+def admin_config_general_update() -> Any:
+    try:
+        result = _replace_general_config_settings(request.get_json(silent=True) or {})
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'config.yaml does not exist'}), 404
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        selection_logger.error('Admin general config update failed: %s', exc)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+    _, readiness_http_status = _build_readiness_payload(
+        context='admin_general_config_update',
+        include_results=False,
+    )
+    selection_logger.info(
+        'Admin general config updated fields=%s backup=%s ready=%s',
+        ','.join(GENERAL_CONFIG_FIELDS),
+        result.get('backup_path'),
+        readiness_http_status == 200,
+    )
+    return jsonify({
+        'success': True,
+        **result,
+        'ready': readiness_http_status == 200,
+    })
 
 
 @routes.route('/admin/logs')
 @admin_required
 def admin_logs_page() -> Any:
     """Admin page with direct links for log downloads."""
-    sources = []
-    for source_key, meta in LOG_SOURCE_DEFINITIONS.items():
-        base_path = _log_path(source_key)
-        sources.append({
-            'key': source_key,
-            'label': meta['label'],
-            'filename': meta['filename'],
-            'exists': base_path.exists(),
-            'size_bytes': base_path.stat().st_size if base_path.exists() else None,
-            'download_tail_url': url_for(
-                'routes.download_logs',
-                sources=source_key,
-                scope='tail',
-                lines=2000,
-            ),
-            'download_full_url': url_for(
-                'routes.download_logs',
-                sources=source_key,
-                scope='full',
-            ),
-        })
-
     return render_template(
         'admin_logs.html',
-        sources=sources,
+        sources=_build_log_sources_manifest(),
         default_tail_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='tail', lines=5000),
         default_full_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='full'),
         is_admin=True,
         active_page='logs',
+        active_tool='logs',
     )
+
+
+@routes.route('/api/admin/logs/tail', methods=['GET'])
+@admin_required
+def admin_log_tail() -> Any:
+    source = (request.args.get('source') or '').strip().lower()
+    if source not in LOG_SOURCE_DEFINITIONS:
+        return jsonify({'success': False, 'error': 'Unknown log source'}), 400
+    try:
+        lines = max(1, min(int(request.args.get('lines', '120')), 1000))
+    except ValueError:
+        return jsonify({'success': False, 'error': 'lines must be an integer'}), 400
+    path = _log_path(source)
+    if not path.exists():
+        return jsonify({
+            'success': True,
+            'source': source,
+            'path': str(path.resolve()),
+            'exists': False,
+            'text': '',
+            'lines': lines,
+        })
+    return jsonify({
+        'success': True,
+        'source': source,
+        'path': str(path.resolve()),
+        'exists': True,
+        'text': _read_tail_text(path, lines),
+        'lines': lines,
+        **_file_stat_payload(path),
+    })
 
 
 @routes.route('/admin/logs/download', methods=['GET'])
@@ -2815,6 +3196,7 @@ def admin_files_page() -> Any:
         manifest=_build_admin_files_manifest(),
         is_admin=True,
         active_page='files',
+        active_tool='files',
     )
 
 
@@ -2842,6 +3224,14 @@ def admin_files_download() -> Any:
         if not file_name:
             return jsonify({'success': False, 'error': 'Missing staged day file name'}), 400
         file_path = STAGED_DAY_DIR / file_name
+    elif target == 'managed_backup':
+        try:
+            file_path = _managed_backup_path(
+                (request.args.get('source') or '').strip(),
+                request.args.get('name') or '',
+            )
+        except ValueError as exc:
+            return jsonify({'success': False, 'error': str(exc)}), 400
     else:
         return jsonify({'success': False, 'error': 'Unknown download target'}), 400
 
@@ -2888,9 +3278,23 @@ def admin_files_upload() -> Any:
         selection_logger.error("Admin file upload failed for %s: %s", target, exc)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
+    _, readiness_http_status = _build_readiness_payload(
+        context='admin_file_upload',
+        include_results=False,
+    )
+    selection_logger.info(
+        'Admin file upload applied target=%s path=%s backup=%s runtime_applied=%s restart_required=%s ready=%s',
+        target,
+        result.get('path'),
+        result.get('backup_path'),
+        result.get('runtime_applied'),
+        result.get('restart_required'),
+        readiness_http_status == 200,
+    )
     return jsonify({
         'success': True,
         **result,
+        'ready': readiness_http_status == 200,
         'manifest': _build_admin_files_manifest(),
     })
 
@@ -2914,6 +3318,11 @@ def admin_files_restore() -> Any:
             if not initialize_data_from_unified(str(live_path), context='admin_file_restore'):
                 raise ValueError('Failed to reload live state from current live backup')
             result = {'message': 'Live state reloaded from current live backup'}
+        elif target == 'managed_backup':
+            result = _restore_managed_file_backup(
+                str(data.get('source', '')).strip(),
+                str(data.get('name', '')).strip(),
+            )
         else:
             return jsonify({'success': False, 'error': 'Unknown restore target'}), 400
     except ValueError as exc:
@@ -2922,9 +3331,85 @@ def admin_files_restore() -> Any:
         selection_logger.error("Admin file restore failed for %s: %s", target, exc)
         return jsonify({'success': False, 'error': str(exc)}), 500
 
+    _, readiness_http_status = _build_readiness_payload(
+        context='admin_file_restore',
+        include_results=False,
+    )
+    selection_logger.info(
+        'Admin file restore applied target=%s path=%s backup=%s restored_from=%s ready=%s',
+        target,
+        result.get('path'),
+        result.get('backup_path'),
+        result.get('restored_from'),
+        readiness_http_status == 200,
+    )
     return jsonify({
         'success': True,
         **result,
+        'ready': readiness_http_status == 200,
+        'manifest': _build_admin_files_manifest(),
+    })
+
+
+@routes.route('/api/admin/files/reload', methods=['POST'])
+@admin_required
+def admin_files_reload() -> Any:
+    data = request.get_json(silent=True) or {}
+    target = str(data.get('target', '')).strip().lower()
+    try:
+        if target == 'config':
+            raw_config = _validate_yaml_payload(CONFIG_FILE_PATH.read_bytes())
+            validate_config_candidate(raw_config)
+            result = reload_runtime_config()
+            if not result.get('applied'):
+                return jsonify({
+                    'success': False,
+                    'restart_required': result.get('reason') in {
+                        'modalities_changed',
+                        'skills_changed',
+                        'secret_key_changed',
+                    },
+                    'reload': result,
+                    'manifest': _build_admin_files_manifest(),
+                }), 409
+            message = result.get('message', 'Config reloaded')
+        elif target == 'skill_roster':
+            roster_path = Path(WORKER_SKILL_ROSTER_PATH)
+            payload = _validate_skill_roster_payload(roster_path.read_bytes())
+            load_worker_skill_json()
+            message = f'Skill roster reloaded ({len(payload)} workers)'
+            result = {'applied': True, 'reason': 'applied', 'message': message}
+        elif target == 'live_backup':
+            live_path = Path(StateManager.get_instance().unified_schedule_paths['live'])
+            _validate_unified_backup_payload(live_path.read_bytes())
+            if not initialize_data_from_unified(str(live_path), context='admin_file_reload'):
+                raise ValueError('Failed to reload live state from current live backup')
+            message = 'Live state reloaded from current live backup'
+            result = {'applied': True, 'reason': 'applied', 'message': message}
+        else:
+            return jsonify({'success': False, 'error': 'Unknown reload target'}), 400
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'Managed file does not exist'}), 404
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        selection_logger.error('Admin file reload failed for %s: %s', target, exc)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+    _, readiness_http_status = _build_readiness_payload(
+        context='admin_file_reload',
+        include_results=False,
+    )
+    selection_logger.info(
+        'Admin managed file reloaded target=%s ready=%s',
+        target,
+        readiness_http_status == 200,
+    )
+    return jsonify({
+        'success': True,
+        'message': message,
+        'reload': result,
+        'ready': readiness_http_status == 200,
         'manifest': _build_admin_files_manifest(),
     })
 
@@ -2958,9 +3443,10 @@ def edit_info() -> Any:
             modality_data[modality]['info_texts'] = info_texts
             selection_logger.info(f"Info texts updated for {modality} by admin")
 
-        # Save the updated state and backup
+        # Save runtime counters and persist the full live snapshot. Hinweise must
+        # survive restarts even when no live schedule dataframe is loaded yet.
         save_state()
-        backup_dataframe(modality)
+        persist_schedule_snapshot(use_staged=False)
 
         return jsonify({
             "success": True,
@@ -3600,7 +4086,7 @@ def get_prep_data() -> Any:
                         backup_dataframe(modality, use_staged=True)
 
             df = staged_modality_data[modality].get('working_hours_df')
-            result[modality] = _df_to_api_response(df)
+            result[modality] = _df_to_api_response(df, modality)
 
         last_prepped_at = staged_modality_data[allowed_modalities[0]].get('last_prepped_at')
         last_modified = staged_modality_data[allowed_modalities[0]].get('last_modified')
@@ -3653,23 +4139,13 @@ def create_prep_worker_plan() -> Any:
 def resolve_prep_task_preview() -> Any:
     return _handle_task_preview(use_staged=True)
 
-@routes.route('/api/prep-next-day/add-worker', methods=['POST'])
-@admin_required
-def add_prep_worker() -> Any:
-    return _handle_add_worker(use_staged=True)
-
-@routes.route('/api/prep-next-day/delete-worker', methods=['POST'])
-@admin_required
-def delete_prep_worker() -> Any:
-    return _handle_delete_worker(use_staged=True)
-
 @routes.route('/api/live-schedule/data', methods=['GET'])
 @admin_required
 def get_live_data() -> Any:
     result = {}
     for modality in allowed_modalities:
         df = modality_data[modality].get('working_hours_df')
-        result[modality] = _df_to_api_response(df)
+        result[modality] = _df_to_api_response(df, modality)
     return jsonify({
         'modalities': result,
         'snapshot_version': _ensure_snapshot_file(False),
@@ -3701,62 +4177,6 @@ def create_live_worker_plan() -> Any:
 def resolve_live_task_preview() -> Any:
     return _handle_task_preview(use_staged=False)
 
-@routes.route('/api/live-schedule/add-worker', methods=['POST'])
-@admin_required
-def add_live_worker() -> Any:
-    def _post_add(modality: str, ppl_name: str) -> None:
-        selection_logger.info(f"Worker {ppl_name} added to LIVE {modality} schedule (no counter reset)")
-
-    return _handle_add_worker(use_staged=False, post_success=_post_add)
-
-@routes.route('/api/live-schedule/delete-worker', methods=['POST'])
-@admin_required
-def delete_live_worker() -> Any:
-    return _handle_delete_worker(
-        use_staged=False,
-        log_message="Worker {worker_name} deleted from LIVE {modality} schedule (no counter reset)",
-    )
-
-@routes.route('/api/live-schedule/add-gap', methods=['POST'])
-@admin_required
-def add_live_gap() -> Any:
-    data = request.json
-    modality = data.get('modality')
-    row_index = data.get('row_index')
-    gap_type = data.get('gap_type', 'custom')
-    gap_start = data.get('gap_start')
-    gap_end = data.get('gap_end')
-    gap_counts_for_hours = data.get('gap_counts_for_hours')
-    verify_ppl = data.get('verify_ppl')
-    snapshot_error = _check_snapshot_version(data.get('snapshot_version'), False)
-
-    if snapshot_error:
-        return snapshot_error
-
-    error = _validate_modality(modality, modality_data)
-    if error:
-        return error
-
-    success, action, error = add_gap_to_schedule(
-        modality,
-        row_index,
-        gap_type,
-        gap_start,
-        gap_end,
-        use_staged=False,
-        gap_counts_for_hours=gap_counts_for_hours,
-        verify_ppl=verify_ppl,
-    )
-
-    if success:
-        return jsonify({
-            'success': True,
-            'action': action,
-            'snapshot_version': _get_snapshot_version(False),
-        })
-    return jsonify({'error': error}), 400
-
-
 @routes.route('/api/live-schedule/add-gap-batch', methods=['POST'])
 @admin_required
 def add_live_gap_batch() -> Any:
@@ -3767,6 +4187,7 @@ def add_live_gap_batch() -> Any:
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
     verify_ppl = data.get('verify_ppl')
+    row_uid_map = data.get('row_uid_map', {})
     snapshot_error = _check_snapshot_version(data.get('snapshot_version'), False)
 
     if snapshot_error:
@@ -3783,6 +4204,7 @@ def add_live_gap_batch() -> Any:
         use_staged=False,
         gap_counts_for_hours=gap_counts_for_hours,
         verify_ppl=verify_ppl,
+        row_uid_map=row_uid_map if isinstance(row_uid_map, dict) else None,
     )
 
     if success:
@@ -3792,53 +4214,6 @@ def add_live_gap_batch() -> Any:
             'snapshot_version': _get_snapshot_version(False),
         })
     return jsonify({'error': error}), 400
-
-@routes.route('/api/prep-next-day/add-gap', methods=['POST'])
-@admin_required
-def add_staged_gap() -> Any:
-    data = request.json
-    modality = data.get('modality')
-    row_index = data.get('row_index')
-    gap_type = data.get('gap_type', 'custom')
-    gap_start = data.get('gap_start')
-    gap_end = data.get('gap_end')
-    gap_counts_for_hours = data.get('gap_counts_for_hours')
-    verify_ppl = data.get('verify_ppl')
-    target_date, staged_error = _prepare_staged_mutation(data)
-    if staged_error:
-        return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        True,
-        target_date=target_date,
-    )
-
-    if snapshot_error:
-        return snapshot_error
-
-    error = _validate_modality(modality, staged_modality_data)
-    if error:
-        return error
-
-    success, action, error = add_gap_to_schedule(
-        modality,
-        row_index,
-        gap_type,
-        gap_start,
-        gap_end,
-        use_staged=True,
-        gap_counts_for_hours=gap_counts_for_hours,
-        verify_ppl=verify_ppl,
-    )
-
-    if success:
-        return jsonify({
-            'success': True,
-            'action': action,
-            'snapshot_version': _get_snapshot_version(True, target_date=target_date),
-        })
-    return jsonify({'error': error}), 400
-
 
 @routes.route('/api/prep-next-day/add-gap-batch', methods=['POST'])
 @admin_required
@@ -3850,6 +4225,7 @@ def add_staged_gap_batch() -> Any:
     gap_end = data.get('gap_end')
     gap_counts_for_hours = data.get('gap_counts_for_hours')
     verify_ppl = data.get('verify_ppl')
+    row_uid_map = data.get('row_uid_map', {})
     target_date, staged_error = _prepare_staged_mutation(data)
     if staged_error:
         return staged_error
@@ -3873,6 +4249,7 @@ def add_staged_gap_batch() -> Any:
         use_staged=True,
         gap_counts_for_hours=gap_counts_for_hours,
         verify_ppl=verify_ppl,
+        row_uid_map=row_uid_map if isinstance(row_uid_map, dict) else None,
     )
 
     if success:
@@ -3884,144 +4261,118 @@ def add_staged_gap_batch() -> Any:
     return jsonify({'error': error}), 400
 
 
-def _handle_remove_gap(use_staged: bool) -> Any:
-    """Handle gap removal for both live and staged schedules."""
-    data = request.json
-    modality = data.get('modality')
-    row_index = data.get('row_index')
-    gap_start = data.get('gap_start')
-    gap_end = data.get('gap_end')
-    gap_activity = data.get('gap_activity')
-    verify_ppl = data.get('verify_ppl')
-    target_date = None
-    if use_staged:
-        target_date, staged_error = _prepare_staged_mutation(data)
-        if staged_error:
-            return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if snapshot_error:
-        return snapshot_error
+def _finalize_assignment_candidate(
+    candidate: Any,
+    used_column: str,
+    source_modality: str,
+    *,
+    requested_modality: str,
+    role: str,
+    canonical_skill: str,
+    special_task: Optional[dict[str, Any]] = None,
+    task_label: Optional[str] = None,
+    task_work_amount: float = 1.0,
+    use_strict_weights: bool = False,
+    manual_selection: bool = False,
+) -> dict[str, Any]:
+    """Record a selected assignment candidate.
 
-    data_store = staged_modality_data if use_staged else modality_data
-    error = _validate_modality(modality, data_store)
-    if error:
-        return error
+    Must be called while holding ``lock``. The caller is responsible for
+    persisting state after the lock is released.
+    """
+    actual_modality = source_modality or requested_modality
+    candidate = candidate.to_dict() if hasattr(candidate, "to_dict") else dict(candidate)
+    if "PPL" not in candidate:
+        raise ValueError("Candidate row is missing the 'PPL' field")
+    person = candidate['PPL']
 
-    if gap_start is None or gap_end is None:
-        return jsonify({'error': 'gap_start and gap_end are required'}), 400
+    actual_skill = candidate.get('__skill_source')
+    if not actual_skill and isinstance(used_column, str):
+        actual_skill = used_column
+    if not actual_skill:
+        actual_skill = role
+    if special_task:
+        actual_skill = canonical_skill
 
-    gap_match = {'start': gap_start, 'end': gap_end, 'activity': gap_activity}
-    success, action, error = remove_gap_from_schedule(
-        modality,
-        row_index,
-        None,
-        use_staged=use_staged,
-        gap_match=gap_match,
-        verify_ppl=verify_ppl,
-    )
-
-    if success:
-        return jsonify({
-            'success': True,
-            'action': action,
-            'snapshot_version': _get_snapshot_version(
-                use_staged,
-                target_date=target_date if use_staged else None,
-            ),
-        })
-    return jsonify({'error': error}), 400
-
-
-def _handle_update_gap(use_staged: bool) -> Any:
-    """Handle gap updates for both live and staged schedules."""
-    data = request.json
-    modality = data.get('modality')
-    row_index = data.get('row_index')
-    gap_start = data.get('gap_start')
-    gap_end = data.get('gap_end')
-    gap_activity = data.get('gap_activity')
-    new_start = data.get('new_start')
-    new_end = data.get('new_end')
-    new_activity = data.get('new_activity')
-    new_counts_for_hours = data.get('new_counts_for_hours')
-    verify_ppl = data.get('verify_ppl')
-    target_date = None
-    if use_staged:
-        target_date, staged_error = _prepare_staged_mutation(data)
-        if staged_error:
-            return staged_error
-    snapshot_error = _check_snapshot_version(
-        data.get('snapshot_version'),
-        use_staged,
-        target_date=target_date if use_staged else None,
-    )
-    if snapshot_error:
-        return snapshot_error
-
-    data_store = staged_modality_data if use_staged else modality_data
-    error = _validate_modality(modality, data_store)
-    if error:
-        return error
-
-    if gap_start is None or gap_end is None:
-        return jsonify({'error': 'gap_start and gap_end are required'}), 400
-
-    gap_match = {'start': gap_start, 'end': gap_end, 'activity': gap_activity}
-    success, action, error = update_gap_in_schedule(
-        modality,
-        row_index,
-        None,
-        new_start,
-        new_end,
-        new_activity,
-        use_staged=use_staged,
-        new_counts_for_hours=new_counts_for_hours,
-        gap_match=gap_match,
-        verify_ppl=verify_ppl,
+    selection_logger.info(
+        "Selected worker: %s using column %s (modality %s, manual=%s)",
+        person,
+        actual_skill,
+        actual_modality,
+        manual_selection,
     )
 
-    if success:
-        return jsonify({
-            'success': True,
-            'action': action,
-            'snapshot_version': _get_snapshot_version(
-                use_staged,
-                target_date=target_date if use_staged else None,
-            ),
-        })
-    return jsonify({'error': error}), 400
+    # Check if this is a weighted ('w') assignment.
+    # Shift modifier is always applied; W stream only for weighted assignments.
+    is_weighted = candidate.get('__is_weighted', False)
+    weight_override = None
+    if special_task:
+        weight_override = get_special_task_weight(
+            special_task['slug'],
+            actual_modality,
+            strict=use_strict_weights,
+        )
+    candidate_shift_modifier = candidate.get('Modifier', 1.0)
+    canonical_id = update_global_assignment(
+        person,
+        actual_skill,
+        actual_modality,
+        is_weighted,
+        strict_mode=use_strict_weights,
+        work_amount=task_work_amount,
+        weight_override=weight_override,
+        shift_modifier_override=candidate_shift_modifier,
+    )
+    flow_target_skill = _resolve_flow_target_skill(candidate, actual_skill)
+    flow_weight = _get_cross_pool_flow_weight(
+        canonical_skill,
+        requested_modality,
+        use_strict_weights=use_strict_weights,
+        work_amount=task_work_amount,
+        weight_override=weight_override,
+    )
+    _record_cross_pool_flow(
+        requested_skill=canonical_skill,
+        target_skill=flow_target_skill,
+        amount=flow_weight,
+    )
+    normalized_flow_target = _normalize_flow_target_key(flow_target_skill)
+    overflowed = normalized_flow_target != canonical_skill
+    unresolved = normalized_flow_target == FLOW_UNRESOLVED_TARGET
+    _record_distribution_stats(
+        requested_skill=canonical_skill,
+        flow_weight=flow_weight,
+        overflowed=overflowed,
+        unresolved=unresolved,
+    )
+    _record_recent_distribution(
+        person=person,
+        canonical_id=canonical_id,
+        requested_skill=canonical_skill,
+        requested_modality=requested_modality,
+        actual_skill=actual_skill,
+        actual_modality=actual_modality,
+        flow_weight=flow_weight,
+        overflowed=overflowed,
+        unresolved=unresolved,
+        task_label=task_label,
+    )
 
+    # Record skill-modality usage for analytics
+    usage_logger.record_skill_modality_usage(actual_skill, actual_modality)
 
-@routes.route('/api/live-schedule/remove-gap', methods=['POST'])
-@admin_required
-def remove_live_gap() -> Any:
-    """Remove a gap from a live schedule shift."""
-    return _handle_remove_gap(use_staged=False)
+    # Check if it's time for scheduled export (7:30 AM)
+    usage_logger.check_and_export_at_scheduled_time()
 
-
-@routes.route('/api/prep-next-day/remove-gap', methods=['POST'])
-@admin_required
-def remove_staged_gap() -> Any:
-    """Remove a gap from a staged schedule shift."""
-    return _handle_remove_gap(use_staged=True)
-
-
-@routes.route('/api/live-schedule/update-gap', methods=['POST'])
-@admin_required
-def update_live_gap() -> Any:
-    """Update a gap in a live schedule shift."""
-    return _handle_update_gap(use_staged=False)
-
-
-@routes.route('/api/prep-next-day/update-gap', methods=['POST'])
-@admin_required
-def update_staged_gap() -> Any:
-    """Update a gap in a staged schedule shift."""
-    return _handle_update_gap(use_staged=True)
+    return {
+        "selected_person": person,
+        "canonical_id": canonical_id,
+        "source_modality": actual_modality,
+        "skill_used": actual_skill,
+        "is_weighted": is_weighted,
+        "task_label": task_label,
+        "manual_selection": manual_selection,
+    }
 
 
 def _assign_worker(
@@ -4144,103 +4495,25 @@ def _assign_worker(
 
             if result is not None:
                 candidate, used_column, source_modality = result
-                actual_modality = source_modality or modality
-                d = modality_data[actual_modality]
-
-                candidate = candidate.to_dict() if hasattr(candidate, "to_dict") else dict(candidate)
-                if "PPL" not in candidate:
-                    raise ValueError("Candidate row is missing the 'PPL' field")
-                person = candidate['PPL']
-
-                actual_skill = candidate.get('__skill_source')
-                if not actual_skill and isinstance(used_column, str):
-                    actual_skill = used_column
-                if not actual_skill:
-                    actual_skill = role
-                if special_task:
-                    actual_skill = canonical_skill
-
-                selection_logger.info(
-                    "Selected worker: %s using column %s (modality %s)",
-                    person,
-                    actual_skill,
-                    actual_modality,
-                )
-
-                # Check if this is a weighted ('w') assignment.
-                # Shift modifier is always applied; W stream only for weighted assignments.
-                is_weighted = candidate.get('__is_weighted', False)
-                weight_override = None
-                if special_task:
-                    weight_override = get_special_task_weight(
-                        special_task['slug'],
-                        actual_modality,
-                        strict=use_strict_weights,
-                    )
-                candidate_shift_modifier = candidate.get('Modifier', 1.0)
-                canonical_id = update_global_assignment(
-                    person,
-                    actual_skill,
-                    actual_modality,
-                    is_weighted,
-                    strict_mode=use_strict_weights,
-                    work_amount=task_work_amount,
-                    weight_override=weight_override,
-                    shift_modifier_override=candidate_shift_modifier,
-                )
-                flow_target_skill = _resolve_flow_target_skill(candidate, actual_skill)
-                flow_weight = _get_cross_pool_flow_weight(
-                    canonical_skill,
-                    modality,
-                    use_strict_weights=use_strict_weights,
-                    work_amount=task_work_amount,
-                    weight_override=weight_override,
-                )
-                _record_cross_pool_flow(
-                    requested_skill=canonical_skill,
-                    target_skill=flow_target_skill,
-                    amount=flow_weight,
-                )
-                normalized_flow_target = _normalize_flow_target_key(flow_target_skill)
-                overflowed = normalized_flow_target != canonical_skill
-                unresolved = normalized_flow_target == FLOW_UNRESOLVED_TARGET
-                _record_distribution_stats(
-                    requested_skill=canonical_skill,
-                    flow_weight=flow_weight,
-                    overflowed=overflowed,
-                    unresolved=unresolved,
-                )
-                _record_recent_distribution(
-                    person=person,
-                    canonical_id=canonical_id,
-                    requested_skill=canonical_skill,
+                response_data = _finalize_assignment_candidate(
+                    candidate,
+                    used_column,
+                    source_modality,
                     requested_modality=modality,
-                    actual_skill=actual_skill,
-                    actual_modality=actual_modality,
-                    flow_weight=flow_weight,
-                    overflowed=overflowed,
-                    unresolved=unresolved,
+                    role=role,
+                    canonical_skill=canonical_skill,
+                    special_task=special_task,
                     task_label=task_label,
+                    task_work_amount=task_work_amount,
+                    use_strict_weights=use_strict_weights,
                 )
                 state_modified = True
-
-                # Record skill-modality usage for analytics
-                usage_logger.record_skill_modality_usage(actual_skill, actual_modality)
-
-                # Check if it's time for scheduled export (7:30 AM)
-                usage_logger.check_and_export_at_scheduled_time()
-
-                response_data = {
-                    "selected_person": person,
-                    "canonical_id": canonical_id,
-                    "source_modality": actual_modality,
-                    "skill_used": actual_skill,
-                    "is_weighted": is_weighted,
-                    "task_label": task_label,
-                }
             else:
                 selection_logger.warning("No available worker found")
-                return jsonify({"error": "No available worker found"}), 404
+                return jsonify({
+                    "error": "No available worker found",
+                    "code": "no_worker_available",
+                }), 404
 
         # Persist state OUTSIDE the lock to prevent blocking I/O
         if state_modified:
@@ -4252,9 +4525,73 @@ def _assign_worker(
         selection_logger.error(f"Error selecting worker: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
+
+def _get_strict_manual_candidates_for_button(
+    now: datetime,
+    canonical_skill: str,
+    modality: str,
+) -> list[dict[str, Any]]:
+    primary_candidates = get_strict_assignment_candidates(
+        now,
+        role=canonical_skill,
+        modality=modality,
+        target_skill_modalities=None,
+    )
+    if primary_candidates:
+        return primary_candidates
+
+    fallback_targets = get_specialist_fallback_targets(canonical_skill, modality)
+    if not fallback_targets:
+        return []
+
+    merged_targets = [(canonical_skill, modality)]
+    for target in fallback_targets:
+        if target not in merged_targets:
+            merged_targets.append(target)
+    return get_strict_assignment_candidates(
+        now,
+        role=canonical_skill,
+        modality=modality,
+        target_skill_modalities=merged_targets,
+    )
+
+
+def _serialize_strict_manual_candidate(candidate_info: dict[str, Any]) -> dict[str, Any]:
+    canonical_id = str(candidate_info.get('canonical_id') or '')
+    raw_name = str(candidate_info.get('person') or canonical_id)
+    source_modality = str(candidate_info.get('modality') or '')
+    source_skill = str(candidate_info.get('skill') or '')
+    ratio = candidate_info.get('ratio')
+    if ratio == float('inf'):
+        ratio_value = None
+    else:
+        try:
+            ratio_value = round(float(ratio), 4)
+        except (TypeError, ValueError):
+            ratio_value = None
+
+    return {
+        'candidate_key': candidate_info.get('candidate_key'),
+        'worker_id': canonical_id,
+        'display_name': _get_preferred_display_name(canonical_id, {raw_name}),
+        'raw_name': raw_name,
+        'source_modality': source_modality,
+        'source_modality_label': modality_labels.get(source_modality, source_modality.upper()),
+        'source_skill': source_skill,
+        'source_skill_label': SKILL_SETTINGS.get(source_skill, {}).get('label', source_skill),
+        'is_weighted': bool(candidate_info.get('is_weighted')),
+        'ratio': ratio_value,
+        'global_weight': round(get_global_weighted_count(canonical_id), 3),
+        'modality_weight': round(get_modality_weighted_count(canonical_id, source_modality), 3),
+    }
+
+
 @routes.route('/api/<modality>/<role>', methods=['GET'])
 @access_required
 def assign_worker_api(modality: str, role: str) -> Any:
+    route_error = _validate_assignment_path(modality, role)
+    if route_error:
+        return route_error
     modality = normalize_modality(modality)
     error = _validate_modality(modality, modality_data)
     if error:
@@ -4264,11 +4601,123 @@ def assign_worker_api(modality: str, role: str) -> Any:
 @routes.route('/api/<modality>/<role>/strict', methods=['GET'])
 @access_required
 def assign_worker_strict_api(modality: str, role: str) -> Any:
+    route_error = _validate_assignment_path(modality, role)
+    if route_error:
+        return route_error
     modality = normalize_modality(modality)
     error = _validate_modality(modality, modality_data)
     if error:
         return error
     return _assign_worker(modality, role, allow_overflow=False, use_strict_weights=True)
+
+
+@routes.route('/api/<modality>/<role>/strict/candidates', methods=['GET'])
+@access_required
+def assign_worker_strict_candidates_api(modality: str, role: str) -> Any:
+    route_error = _validate_assignment_path(modality, role)
+    if route_error:
+        return route_error
+    modality = normalize_modality(modality)
+    error = _validate_modality(modality, modality_data)
+    if error:
+        return error
+
+    canonical_skill = normalize_skill(role)
+    if not is_strict_manual_select_enabled(canonical_skill, modality):
+        return jsonify({"error": "Manual strict selection is not enabled for this button"}), 404
+
+    now = get_local_now()
+    with lock:
+        candidates = _get_strict_manual_candidates_for_button(now, canonical_skill, modality)
+
+    return jsonify({
+        'modality': modality,
+        'skill': canonical_skill,
+        'candidates': [
+            _serialize_strict_manual_candidate(candidate)
+            for candidate in candidates
+        ],
+    })
+
+
+@routes.route('/api/<modality>/<role>/strict/manual', methods=['POST'])
+@access_required
+def assign_worker_strict_manual_api(modality: str, role: str) -> Any:
+    route_error = _validate_assignment_path(modality, role)
+    if route_error:
+        return route_error
+    modality = normalize_modality(modality)
+    error = _validate_modality(modality, modality_data)
+    if error:
+        return error
+
+    canonical_skill = normalize_skill(role)
+    if not is_strict_manual_select_enabled(canonical_skill, modality):
+        return jsonify({"error": "Manual strict selection is not enabled for this button"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    requested_key = str(payload.get('candidate_key') or '').strip()
+    requested_worker_id = str(payload.get('worker_id') or '').strip()
+    if not requested_key and not requested_worker_id:
+        return jsonify({"error": "candidate_key is required"}), 400
+
+    now = get_local_now()
+    response_data = None
+    state_modified = False
+    request_flow_weight = _get_cross_pool_flow_weight(
+        canonical_skill,
+        modality,
+        use_strict_weights=True,
+        work_amount=1.0,
+        weight_override=None,
+    )
+
+    with lock:
+        _record_distribution_request(
+            requested_skill=canonical_skill,
+            requested_modality=modality,
+            request_weight=request_flow_weight,
+        )
+        candidates = _get_strict_manual_candidates_for_button(now, canonical_skill, modality)
+        selected = None
+        if requested_key:
+            selected = next(
+                (
+                    candidate for candidate in candidates
+                    if str(candidate.get('candidate_key') or '') == requested_key
+                ),
+                None,
+            )
+        elif requested_worker_id:
+            matching = [
+                candidate for candidate in candidates
+                if str(candidate.get('canonical_id') or '') == requested_worker_id
+            ]
+            if len(matching) == 1:
+                selected = matching[0]
+
+        if selected is None:
+            return jsonify({"error": "Selected worker is no longer available"}), 409
+
+        response_data = _finalize_assignment_candidate(
+            selected['candidate'],
+            selected['skill'],
+            selected['modality'],
+            requested_modality=modality,
+            role=canonical_skill,
+            canonical_skill=canonical_skill,
+            special_task=None,
+            task_label=None,
+            task_work_amount=1.0,
+            use_strict_weights=True,
+            manual_selection=True,
+        )
+        state_modified = True
+
+    if state_modified:
+        save_state()
+
+    return jsonify(response_data)
 
 # Usage Statistics API Endpoints
 
@@ -4386,15 +4835,9 @@ def get_usage_stats_file_info() -> Any:
 # FLOW BALANCE MONITOR
 # =============================================================================
 
-@routes.route('/flow-balance')
+@routes.route('/api/performance/data', methods=['GET'])
 @admin_required
-def flow_balance_page() -> Any:
-    return redirect(url_for('routes.worker_load_monitor', mode='flow'))
-
-
-@routes.route('/api/flow-balance/data', methods=['GET'])
-@admin_required
-def get_flow_balance_data() -> Any:
+def get_performance_data() -> Any:
     return jsonify(_build_flow_balance_payload())
 
 
@@ -4408,7 +4851,7 @@ def performance_page() -> Any:
     load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
     modality = resolve_modality_from_request()
     return render_template(
-        'balance_summary.html',
+        'performance.html',
         modality=modality,
         skills=SKILL_COLUMNS,
         skill_settings=SKILL_SETTINGS,
@@ -4418,13 +4861,6 @@ def performance_page() -> Any:
         ui_colors=APP_CONFIG.get('ui_colors', {}),
         is_admin=True,
     )
-
-
-@routes.route('/balance-summary')
-@admin_required
-def balance_summary_page() -> Any:
-    params = request.args.to_dict(flat=True)
-    return redirect(url_for('routes.performance_page', **params))
 
 
 # =============================================================================

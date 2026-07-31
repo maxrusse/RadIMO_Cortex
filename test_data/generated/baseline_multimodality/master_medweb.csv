@@ -1,4 +1,5 @@
-Datum,Beschreibung der Aktivität,Name des Mitarbeiters,Code des Mitarbeiters
+Datum,Beschreibung der Aktivität,Name des Mitarbeiters,Personalnummer
 23.01.2026,Baseline CT Notfall,Dr. Base CT,BM01
 23.01.2026,Baseline MR Privat,Dr. Base MR,BM02
-23.01.2026,Baseline XRAY MDH,Dr. Base XR,BM03
+23.01.2026,Baseline XRAY Kinder,Dr. Base XR,BM03
+23.01.2026,Baseline CT Gyn,Dr. Base CT Gyn,BM04

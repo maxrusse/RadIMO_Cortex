@@ -8,13 +8,9 @@ from flask import Flask
 # Local imports
 from config import APP_CONFIG
 from routes import routes
-from data_manager import (
-    load_state,
-    check_and_perform_daily_reset,
-    allowed_modalities,
-    attempt_initialize_data,
-    load_unified_live_backup,
-)
+from data_manager.file_ops import load_unified_live_backup
+from data_manager.scheduled_tasks import check_and_perform_daily_reset
+from data_manager.state_persistence import load_state
 from state_manager import StateManager
 from lib.utils import selection_logger
 
@@ -51,23 +47,14 @@ def startup_initialization() -> None:
     else:
         selection_logger.info("No master CSV found.")
 
-    # Initialize Modalities
+    # Restore the canonical unified live schedule.
     state = StateManager.get_instance()
     unified_live_backup = state.unified_schedule_paths['live']
     if load_unified_live_backup(unified_live_backup):
         selection_logger.info("Unified live backup loaded at startup.")
         return
 
-    for mod in allowed_modalities:
-        backup_dir = os.path.join(app.config['UPLOAD_FOLDER'], "backups")
-        live_backup = os.path.join(backup_dir, f"Cortex_{mod.upper()}_live.json")
-
-        if os.path.exists(live_backup):
-            selection_logger.info(f"Attempting to load LIVE backup for {mod}: {live_backup}")
-            if attempt_initialize_data(live_backup, mod, context='startup backup'):
-                continue
-
-        selection_logger.warning(f"Starting {mod} with EMPTY data (no valid backup).")
+    selection_logger.warning("Starting with EMPTY data (no valid unified live backup).")
 
 
 # -----------------------------------------------------------

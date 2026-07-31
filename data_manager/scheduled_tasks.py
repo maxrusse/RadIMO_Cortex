@@ -7,7 +7,6 @@ This module handles:
 - Staged data clearing
 """
 import os
-import shutil
 import json
 from datetime import datetime, time, date
 from typing import Any, Dict, Optional, Union

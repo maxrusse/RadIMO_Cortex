@@ -1,93 +1,29 @@
-- A single **Master CSV** upload populates current and future workday schedules.
-- Mapping rules attach modality, shift, and skill overrides to activity descriptions.
-- **GAP handling**: meetings and boards trigger split shifts, keeping coverage aligned with availability.
-- **Skill management**: workers pull global skill levels from the Skill Matrix (saves directly).
-- **Daily prep**: admins use "Prep Tomorrow" to adjust the staged schedule for the next workday.
+# RadIMO Cortex workflow
 
----
+## Daily operation
 
-## 🔄 Complete Flow
+1. Upload the current Medweb export in **Tools → Import** (`/upload`). It is stored as `uploads/master_medweb.csv`.
+2. Use **Today** (`/prep-today`) only for changes to the current live schedule. These changes apply immediately and do not reset counters.
+3. Use **Planning** (`/prep-tomorrow`) to prepare a selected future workday. Reloading that target date from the Master CSV replaces that staged day.
+4. Use **HARD RELOAD TODAY** on Import only when the live day genuinely must be rebuilt from the Master CSV. It resets the live assignment counters.
 
-1) **Source**: medweb exports a monthly CSV with worker activities.
-2) **Ingestion**: the CSV is uploaded as the current master copy; it powers both manual processing and the daily preload.
-3) **Parsing**: mapping rules attach modality and shift names; shift times come from the config with Friday-specific exceptions when defined.
-4) **Normalization**: shift windows become start/end datetimes. Durations are calculated for same-day shifts only (end time must be after start time).
-5) **Exclusions**: scheduled boards or meetings split shifts into available segments without losing total coverage accounting.
-6) **Rosters**: worker skills load from flat Skill×Modality combinations in the roster; CSV rule skill_overrides can override specific combinations.
-7) **Preparation**: optional edits for the next workday happen on `/prep-tomorrow`, keeping current-day assignments untouched.
-8) **Assignment**: real-time selection uses the normalized shifts and skill values to balance workload and honor fallback rules.
+Uploading a Master CSV does not overwrite an existing Planning snapshot. Reload Planning explicitly for the desired date.
 
----
+## Schedule and assignment model
 
-## 📤 Master CSV Strategy
+- `config.yaml` is the active local configuration. Start a new instance by copying the tracked `config.demo.yaml`; never put live credentials in the demo file.
+- Mapping rules turn CSV activities into modality, shift, and optional skill overrides. Keep rules ordered from specific to general: first match wins.
+- Shifts are same-day windows: the end time must be later than the start time.
+- Meetings, boards, and breaks create gap segments. Only shift segments provide availability.
+- The Skill Matrix (`/skill-roster`) holds persistent worker baselines. `1` and `w` are active, `0` is fallback/generalist, and `-1` is excluded. Shift and live/planning edits determine the active day state.
+- Assignment uses active shift availability, configured eligibility, button weights, modifiers, and overflow rules.
 
-RadIMO uses a single monthly CSV (`master_medweb.csv`) to power the entire schedule.
+## Automation and verification
 
-### 1. Upload Master
-**Action**: Admin Panel -> **Master CSV Upload**
-- Saves the file to `uploads/master_medweb.csv`.
-- This file acts as the source of truth for `HARD RELOAD TODAY` and `Prep Tomorrow`.
-- Uploading a new file does **not** automatically overwrite an already staged next day.
+- The configured daily reset time is `scheduler.daily_reset_time` (the demo value is `07:30`). It promotes the dated staged snapshot to the live day and resets daily counters when the application next performs its reset check.
+- Planning is also loaded on demand when required; do not assume an unattended preload succeeded. Check Planning and `/readyz` before the next workday.
+- Use **Tools → Status** (`/status`) or `/readyz` after configuration, import, or recovery work. Review `logs/selection.log` for reset and loading messages.
 
-### 2. Daily Operations
-**Action**: Admin Panel -> **HARD RELOAD TODAY**
-- Manually trigger a rebuild of today's schedule from the Master CSV.
-- **WARNING**: This resets all current assignment counters and history.
-- Use only for real same-day resets. Normal same-day edits belong on `/prep-today`.
+## Admin navigation
 
-### 3. Future Planning
-**Action**: **Prep Tomorrow** page -> reload selected date from Master CSV
-- Rebuilds the staged next-day plan from the current Master CSV.
-- Overwrites the saved staged plan for that selected target date.
-- This is the only normal path that refreshes an already prepared next day from a newly uploaded CSV.
-
-### 4. Automated Reset
-- Every morning at the configured reset time (currently `07:30`), the system performs the daily live reset logic for the new date.
-
----
-
-## 📝 Schedule Editing (`/prep-today`, `/prep-tomorrow`)
-
-Admins can adjust "Today" (Live) or plan "Tomorrow" (Staged) via separate pages.
-
-**Features:**
-- **Manual highlighting**: Any shifts added or edited manually by an admin are highlighted (subtle yellow) to distinguish them from auto-loaded Master CSV data.
-- **Gaps as segments**: Gaps (meetings, breaks, boards) are stored as `gap_segment` rows, and shifts are split into `shift_segment` availability windows. Gaps always win over shifts, so availability comes only from `shift_segment` rows.
-- **Effective duration**: Each shift segment includes its own duration, and gap segments never contribute to availability or hours.
-- **Shared timeline semantics**: timetable and prep/change pages use the same grouped worker/shift feed, so tooltips and active skill-modality labels follow the same `1`/`w` logic on both pages.
-
----
-
-## ⚙️ Configuration Notes
-
-- **Mapping rules**: First match wins. Order from specific to general.
-- **Same-day shifts**: All shifts must have end time after start time on the same day.
-- **Skill roster**: Saves directly to `worker_skill_roster.json`; priority over mapping defaults.
-- **Synthetic shifts**: Config-defined recurring workers are injected during day build; roster `-1` still blocks them.
-
----
-
-## ✅ Quick Checklist
-
-- [ ] Upload Master CSV at start of month.
-- [ ] Review "Prep Tomorrow" in the evening (`/prep-tomorrow`).
-- [ ] Use "Change Today" for same-day sickness/changes (`/prep-today`).
-- [ ] Use `HARD RELOAD TODAY` only when today must be rebuilt from Master CSV.
-- [ ] Monitor `selection.log` for auto-reset confirmation at 07:30.
-
----
-
-## GitHub Push Workflow
-
-When `git push` fails because the local credential helper is stale or points to a missing VS Code socket:
-
-1. Run `gh auth login --hostname github.com --git-protocol https --web --insecure-storage`.
-2. If you need the one-time code and URL printed in-terminal, use:
-   `printf 'y\n' | GH_BROWSER=echo gh auth login --hostname github.com --git-protocol https --web --insecure-storage`
-3. Verify login with `gh auth status`.
-4. Run `gh auth setup-git` so `git push` uses the `gh` credential helper instead of the broken VS Code helper.
-5. Push normally with `git push`.
-
-Typical failure symptom if this is not set up:
-- `Missing or invalid credentials`
-- `connect ENOENT /run/user/.../vscode-git-....sock`
+The primary admin navigation is **Analysis**, **Workload**, **Today**, **Planning**, **Schedule**, and **Live**. The **Tools** menu contains **Overview**, **Settings**, **Corrections**, **Skills**, **Weights**, **Import**, **Files**, **Logs**, and **Status**.

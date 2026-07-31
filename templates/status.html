@@ -3,110 +3,27 @@
 {% block title %}RadIMO Cortex | Status{% endblock %}
 
 {% block styles %}
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
-    }
-
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.35rem 0.65rem;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: #fff;
-      text-decoration: none;
-    }
-
-    .status-pill--ok {
-      background: #2e8b57;
-    }
-
-    .status-pill--error {
-      background: #b33a3a;
-    }
-
-    .meta {
-      color: #5f6b7a;
-      font-size: 0.85rem;
-      margin-top: 0.45rem;
-    }
-
-    .probe-links {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .probe-links a {
-      color: #004892;
-      font-weight: 600;
-      text-decoration: none;
-    }
-
-    .probe-links a:hover {
-      text-decoration: underline;
-    }
-
-    .checks-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-
-    .checks-table th,
-    .checks-table td {
-      text-align: left;
-      border-bottom: 1px solid #e7ebf0;
-      padding: 0.55rem 0.4rem;
-      vertical-align: top;
-    }
-
-    .checks-table th {
-      background: #f8f9fb;
-      font-weight: 700;
-    }
-
-    .check-status {
-      font-weight: 700;
-    }
-
-    .check-status--ok {
-      color: #2e8b57;
-    }
-
-    .check-status--warning {
-      color: #9a6a00;
-    }
-
-    .check-status--error {
-      color: #b33a3a;
-    }
+    {% include 'partials/admin_theme.html' %}
+    body { max-width: 1320px; }
+    .status-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.55rem; }
+    .status-card { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; }
+    .status-card__label { color: var(--ops-muted); font-size: 0.69rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
+    .status-card__value { margin-top: .15rem; color: var(--ops-ink); font-size: 1rem; font-weight: 850; }
+    .status-card__meta { color: var(--ops-muted); font-size: .67rem; overflow-wrap: anywhere; }
+    .probe-links { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .checks-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+    .checks-table th, .checks-table td { padding: .45rem; border-bottom: 1px solid #e1e8ef; text-align: left; vertical-align: top; }
+    .checks-table th { background: #eaf0f5; color: #294b65; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; }
+    .check-status { font-weight: 850; }
+    .check-status--ok { color: var(--ops-success); }
+    .check-status--warning { color: var(--ops-warning); }
+    .check-status--error { color: var(--ops-danger); }
+    @media (max-width: 760px) { .status-card-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Status' %}
-  {% set header_subtitle = 'Health and Readiness' %}
+  {% set header_subtitle = 'Health & readiness' %}
   {% set header_mode = 'global' %}
   {% set active_page = '' %}
   {% set header_nav = namespace(links=[]) %}
@@ -115,40 +32,45 @@
   {% include 'partials/header.html' %}
 
   {% set ready_ok = readiness_http_status == 200 %}
+  {% set checks = readiness_payload.get('checks', []) %}
+  {% set warning_count = checks|selectattr('status', 'equalto', 'WARNING')|list|length %}
+  {% set error_count = checks|selectattr('status', 'equalto', 'ERROR')|list|length %}
 
-  <div class="status-grid">
-    <div class="card">
+  <div class="ops-shell">
+    <div class="ops-page-head">
       <div>
-        <a href="{{ url_for('routes.healthz') }}" class="status-pill status-pill--ok">Health: OK</a>
+        <div class="ops-eyebrow">System diagnostics</div>
+        <h2>Readiness protocol</h2>
       </div>
-      <div class="meta">
-        Timestamp: {{ health_payload.get('timestamp', '-') }}
-      </div>
-    </div>
-
-    <div class="card">
-      <div>
-        <a href="{{ url_for('routes.readyz') }}"
-          class="status-pill {{ 'status-pill--ok' if ready_ok else 'status-pill--error' }}">
-          Ready: {{ 'READY' if ready_ok else 'NOT READY' }}
-        </a>
-      </div>
-      <div class="meta">
-        Timestamp: {{ readiness_payload.get('timestamp', '-') }}
+      <div class="ops-actions">
+        <button class="ops-button" type="button" onclick="location.reload()">Run checks again</button>
+        {% if is_admin %}<a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_logs_page') }}">Open logs</a>{% endif %}
       </div>
     </div>
 
-    <div class="card">
-      <div class="meta" style="margin-top:0;">Probe links</div>
-      <div class="probe-links">
-        <a href="{{ url_for('routes.healthz') }}" target="_blank" rel="noopener">/healthz</a>
-        <a href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
-      </div>
-    </div>
-  </div>
+    <section class="status-card-grid" aria-label="Probe summary">
+      <article class="ops-card status-card">
+        <div><div class="status-card__label">Health</div><div class="status-card__value">OK</div><div class="status-card__meta">{{ health_payload.get('timestamp', '-') }}</div></div>
+        <span class="ops-badge">healthy</span>
+      </article>
+      <article class="ops-card status-card">
+        <div><div class="status-card__label">Readiness</div><div class="status-card__value">{{ 'READY' if ready_ok else 'NOT READY' }}</div><div class="status-card__meta">{{ readiness_payload.get('timestamp', '-') }}</div></div>
+        <span class="ops-badge {{ '' if ready_ok else 'ops-badge--error' }}">{{ 'ready' if ready_ok else 'attention' }}</span>
+      </article>
+      <article class="ops-card status-card">
+        <div><div class="status-card__label">Checks</div><div class="status-card__value">{{ checks|length }} total</div><div class="status-card__meta">{{ warning_count }} warning · {{ error_count }} error</div></div>
+        <div class="probe-links">
+          <a class="ops-button ops-button--outline" href="{{ url_for('routes.healthz') }}" target="_blank" rel="noopener">/healthz</a>
+          <a class="ops-button ops-button--outline" href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
+        </div>
+      </article>
+    </section>
 
-  <div class="card">
-    <h2>Readiness Checks</h2>
+  <section class="ops-panel">
+    <div class="ops-section-head">
+      <div><h2 class="ops-section-title">Readiness Checks</h2></div>
+      {% if is_admin %}<a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_files_page') }}">Open files</a>{% endif %}
+    </div>
     <table class="checks-table">
       <thead>
         <tr>
@@ -172,5 +94,6 @@
         {% endfor %}
       </tbody>
     </table>
+  </section>
   </div>
 {% endblock %}

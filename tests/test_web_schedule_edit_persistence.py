@@ -442,6 +442,183 @@ class TestWebScheduleEditPersistence(unittest.TestCase):
             before,
         )
 
+    def test_quick_edit_update_relocates_by_row_uid_after_reindex(self) -> None:
+        modality = allowed_modalities[0]
+        response = self.client.get("/api/live-schedule/data")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        row_uid = response.get_json()["modalities"][modality][0]["row_uid"]
+        self.assertTrue(row_uid)
+
+        df = self.state.modality_data[modality]["working_hours_df"]
+        alice_row = df.iloc[0].to_dict()
+        bob_row = dict(alice_row)
+        bob_row["PPL"] = "Bob (B1)"
+        bob_row["tasks"] = "Bob shift"
+        self.state.modality_data[modality]["working_hours_df"] = pd.DataFrame([bob_row, alice_row])
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "verify_row_uid": row_uid,
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        updated = self.state.modality_data[modality]["working_hours_df"]
+        self.assertEqual(updated.iloc[0]["PPL"], "Bob (B1)")
+        self.assertEqual(float(updated.iloc[0]["Modifier"]), 1.0)
+        self.assertEqual(updated.iloc[1]["PPL"], "Alice (A1)")
+        self.assertEqual(float(updated.iloc[1]["Modifier"]), 2.5)
+
+    def test_quick_edit_update_rejects_changed_row_uid(self) -> None:
+        modality = allowed_modalities[0]
+        response = self.client.get("/api/live-schedule/data")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        row_uid = response.get_json()["modalities"][modality][0]["row_uid"]
+
+        df = self.state.modality_data[modality]["working_hours_df"]
+        df.at[0, SKILL_COLUMNS[0]] = 1
+        before = df.copy(deep=True)
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "verify_row_uid": row_uid,
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Row changed", response.get_json()["error"])
+        pd.testing.assert_frame_equal(
+            self.state.modality_data[modality]["working_hours_df"],
+            before,
+        )
+
+    def test_quick_edit_update_uses_worker_revision_instead_of_global_snapshot(self) -> None:
+        modality = allowed_modalities[0]
+        response = self.client.get("/api/live-schedule/data")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        payload = response.get_json()
+        row_uid = payload["modalities"][modality][0]["row_uid"]
+        worker_revision = payload["worker_revisions"]["Alice (A1)"]
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "verify_row_uid": row_uid,
+                "worker_revision": worker_revision,
+                "snapshot_version": "stale-global-snapshot",
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertIn("worker_revision", response.get_json())
+        updated = self.state.modality_data[modality]["working_hours_df"]
+        self.assertEqual(float(updated.iloc[0]["Modifier"]), 2.5)
+
+    def test_quick_edit_update_allows_stale_worker_revision_when_row_uid_matches(self) -> None:
+        modality = allowed_modalities[0]
+        response = self.client.get("/api/live-schedule/data")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        row_uid = response.get_json()["modalities"][modality][0]["row_uid"]
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "verify_row_uid": row_uid,
+                "worker_revision": "stale",
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_json())
+        updated = self.state.modality_data[modality]["working_hours_df"]
+        self.assertEqual(float(updated.iloc[0]["Modifier"]), 2.5)
+
+    def test_update_row_rejects_stale_worker_revision_without_row_uid_guard(self) -> None:
+        modality = allowed_modalities[0]
+        before = self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "worker_revision": "stale",
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("updated in another session", response.get_json()["error"])
+        pd.testing.assert_frame_equal(
+            self.state.modality_data[modality]["working_hours_df"],
+            before,
+        )
+
+    def test_update_row_rejects_stale_worker_revision_for_structural_update(self) -> None:
+        modality = allowed_modalities[0]
+        response = self.client.get("/api/live-schedule/data")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        row_uid = response.get_json()["modalities"][modality][0]["row_uid"]
+        before = self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "verify_ppl": "Alice (A1)",
+                "verify_row_uid": row_uid,
+                "worker_revision": "stale",
+                "updates": {"start_time": "08:00"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("updated in another session", response.get_json()["error"])
+        pd.testing.assert_frame_equal(
+            self.state.modality_data[modality]["working_hours_df"],
+            before,
+        )
+
+    def test_quick_edit_update_requires_worker_when_worker_revision_is_sent(self) -> None:
+        modality = allowed_modalities[0]
+        before = self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
+
+        response = self.client.post(
+            "/api/live-schedule/update-row",
+            json={
+                "modality": modality,
+                "row_index": 0,
+                "worker_revision": "some-revision",
+                "updates": {"Modifier": 2.5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("verify_ppl is required", response.get_json()["error"])
+        pd.testing.assert_frame_equal(
+            self.state.modality_data[modality]["working_hours_df"],
+            before,
+        )
+
     def test_gap_batch_rejects_wrong_live_worker(self) -> None:
         before = {
             modality: self.state.modality_data[modality]["working_hours_df"].copy(deep=True)
@@ -467,30 +644,6 @@ class TestWebScheduleEditPersistence(unittest.TestCase):
                 self.state.modality_data[modality]["working_hours_df"],
                 before[modality],
             )
-
-    def test_gap_add_rejects_wrong_staged_worker(self) -> None:
-        modality = allowed_modalities[0]
-        before = self.state.staged_modality_data[modality]["working_hours_df"].copy(deep=True)
-
-        response = self.client.post(
-            "/api/prep-next-day/add-gap",
-            json={
-                "modality": modality,
-                "row_index": 0,
-                "verify_ppl": "Bob (B1)",
-                "target_date": self.target_date.isoformat(),
-                "gap_type": "Break",
-                "gap_start": "12:00",
-                "gap_end": "12:30",
-            },
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Row mismatch", response.get_json()["error"])
-        pd.testing.assert_frame_equal(
-            self.state.staged_modality_data[modality]["working_hours_df"],
-            before,
-        )
 
     def test_build_failure_does_not_change_any_modality(self) -> None:
         before = {

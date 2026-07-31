@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ default_language|default('de') }}" data-default-language="{{ default_language|default('de') }}">
 
 <head>
   <meta charset="UTF-8">
@@ -7,6 +7,8 @@
   <title>{% block title %}RadIMO Cortex{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/dialog_focus.js') }}" defer></script>
   {% block head_extra %}{% endblock %}
   <style>
     {% block base_styles %}{% endblock %}
@@ -16,7 +18,10 @@
 </head>
 
 <body{% block body_attrs %}{% endblock %}>
-  {% block content %}{% endblock %}
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <main id="main-content" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
 </body>
 
 </html>
