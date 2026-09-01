@@ -1,14 +1,24 @@
 # RadIMO Cortex
 
-**Intelligent Radiology Orchestration**
+**Intelligent radiology workload orchestration**
 
-Worker assignment for radiology teams with automatic load balancing, skill-aware routing, and shift-based fairness.
+RadIMO Cortex gives radiology teams one operational view for distributing work across CT, MR, and X-ray. It combines the daily schedule, modality and skill coverage, shift availability, gaps, and current load so the next assignment can be made with the relevant context visible.
+
+This is a coordination product for radiology operations. It does not interpret images, generate reports, or make autonomous clinical decisions. The responsible team remains in control of assignment rules, schedule changes, and clinical work.
+
+**Product presentation:** [RadIMO Cortex on GitHub Pages](https://maxrusse.github.io/RadIMO_Cortex/)
+
+**Repository:** [github.com/maxrusse/RadIMO_Cortex](https://github.com/maxrusse/RadIMO_Cortex)
 
 ---
 
-## What is RadIMO Cortex?
+## What Cortex helps the team do
 
-RadIMO Cortex orchestrates workload distribution for radiology teams across CT, MR, and X-ray using skills such as Notfall, Privat, Gyn, AOU, CVT, MDH, and Kinder. It balances assignments for fairness while respecting availability, shift timing, and skill levels.
+- **Assign the next case:** use modality- or skill-centred controls with current availability and configurable routing rules.
+- **Keep distribution understandable:** combine work-hour-adjusted balancing, weights, specialist-only routes, and live load views.
+- **Adapt to the real day:** record gaps, meetings, sickness, coverage changes, and manual corrections without losing the underlying schedule.
+- **Prepare tomorrow safely:** stage a future workday separately from today’s live assignments.
+- **Review the operating picture:** inspect the timetable, worker load, skill matrix, weights, files, logs, and readiness status.
 
 **Key capabilities:**
 - Real-time worker assignment with automatic load balancing

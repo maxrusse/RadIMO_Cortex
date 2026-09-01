@@ -177,7 +177,7 @@ def test_legacy_surfaces_are_not_part_of_the_current_version():
 
     assignment_script = Path('static/js/assignment_ui.js').read_text(encoding='utf-8')
     strict_script = Path('static/js/strict_worker_select.js').read_text(encoding='utf-8')
-    assert 'Kein passender Mitarbeiter verfügbar. Bitte Normalmodus verwenden.' in assignment_script
+    assert 'Kein passender Mitarbeiter verfügbar. Bitte Normalmodus verwenden oder den OA informieren.' in assignment_script
     assert 'Server error:' not in assignment_script
     assert 'Server error:' not in strict_script
     assert 'AssignmentUI.request(endpoint)' in Path('templates/index.html').read_text(encoding='utf-8')
