@@ -27,7 +27,7 @@ This is a coordination product for radiology operations. It does not interpret i
 - Two UI modes: by modality or by skill
 - Two-level fallback for high availability
 - Master CSV integration for monthly schedule management
-- Admin system for skills, live-day changes, next-day planning, corrections, weights, files, logs, and settings
+- Admin system for skills, live-day changes, multiday planning, corrections, weights, files, logs, and settings
 - Worker skill roster admin portal with matrix-based management
 - GAP handling (split shifts) for meetings and boards
 - Smart skill filtering on planning and Schedule views
@@ -76,7 +76,7 @@ Admin pages require a session via `/login` when `admin_access_protection_enabled
 | Analysis | `/performance` | Management-level balance overview |
 | Workload | `/worker-load` | Detailed load monitoring |
 | Today | `/prep-today` | Edit the current live schedule |
-| Planning | `/prep-tomorrow` | Prepare a staged workday |
+| Planning | `/prep-tomorrow` | Prepare staged future workdays |
 | Corrections | `/manual-adjustments` | Publish manual load corrections |
 | Skills | `/skill-roster` | Edit worker skills |
 | Weights | `/button-weights` | Configure button and special-task weights |
@@ -139,7 +139,7 @@ Where each control lives:
 ### Admin Pages
 1. **Analysis** (`/performance`) - Management overview
 2. **Workload** (`/worker-load`) - Simple summary, advanced matrix, and flow chart
-3. **Today / Planning** (`/prep-today`, `/prep-tomorrow`) - Live and staged schedule editing
+3. **Today / Planning** (`/prep-today`, `/prep-tomorrow`) - Live edits and multiday staged planning
 4. **Corrections** (`/manual-adjustments`) - Manual load adjustments
 5. **Skills / Weights** (`/skill-roster`, `/button-weights`) - Worker capabilities and routing weights
 6. **Import / Tools** (`/upload`, `/admin/tools`) - Source data and operations
@@ -151,7 +151,7 @@ Where each control lives:
 - **Skill View** (`/by-skill`) - Main assignment view by skill
 - **Schedule** (`/timetable`) - Visual timeline of shifts and gaps
 - **Today** (`/prep-today`) - Live edits for the current day
-- **Planning** (`/prep-tomorrow`) - Staged edits for a selected workday
+- **Planning** (`/prep-tomorrow`) - Staged edits for selected future workdays
 - **Tools menu** - Corrections, Skills, Weights, Import, Files, Logs, Settings, and Status
 
 ### Master CSV Semantics
