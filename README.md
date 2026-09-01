@@ -17,7 +17,7 @@ This is a coordination product for radiology operations. It does not interpret i
 - **Assign the next case:** use modality- or skill-centred controls with current availability and configurable routing rules.
 - **Keep distribution understandable:** combine work-hour-adjusted balancing, weights, specialist-only routes, and live load views.
 - **Adapt to the real day:** record gaps, meetings, sickness, coverage changes, and manual corrections without losing the underlying schedule.
-- **Prepare tomorrow safely:** stage a future workday separately from today’s live assignments.
+- **Prepare future days safely:** stage multiple future workdays separately from today’s live assignments.
 - **Review the operating picture:** inspect the timetable, worker load, skill matrix, weights, files, logs, and readiness status.
 
 **Key capabilities:**

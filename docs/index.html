@@ -17,8 +17,8 @@
         <nav class="nav-links" aria-label="Primary navigation">
           <a href="#product">Product</a>
           <a href="#workflow">Workflow</a>
-          <a href="#views">Views</a>
-          <a href="#guardrails">Guardrails</a>
+          <a href="#screens">Screens</a>
+          <a href="#controls">Controls</a>
           <a href="https://github.com/maxrusse/RadIMO_Cortex">GitHub</a>
         </nav>
       </div>
@@ -27,121 +27,95 @@
     <main id="content">
       <section class="hero shell" id="top">
         <div class="hero-copy">
-          <p class="eyebrow">Radiology workload orchestration</p>
-          <h1>A clearer working day for the whole reading team.</h1>
-          <p class="lead">RadIMO Cortex turns the daily schedule into a shared operational view. It helps teams route work by modality, skill, availability, and current load while leaving clinical responsibility with the radiologist.</p>
+          <p class="eyebrow">RadIMO line · Cortex</p>
+          <h1>Turn a changing radiology day into a workable plan.</h1>
+          <p class="lead">Cortex brings schedule, skills, availability, assignments, and current load into one operational view—so coordinators can route the next work package with the whole day in context.</p>
           <div class="actions">
             <a class="button primary" href="#product">See how Cortex helps</a>
             <a class="button ghost" href="https://github.com/maxrusse/RadIMO_Cortex">Open the repository</a>
           </div>
           <dl class="facts" aria-label="Product facts">
             <div><dt>Coverage</dt><dd>CT · MR · X-ray</dd></div>
-            <div><dt>Routing</dt><dd>Skill-aware</dd></div>
-            <div><dt>Planning</dt><dd>Today + next day</dd></div>
+            <div><dt>Routing</dt><dd>Skill + capacity</dd></div>
+            <div><dt>Planning</dt><dd>Live + multiday</dd></div>
           </dl>
         </div>
         <figure class="screenshot-card hero-screenshot">
-          <img src="./assets/dashboard-ct.png" alt="RadIMO Cortex CT dashboard with modality and skill assignment controls" width="1920" height="1080">
-          <figcaption>Real Cortex dashboard screenshot from the deterministic training environment.</figcaption>
+          <img src="./assets/dashboard-ct-cropped.png" alt="RadIMO Cortex CT dashboard with modality and skill assignment controls" width="1920" height="690">
+          <figcaption>Live CT dashboard with modality and skill controls. Real screen from a configured demonstration session.</figcaption>
         </figure>
-      </section>
-
-      <section class="notice shell" aria-label="Clinical use notice">
-        <div class="notice-mark" aria-hidden="true">!</div>
-        <div>
-          <strong>Operational coordination, not autonomous diagnosis.</strong>
-          <p>Cortex supports the organisation of radiology work. It does not interpret images, make clinical decisions, or replace the responsible team. Assignment rules remain configurable, visible, and reviewable.</p>
-        </div>
       </section>
 
       <section class="section shell" id="product">
         <div class="section-heading">
-          <p class="eyebrow">Product</p>
-          <h2>One operational picture for a complex day.</h2>
-          <p class="section-lead">Cortex brings the information people use to distribute work into one place: who is available, what they cover, how the schedule is changing, and where the current load is accumulating.</p>
+          <p class="eyebrow">The need</p>
+          <h2>Make the next assignment with the right context.</h2>
+          <p class="section-lead">A coordinator should not have to reconcile the schedule, a skills list, and a separate load overview before every decision. Cortex keeps those signals together and turns them into a clear working surface.</p>
         </div>
         <div class="principles">
-          <article><h3>Put the right work with the right people</h3><p>Route buttons and work packages using the team’s modality and skill matrix, with specialist-only options where the workflow requires them.</p></article>
-          <article><h3>Make fairness visible</h3><p>Work-hour-adjusted balancing, weights, and live load views help coordinators understand why work is being distributed as it is.</p></article>
-          <article><h3>Keep the schedule workable</h3><p>Handle gaps, meetings, sickness, coverage changes, and next-day preparation without rebuilding the whole operational picture.</p></article>
-        </div>
-      </section>
-
-      <section class="section shell workspace-section" id="views">
-        <div class="section-heading">
-          <p class="eyebrow">Built around the team</p>
-          <h2>Useful views for the moments that matter.</h2>
-          <p class="section-lead">The interface stays close to the team’s working language: modalities, skills, shifts, assignments, and load. Each view answers a different practical question.</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card"><span class="feature-label">Live</span><h3>What can I assign now?</h3><p>Use the modality or skill dashboard to make the next assignment with the current availability and routing rules in view.</p></article>
-          <article class="feature-card"><span class="feature-label">Schedule</span><h3>Who is available when?</h3><p>Read shifts, gaps, meetings, and coverage on a shared timetable instead of piecing them together from separate lists.</p></article>
-          <article class="feature-card"><span class="feature-label">Planning</span><h3>What needs to be ready tomorrow?</h3><p>Prepare a staged future day, apply filters, and make targeted changes without altering today’s live counters.</p></article>
-          <article class="feature-card"><span class="feature-label">Analysis</span><h3>Is the distribution balanced?</h3><p>Review simple totals or the advanced modality-by-skill matrix to see where load is concentrated and where capacity remains.</p></article>
-        </div>
-      </section>
-
-      <section class="section shell screenshot-section">
-        <div class="screenshot-row">
-          <figure class="screenshot-card">
-            <img src="./assets/timetable-ct-notfall.png" alt="RadIMO Cortex timetable filtered to CT and Notfall work" width="1920" height="1080" loading="lazy">
-            <figcaption>The timetable makes availability and gaps legible across the day.</figcaption>
-          </figure>
-          <div class="screenshot-copy">
-            <p class="eyebrow">From decision to context</p>
-            <h2>Coordinate the work around the reading room, not around a spreadsheet.</h2>
-            <p>The live dashboard answers the immediate question. The timetable explains the surrounding context. The load view shows the accumulated effect. Together they support a calmer handoff between coordination and reporting.</p>
-            <a class="text-link" href="https://github.com/maxrusse/RadIMO_Cortex/blob/main/docs/WORKFLOW.md">Read the daily workflow →</a>
-          </div>
+          <article><h3>Route by real capacity</h3><p>Use modality, skill, shift availability, and current load to identify who can take the next work package.</p></article>
+          <article><h3>Keep distribution fair</h3><p>Work-hour-adjusted balancing and configurable weights make the distribution easier to understand and review.</p></article>
+          <article><h3>Stay close to the day</h3><p>Handle gaps, meetings, sickness, coverage changes, and future plans without losing the shared schedule.</p></article>
         </div>
       </section>
 
       <section class="section shell workflow-section" id="workflow">
         <div class="section-heading">
-          <p class="eyebrow">Typical flow</p>
-          <h2>Three connected steps around each workday.</h2>
+          <p class="eyebrow">The daily rhythm</p>
+          <h2>From source schedule to shared working day.</h2>
+          <p class="section-lead">Cortex follows the work as it actually happens: start with the schedule, shape the day, then assign and review.</p>
         </div>
         <ol class="workflow">
-          <li><span>01</span><div><h3>Bring in the schedule</h3><p>Upload the current Master CSV and let the configured mapping turn it into a working day.</p></div></li>
-          <li><span>02</span><div><h3>Shape the day</h3><p>Account for skills, shift windows, gaps, coverage changes, and a staged plan for the next day.</p></div></li>
-          <li><span>03</span><div><h3>Assign and review</h3><p>Use live routing, monitor the resulting load, and keep operational changes visible to the team.</p></div></li>
+          <li><span>01</span><div><h3>Start from the schedule</h3><p>Bring in the current Master CSV and turn it into a working day with the team’s configured roles and modalities.</p></div></li>
+          <li><span>02</span><div><h3>Shape today and future days</h3><p>Adjust live coverage and gaps, then prepare one or more future dates without changing the live day.</p></div></li>
+          <li><span>03</span><div><h3>Assign, balance, review</h3><p>Route work from the live view and use timetable and load views to follow the effect across the team.</p></div></li>
         </ol>
       </section>
 
-      <section class="section shell split-section">
-        <div>
-          <p class="eyebrow">Team reality</p>
-          <h2>Designed for coordination under pressure.</h2>
-          <p>Radiology days change. A colleague is pulled into a board, a shift starts late, a specialist is needed for a particular work package, or tomorrow’s plan needs to be adjusted before anyone arrives. Cortex keeps those changes close to the operational surface.</p>
-          <ul class="check-list">
-            <li>Normal and specialist-only routing can coexist.</li>
-            <li>Gaps split availability without deleting the underlying schedule.</li>
-            <li>Manual corrections and staged planning remain explicit actions.</li>
-          </ul>
+      <section class="section shell screenshot-section" id="screens">
+        <div class="section-heading">
+          <p class="eyebrow">In use</p>
+          <h2>Each view answers a practical question.</h2>
+          <p class="section-lead">Cortex keeps the interface close to the reading room: what can be assigned, who is available, what needs to change, and how the load is developing.</p>
         </div>
-        <figure class="screenshot-card">
-          <img src="./assets/worker-load-advanced.png" alt="RadIMO Cortex advanced worker load matrix across modalities and skills" width="1920" height="1080" loading="lazy">
-          <figcaption>Advanced load view with modality-by-skill totals.</figcaption>
-        </figure>
+        <div class="screens-grid">
+          <figure class="screenshot-card screen-card screen-card-tall">
+            <img src="./assets/change-today.png" alt="RadIMO Cortex Change Today page with worker skill matrix and timeline" width="1920" height="2325" loading="lazy">
+            <figcaption><strong>Change Today.</strong> Make live coverage changes, edit worker plans, and see the resulting timeline in one place.</figcaption>
+          </figure>
+          <figure class="screenshot-card screen-card screen-card-tall">
+            <img src="./assets/prep-tomorrow.png" alt="RadIMO Cortex Prep Tomorrow page with staged schedule and timeline" width="1920" height="2377" loading="lazy">
+            <figcaption><strong>Planning.</strong> Prepare a selected future date, repeat the process across multiple days, and keep staging separate from live work.</figcaption>
+          </figure>
+          <figure class="screenshot-card screen-card screen-card-medium">
+            <img src="./assets/worker-load-simple.png" alt="RadIMO Cortex Balance page with global, modality, and skill load summaries" width="1920" height="1630" loading="lazy">
+            <figcaption><strong>Balance.</strong> See global, per-modality, and per-skill load at a glance.</figcaption>
+          </figure>
+          <figure class="screenshot-card screen-card screen-card-medium">
+            <img src="./assets/admin-upload.png" alt="RadIMO Cortex Admin page showing the Master CSV upload workflow" width="1920" height="1080" loading="lazy">
+            <figcaption><strong>Source schedule.</strong> Upload the Master CSV and keep the path from source data to working day visible.</figcaption>
+          </figure>
+        </div>
       </section>
 
-      <section class="section shell guardrails-section" id="guardrails">
+      <section class="section shell split-section" id="controls">
         <div>
-          <p class="eyebrow">Guardrails</p>
-          <h2>Rules that can be explained to the people using them.</h2>
-          <p>Eligibility, weights, overflow, and strict routing are configured as operational rules rather than hidden behaviour. Status and logs provide a path to check readiness and understand what happened during the day.</p>
+          <p class="eyebrow">Team-controlled</p>
+          <h2>Operational rules stay visible.</h2>
+          <p>Skills, weights, overflow, specialist-only routing, gaps, corrections, and future-day planning are explicit controls. The team can see what is configured, change what is needed, and review the result.</p>
+          <a class="text-link" href="https://github.com/maxrusse/RadIMO_Cortex/blob/main/docs/ADMIN_GUIDE.md">Read the admin guide →</a>
         </div>
-        <div class="guardrail-grid">
-          <article><h3>Visible skills</h3><p>Active, weighted, passive, and excluded capabilities are represented in the Skill Matrix.</p></article>
-          <article><h3>Controlled change</h3><p>Today and Planning are separate surfaces, so preparation does not silently rewrite the live day.</p></article>
-          <article><h3>Operational evidence</h3><p>Health checks, logs, usage statistics, and managed-file views support review and handover.</p></article>
+        <div class="control-list">
+          <article><h3>Skill matrix</h3><p>Keep capability and modality coverage aligned with the team.</p></article>
+          <article><h3>Weights and routing</h3><p>Make distribution rules deliberate rather than hidden in the workflow.</p></article>
+          <article><h3>Status and logs</h3><p>Support handover, readiness checks, and review of the operating day.</p></article>
         </div>
       </section>
 
       <section class="section shell documentation-section">
         <div class="section-heading">
           <p class="eyebrow">Further reading</p>
-          <h2>Go deeper when you need the implementation detail.</h2>
+          <h2>Keep the overview close; keep the detail available.</h2>
         </div>
         <div class="doc-links">
           <a href="https://github.com/maxrusse/RadIMO_Cortex/blob/main/docs/ADMIN_GUIDE.md"><strong>Admin guide</strong><span>Pages, planning, skills, weights, and recovery.</span></a>
