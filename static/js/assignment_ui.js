@@ -18,8 +18,8 @@
     const noWorker = error?.code === 'no_worker_available' || error?.status === 404;
     if (noWorker && options.strict) {
       return english
-        ? 'No strict worker available. Please use normal mode.'
-        : 'Kein passender Mitarbeiter verfügbar. Bitte Normalmodus verwenden.';
+        ? 'No strict worker available. Please use normal mode or inform the OA.'
+        : 'Kein passender Mitarbeiter verfügbar. Bitte Normalmodus verwenden oder den OA informieren.';
     }
     if (noWorker) {
       return english
