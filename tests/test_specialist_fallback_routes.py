@@ -7,14 +7,11 @@ from config import SKILL_COLUMNS, get_specialist_fallback_targets
 
 
 class TestSpecialistFallbackRoutes(unittest.TestCase):
-    def test_configured_specialist_fallback_targets(self) -> None:
+    def test_no_targets_for_all_configured_skills(self) -> None:
         for skill in SKILL_COLUMNS:
             with self.subTest(skill=skill):
                 targets = get_specialist_fallback_targets(skill, "ct")
-                if skill == "mdh":
-                    self.assertEqual(targets, [("aou", "ct"), ("cvt", "ct")])
-                else:
-                    self.assertEqual(targets, [])
+                self.assertEqual(targets, [])
 
     def test_assign_without_fallback_route_keeps_normal_overflow(self) -> None:
         candidate = {

@@ -22,6 +22,7 @@ from config import (
     SKILL_COLUMNS,
     UPLOAD_FOLDER,
     selection_logger,
+    IMPORT_LOGGER,
 )
 from lib.utils import (
     TIME_FORMAT,
@@ -463,6 +464,15 @@ def _load_unified_backup(file_path: str, use_staged: bool) -> bool:
             data = json.load(f)
     except FileNotFoundError:
         return False
+    except json.JSONDecodeError as exc:
+        IMPORT_LOGGER.error(
+            "JSON import failed while reading %s (staged=%s): %s",
+            file_path,
+            use_staged,
+            exc,
+            exc_info=True,
+        )
+        raise
 
     records = data.get('working_hours', [])
     info_texts = data.get('info_texts', {})
@@ -536,7 +546,21 @@ def _load_unified_scheduled_into_staged(file_path: str) -> bool:
             data = json.load(f)
     except FileNotFoundError:
         return False
+    except json.JSONDecodeError as exc:
+        IMPORT_LOGGER.error(
+            "JSON import failed while reading scheduled file %s: %s",
+            file_path,
+            exc,
+            exc_info=True,
+        )
+        return False
     except Exception as exc:
+        IMPORT_LOGGER.error(
+            "Schedule import failed while reading %s: %s",
+            file_path,
+            exc,
+            exc_info=True,
+        )
         selection_logger.error("Error reading unified scheduled file for staged load: %s", exc)
         return False
 
@@ -760,7 +784,11 @@ def write_unified_scheduled_file(modality_dfs: dict, *, target_date: Optional[da
     }
 
     target_path = unified_schedule_paths['scheduled']
-    os.makedirs(os.path.dirname(target_path), exist_ok=True)
-    with open(target_path, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+    _write_payload_to_path(payload, target_path, "scheduled")
     selection_logger.info("Unified scheduled file saved at %s", target_path)
+    IMPORT_LOGGER.info(
+        "Schedule JSON replaced atomically: path=%s target_date=%s records=%d",
+        target_path,
+        payload['metadata']['target_date'],
+        len(records),
+    )

@@ -17,6 +17,7 @@ from config import (
     allowed_modalities,
     UPLOAD_FOLDER,
     selection_logger,
+    IMPORT_LOGGER,
 )
 from lib.utils import (
     get_local_now,
@@ -213,14 +214,15 @@ def preload_next_workday(csv_path: str, config: dict, target_date: Optional[Unio
             config
         )
 
-        # Clear unified scheduled file first to prevent stale data
+        # Keep the previous complete JSON visible until the new payload is ready.
+        # write_unified_scheduled_file() replaces it atomically, so readers never
+        # observe an empty or partially-written schedule file.
         unified_scheduled_path = _state.unified_schedule_paths['scheduled']
-        if os.path.exists(unified_scheduled_path):
-            try:
-                os.remove(unified_scheduled_path)
-                selection_logger.info("Cleared existing unified scheduled file")
-            except OSError as e:
-                selection_logger.warning("Could not remove existing unified scheduled file: %s", e)
+        IMPORT_LOGGER.info(
+            "CSV preload prepared schedule payload: csv=%s target_date=%s",
+            csv_path,
+            date_str,
+        )
 
         if not modality_dfs:
             modality_dfs = {}
@@ -252,6 +254,13 @@ def preload_next_workday(csv_path: str, config: dict, target_date: Optional[Unio
             if not os.path.exists(staged_day_path):
                 raise RuntimeError(f"Staged day snapshot was not written: {staged_day_path}")
         except Exception as exc:
+            IMPORT_LOGGER.error(
+                "CSV preload failed while saving schedule: csv=%s target_date=%s error=%s",
+                csv_path,
+                date_str,
+                exc,
+                exc_info=True,
+            )
             selection_logger.error("Failed to save unified scheduled file: %s", exc)
             save_error = str(exc)
 
@@ -283,6 +292,13 @@ def preload_next_workday(csv_path: str, config: dict, target_date: Optional[Unio
         }
 
     except Exception as exc:
+        IMPORT_LOGGER.error(
+            "CSV preload failed before schedule save: csv=%s target_date=%s error=%s",
+            csv_path,
+            (_parse_target_date(target_date) or get_next_workday().date()).isoformat(),
+            exc,
+            exc_info=True,
+        )
         selection_logger.error(f"Error in preload_next_workday: {exc}", exc_info=True)
         return {
             'success': False,

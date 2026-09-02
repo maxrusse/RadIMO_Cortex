@@ -10,6 +10,7 @@ import os
 import re
 import signal
 import shutil
+import tempfile
 import threading
 from datetime import date, datetime, time
 from functools import wraps
@@ -50,6 +51,7 @@ from config import (
     UPLOAD_FOLDER,
     WORKER_SKILL_ROSTER_PATH,
     selection_logger,
+    IMPORT_LOGGER,
     get_worker_name_display_style,
     normalize_modality,
     normalize_skill,
@@ -166,6 +168,10 @@ LOG_SOURCE_DEFINITIONS: dict[str, dict[str, str]] = {
     'flow': {
         'label': 'Flow balance',
         'filename': 'flow_balance.log',
+    },
+    'import': {
+        'label': 'CSV / schedule import',
+        'filename': 'import.log',
     },
 }
 FLOW_UNRESOLVED_TARGET = '__unresolved__'
@@ -586,7 +592,7 @@ def _handle_task_preview(use_staged: bool) -> Any:
     if use_staged:
         result['target_date'] = target_date.isoformat()
     return jsonify(result)
-DEFAULT_LOG_SOURCES = ('gunicorn', 'selection')
+DEFAULT_LOG_SOURCES = ('gunicorn', 'selection', 'import')
 MAX_LOG_TAIL_LINES = 50_000
 ADMIN_FILE_BACKUP_DIR = Path(UPLOAD_FOLDER) / 'backups' / 'admin_files'
 SKILL_ROSTER_BACKUP_DIR = Path(WORKER_SKILL_ROSTER_PATH).parent / 'backups'
@@ -3120,8 +3126,17 @@ def admin_logs_page() -> Any:
     return render_template(
         'admin_logs.html',
         sources=_build_log_sources_manifest(),
-        default_tail_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='tail', lines=5000),
-        default_full_url=url_for('routes.download_logs', sources='gunicorn,selection', scope='full'),
+        default_tail_url=url_for(
+            'routes.download_logs',
+            sources=','.join(DEFAULT_LOG_SOURCES),
+            scope='tail',
+            lines=5000,
+        ),
+        default_full_url=url_for(
+            'routes.download_logs',
+            sources=','.join(DEFAULT_LOG_SOURCES),
+            scope='full',
+        ),
         is_admin=True,
         active_page='logs',
         active_tool='logs',
@@ -3484,15 +3499,42 @@ def upload_master_csv() -> Any:
     if not file.filename.lower().endswith('.csv'):
         return jsonify({"error": "Bitte CSV-Datei hochladen"}), 400
 
+    temp_path = None
     try:
-        file.save(MASTER_CSV_PATH)
+        temp_fd, temp_path = tempfile.mkstemp(
+            prefix='.master_medweb.',
+            suffix='.csv.tmp',
+            dir=os.path.dirname(MASTER_CSV_PATH) or '.',
+        )
+        os.close(temp_fd)
+        file.save(temp_path)
+        os.replace(temp_path, MASTER_CSV_PATH)
+        IMPORT_LOGGER.info(
+            "Master CSV uploaded: source_name=%s path=%s bytes=%d",
+            file.filename,
+            MASTER_CSV_PATH,
+            os.path.getsize(MASTER_CSV_PATH),
+        )
         selection_logger.info(f"Master CSV uploaded: {MASTER_CSV_PATH}")
         return jsonify({
             "success": True,
             "message": "Master-CSV erfolgreich hochgeladen"
         })
     except Exception as e:
+        IMPORT_LOGGER.error(
+            "Master CSV upload failed: source_name=%s path=%s error=%s",
+            file.filename,
+            MASTER_CSV_PATH,
+            e,
+            exc_info=True,
+        )
         return jsonify({"error": f"Upload fehlgeschlagen: {str(e)}"}), 500
+    finally:
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
 
 
 @routes.route('/preload-from-master', methods=['POST'])

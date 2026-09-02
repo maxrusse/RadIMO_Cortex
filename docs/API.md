@@ -66,8 +66,9 @@ through the advanced YAML workflow requires an application restart.
 returns `202` after scheduling a Gunicorn reload; it returns `409` when that
 operation is unavailable.
 
-For log downloads, `sources` accepts `gunicorn`, `selection`, `flow`, or
-`all`; `scope` is `tail` or `full`; `lines` is an integer. Invalid source,
+For log downloads, `sources` accepts `gunicorn`, `selection`, `flow`, `import`, or
+`all`; `scope` is `tail` or `full`; `lines` is an integer. The `import` source
+contains CSV/preload and generated-schedule JSON read/write events. Invalid source,
 scope, or line values return `400`.
 
 ## Schedules and CSV

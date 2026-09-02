@@ -52,6 +52,14 @@ if not FLOW_SNAPSHOT_LOGGER.handlers:
     flow_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
     FLOW_SNAPSHOT_LOGGER.addHandler(flow_handler)
 
+IMPORT_LOGGER = logging.getLogger('radimo.import')
+IMPORT_LOGGER.setLevel(logging.INFO)
+IMPORT_LOGGER.propagate = False
+if not IMPORT_LOGGER.handlers:
+    import_handler = RotatingFileHandler('logs/import.log', maxBytes=10_000_000, backupCount=3)
+    import_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+    IMPORT_LOGGER.addHandler(import_handler)
+
 # -----------------------------------------------------------
 # Default Constants
 # -----------------------------------------------------------

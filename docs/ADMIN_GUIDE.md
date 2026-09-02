@@ -52,6 +52,6 @@ The Weight Matrix stores normal and strict assignment weights in `data/button_we
 
 ## Operational checks
 
-Use `/healthz` for a basic health response and `/readyz` (or **Status**) for readiness details. Logs provides current and rotated `gunicorn.log`, `selection.log`, and `flow_balance.log`; `selection.log` is the primary application log.
+Use `/healthz` for a basic health response and `/readyz` (or **Status**) for readiness details. Logs provides current and rotated `gunicorn.log`, `selection.log`, `flow_balance.log`, and `import.log`; `selection.log` is the primary application log and `import.log` records CSV/preload and generated-schedule JSON events, including parse failures.
 
 At the configured daily reset time (`scheduler.daily_reset_time`, demo: `07:30`), the app promotes the staged day and resets daily counters. Review Today and readiness on the next workday; Planning may also be loaded lazily when requested.

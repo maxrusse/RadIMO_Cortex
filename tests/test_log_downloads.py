@@ -83,6 +83,19 @@ class TestLogDownloads(unittest.TestCase):
         self.assertFalse(payload["success"])
         self.assertIn("Unknown log source", payload["error"])
 
+    def test_import_log_is_available_for_download(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            log_root = Path(tmp_dir)
+            self._write_log(log_root, "import.log", "JSON import failed: line 1 column 1\n")
+
+            with patch("routes.has_admin_access", return_value=True), patch.object(routes, "LOG_ROOT", log_root):
+                response = self.client.get("/admin/logs/download?sources=import&scope=full")
+
+        self.assertEqual(response.status_code, 200)
+        archive = zipfile.ZipFile(io.BytesIO(response.data))
+        self.assertEqual(archive.namelist(), ["import/import.log"])
+        self.assertIn("line 1 column 1", archive.read("import/import.log").decode("utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
