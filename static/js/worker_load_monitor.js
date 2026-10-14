@@ -21,10 +21,15 @@ let flowDataLoaded = false;
 let flowData = null;
 let recentDataLoaded = false;
 let recentData = [];
-let recentFilters = { skill: '', modality: '', status: '', worker: '', visible: '50' };
+let recentFilters = { skill: '', modality: '', status: '', worker: '', visible: '50', type: '' };
+let correctionWorkers = [];
+let correctionDeltas = [];
+let correctionLog = [];
+let correctionsLoaded = false;
+let expandedWorkerId = null;
 let filters = { modality: '', skill: '', hideZero: false };
 let sortState = {
-  global: { column: 'weight_per_hour', direction: 'desc' },
+  global: { column: 'deviation', direction: 'desc' },
   advancedWeight: { column: 'weight', direction: 'desc' },
   advancedCount: { column: 'count', direction: 'desc' },
 };
@@ -46,6 +51,10 @@ let sortState = {
   style.textContent = css;
   document.head.appendChild(style);
 })();
+
+function t(text) {
+  return window.RadimoI18n?.t ? window.RadimoI18n.t(text) : text;
+}
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -363,6 +372,11 @@ function getSortValue(worker, column, tableType) {
   }
   if (column === 'weight') return Number(worker.global_weight || 0);
   if (column === 'weight_per_hour') return Number(worker.weight_per_hour || 0);
+  if (column === 'hours') return Number(worker.hours_worked_now || 0);
+  if (column === 'deviation') {
+    const deviation = getWorkerDeviation(worker, getRatioBenchmark(workersData));
+    return deviation === null ? -Infinity : deviation;
+  }
   return 0;
 }
 
@@ -440,24 +454,47 @@ function getDerivedWorkerWeight(worker) {
   }, 0);
 }
 
+function getWorkerDeviation(worker, benchmark) {
+  const hours = Number(worker.hours_worked_now || 0);
+  if (!benchmark || hours < getValidWorkerThresholdHours()) return null;
+  return Number(worker.weight_per_hour || 0) / benchmark - 1;
+}
+
+function formatDeviation(deviation) {
+  if (deviation === null) return '–';
+  const percent = Math.round(deviation * 100);
+  return `${percent > 0 ? '+' : ''}${percent} %`;
+}
+
+function deviationBar(deviation) {
+  if (deviation === null) return '<div class="dev-bar"></div>';
+  const clamped = Math.max(-1, Math.min(1, deviation));
+  const width = Math.abs(clamped) * 50;
+  const left = clamped < 0 ? 50 - width : 50;
+  let tone = 'is-ok';
+  if (deviation > 0.5) tone = 'is-veryhigh';
+  else if (deviation > 0.2) tone = 'is-high';
+  else if (deviation < -0.2) tone = 'is-low';
+  return `<div class="dev-bar"><div class="dev-bar__fill ${tone}" style="left:${left}%;width:${Math.max(width, 0.6)}%"></div></div>`;
+}
+
 function renderGlobalTable() {
   const tbody = document.getElementById('tbody-global');
   if (!tbody) return;
+  const thresholdEl = document.getElementById('valid-threshold');
+  if (thresholdEl) thresholdEl.textContent = formatValue(getValidWorkerThresholdHours(), 1);
 
   const filteredWorkers = getFilteredWorkers();
   const sorted = sortWorkers(filteredWorkers, 'global');
+  const preservedDetail = document.querySelector('#tbody-global tr.detail-row');
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">No workers match filters</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="7" class="no-data">${escapeHtml(t('No workers match filters'))}</td></tr>`;
     return;
   }
 
-  const maxBarRatio = Math.max(maxLoadRatio, 1);
-  const benchmark = getRatioBenchmark(filteredWorkers);
+  const benchmark = getRatioBenchmark(workersData);
   let html = '';
-  let totalBalance = 0;
-  let totalManual = 0;
-  let totalWeight = 0;
-  let totalHours = 0;
+  let totals = { hours: 0, balance: 0, manual: 0, weight: 0 };
 
   sorted.forEach(function(worker) {
     const balanceWeight = Number(worker.balance_weight || 0);
@@ -465,42 +502,49 @@ function renderGlobalTable() {
     const weight = Number(worker.global_weight || 0);
     const hours = Number(worker.hours_worked_now || 0);
     const ratio = Number(worker.weight_per_hour || 0);
-    totalBalance += balanceWeight;
-    totalManual += manualAdjustment;
-    totalWeight += weight;
-    totalHours += hours;
+    totals.hours += hours;
+    totals.balance += balanceWeight;
+    totals.manual += manualAdjustment;
+    totals.weight += weight;
+    const deviation = getWorkerDeviation(worker, benchmark);
     const ratioColor = getRatioColor(ratio, benchmark);
-    const barWidth = Math.min((ratio / maxBarRatio) * 100, 100);
-    html += `<tr>
+    const workerId = String(worker.canonical_id || worker.name || '');
+    const isOpen = expandedWorkerId === workerId;
+    const belowThreshold = hours < getValidWorkerThresholdHours();
+    html += `<tr class="worker-row${isOpen ? ' is-open' : ''}${belowThreshold ? ' is-below-threshold' : ''}" data-worker-id="${escapeHtml(workerId)}"
+      onclick="toggleWorkerDetail(this.dataset.workerId)" title="${escapeHtml(t('Click for details and corrections'))}">
       <td class="worker-col">${escapeHtml(worker.name)}</td>
-      <td class="weight-value">${formatValue(balanceWeight)}</td>
-      <td class="weight-value ${manualAdjustment > 0 ? 'text-red' : (manualAdjustment < 0 ? 'text-green' : 'text-muted')}">${manualAdjustment > 0 ? '+' : ''}${formatValue(manualAdjustment)}</td>
-      <td class="weight-value ${getLoadColor(weight).text}">${formatValue(weight)}</td>
+      <td class="weight-value">${formatValue(hours, 2)}</td>
+      <td class="weight-value">${formatValue(balanceWeight, 2)}</td>
+      <td class="weight-value ${manualAdjustment > 0 ? 'text-red' : (manualAdjustment < 0 ? 'text-green' : 'text-muted')}">${manualAdjustment > 0 ? '+' : ''}${formatValue(manualAdjustment, 2)}</td>
+      <td class="weight-value">${formatValue(weight, 2)}</td>
       <td class="weight-value ${ratioColor.text}">${formatValue(ratio, 2)}</td>
-      <td>
-        <div class="weight-bar">
-          <div class="weight-bar-fill ${ratioColor.fillClass}" style="width:${barWidth}%;max-width:200px;"></div>
-        </div>
-      </td>
+      <td class="dev-cell"><div class="dev-wrap">${deviationBar(deviation)}<span class="dev-label ${ratioColor.text}">${formatDeviation(deviation)}</span></div></td>
     </tr>`;
+    if (isOpen) html += `<tr class="detail-placeholder" data-worker-id="${escapeHtml(workerId)}"></tr>`;
   });
 
-  const totalRatio = totalHours > 0 ? totalWeight / totalHours : 0;
-  const totalColor = getRatioColor(totalRatio, benchmark);
-  const totalBarWidth = Math.min((totalRatio / maxBarRatio) * 100, 100);
+  const totalRatio = totals.hours > 0 ? totals.weight / totals.hours : 0;
   html += `<tr class="totals-row">
-    <td class="worker-col">Total</td>
-    <td class="weight-value">${formatValue(totalBalance)}</td>
-    <td class="weight-value ${totalManual > 0 ? 'text-red' : (totalManual < 0 ? 'text-green' : '')}">${totalManual > 0 ? '+' : ''}${formatValue(totalManual)}</td>
-    <td class="weight-value">${formatValue(totalWeight)}</td>
-    <td class="weight-value ${totalColor.text}">${formatValue(totalRatio, 2)}</td>
-    <td>
-      <div class="weight-bar">
-        <div class="weight-bar-fill ${totalColor.fillClass}" style="width:${totalBarWidth}%;max-width:200px;"></div>
-      </div>
-    </td>
+    <td>${escapeHtml(t('Total'))}</td>
+    <td class="weight-value">${formatValue(totals.hours, 2)}</td>
+    <td class="weight-value">${formatValue(totals.balance, 2)}</td>
+    <td class="weight-value">${totals.manual > 0 ? '+' : ''}${formatValue(totals.manual, 2)}</td>
+    <td class="weight-value">${formatValue(totals.weight, 2)}</td>
+    <td class="weight-value">${formatValue(totalRatio, 2)}</td>
+    <td class="log-detail">${escapeHtml(t('Median weight / hour'))}: ${formatValue(benchmark, 2)}</td>
   </tr>`;
   tbody.innerHTML = html;
+
+  const placeholder = tbody.querySelector('tr.detail-placeholder');
+  if (placeholder) {
+    if (preservedDetail && preservedDetail.dataset.workerId === placeholder.dataset.workerId) {
+      placeholder.replaceWith(preservedDetail);
+      refreshWorkerDetailData(preservedDetail);
+    } else {
+      placeholder.replaceWith(buildWorkerDetailRow(placeholder.dataset.workerId));
+    }
+  }
 }
 
 function renderAdvancedTable(variant) {
@@ -585,69 +629,98 @@ function renderAdvancedTable(variant) {
   updateSortIndicators(tableKey, tableId);
 }
 
+function getAssignmentStatus(item) {
+  if (item.unresolved) return 'unresolved';
+  if (item.overflowed) return 'overflow';
+  return 'direct';
+}
+
+function buildLogEntries() {
+  const entries = [];
+  const worker = recentFilters.worker;
+  if (recentFilters.type !== 'corrections') {
+    recentData.forEach(function(item) {
+      const workerName = String(item.person || '').toLowerCase();
+      const workerRawName = String(item.person_raw || '').toLowerCase();
+      if (worker && !workerName.includes(worker) && !workerRawName.includes(worker)) return;
+      if (recentFilters.status && getAssignmentStatus(item) !== recentFilters.status) return;
+      if (recentFilters.skill && item.requested_skill !== recentFilters.skill && item.actual_skill !== recentFilters.skill) return;
+      if (recentFilters.modality && item.requested_modality !== recentFilters.modality && item.actual_modality !== recentFilters.modality) return;
+      entries.push({ kind: 'assignment', timestamp: item.timestamp, item });
+    });
+  }
+  const assignmentOnlyFilter = recentFilters.status || recentFilters.skill || recentFilters.modality;
+  if (recentFilters.type !== 'assignments' && !assignmentOnlyFilter) {
+    correctionLog.forEach(function(entry) {
+      const name = String(entry.worker_name || entry.worker_id || '').toLowerCase();
+      if (worker && !name.includes(worker)) return;
+      entries.push({ kind: 'correction', timestamp: entry.timestamp, item: entry });
+    });
+  }
+  entries.sort(function(a, b) { return String(b.timestamp || '').localeCompare(String(a.timestamp || '')); });
+  return entries;
+}
+
+function renderLogRow(entry) {
+  const item = entry.item;
+  if (entry.kind === 'correction') {
+    const delta = Number(item.delta || 0);
+    const by = [item.admin_name, item.client_ip].filter(Boolean).join(' · ');
+    return `<tr class="log-row--correction">
+      <td>${escapeHtml(formatDateTime(item.timestamp))}</td>
+      <td><span class="recent-pill recent-pill-correction">${escapeHtml(t('Correction'))}</span></td>
+      <td>${escapeHtml(item.worker_name || item.worker_id || '-')}</td>
+      <td>–</td>
+      <td>–</td>
+      <td class="log-detail">${escapeHtml(item.reason || '')}</td>
+      <td class="num ${delta > 0 ? 'text-red' : 'text-green'}">${delta > 0 ? '+' : ''}${formatValue(delta, 2)}</td>
+      <td class="log-detail">${escapeHtml(t('Total'))} ${formatValue(item.total_before, 2)} → ${formatValue(item.total_after, 2)}${by ? ` · ${escapeHtml(by)}` : ''}</td>
+    </tr>`;
+  }
+  const requested = `${getSkillLabel(item.requested_skill)} / ${getModalityLabel(item.requested_modality)}`;
+  const actual = `${getSkillLabel(item.actual_skill)} / ${getModalityLabel(item.actual_modality)}`;
+  const status = getAssignmentStatus(item);
+  const pill = {
+    direct: '<span class="recent-pill recent-pill-ok">Direct</span>',
+    overflow: '<span class="recent-pill recent-pill-overflow">Overflow</span>',
+    unresolved: '<span class="recent-pill recent-pill-unresolved">Unresolved</span>',
+  }[status];
+  return `<tr>
+    <td>${escapeHtml(formatDateTime(item.timestamp))}</td>
+    <td>${escapeHtml(t('Assignment'))}</td>
+    <td>${escapeHtml(item.person || '-')}</td>
+    <td>${escapeHtml(requested)}</td>
+    <td>${escapeHtml(actual)}</td>
+    <td>${escapeHtml(item.task_label || '-')}</td>
+    <td class="num">${formatValue(item.weight, 2)}</td>
+    <td>${pill}</td>
+  </tr>`;
+}
+
 function renderRecentTable() {
   const tbody = document.getElementById('tbody-recent');
   const summary = document.getElementById('recent-summary-note');
   if (!tbody) return;
-  if (!recentData.length) {
-    if (summary) {
-      summary.textContent = 'Showing 0 of 0 events';
-    }
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No recent distributions recorded yet.</td></tr>';
-    return;
-  }
-  const filtered = recentData.filter(function(item) {
-    const status = item.unresolved ? 'unresolved' : (item.overflowed ? 'overflow' : 'direct');
-    const workerName = String(item.person || '').toLowerCase();
-    const workerRawName = String(item.person_raw || '').toLowerCase();
-    const requestedSkill = String(item.requested_skill || '');
-    const actualSkill = String(item.actual_skill || '');
-    const requestedModality = String(item.requested_modality || '');
-    const actualModality = String(item.actual_modality || '');
-    if (recentFilters.worker && !workerName.includes(recentFilters.worker) && !workerRawName.includes(recentFilters.worker)) {
-      return false;
-    }
-    if (recentFilters.status && status !== recentFilters.status) {
-      return false;
-    }
-    if (recentFilters.skill && requestedSkill !== recentFilters.skill && actualSkill !== recentFilters.skill) {
-      return false;
-    }
-    if (recentFilters.modality && requestedModality !== recentFilters.modality && actualModality !== recentFilters.modality) {
-      return false;
-    }
-    return true;
+  document.querySelectorAll('[data-log-type]').forEach(function(btn) {
+    btn.setAttribute('aria-pressed', btn.dataset.logType === recentFilters.type ? 'true' : 'false');
   });
-
-  const visibleCount = recentFilters.visible === 'full' ? filtered.length : Math.max(parseInt(recentFilters.visible, 10) || 0, 0);
-  const visibleItems = recentFilters.visible === 'full' ? filtered : filtered.slice(0, visibleCount);
+  const entries = buildLogEntries();
+  const visibleItems = recentFilters.visible === 'full'
+    ? entries
+    : entries.slice(0, Math.max(parseInt(recentFilters.visible, 10) || 0, 0));
   if (summary) {
-    const visibleLabel = recentFilters.visible === 'full' ? 'Full day stream' : `${visibleItems.length} visible`;
-    summary.textContent = `${visibleLabel} | showing ${visibleItems.length} of ${filtered.length} filtered events (${recentData.length} loaded)`;
+    summary.textContent = `${visibleItems.length} / ${entries.length} ${t('entries')} · ${recentData.length} ${t('assignments loaded')} · ${correctionLog.length} ${t('corrections today')}`;
   }
   if (!visibleItems.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">No recent events match the current filters.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="8" class="no-data">${escapeHtml(t('No entries match the current filters.'))}</td></tr>`;
     return;
   }
-  tbody.innerHTML = visibleItems.map(function(item) {
-    const requested = `${getSkillLabel(item.requested_skill)} / ${getModalityLabel(item.requested_modality)}`;
-    const actual = `${getSkillLabel(item.actual_skill)} / ${getModalityLabel(item.actual_modality)}`;
-    let status = '<span class="recent-pill recent-pill-ok">Direct</span>';
-    if (item.unresolved) {
-      status = '<span class="recent-pill recent-pill-unresolved">Unresolved</span>';
-    } else if (item.overflowed) {
-      status = '<span class="recent-pill recent-pill-overflow">Overflow</span>';
-    }
-    return `<tr>
-      <td>${escapeHtml(formatDateTime(item.timestamp))}</td>
-      <td>${escapeHtml(item.person || '-')}</td>
-      <td>${escapeHtml(requested)}</td>
-      <td>${escapeHtml(actual)}</td>
-      <td>${escapeHtml(item.task_label || '-')}</td>
-      <td>${formatValue(item.weight, 2)}</td>
-      <td>${status}</td>
-    </tr>`;
-  }).join('');
+  tbody.innerHTML = visibleItems.map(renderLogRow).join('');
+}
+
+function filterLogByType(type) {
+  recentFilters.type = type || '';
+  renderRecentTable();
 }
 
 function filterRecentByWorker(value) {
@@ -721,37 +794,68 @@ function renderAllTables() {
 function setMode(mode, options = {}) {
   const skipLoad = options.skipLoad === true;
   currentMode = MODES.includes(mode) ? mode : 'simple';
+  if (currentMode.startsWith('advanced')) lastMatrixMode = currentMode;
   MODES.forEach(function(modeName) {
     document.body.classList.remove(`mode-${modeName}`);
   });
   document.body.classList.add(`mode-${currentMode}`);
-  document.querySelectorAll('.mode-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.mode === currentMode);
+  const isMatrix = currentMode.startsWith('advanced');
+  document.querySelectorAll('[data-mode]').forEach(function(btn) {
+    const active = btn.dataset.mode === currentMode || (btn.dataset.mode === 'matrix' && isMatrix);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
+  const view = getViewForMode(currentMode);
+  document.querySelectorAll('[data-view]').forEach(function(tab) {
+    tab.setAttribute('aria-selected', tab.dataset.view === view ? 'true' : 'false');
+  });
+  const url = new URL(window.location.href);
+  url.searchParams.set('view', view);
+  url.searchParams.delete('mode');
+  window.history.replaceState(null, '', url);
   renderAllTables();
   if (skipLoad) {
     return;
   }
-  if (currentMode === 'flow' && !flowDataLoaded) {
-    loadFlowData();
+  if (currentMode === 'flow') {
+    if (!flowDataLoaded) loadFlowData();
+    window.RadimoDayOverview?.load();
   }
   if (currentMode === 'recent') {
     loadRecentData();
+    loadCorrectionsData();
   }
+}
+
+function getViewForMode(mode) {
+  if (mode === 'flow') return 'day';
+  if (mode === 'recent') return 'log';
+  return 'people';
+}
+
+let lastMatrixMode = 'advanced-weight';
+
+function currentMatrixMode() {
+  return lastMatrixMode;
+}
+
+function setView(view) {
+  if (view === 'day') setMode('flow');
+  else if (view === 'log') setMode('recent');
+  else setMode(currentMode.startsWith('advanced') ? currentMode : 'simple');
 }
 
 function filterByModality(modality) {
   filters.modality = modality;
-  document.querySelectorAll('[data-modality]').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.modality === modality);
+  document.querySelectorAll('.wl-filter-chips [data-modality]').forEach(function(btn) {
+    btn.classList.toggle('is-active', btn.dataset.modality === modality);
   });
   renderAllTables();
 }
 
 function filterBySkill(skill) {
   filters.skill = skill;
-  document.querySelectorAll('[data-skill]').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.skill === skill);
+  document.querySelectorAll('.wl-filter-chips [data-skill]').forEach(function(btn) {
+    btn.classList.toggle('is-active', btn.dataset.skill === skill);
   });
   renderAllTables();
 }
@@ -776,7 +880,7 @@ function toggleAutoRefresh() {
 function updateLastUpdateTime() {
   const lastUpdate = document.getElementById('last-update');
   if (lastUpdate) {
-    lastUpdate.textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+    lastUpdate.textContent = `${t('Updated')} ${new Date().toLocaleTimeString('de-DE')}`;
   }
 }
 
@@ -1007,13 +1111,211 @@ function loadFlowData() {
 
 function refreshCurrentMode() {
   const requests = [loadData(), loadFlowData()];
-  if (currentMode === 'recent') {
+  if (currentMode === 'flow' && window.RadimoDayOverview) {
+    requests.push(window.RadimoDayOverview.load());
+  }
+  if (currentMode === 'recent' || expandedWorkerId) {
     requests.push(loadRecentData());
+    requests.push(loadCorrectionsData());
   }
   return Promise.all(requests);
 }
 
+// =============================================================================
+// Worker detail row: skill × modality breakdown, recent assignments, corrections
+// =============================================================================
+
+function loadCorrectionsData() {
+  return fetch('/api/manual-adjustments')
+    .then(function(response) { return response.json().then(function(payload) { return { response, payload }; }); })
+    .then(function({ response, payload }) {
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Failed to load corrections');
+      correctionWorkers = payload.workers || [];
+      correctionDeltas = payload.allowed_deltas || [];
+      correctionLog = payload.adjustments || [];
+      correctionsLoaded = true;
+      if (currentMode === 'recent') renderRecentTable();
+      document.querySelectorAll('#tbody-global tr.detail-row').forEach(refreshWorkerDetailData);
+    })
+    .catch(function(error) {
+      console.error('Failed to load corrections:', error);
+    });
+}
+
+function findWorker(workerId) {
+  return workersData.find(function(worker) { return String(worker.canonical_id || worker.name) === workerId; });
+}
+
+function toggleWorkerDetail(workerId) {
+  expandedWorkerId = expandedWorkerId === workerId ? null : workerId;
+  renderGlobalTable();
+  if (expandedWorkerId) {
+    if (!recentDataLoaded) loadRecentData().then(function() { document.querySelectorAll('#tbody-global tr.detail-row').forEach(refreshWorkerDetailData); });
+    if (!correctionsLoaded) loadCorrectionsData();
+  }
+}
+
+function buildWorkerDetailRow(workerId) {
+  const row = document.createElement('tr');
+  row.className = 'detail-row';
+  row.dataset.workerId = workerId;
+  row.innerHTML = `<td colspan="7">
+    <div class="worker-detail" onclick="event.stopPropagation()">
+      <div class="worker-detail__box">
+        <h4>${escapeHtml(t('Assignments by modality and skill'))}</h4>
+        <div data-part="matrix"></div>
+      </div>
+      <div class="worker-detail__box">
+        <h4>${escapeHtml(t('Recent assignments'))}</h4>
+        <div class="mini-scroll" data-part="events"></div>
+        <h4 style="margin-top:0.6rem">${escapeHtml(t('Corrections today'))}</h4>
+        <div data-part="corrections"></div>
+      </div>
+      <div class="worker-detail__box">
+        <h4>${escapeHtml(t('Book correction'))}</h4>
+        <form class="correction-form" onsubmit="submitWorkerCorrection(event, this)">
+          <label>${escapeHtml(t('Value'))}<select name="delta" onchange="updateCorrectionPreview(this.form)"></select></label>
+          <label>${escapeHtml(t('Your name'))}<input name="admin_name" type="text" autocomplete="name" required></label>
+          <label class="wide">${escapeHtml(t('Reason'))}<input name="reason" type="text" maxlength="160" required></label>
+          <label class="wide">${escapeHtml(t('Admin password'))}<input name="admin_password" type="password" autocomplete="current-password" required></label>
+          <div class="correction-preview" data-part="preview"></div>
+          <div class="correction-actions">
+            <button class="ui-btn" type="submit">${escapeHtml(t('Publish correction'))}</button>
+            <span class="correction-status" data-part="status" aria-live="polite"></span>
+          </div>
+        </form>
+        <p class="log-detail" style="margin-top:0.4rem">${escapeHtml(t('Corrections change weighted totals only; they create no assignment counts.'))}</p>
+      </div>
+    </div>
+  </td>`;
+  const form = row.querySelector('form');
+  form.admin_name.value = localStorage.getItem('radimo.correction.adminName') || '';
+  refreshWorkerDetailData(row);
+  return row;
+}
+
+function refreshWorkerDetailData(row) {
+  const worker = findWorker(row.dataset.workerId);
+  if (!worker) return;
+  const matrixEl = row.querySelector('[data-part="matrix"]');
+  let matrix = `<table class="mini-table"><thead><tr><th></th>${MODALITIES.map(function(mod) { return `<th>${escapeHtml(getModalityLabel(mod))}</th>`; }).join('')}</tr></thead><tbody>`;
+  SKILLS.forEach(function(skill) {
+    matrix += `<tr><td>${escapeHtml(getSkillLabel(skill))}</td>`;
+    MODALITIES.forEach(function(mod) {
+      const count = getCellCount(worker, mod, skill);
+      const weight = getCellDerivedWeight(worker, mod, skill);
+      matrix += count
+        ? `<td title="${escapeHtml(t('count × configured weight'))}">${count} · ${formatValue(weight, 2)}</td>`
+        : '<td class="is-zero">–</td>';
+    });
+    matrix += '</tr>';
+  });
+  matrixEl.innerHTML = matrix + '</tbody></table>';
+
+  const events = recentData.filter(function(item) { return String(item.canonical_id || '') === row.dataset.workerId; }).slice(0, 15);
+  row.querySelector('[data-part="events"]').innerHTML = events.length
+    ? `<table class="mini-table"><tbody>${events.map(function(item) {
+        const status = getAssignmentStatus(item);
+        return `<tr><td>${escapeHtml(formatDateTime(item.timestamp).split(', ').pop())}</td>
+          <td>${escapeHtml(getSkillLabel(item.requested_skill))} / ${escapeHtml(getModalityLabel(item.requested_modality))}</td>
+          <td>${status === 'direct' ? '' : `<span class="recent-pill recent-pill-${status === 'overflow' ? 'overflow' : 'unresolved'}">${escapeHtml(status === 'overflow' ? 'Overflow' : 'Unresolved')}</span>`}</td>
+          <td>${formatValue(item.weight, 2)}</td></tr>`;
+      }).join('')}</tbody></table>`
+    : `<div class="log-detail">${escapeHtml(recentDataLoaded ? t('No assignments recorded today.') : t('Loading...'))}</div>`;
+
+  const corrections = correctionLog.filter(function(entry) { return entry.worker_id === row.dataset.workerId; });
+  row.querySelector('[data-part="corrections"]').innerHTML = corrections.length
+    ? `<table class="mini-table"><tbody>${corrections.map(function(entry) {
+        const delta = Number(entry.delta || 0);
+        return `<tr><td>${escapeHtml(formatDateTime(entry.timestamp).split(', ').pop())}</td><td class="${delta > 0 ? 'text-red' : 'text-green'}">${delta > 0 ? '+' : ''}${formatValue(delta, 2)}</td><td style="text-align:left">${escapeHtml(entry.reason || '')}</td><td>${escapeHtml(entry.admin_name || '')}</td></tr>`;
+      }).join('')}</tbody></table>`
+    : `<div class="log-detail">${escapeHtml(t('None'))}</div>`;
+
+  const select = row.querySelector('select[name="delta"]');
+  if (select && correctionDeltas.length && !select.options.length) {
+    const deltas = Array.from(new Set(correctionDeltas.map(Number).filter(Number.isFinite))).sort(function(a, b) { return a - b; });
+    select.innerHTML = deltas.map(function(delta) {
+      return `<option value="${delta}">${delta > 0 ? '+' : ''}${delta.toFixed(2)}</option>`;
+    }).join('');
+    if (deltas.includes(1)) select.value = '1';
+  }
+  updateCorrectionPreview(row.querySelector('form'));
+}
+
+function updateCorrectionPreview(form) {
+  if (!form) return;
+  const row = form.closest('tr.detail-row');
+  const worker = findWorker(row.dataset.workerId);
+  const preview = row.querySelector('[data-part="preview"]');
+  const delta = Number(form.delta.value);
+  if (!worker || !Number.isFinite(delta) || form.delta.value === '') {
+    preview.textContent = t('Loading...');
+    return;
+  }
+  const total = Number(worker.global_weight || 0);
+  const hours = Number(worker.hours_worked_now || 0);
+  const after = total + delta;
+  const perHourBefore = hours > 0 ? total / hours : 0;
+  const perHourAfter = hours > 0 ? after / hours : 0;
+  preview.textContent = `${t('Total')} ${formatValue(total, 2)} → ${formatValue(after, 2)} · ${t('Weight / Hour')} ${formatValue(perHourBefore, 2)} → ${formatValue(perHourAfter, 2)}`;
+}
+
+function submitWorkerCorrection(event, form) {
+  event.preventDefault();
+  const row = form.closest('tr.detail-row');
+  const status = row.querySelector('[data-part="status"]');
+  const button = form.querySelector('button[type="submit"]');
+  const payload = {
+    worker_id: row.dataset.workerId,
+    delta: Number(form.delta.value),
+    admin_name: form.admin_name.value.trim(),
+    reason: form.reason.value.trim(),
+    admin_password: form.admin_password.value,
+  };
+  if (!payload.reason || !payload.admin_name || !payload.admin_password) {
+    status.className = 'correction-status is-error';
+    status.textContent = t('Please complete all required fields.');
+    return;
+  }
+  button.disabled = true;
+  status.className = 'correction-status';
+  status.textContent = t('Publishing...');
+  fetch('/api/manual-adjustments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(function(response) { return response.json().then(function(result) { return { response, result }; }); })
+    .then(function({ response, result }) {
+      if (!response.ok || !result.success) throw new Error(result.error || 'Manual adjustment failed');
+      localStorage.setItem('radimo.correction.adminName', payload.admin_name);
+      correctionWorkers = result.workers || correctionWorkers;
+      correctionLog = result.adjustments || correctionLog;
+      form.reason.value = '';
+      form.admin_password.value = '';
+      status.className = 'correction-status is-success';
+      const entry = result.entry || {};
+      status.textContent = `${t('Published')}: ${t('Total')} ${formatValue(entry.total_before, 2)} → ${formatValue(entry.total_after, 2)}`;
+      return loadData();
+    })
+    .catch(function(error) {
+      status.className = 'correction-status is-error';
+      status.textContent = error.message;
+      form.admin_password.focus();
+    })
+    .finally(function() {
+      button.disabled = false;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  if (view === 'day') currentMode = 'flow';
+  else if (view === 'log') currentMode = 'recent';
+  else if (view === 'people' && !currentMode.startsWith('advanced')) currentMode = 'simple';
   setMode(currentMode, { skipLoad: true });
+  if (currentMode === 'flow') window.RadimoDayOverview?.load();
+  if (currentMode === 'recent') loadCorrectionsData();
   toggleAutoRefresh();
 });

@@ -540,12 +540,14 @@ class TestHealthEndpoints(unittest.TestCase):
 
     @patch("routes.has_admin_access", return_value=True)
     def test_performance_page_renders_management_sections(self, _mock_admin) -> None:
-        response = self.client.get("/performance")
+        redirect = self.client.get("/performance")
+        self.assertEqual(redirect.status_code, 302)
+        self.assertIn("/worker-load?view=day", redirect.location)
 
+        response = self.client.get("/worker-load?view=day")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Analysis", response.data)
+        self.assertIn(b"Day overview", response.data)
         self.assertIn("Tageslast".encode("utf-8"), response.data)
-        self.assertIn("Lasttreiber".encode("utf-8"), response.data)
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="daily-load-skill-chart"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
@@ -643,16 +645,15 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-global"', response.data)
         self.assertIn(b'Weight / Hour', response.data)
-        self.assertIn(b'Total Weight', response.data)
-        self.assertIn(b'<th class="sortable" data-sort="manual_adjustment"', response.data)
-        self.assertIn(b"Weighted Matrix", response.data)
-        self.assertIn(b"Count Matrix", response.data)
-        self.assertIn(b"Recent Events", response.data)
+        self.assertIn(b'Deviation from median', response.data)
+        self.assertIn(b'data-sort="manual_adjustment"', response.data)
+        self.assertIn(b'data-mode="matrix"', response.data)
+        self.assertIn(b'data-mode="advanced-count"', response.data)
+        self.assertIn(b'data-view="log"', response.data)
         self.assertNotIn(b'id="summary-modality"', response.data)
         self.assertNotIn(b'id="summary-skill"', response.data)
         self.assertNotIn(b'id="summary-modality-hour"', response.data)
         self.assertNotIn(b'id="summary-skill-hour"', response.data)
-        self.assertNotIn(b'id="summary-overview"', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_weight_mode_renders_derived_weight_matrix(self, _mock_admin) -> None:
@@ -660,7 +661,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-advanced-weight"', response.data)
-        self.assertIn(b'Derived load view using assignment count', response.data)
+        self.assertIn(b'Derived load: assignment count', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_count_mode_renders_count_matrix(self, _mock_admin) -> None:
@@ -676,7 +677,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-recent"', response.data)
-        self.assertIn(b'Recent Assignment Events', response.data)
+        self.assertIn(b'data-log-type="assignments"', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes.allowed_modalities", ["ct"])
@@ -731,16 +732,16 @@ class TestHealthEndpoints(unittest.TestCase):
     def test_manual_adjustments_page_renders(self, _mock_admin) -> None:
         response = self.client.get("/manual-adjustments")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Corrections", response.data)
-        self.assertIn(b"Your name", response.data)
-        self.assertIn(b'id="manual-worker-body"', response.data)
-        self.assertIn(b'js/manual_adjustments.js', response.data)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/worker-load?view=people", response.location)
 
-        script_path = os.path.join(os.path.dirname(__file__), "..", "static/js/manual_adjustments.js")
+        script_path = os.path.join(os.path.dirname(__file__), "..", "static/js/worker_load_monitor.js")
         with open(script_path, encoding="utf-8") as handle:
             script = handle.read()
-        self.assertIn("Manual adjust", script)
+        self.assertIn("Book correction", script)
+        self.assertIn("Your name", script)
+        self.assertIn("fetch('/api/manual-adjustments'", script)
+        self.assertNotIn("admin_password', ", script.split("localStorage.setItem")[1].split(")")[0])
 
     @patch("routes.has_admin_access", return_value=False)
     def test_manual_adjustments_nav_hidden_without_admin_access(self, _mock_admin) -> None:

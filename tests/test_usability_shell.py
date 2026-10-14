@@ -245,12 +245,9 @@ def test_admin_tools_stay_compact_and_reachable_on_narrow_pages():
     assert '.upload-column {' in upload_html
     assert 'order: 1;' in upload_html
 
-    corrections_html = client.get('/manual-adjustments').get_data(as_text=True)
-    assert 'id="manual-worker-filter"' in corrections_html
-    assert 'id="manual-adjusted-only"' in corrections_html
-    corrections_js = Path('static/js/manual_adjustments.js').read_text(encoding='utf-8')
-    assert "manual-worker-filter')?.addEventListener('input', renderWorkers)" in corrections_js
-    assert "manual-adjusted-only')?.addEventListener('change', renderWorkers)" in corrections_js
+    workload_html = client.get('/worker-load').get_data(as_text=True)
+    assert 'id="recent-filter-worker"' in workload_html
+    assert 'data-log-type="corrections"' in workload_html
 
     files_html = client.get('/admin/files').get_data(as_text=True)
     assert 'class="section-jumps"' in files_html
@@ -271,12 +268,10 @@ def test_page_titles_follow_short_naming_contract():
     expected_titles = {
         '/login': 'RadIMO Cortex | Admin',
         '/?modality=ct': 'RadIMO Cortex | CT Live',
-        '/performance': 'RadIMO Cortex | Analysis',
         '/worker-load': 'RadIMO Cortex | Workload',
         '/prep-today': 'RadIMO Cortex | Today',
         '/prep-tomorrow': 'RadIMO Cortex | Planning',
         '/timetable': 'RadIMO Cortex | Schedule',
-        '/manual-adjustments': 'RadIMO Cortex | Corrections',
         '/skill-roster': 'RadIMO Cortex | Skills',
         '/button-weights': 'RadIMO Cortex | Weights',
         '/upload': 'RadIMO Cortex | Import',

@@ -4,655 +4,275 @@
 {% block title %}RadIMO Cortex | Workload{% endblock %}
 
 {% block styles %}
-
     :root {
-      --load-green: #28a745;
-      --load-yellow: #ffc107;
-      --load-red: #dc3545;
+      --load-green: #2f9e5b;
+      --load-yellow: #e0a100;
+      --load-red: #d13d3d;
     }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1800px;
-      margin: 0 auto;
-    }
+    /* Tab bar with refresh controls on the right */
+    .wl-tabs { align-items: flex-end; }
+    .wl-tabs__spacer { flex: 1 1 auto; }
 
-    .card {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      margin-bottom: 1rem;
-    }
-
-    .card h3 {
-      margin-bottom: 1rem;
-      color: #004892;
-      border-bottom: 2px solid #e0e0e0;
-      padding-bottom: 0.5rem;
-      font-size: 1rem;
-    }
-
-    .flow-meta-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 0.6rem;
-      margin-bottom: 1rem;
-    }
-
-    .flow-meta-box {
-      background: #f6f8fa;
-      border: 1px solid #e2e6ea;
-      border-radius: 6px;
-      padding: 0.55rem 0.7rem;
-    }
-
-    .flow-meta-label {
-      display: block;
-      color: #666;
-      font-size: 0.76rem;
-      margin-bottom: 0.15rem;
-    }
-
-    .flow-meta-value {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #1f2937;
-    }
-
-    .flow-diagram-card {
-      border: 1px solid #d8e3ef;
-      border-radius: 8px;
-      background: linear-gradient(180deg, #fafdff 0%, #f3f8fc 100%);
-      padding: 0.85rem;
-      margin-bottom: 1rem;
-    }
-
-    .flow-diagram-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 0.75rem;
-      margin-bottom: 0.6rem;
-      flex-wrap: wrap;
-    }
-
-    .flow-diagram-header h4 {
-      margin: 0;
-      color: #004892;
-      font-size: 0.95rem;
-    }
-
-    .flow-diagram-caption {
-      font-size: 0.78rem;
-      color: #5f6c77;
-    }
-
-    .flow-diagram-wrap {
-      overflow-x: auto;
-      border-radius: 6px;
-      border: 1px solid #e3ebf3;
-      background: #fff;
-    }
-
-    .flow-diagram {
-      display: block;
-      min-width: 760px;
-    }
-
-    .flow-diagram-empty {
-      padding: 1rem;
-      text-align: center;
-      color: #667;
-      font-style: italic;
-    }
-
-    /* Mode Toggle */
-    .mode-toggle {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .mode-btn {
-      padding: 0.5rem 1.5rem;
-      border: 2px solid #004892;
-      background: white;
-      color: #004892;
-      font-weight: 600;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-
-    .mode-btn:hover {
-      background: #e6f2fa;
-    }
-
-    .mode-btn.active {
-      background: #004892;
-      color: white;
-    }
-
-    /* Controls Bar */
-    .controls-bar {
-      display: flex;
-      justify-content: space-between;
+    .wl-refresh {
+      display: inline-flex;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      padding: 0.75rem;
-      background: #f8f9fa;
-      border-radius: 6px;
+      gap: 0.4rem;
+      margin-bottom: 0.35rem;
+      font-size: var(--fs-sm);
     }
 
-    /* Filter Bar (Advanced Mode) */
-    .filter-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-      padding: 0.75rem;
-      background: #e9ecef;
-      border-radius: 6px;
-      margin-bottom: 1rem;
-    }
+    .wl-refresh label { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+    .last-update { min-width: 7.5rem; color: var(--c-muted); font-size: var(--fs-xs); }
 
-    .filter-bar label {
-      font-weight: 500;
-      margin-right: 0.5rem;
-    }
+    .wl-view { display: none; }
+    body.mode-simple .wl-view--people,
+    body.mode-advanced-weight .wl-view--people,
+    body.mode-advanced-count .wl-view--people,
+    body.mode-flow .wl-view--day,
+    body.mode-recent .wl-view--log { display: block; }
 
-    .filter-btn {
-      padding: 0.25rem 0.75rem;
-      border: 1px solid #ccc;
-      background: white;
-      font-size: 0.8rem;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: all 0.15s;
-    }
+    .people-compact,
+    .people-matrix,
+    .matrix-weight,
+    .matrix-count { display: none; }
+    body.mode-simple .people-compact { display: block; }
+    body.mode-advanced-weight .people-matrix,
+    body.mode-advanced-count .people-matrix { display: block; }
+    body.mode-advanced-weight .matrix-weight { display: block; }
+    body.mode-advanced-count .matrix-count { display: block; }
 
-    .filter-btn:hover {
-      background: #f0f0f0;
-    }
+    .wl-toolbar { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--c-line); }
+    .wl-toolbar .ui-chip { min-height: 24px; padding: 0.12rem 0.5rem; font-size: var(--fs-xs); }
+    .wl-note { padding: 0.35rem 0.85rem; color: var(--c-muted); font-size: var(--fs-xs); border-bottom: 1px solid var(--c-line); }
+    .wl-note strong { color: var(--c-ink); }
+    .matrix-only { display: none; }
+    body.mode-advanced-weight .matrix-only,
+    body.mode-advanced-count .matrix-only { display: inline-flex; }
 
-    .filter-btn.active {
-      background: #004892;
-      color: white;
-      border-color: #004892;
-    }
+    /* Shared dense tables */
+    .table-container { overflow: auto; }
 
-    .filter-separator {
-      width: 1px;
-      height: 24px;
-      background: #ccc;
-      margin: 0 0.5rem;
-    }
-
-    /* Tables - styled to match prep page */
     .load-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.78rem;
+      font-size: var(--fs-sm);
     }
 
     .load-table th,
     .load-table td {
-      padding: 0.35rem 0.5rem;
+      padding: 0.36rem 0.55rem;
+      border-bottom: 1px solid #e3e9ef;
       text-align: left;
-      border: 1px solid #e5e5e5;
-      vertical-align: middle;
-    }
-
-    .load-table th {
-      background: #004892;
-      color: white;
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      cursor: pointer;
       white-space: nowrap;
     }
 
-    .load-table th:hover {
-      background: #003670;
+    .load-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--c-surface-3);
+      color: #2b4a62;
+      font-size: var(--fs-xs);
+      font-weight: 750;
     }
 
-    .load-table tr:hover {
-      background: rgba(0, 72, 146, 0.05);
-    }
+    .load-table .num,
+    .weight-value { text-align: right; font-variant-numeric: tabular-nums; }
 
-    .load-table tr:nth-child(even) {
-      background: #fafafa;
-    }
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { color: var(--c-ink); }
+    .sortable::after { content: ' ↕'; opacity: 0.35; }
+    .sortable.sort-asc::after { content: ' ↑'; opacity: 1; }
+    .sortable.sort-desc::after { content: ' ↓'; opacity: 1; }
 
-    .load-table tr:nth-child(even):hover {
-      background: rgba(0, 72, 146, 0.08);
-    }
+    .text-red { color: #c0392b; }
+    .text-green { color: var(--c-success); }
+    .text-yellow { color: #a66b00; }
+    .text-low { color: #2d6aa5; }
+    .text-muted { color: var(--c-faint); }
 
-    .load-table .sortable::after {
-      content: ' ↕';
-      opacity: 0.5;
-      color: rgba(255, 255, 255, 0.8);
-    }
+    .totals-row td { background: var(--c-surface-2); font-weight: 750; }
+    .no-data { padding: 1rem; color: var(--c-muted); font-style: italic; text-align: center; }
 
-    .load-table .sort-asc::after {
-      content: ' ↑';
-      opacity: 1;
-      color: white;
-    }
+    /* People: deviation from median */
+    .people-table tbody tr.worker-row { cursor: pointer; }
+    .people-table tbody tr.worker-row:hover td { background: #f4f8fb; }
+    .people-table tbody tr.worker-row.is-open td { background: var(--c-primary-soft); }
+    .people-table .worker-col { font-weight: 600; }
+    .people-table .worker-col::before { content: '▸ '; color: var(--c-faint); }
+    .people-table tr.is-open .worker-col::before { content: '▾ '; color: var(--c-primary); }
+    .people-table tr.is-below-threshold .worker-col { color: var(--c-muted); font-weight: 400; }
 
-    .load-table .sort-desc::after {
-      content: ' ↓';
-      opacity: 1;
-      color: white;
-    }
+    .dev-cell { width: 34%; min-width: 260px; }
 
-    /* Weight Bar */
-    .weight-bar {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .weight-bar-fill {
-      height: 16px;
+    .dev-bar {
+      position: relative;
+      height: 14px;
       border-radius: 3px;
-      min-width: 4px;
-      transition: width 0.3s ease;
+      background: var(--c-surface-2);
     }
 
-    .weight-value {
-      font-weight: 600;
-      min-width: 45px;
+    .dev-bar::before {
+      content: '';
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      left: 50%;
+      width: 2px;
+      background: #6b7c8c;
     }
 
-    /* Color classes */
-    .load-green { background: var(--load-green); }
-    .load-yellow { background: var(--load-yellow); }
-    .load-red { background: var(--load-red); }
+    .dev-bar__fill { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; }
+    .dev-bar__fill.is-high { background: #e07a6a; }
+    .dev-bar__fill.is-veryhigh { background: var(--load-red); }
+    .dev-bar__fill.is-ok { background: #8cc9a3; }
+    .dev-bar__fill.is-low { background: #7fa8d1; }
+    .dev-wrap { display: grid; grid-template-columns: 1fr 4.2rem; align-items: center; gap: 0.5rem; }
+    .dev-label { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
 
-    .text-green { color: var(--load-green); }
-    .text-yellow { color: #856404; }
-    .text-red { color: var(--load-red); }
-    .text-muted { color: #6c757d; }
-    .text-low { color: #7a8793; }
+    /* Expanded detail row */
+    .detail-row > td { padding: 0 !important; background: #fbfcfe !important; border-bottom: 2px solid var(--c-primary) !important; white-space: normal !important; }
 
-    /* Badge */
-    .badge {
-      display: inline-block;
-      padding: 0.15rem 0.5rem;
-      border-radius: 3px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: white;
-    }
-
-    /* Section separators */
-    .section-divider {
-      margin: 2rem 0 1rem 0;
-      padding-bottom: 0.5rem;
-      border-bottom: 3px solid #004892;
-    }
-
-    .section-divider h3 {
-      margin: 0;
-      color: #004892;
-      font-size: 1.1rem;
-    }
-
-    /* No data message */
-    .no-data {
-      text-align: center;
-      padding: 2rem;
-      color: #666;
-      font-style: italic;
-    }
-
-    /* Modality/Skill header colors - dynamically added by JS */
-    .compact-grid th {
-      text-align: center;
-    }
-
-    .compact-grid .header-top th {
-      font-size: 0.75rem;
-      padding: 0.3rem 0.25rem;
-    }
-
-    .compact-grid .header-sub th {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.15rem;
-      background: #e8f0f7;
-      color: #004892;
-      font-weight: 600;
-      white-space: normal;
-      line-height: 1.2;
-    }
-
-    .compact-grid td {
-      text-align: center;
-    }
-
-    .compact-grid .worker-col {
-      text-align: left !important;
-      min-width: 140px;
-      background: #fff;
-      color: #333;
-    }
-
-    /* Auto-refresh */
-    .auto-refresh {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .auto-refresh input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-    }
-
-    .refresh-btn {
-      padding: 0.3rem 0.75rem;
-      background: #004892;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-
-    .refresh-btn:hover {
-      background: #003366;
-    }
-
-    .last-update {
-      font-size: 0.8rem;
-      color: #666;
-    }
-
-    .summary-grid {
+    .worker-detail {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: minmax(260px, 1.1fr) minmax(280px, 1.2fr) minmax(300px, 1fr);
       gap: 0.85rem;
+      padding: 0.75rem 0.85rem 0.85rem;
     }
 
-    .summary-card {
-      background: #fff;
-      border: 1px solid #dbe4ee;
-      border-radius: 8px;
-      padding: 0.85rem 0.95rem;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    .worker-detail h4 {
+      margin: 0 0 0.35rem;
+      color: var(--c-ink);
+      font-size: var(--fs-sm);
+      font-weight: 750;
     }
 
-    .summary-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.65rem;
+    .worker-detail__box { min-width: 0; }
+
+    .mini-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+    .mini-table th, .mini-table td { padding: 0.18rem 0.35rem; border-bottom: 1px solid #e6ecf2; text-align: right; white-space: nowrap; }
+    .mini-table th:first-child, .mini-table td:first-child { text-align: left; }
+    .mini-table th { color: var(--c-muted); font-weight: 700; }
+    .mini-table .is-zero { color: #c3cbd4; }
+    .mini-scroll { max-height: 190px; overflow: auto; }
+
+    .correction-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.5rem; }
+    .correction-form label { display: grid; gap: 0.15rem; color: var(--c-muted); font-size: var(--fs-xs); font-weight: 650; }
+    .correction-form label.wide { grid-column: 1 / -1; }
+
+    .correction-form input,
+    .correction-form select {
+      height: 28px;
+      padding: 0.15rem 0.4rem;
+      border: 1px solid var(--c-line-strong);
+      border-radius: var(--radius-sm);
+      color: var(--c-ink);
+      font: inherit;
+      font-size: var(--fs-sm);
     }
 
-    .summary-card-title {
-      font-weight: 700;
-      color: #203040;
-      font-size: 0.92rem;
+    .correction-preview {
+      grid-column: 1 / -1;
+      padding: 0.35rem 0.5rem;
+      border-radius: var(--radius-sm);
+      background: var(--c-surface-3);
+      font-size: var(--fs-sm);
+      font-variant-numeric: tabular-nums;
     }
 
-    .summary-card-badge {
-      display: inline-block;
-      min-width: 44px;
-      text-align: center;
-      padding: 0.14rem 0.45rem;
-      border-radius: 999px;
-      font-size: 0.74rem;
-      font-weight: 700;
-      color: #fff;
+    .correction-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
+    .correction-status { font-size: var(--fs-sm); font-weight: 650; }
+    .correction-status.is-error { color: var(--c-danger); }
+    .correction-status.is-success { color: var(--c-success); }
+
+    /* Matrix headers */
+    .compact-grid th { text-align: center; }
+    .compact-grid .header-sub th { top: 27px; }
+    .compact-grid td { text-align: center; }
+    .compact-grid td.worker-col { text-align: left; }
+
+    /* Day overview */
+    .day-grid { display: grid; gap: 0.75rem; }
+
+    .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    .summary-card { padding: 0.75rem 0.85rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: #fff; }
+    .summary-card-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.2rem; }
+    .summary-card-title { color: var(--c-ink); font-size: 0.92rem; font-weight: 750; }
+    .summary-card-kicker { color: var(--c-muted); font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; }
+    .summary-card-main { color: var(--c-primary-strong); font-size: 1.7rem; font-weight: 800; line-height: 1.1; }
+    .summary-card-note { margin: 0.15rem 0 0.35rem; color: var(--c-muted); font-size: var(--fs-xs); }
+    .summary-card-sub { display: flex; justify-content: space-between; gap: 0.75rem; padding-top: 0.25rem; margin-top: 0.25rem; border-top: 1px solid #e6edf4; color: #4a5b6a; font-size: var(--fs-sm); }
+    .summary-card-empty { padding: 0.75rem; border: 1px dashed var(--c-line-strong); border-radius: var(--radius); color: var(--c-muted); font-style: italic; }
+
+    .leaders-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+    .leaders-card { padding: 0.65rem 0.75rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: #fff; }
+    .leaders-card h4 { margin: 0; color: var(--c-ink); font-size: var(--fs-sm); font-weight: 750; }
+    .leaders-note { margin: 0.1rem 0 0.4rem; color: var(--c-muted); font-size: var(--fs-xs); line-height: 1.35; }
+    .leaders-list { margin: 0; padding-left: 1.1rem; color: #314150; font-size: var(--fs-sm); }
+    .leaders-list li + li { margin-top: 0.2rem; }
+
+    .daily-load-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    .daily-load-card { min-width: 0; padding: 0.65rem 0.75rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: #fff; }
+    .daily-load-card-header { display: flex; justify-content: space-between; align-items: baseline; }
+    .daily-load-card-header h4 { margin: 0; color: var(--c-ink); font-size: var(--fs-sm); }
+    .daily-load-total { color: var(--c-muted); font-size: var(--fs-xs); font-weight: 700; }
+    .daily-load-note { margin: 0.1rem 0 0.4rem; color: var(--c-muted); font-size: var(--fs-xs); }
+    .daily-load-chart-wrap { overflow-x: auto; border: 1px solid #e3ebf3; border-radius: var(--radius-sm); background: #fbfdff; }
+    .daily-load-chart { display: block; width: 100%; min-width: 560px; height: 260px; }
+    .daily-load-empty { padding: 0.6rem; color: var(--c-muted); font-style: italic; text-align: center; }
+    .daily-load-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; margin-top: 0.4rem; color: #4c5b67; font-size: var(--fs-xs); }
+    .daily-load-legend-item { display: inline-flex; align-items: center; gap: 0.28rem; white-space: nowrap; }
+    .daily-load-legend-swatch { display: inline-block; width: 0.75rem; height: 0.18rem; border-radius: 999px; }
+
+    .flow-meta { padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--c-line); }
+    .flow-meta-label { color: var(--c-muted); }
+    .flow-meta-value { color: var(--c-ink); font-weight: 750; }
+    .flow-diagram-wrap { overflow-x: auto; }
+    .flow-diagram { display: block; min-width: 760px; }
+    .flow-diagram-empty { padding: 1rem; color: var(--c-muted); font-style: italic; text-align: center; }
+
+    /* Log */
+    .log-controls label { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--c-muted); font-size: var(--fs-xs); font-weight: 700; }
+
+    .log-controls input,
+    .log-controls select {
+      height: 26px;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--c-line-strong);
+      border-radius: var(--radius-sm);
+      color: var(--c-ink);
+      font: inherit;
+      font-size: var(--fs-sm);
     }
 
-    .summary-card-main {
-      font-size: 1.35rem;
-      font-weight: 700;
-      color: #0f2740;
-      line-height: 1.1;
-      margin-bottom: 0.15rem;
-    }
-
-    .summary-card-main-label {
-      font-size: 0.73rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #6a7a87;
-      margin-bottom: 0.5rem;
-    }
-
-    .summary-card-sub {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.75rem;
-      font-size: 0.8rem;
-      color: #5c6b77;
-    }
-
-    .summary-card-sub-stack {
-      padding-top: 0.35rem;
-      border-top: 1px solid #e6edf4;
-      margin-top: 0.1rem;
-      margin-bottom: 0.25rem;
-    }
-
-    .summary-card-empty {
-      padding: 1rem;
-      border: 1px dashed #ccd6e2;
-      border-radius: 8px;
-      color: #667;
-      font-style: italic;
-      background: #fbfcfe;
-    }
-
-    .kpi-strip {
-      margin-bottom: 1rem;
-    }
-
-    .kpi-section + .kpi-section {
-      margin-top: 0.9rem;
-    }
-
-    .kpi-section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 0.75rem;
-      margin-bottom: 0.45rem;
-      flex-wrap: wrap;
-    }
-
-    .kpi-section-header h4 {
-      margin: 0;
-      color: #004892;
-      font-size: 0.92rem;
-    }
-
-    .kpi-section-note {
-      font-size: 0.76rem;
-      color: #667482;
-    }
-
-    .kpi-grid-compact {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 0.65rem;
-    }
-
-    .summary-card-main-sub {
-      font-size: 0.82rem;
-      color: #617180;
-      margin-top: 0.1rem;
-      margin-bottom: 0.45rem;
-    }
-
-    .summary-card-badge.is-soft {
-      color: #16324d;
-      background: #dbe8f5 !important;
-    }
-
-    .section-note {
-      margin: -0.4rem 0 0.85rem 0;
-      font-size: 0.8rem;
-      color: #617180;
-    }
-
-    .recent-table td,
-    .recent-table th {
-      font-size: 0.76rem;
-    }
-
-    .recent-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      align-items: center;
-      margin-bottom: 0.75rem;
-      padding: 0.6rem;
-      background: #f7f9fb;
-      border: 1px solid #d8e3ef;
-      border-radius: 6px;
-    }
-
-    .recent-control-group {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-
-    .recent-control-group label {
-      font-size: 0.74rem;
-      font-weight: 600;
-      color: #44515f;
-    }
-
-    .recent-select,
-    .recent-search {
-      height: 32px;
-      padding: 0 0.55rem;
-      border: 1px solid #c8d3de;
-      border-radius: 5px;
-      background: #fff;
-      color: #1f2937;
-      font-size: 0.76rem;
-    }
-
-    .recent-select {
-      min-width: 82px;
-    }
-
-    .recent-search {
-      min-width: 132px;
-    }
-
-    .recent-summary {
-      margin-left: auto;
-      font-size: 0.74rem;
-      color: #617180;
-      white-space: normal;
-    }
+    .recent-summary { color: var(--c-muted); font-size: var(--fs-xs); }
 
     .recent-pill {
       display: inline-block;
-      padding: 0.12rem 0.42rem;
+      padding: 0.06rem 0.45rem;
       border-radius: 999px;
       font-size: 0.7rem;
-      font-weight: 700;
-      white-space: nowrap;
+      font-weight: 750;
     }
 
-    .recent-pill-overflow {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .recent-pill-ok {
-      background: #e6f4ea;
-      color: #256a3a;
-    }
-
-    .recent-pill-unresolved {
-      background: #f8d7da;
-      color: #842029;
-    }
-
-    .advanced-panel {
-      display: none;
-    }
-
-    /* Hide sections based on mode */
-    .advanced-only {
-      display: none;
-    }
-
-    .flow-only {
-      display: none;
-    }
-
-    .recent-only {
-      display: none;
-    }
-
-    body.mode-advanced-weight .advanced-only,
-    body.mode-advanced-count .advanced-only {
-      display: block;
-    }
-
-    body.mode-advanced-weight .advanced-weight-panel,
-    body.mode-advanced-count .advanced-count-panel,
-    body.mode-flow .flow-only,
-    body.mode-recent .recent-only {
-      display: block;
-    }
-
-    body.mode-advanced-weight .simple-only,
-    body.mode-advanced-count .simple-only,
-    body.mode-flow .simple-only,
-    body.mode-flow .advanced-only,
-    body.mode-flow .data-filter-only,
-    body.mode-recent .simple-only,
-    body.mode-recent .advanced-only,
-    body.mode-recent .flow-only,
-    body.mode-recent .data-filter-only {
-      display: none;
-    }
-
-    /* Totals row styling */
-    .totals-row {
-      background: #e8f0f7 !important;
-      border-top: 2px solid #004892;
-    }
-
-    .totals-row:hover {
-      background: #dce8f3 !important;
-    }
-
-    .totals-row td {
-      font-weight: 700;
-    }
+    .recent-pill-ok { background: var(--c-success-soft); color: var(--c-success); }
+    .recent-pill-overflow { background: var(--c-warning-soft); color: var(--c-warning); }
+    .recent-pill-unresolved { background: var(--c-danger-soft); color: var(--c-danger); }
+    .recent-pill-correction { background: #efe7fb; color: #5b3a9c; }
+    .log-row--correction td { background: #fbf8ff; }
+    .log-detail { color: var(--c-muted); font-size: var(--fs-xs); white-space: normal; }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Workload' %}
   {% set header_subtitle = 'Live workload' %}
-  {% set header_mode = 'global' %}
   {% set active_page = 'balance_detail' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-<!-- Page Config JSON -->
 <script id="page-config" type="application/json">
 {
   "skills": {{ skills | tojson }},
@@ -667,90 +287,91 @@
 }
 </script>
 
-<div class="card">
-  <!-- Controls Bar -->
-  <div class="controls-bar">
-    <div class="mode-toggle">
-      <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
-      <button class="mode-btn" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Weighted Matrix</button>
-      <button class="mode-btn" data-mode="advanced-count" onclick="setMode('advanced-count')">Count Matrix</button>
-      <button class="mode-btn" data-mode="flow" onclick="setMode('flow')">Flow Analysis</button>
-      <button class="mode-btn" data-mode="recent" onclick="setMode('recent')">Recent Events</button>
-    </div>
-
-    <div class="auto-refresh">
-      <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()" checked>
-      <label for="auto-refresh">Auto-refresh</label>
-      <button class="refresh-btn" type="button" onclick="refreshCurrentMode()">Refresh</button>
-      <span class="last-update" id="last-update"></span>
-    </div>
+<div class="ui-tabs wl-tabs" role="tablist" aria-label="Workload views">
+  <button class="ui-tab" type="button" role="tab" data-view="people" onclick="setView('people')">People</button>
+  <button class="ui-tab" type="button" role="tab" data-view="day" onclick="setView('day')">Day overview</button>
+  <button class="ui-tab" type="button" role="tab" data-view="log" onclick="setView('log')">Log</button>
+  <span class="wl-tabs__spacer"></span>
+  <div class="wl-refresh">
+    <label><input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()" checked> Auto-refresh</label>
+    <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="refreshCurrentMode()">Refresh</button>
+    <span class="last-update" id="last-update"></span>
   </div>
+</div>
 
-  <!-- Filter Bar -->
-  <div class="filter-bar data-filter-only" id="filter-bar">
-    <label>Skill:</label>
-    <button class="filter-btn active" data-skill="" onclick="filterBySkill('')">All</button>
-    {% for skill in skills %}
-    <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('{{ skill }}')"
-      title="{{ skill_settings[skill].get('tooltip', skill_settings[skill].label) }}"
-      aria-label="{{ skill_settings[skill].get('tooltip', skill_settings[skill].label) }}">
-      {{ skill_settings[skill].label }}
-    </button>
-    {% endfor %}
-
-    <div class="filter-separator"></div>
-
-    <label>Modality:</label>
-    <button class="filter-btn active" data-modality="" onclick="filterByModality('')">All</button>
-    {% for mod in modalities %}
-    <button class="filter-btn" data-modality="{{ mod }}" onclick="filterByModality('{{ mod }}')">{{ modality_settings[mod].label }}</button>
-    {% endfor %}
-
-    <div class="filter-separator"></div>
-
-    <label>
-      <input type="checkbox" id="filter-hide-zero" onchange="applyFilters()"> Hide Zero
+<!-- People -->
+<section class="wl-view wl-view--people ui-panel" aria-label="People">
+  <div class="ui-toolbar wl-toolbar">
+    <div class="ui-segmented" aria-label="Display">
+      <button type="button" data-mode="simple" onclick="setMode('simple')">Compact</button>
+      <button type="button" data-mode="matrix" onclick="setMode(currentMatrixMode())">Matrix</button>
+    </div>
+    <div class="ui-segmented matrix-only" aria-label="Matrix measure">
+      <button type="button" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Weight</button>
+      <button type="button" data-mode="advanced-count" onclick="setMode('advanced-count')">Count</button>
+    </div>
+    <span class="ui-toolbar__sep" aria-hidden="true"></span>
+    <div class="ui-toolbar__group">
+      <span class="ui-toolbar__label">Skill</span>
+      <div class="ui-chips wl-filter-chips">
+        <button class="ui-chip is-active" type="button" data-skill="" onclick="filterBySkill('')">All</button>
+        {% for skill in skills %}
+        <button class="ui-chip" type="button" data-skill="{{ skill }}" onclick="filterBySkill('{{ skill }}')"
+          title="{{ skill_settings[skill].get('tooltip', skill_settings[skill].label) }}">{{ skill_settings[skill].label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ui-toolbar__group">
+      <span class="ui-toolbar__label">Modality</span>
+      <div class="ui-chips wl-filter-chips">
+        <button class="ui-chip is-active" type="button" data-modality="" onclick="filterByModality('')">All</button>
+        {% for mod in modalities %}
+        <button class="ui-chip" type="button" data-modality="{{ mod }}" onclick="filterByModality('{{ mod }}')">{{ modality_settings[mod].label }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    <span class="ui-toolbar__spacer"></span>
+    <label class="ui-toolbar__group" style="font-size: var(--fs-sm); cursor: pointer;">
+      <input type="checkbox" id="filter-hide-zero" onchange="applyFilters()"> Hide zero
     </label>
   </div>
+  <div class="wl-note" id="people-note">
+    <span>Filters select which workers are shown; totals stay global across all modalities.</span>
+    <span>Deviation compares weight per worked hour with the median of all workers with enough hours. Click a row for details and corrections.</span>
+  </div>
 
-  <div class="simple-only">
-    <div class="section-divider">
-      <h3>Global (Total Weight + Weight / Hour)</h3>
-    </div>
+  <div class="people-compact">
     <div class="table-container">
-      <table class="load-table" id="table-global">
+      <table class="load-table people-table" id="table-global">
         <thead>
           <tr>
             <th class="sortable" data-sort="name" onclick="sortTable('global', 'name')">Worker</th>
-            <th class="sortable" data-sort="balance_weight" onclick="sortTable('global', 'balance_weight')">Load</th>
-            <th class="sortable" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">MA</th>
-            <th class="sortable" data-sort="weight" onclick="sortTable('global', 'weight')">Total Weight</th>
-            <th class="sortable" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
-            <th>Load Bar</th>
+            <th class="sortable num" data-sort="hours" onclick="sortTable('global', 'hours')">Hours</th>
+            <th class="sortable num" data-sort="balance_weight" onclick="sortTable('global', 'balance_weight')">Load</th>
+            <th class="sortable num" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">Correction</th>
+            <th class="sortable num" data-sort="weight" onclick="sortTable('global', 'weight')">Total</th>
+            <th class="sortable num" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
+            <th class="sortable dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')">Deviation from median</th>
           </tr>
         </thead>
         <tbody id="tbody-global"></tbody>
       </table>
     </div>
-
   </div>
 
-  <div class="advanced-only">
-    <div class="section-divider">
-      <h3>Detailed Matrix (Modality × Skill)</h3>
-    </div>
-    <div class="advanced-panel advanced-weight-panel">
-      <p class="section-note">Derived load view using assignment count × configured skill-modality weight from the current config.</p>
-      <div class="table-container" style="overflow-x: auto;">
+  <div class="people-matrix">
+    <div class="matrix-weight">
+      <p class="wl-note">Derived load: assignment count × configured skill-modality weight from the current config.</p>
+      <div class="table-container">
         <table class="load-table compact-grid" id="table-advanced-weight">
           <thead id="thead-advanced-weight"></thead>
           <tbody id="tbody-advanced-weight"></tbody>
         </table>
       </div>
     </div>
-    <div class="advanced-panel advanced-count-panel">
-      <p class="section-note">Raw assignment counts for auditing. Useful when tiny modalities like X-ray would distort weighted comparisons.</p>
-      <div class="table-container" style="overflow-x: auto;">
+    <div class="matrix-count">
+      <p class="wl-note">Raw assignment counts for auditing. Useful when small modalities like X-ray would distort weighted comparisons.</p>
+      <div class="table-container">
         <table class="load-table compact-grid" id="table-advanced-count">
           <thead id="thead-advanced-count"></thead>
           <tbody id="tbody-advanced-count"></tbody>
@@ -759,130 +380,155 @@
     </div>
   </div>
 
-  <div class="recent-only">
-    <div class="section-divider">
-      <h3>Recent Assignment Events</h3>
-    </div>
-    <p class="section-note">Last assignment events recorded in the backend tracking stream. Full shows the complete current-day stream.</p>
-    <div class="recent-controls">
-      <div class="recent-control-group">
-        <label for="recent-filter-worker">Worker</label>
-        <input class="recent-search" id="recent-filter-worker" type="search" placeholder="Name filtern" oninput="filterRecentByWorker(this.value)">
-      </div>
-      <div class="recent-control-group">
-        <label for="recent-filter-status">Status</label>
-        <select class="recent-select" id="recent-filter-status" onchange="filterRecentByStatus(this.value)">
-          <option value="">All</option>
-          <option value="direct">Direct</option>
-          <option value="overflow">Overflow</option>
-          <option value="unresolved">Unresolved</option>
-        </select>
-      </div>
-      <div class="recent-control-group">
-        <label for="recent-filter-skill">Skill</label>
-        <select class="recent-select" id="recent-filter-skill" onchange="filterRecentBySkill(this.value)">
-          <option value="">All</option>
-          {% for skill in skills %}
-          <option value="{{ skill }}">{{ skill_settings[skill].label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="recent-control-group">
-        <label for="recent-filter-modality">Modality</label>
-        <select class="recent-select" id="recent-filter-modality" onchange="filterRecentByModality(this.value)">
-          <option value="">All</option>
-          {% for mod in modalities %}
-          <option value="{{ mod }}">{{ modality_settings[mod].label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="recent-control-group">
-        <label for="recent-visible-count">Visible</label>
-        <select class="recent-select" id="recent-visible-count" onchange="setRecentVisibleCount(this.value)">
-          <option value="10">10</option>
-          <option value="25">25</option>
-          <option value="50" selected>50</option>
-          <option value="full">Full</option>
-        </select>
-      </div>
-      <div class="recent-summary" id="recent-summary-note">Showing 0 of 0 events</div>
-    </div>
-    <div class="table-container" style="overflow-x: auto;">
-      <table class="load-table recent-table" id="table-recent">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Worker</th>
-            <th>Requested</th>
-            <th>Assigned</th>
-            <th>Task</th>
-            <th>Weight</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-recent"></tbody>
-      </table>
-    </div>
+  <div class="no-data" id="no-data-msg" style="display: none;">
+    No worker data available. Load schedule data first.
   </div>
+</section>
 
-  <div class="flow-only">
-    <div class="section-divider">
-      <h3>Weighted Skill Overflow Tracking</h3>
-    </div>
+<!-- Day overview -->
+<section class="wl-view wl-view--day" aria-label="Day overview">
+  <div class="day-grid">
+    <div class="summary-grid" id="summary-overview"></div>
 
-    <div class="flow-meta-grid">
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Window</span>
-        <span class="flow-meta-value" id="meta-window">-</span>
+    <div class="leaders-grid">
+      <div class="leaders-card">
+        <h4>Absorbierte Last nach Skill</h4>
+        <p class="leaders-note">Zugewiesene gewichtete Last, die bisher bei Mitarbeitenden angekommen ist.</p>
+        <ol class="leaders-list" id="leaders-skill-total"></ol>
       </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Last Reset Date</span>
-        <span class="flow-meta-value" id="meta-reset-date">-</span>
+      <div class="leaders-card">
+        <h4>Absorbierte Last nach Modalität</h4>
+        <p class="leaders-note">Gleiche zugewiesene Last, nach Modalität aggregiert.</p>
+        <ol class="leaders-list" id="leaders-modality-total"></ol>
       </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Weighted Movement Total</span>
-        <span class="flow-meta-value" id="meta-total">0</span>
+      <div class="leaders-card">
+        <h4>Overflow nach angefragtem Skill</h4>
+        <p class="leaders-note">Anteil der angefragten Last, der nicht im Ursprungsskill blieb.</p>
+        <ol class="leaders-list" id="leaders-overflow-skills"></ol>
       </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Request Inflow</span>
-        <span class="flow-meta-value" id="meta-inflow">0</span>
-      </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Overflow Quote</span>
-        <span class="flow-meta-value" id="meta-overflow-quote">0%</span>
-      </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Unresolved Weight</span>
-        <span class="flow-meta-value" id="meta-unresolved">0</span>
-      </div>
-      <div class="flow-meta-box">
-        <span class="flow-meta-label">Unresolved Quote</span>
-        <span class="flow-meta-value" id="meta-unresolved-quote">0%</span>
+      <div class="leaders-card">
+        <h4>Overflow-Hotspots</h4>
+        <p class="leaders-note">Größte gewichtete Bewegungen von angefragtem Skill zu Zielskill.</p>
+        <ol class="leaders-list" id="leaders-overflow"></ol>
       </div>
     </div>
 
-    <div class="flow-diagram-card">
-      <div class="flow-diagram-header">
-        <h4>Migration Flow</h4>
-        <span class="flow-diagram-caption">requested skill to absorbing target skill, weighted by requested skill-modality</span>
+    <div class="daily-load-grid">
+      <div class="daily-load-card">
+        <div class="daily-load-card-header">
+          <h4>Angefragte Last · Skills</h4>
+          <span class="daily-load-total" id="daily-load-skill-total">0</span>
+        </div>
+        <p class="daily-load-note">Kumulativ, gewichtet nach Skill-/Modalitätsmatrix; x = 07:00–21:00.</p>
+        <div class="daily-load-chart-wrap">
+          <svg id="daily-load-skill-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Skill"></svg>
+        </div>
+        <div id="daily-load-skill-empty" class="daily-load-empty" style="display: none;">Heute noch keine angefragte Last im Zeitfenster.</div>
+        <div id="daily-load-skill-legend" class="daily-load-legend"></div>
+      </div>
+      <div class="daily-load-card">
+        <div class="daily-load-card-header">
+          <h4>Angefragte Last · Modalitäten</h4>
+          <span class="daily-load-total" id="daily-load-modality-total">0</span>
+        </div>
+        <p class="daily-load-note">Gleiche Last wie links, nach CT/MR/X-ray aggregiert.</p>
+        <div class="daily-load-chart-wrap">
+          <svg id="daily-load-modality-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Modalität"></svg>
+        </div>
+        <div id="daily-load-modality-empty" class="daily-load-empty" style="display: none;">Heute noch keine angefragte Last im Zeitfenster.</div>
+        <div id="daily-load-modality-legend" class="daily-load-legend"></div>
+      </div>
+    </div>
+
+    <div class="ui-panel" style="margin-bottom: 0;">
+      <div class="ui-panel__head">
+        <h3 class="ui-panel__title">Skill overflow</h3>
+        <span class="ui-panel__hint">requested skill to absorbing target skill, weighted by requested skill-modality</span>
+      </div>
+      <div class="ui-kv flow-meta">
+        <span class="ui-kv__item"><span class="flow-meta-label">Window</span><span class="flow-meta-value" id="meta-window">-</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Last reset</span><span class="flow-meta-value" id="meta-reset-date">-</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Weighted movement total</span><span class="flow-meta-value" id="meta-total">0</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Request inflow</span><span class="flow-meta-value" id="meta-inflow">0</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Overflow quote</span><span class="flow-meta-value" id="meta-overflow-quote">0%</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Unresolved weight</span><span class="flow-meta-value" id="meta-unresolved">0</span></span>
+        <span class="ui-kv__item"><span class="flow-meta-label">Unresolved quote</span><span class="flow-meta-value" id="meta-unresolved-quote">0%</span></span>
       </div>
       <div class="flow-diagram-wrap">
         <svg id="flow-diagram" class="flow-diagram" role="img" aria-label="Weighted skill overflow migration flow diagram"></svg>
       </div>
-      <div id="flow-diagram-empty" class="flow-diagram-empty" style="display: none;">
-        No weighted cross-skill movement to visualize yet.
-      </div>
-    </div>
-    <div id="flow-no-data-msg" class="no-data" style="display: none;">
-      No flow data available yet.
+      <div id="flow-diagram-empty" class="flow-diagram-empty" style="display: none;">No weighted cross-skill movement to visualize yet.</div>
+      <div id="flow-no-data-msg" class="no-data" style="display: none;">No flow data available yet.</div>
     </div>
   </div>
+</section>
 
-  <div class="no-data" id="no-data-msg" style="display: none;">
-    No worker data available. Load schedule data first.
+<!-- Log -->
+<section class="wl-view wl-view--log ui-panel" aria-label="Log">
+  <div class="ui-toolbar wl-toolbar log-controls">
+    <div class="ui-segmented" aria-label="Entry type">
+      <button type="button" data-log-type="" onclick="filterLogByType('')">All</button>
+      <button type="button" data-log-type="assignments" onclick="filterLogByType('assignments')">Assignments</button>
+      <button type="button" data-log-type="corrections" onclick="filterLogByType('corrections')">Corrections</button>
+    </div>
+    <label for="recent-filter-worker">Worker
+      <input id="recent-filter-worker" type="search" placeholder="Filter by name" oninput="filterRecentByWorker(this.value)">
+    </label>
+    <label for="recent-filter-status">Status
+      <select id="recent-filter-status" onchange="filterRecentByStatus(this.value)">
+        <option value="">All</option>
+        <option value="direct">Direct</option>
+        <option value="overflow">Overflow</option>
+        <option value="unresolved">Unresolved</option>
+      </select>
+    </label>
+    <label for="recent-filter-skill">Skill
+      <select id="recent-filter-skill" onchange="filterRecentBySkill(this.value)">
+        <option value="">All</option>
+        {% for skill in skills %}
+        <option value="{{ skill }}">{{ skill_settings[skill].label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="recent-filter-modality">Modality
+      <select id="recent-filter-modality" onchange="filterRecentByModality(this.value)">
+        <option value="">All</option>
+        {% for mod in modalities %}
+        <option value="{{ mod }}">{{ modality_settings[mod].label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="recent-visible-count">Visible
+      <select id="recent-visible-count" onchange="setRecentVisibleCount(this.value)">
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="full">Full</option>
+      </select>
+    </label>
+    <span class="ui-toolbar__spacer"></span>
+    <span class="recent-summary" id="recent-summary-note"></span>
   </div>
-</div>
+  <div class="table-container">
+    <table class="load-table recent-table" id="table-recent">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Worker</th>
+          <th>Requested</th>
+          <th>Assigned</th>
+          <th>Task / reason</th>
+          <th class="num">Weight</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-recent"></tbody>
+    </table>
+  </div>
+</section>
 
 <script src="{{ url_for('static', filename='js/worker_name_utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/performance.js') }}"></script>
 <script src="{{ url_for('static', filename='js/worker_load_monitor.js') }}"></script>
 {% endblock %}

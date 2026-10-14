@@ -4890,19 +4890,8 @@ def get_performance_data() -> Any:
 @routes.route('/performance')
 @admin_required
 def performance_page() -> Any:
-    load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
-    modality = resolve_modality_from_request()
-    return render_template(
-        'performance.html',
-        modality=modality,
-        skills=SKILL_COLUMNS,
-        skill_settings=SKILL_SETTINGS,
-        modalities=list(MODALITY_SETTINGS.keys()),
-        modality_settings=MODALITY_SETTINGS,
-        load_monitor_config=load_monitor_config,
-        ui_colors=APP_CONFIG.get('ui_colors', {}),
-        is_admin=True,
-    )
+    """The former Analysis page is the Day overview tab of the Workload page."""
+    return redirect(url_for('routes.worker_load_monitor', view='day'))
 
 
 # =============================================================================
@@ -4912,13 +4901,8 @@ def performance_page() -> Any:
 @routes.route('/manual-adjustments')
 @admin_required
 def manual_adjustments_page() -> Any:
-    modality = resolve_modality_from_request()
-    return render_template(
-        'manual_adjustments.html',
-        modality=modality,
-        ui_colors=APP_CONFIG.get('ui_colors', {}),
-        is_admin=True,
-    )
+    """Corrections are booked from a worker's row on the Workload page."""
+    return redirect(url_for('routes.worker_load_monitor', view='people'))
 
 
 @routes.route('/api/manual-adjustments', methods=['GET', 'POST'])
