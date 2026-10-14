@@ -192,9 +192,8 @@ def test_admin_files_has_valid_title_and_main_tools_navigation():
     assert '<title>RadIMO Cortex | Files</title>' in html
     assert 'href="/admin/tools"' in html
     assert 'href="/admin/logs"' in html
-    assert 'href="/status"' in html
     primary_nav = html.split('<nav class="app-nav"', 1)[1].split('</nav>', 1)[0]
-    tools_menu = html.split('<details class="system-menu"', 1)[1].split('</details>', 1)[0]
+    tools_menu = html.split('<details class="system-menu', 1)[1].split('</details>', 1)[0]
     assert 'href="/timetable?modality=all"' in primary_nav
     assert 'href="/timetable?modality=all"' not in tools_menu
 
@@ -220,12 +219,12 @@ def test_admin_pages_do_not_repeat_the_tools_subnavigation():
 
 
 def test_dashboard_selectors_use_solid_distinct_active_states():
-    header_css = Path('templates/partials/header_styles.html').read_text(encoding='utf-8')
+    header_css = Path('static/styles.css').read_text(encoding='utf-8')
     timetable_js = Path('static/js/timetable.js').read_text(encoding='utf-8')
     timeline_js = Path('static/js/timeline.js').read_text(encoding='utf-8')
 
     assert 'repeating-linear-gradient' not in header_css
-    assert 'box-shadow: 0 0 0 3px #fff, 0 0 0 6px' in header_css
+    assert 'box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--selector-color' in header_css
     timetable_template = Path('templates/timetable.html').read_text(encoding='utf-8')
     assert 'buildSkillGradient' not in timeline_js
     assert 'solidBars' not in timetable_js
@@ -301,7 +300,7 @@ def test_page_titles_follow_short_naming_contract():
 def test_primary_navigation_uses_short_names_only():
     html = _admin_client().get('/admin/tools').get_data(as_text=True)
 
-    for label in ('Analysis', 'Workload', 'Today', 'Planning', 'Live', 'Overview', 'Settings', 'Corrections', 'Skills', 'Weights', 'Import', 'Schedule'):
+    for label in ('Workload', 'Today', 'Planning', 'Live', 'Schedule', 'Administration', 'System status', 'Settings', 'Logs', 'Skills', 'Weights', 'Import'):
         assert re.search(rf'>\s*{re.escape(label)}\s*<', html)
     for legacy in ('Performance', 'Adjust Weight', 'Skill Matrix', 'Weight Matrix', 'Change Today', 'Prep Tomorrow', 'Timetable', 'Dashboard', 'Files & Recovery'):
         assert not re.search(rf'>\s*{re.escape(legacy)}\s*<', html)

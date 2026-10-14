@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
 {% block title %}RadIMO Cortex | Status{% endblock %}
 
 {% block styles %}
-    {% include 'partials/admin_theme.html' %}
     body { max-width: 1320px; }
     .status-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.55rem; }
     .status-card { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; }

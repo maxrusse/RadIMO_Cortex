@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
 {% block title %}RadIMO Cortex | Tools{% endblock %}
 
 {% block styles %}
-  {% include 'partials/admin_theme.html' %}
   body { max-width: 1500px; }
   .workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
   .workspace-card { display: flex; flex-direction: column; min-height: 118px; }

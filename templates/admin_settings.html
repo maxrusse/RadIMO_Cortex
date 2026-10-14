@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
 {% block title %}RadIMO Cortex | Settings{% endblock %}
 
 {% block styles %}
-  {% include 'partials/admin_theme.html' %}
   body { max-width: 1500px; }
   .settings-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .75fr); gap: .65rem; }
   .settings-card { background: #fff; border: 1px solid #d8e1ea; border-radius: 7px; padding: .75rem; min-width: 0; }

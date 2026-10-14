@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
 {% set page_mode = initial_tab|default('today') %}
 {% if page_mode == 'today' %}
@@ -12,7 +13,6 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block styles %}
-    {% include 'partials/admin_theme.html' %}
 
     body {
       font-family: system-ui, -apple-system, sans-serif;

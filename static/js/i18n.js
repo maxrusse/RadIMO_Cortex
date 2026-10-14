@@ -507,7 +507,15 @@
     ['Modalities', 'Modalitäten'],
     ['Skills', 'Skills'],
     ['Worker Data', 'Mitarbeiterdaten'],
-    ['Legal notice & EULA', 'Impressum & EULA']
+    ['Legal notice & EULA', 'Impressum & EULA'],
+    // Application shell
+    ['Administration', 'Verwaltung'],
+    ['Team & rules', 'Team & Regeln'],
+    ['Schedule data', 'Plandaten'],
+    ['Files & backups', 'Dateien & Backups'],
+    ['System status', 'Systemstatus'],
+    ['1 unsaved change', '1 ungespeicherte Änderung'],
+    ['unsaved changes', 'ungespeicherte Änderungen']
   ];
 
   const lookup = new Map();

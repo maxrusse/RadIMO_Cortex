@@ -9,15 +9,15 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/dialog_focus.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/ui_shell.js') }}" defer></script>
   {% block head_extra %}{% endblock %}
   <style>
     {% block base_styles %}{% endblock %}
-    {% include 'partials/header_styles.html' %}
     {% block styles %}{% endblock %}
   </style>
 </head>
 
-<body{% block body_attrs %}{% endblock %}>
+<body class="theme-{{ page_theme|default('live') }}"{% block body_attrs %}{% endblock %}>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <main id="main-content" tabindex="-1">
     {% block content %}{% endblock %}

@@ -546,7 +546,6 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertIn(b"Analysis", response.data)
         self.assertIn("Tageslast".encode("utf-8"), response.data)
         self.assertIn("Lasttreiber".encode("utf-8"), response.data)
-        self.assertIn("Gesamtansicht".encode("utf-8"), response.data)
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="daily-load-skill-chart"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
