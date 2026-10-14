@@ -511,11 +511,42 @@
     // Application shell
     ['Administration', 'Verwaltung'],
     ['Team & rules', 'Team & Regeln'],
-    ['Schedule data', 'Plandaten'],
     ['Files & backups', 'Dateien & Backups'],
     ['System status', 'Systemstatus'],
     ['1 unsaved change', '1 ungespeicherte Änderung'],
-    ['unsaved changes', 'ungespeicherte Änderungen']
+    ['unsaved changes', 'ungespeicherte Änderungen'],
+    // == area: today-planning ==
+    ['Exit Quick Edit', 'Bearbeitung beenden'],
+    ["Changes apply immediately to today's schedule.", 'Änderungen gelten sofort für den heutigen Plan.'],
+    ['More actions', 'Weitere Aktionen'],
+    ['Rebuild today from CSV', 'Heute neu aus CSV aufbauen'],
+    ["Rebuilds the live day from the Master CSV and resets today's assignment counters.", 'Baut den Live-Tag aus der Master-CSV neu auf und setzt die heutigen Zuweisungszähler zurück.'],
+    ["Rebuild today from the Master CSV? All live edits of today are replaced and today's assignment counters are reset.", 'Heute aus der Master-CSV neu aufbauen? Alle heutigen Live-Änderungen werden ersetzt und die heutigen Zuweisungszähler zurückgesetzt.'],
+    ["Rebuild today from the Master CSV? Unsaved Quick Edit changes are discarded, all live edits of today are replaced and today's assignment counters are reset.", 'Heute aus der Master-CSV neu aufbauen? Ungespeicherte Schnelländerungen werden verworfen, alle heutigen Live-Änderungen ersetzt und die heutigen Zuweisungszähler zurückgesetzt.'],
+    ['Previous day', 'Vorheriger Tag'],
+    ['Next day', 'Nächster Tag'],
+    ['Planning date', 'Planungsdatum'],
+    ['Prepared:', 'Vorbereitet:'],
+    ['Open prepared day', 'Vorbereiteten Tag öffnen'],
+    ['Reload the selected date from CSV and overwrite the current staged data.', 'Gewählten Tag erneut aus der CSV laden und die vorbereiteten Daten überschreiben.'],
+    ['Paused during edits', 'Pausiert während der Bearbeitung'],
+    ['Auto-refresh off', 'Automatische Aktualisierung aus'],
+    ['Updated', 'Aktualisiert'],
+    ['Mod → Skill', 'Mod → Skill'],
+    ['Skill → Mod', 'Skill → Mod'],
+    ['No coverage:', 'Nicht besetzt:'],
+    ['Nobody with 1 or w on this day. Click to filter.', 'Niemand mit 1 oder w an diesem Tag. Klick filtert die Tabelle.'],
+    ['Show only this combination', 'Nur diese Kombination anzeigen'],
+    ['Every skill is covered in every modality.', 'Jeder Skill ist in jeder Modalität besetzt.'],
+    ['Active counts by modality & skill', 'Aktive Anzahl nach Modalität & Skill'],
+    ['Coverage over the day', 'Abdeckung über den Tag'],
+    ['active workers (1 or w) per skill, all modalities; hatched = nobody', 'aktive Personen (1 oder w) je Skill über alle Modalitäten; schraffiert = niemand'],
+    ['Save or exit Quick Edit to open the full editor', 'Zum vollständigen Bearbeiten erst speichern oder Schnellbearbeitung beenden'],
+    // == area: workload ==
+    // == area: live-schedule ==
+    // == area: skills-weights ==
+    // == area: system ==
+    ['RadIMO Cortex', 'RadIMO Cortex']
   ];
 
   const lookup = new Map();

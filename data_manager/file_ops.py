@@ -188,6 +188,8 @@ def apply_roster_overrides_to_schedule(df: pd.DataFrame, modality: str) -> pd.Da
         return df
 
     worker_roster = get_merged_worker_roster(APP_CONFIG)
+    # Skill cells mix ints and 'w'; pandas >= 3 would otherwise infer a strict str dtype.
+    df[skill_columns] = df[skill_columns].astype(object)
 
     for idx, row in df.iterrows():
         canonical_id = get_canonical_worker_id(row.get('PPL'))

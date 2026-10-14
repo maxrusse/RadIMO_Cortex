@@ -47,11 +47,8 @@ function applyTimelineFilters(tab) {
 
 function filterByModality(tab, modality) {
   // Update button states
-  const buttons = document.querySelectorAll(`[data-modality]`);
-  buttons.forEach(btn => {
-    if (btn.closest('.filter-bar') && btn.onclick && btn.onclick.toString().includes(`'${tab}'`)) {
-      btn.classList.toggle('active', btn.getAttribute('data-modality') === modality);
-    }
+  document.querySelectorAll(`[data-filter-tab="${tab}"][data-filter-kind="modality"] [data-modality]`).forEach(btn => {
+    btn.classList.toggle('is-active', btn.getAttribute('data-modality') === modality.toLowerCase());
   });
 
   // Update filter and render
@@ -69,11 +66,8 @@ function filterByModality(tab, modality) {
 
 function filterBySkill(tab, skill) {
   // Update button states
-  const buttons = document.querySelectorAll(`[data-skill]`);
-  buttons.forEach(btn => {
-    if (btn.closest('.filter-bar') && btn.onclick && btn.onclick.toString().includes(`'${tab}'`)) {
-      btn.classList.toggle('active', btn.getAttribute('data-skill') === skill);
-    }
+  document.querySelectorAll(`[data-filter-tab="${tab}"][data-filter-kind="skill"] [data-skill]`).forEach(btn => {
+    btn.classList.toggle('is-active', btn.getAttribute('data-skill') === skill);
   });
 
   // Update filter and render
@@ -862,7 +856,7 @@ function updatePrepSelectionControls() {
     inputEl.title = localizedLockMessage;
   }
 
-  document.querySelectorAll('[data-prep-date-step]').forEach(btn => {
+  document.querySelectorAll('[data-prep-date-step], [data-staged-date]').forEach(btn => {
     btn.disabled = locked;
     btn.title = localizedLockMessage;
   });
@@ -899,6 +893,7 @@ function updatePrepTargetUI() {
     }
   }
   updatePrepSelectionControls();
+  if (typeof updatePreparedDayChips === 'function') updatePreparedDayChips();
 }
 
 function shiftPrepDate(offsetDays) {
@@ -1082,7 +1077,7 @@ async function refreshPrepTab(tab, options = {}) {
   }
   await loadTabData(tab);
   if (!silent) {
-    updatePrepRefreshStatus(tab, `Updated ${new Date().toLocaleTimeString()}`);
+    updatePrepRefreshStatus(tab, `${window.RadimoI18n?.t('Updated') || 'Updated'} ${new Date().toLocaleTimeString('de-DE')}`);
   }
 }
 
@@ -2576,9 +2571,9 @@ async function loadFromCSV(mode, options = {}) {
   if (mode === 'today') {
     const hasPendingChanges = Object.keys(pendingChanges.today || {}).length > 0;
     const message = hasPendingChanges
-      ? 'HARD RELOAD TODAY will discard unsaved Quick Edit changes and reset today from the Master CSV. Continue?'
-      : 'HARD RELOAD TODAY will reset today from the Master CSV. Continue?';
-    if (shouldConfirm && !window.confirm(message)) {
+      ? 'Rebuild today from the Master CSV? Unsaved Quick Edit changes are discarded, all live edits of today are replaced and today\'s assignment counters are reset.'
+      : 'Rebuild today from the Master CSV? All live edits of today are replaced and today\'s assignment counters are reset.';
+    if (shouldConfirm && !window.confirm(window.RadimoI18n?.t(message) || message)) {
       return;
     }
   } else {
@@ -2651,7 +2646,21 @@ function updatePrepOverlayTop() {
 updatePrepOverlayTop();
 window.addEventListener('resize', updatePrepOverlayTop);
 applyEditModeUI(currentTab);
-loadTabData(currentTab);
+if (currentTab === 'tomorrow') {
+  const requestedDate = new URLSearchParams(window.location.search).get('date');
+  const validRequest = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate || '')
+    && (!prepMinDate || requestedDate >= prepMinDate)
+    && requestedDate !== prepTargetDate;
+  if (validRequest) {
+    document.getElementById('prep-target-date').value = requestedDate;
+    onPrepDateInputChange();
+  } else {
+    loadTabData(currentTab);
+  }
+  renderPreparedDays();
+} else {
+  loadTabData(currentTab);
+}
 if (currentTab === 'today') {
   togglePrepAutoRefresh('today');
 }
