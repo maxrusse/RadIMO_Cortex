@@ -4,20 +4,19 @@
 {% block title %}RadIMO Cortex | Status{% endblock %}
 
 {% block styles %}
-    body { max-width: 1320px; }
     .status-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.55rem; }
     .status-card { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; }
-    .status-card__label { color: var(--ops-muted); font-size: 0.69rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
-    .status-card__value { margin-top: .15rem; color: var(--ops-ink); font-size: 1rem; font-weight: 850; }
-    .status-card__meta { color: var(--ops-muted); font-size: .67rem; overflow-wrap: anywhere; }
+    .status-card__label { color: var(--c-muted); font-size: 0.69rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
+    .status-card__value { margin-top: .15rem; color: var(--c-ink); font-size: 1rem; font-weight: 850; }
+    .status-card__meta { color: var(--c-muted); font-size: .67rem; overflow-wrap: anywhere; }
     .probe-links { display: flex; gap: .3rem; flex-wrap: wrap; }
     .checks-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
     .checks-table th, .checks-table td { padding: .45rem; border-bottom: 1px solid #e1e8ef; text-align: left; vertical-align: top; }
     .checks-table th { background: #eaf0f5; color: #294b65; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; }
     .check-status { font-weight: 850; }
-    .check-status--ok { color: var(--ops-success); }
-    .check-status--warning { color: var(--ops-warning); }
-    .check-status--error { color: var(--ops-danger); }
+    .check-status--ok { color: var(--c-success); }
+    .check-status--warning { color: var(--c-warning); }
+    .check-status--error { color: var(--c-danger); }
     @media (max-width: 760px) { .status-card-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
@@ -80,7 +79,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for check in readiness_payload.get('checks', []) %}
+        {% for check in (checks|rejectattr('status', 'equalto', 'OK')|list) + (checks|selectattr('status', 'equalto', 'OK')|list) %}
         {% set check_status = (check.get('status', 'UNKNOWN')|upper) %}
         <tr>
           <td>{{ check.get('name', '-') }}</td>

@@ -4,632 +4,31 @@
 {% block title %}RadIMO Cortex | Import{% endblock %}
 
 {% block styles %}
-
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1800px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      margin-bottom: 1.5rem;
-    }
-
-    .page-layout {
-      display: grid;
-      grid-template-columns: minmax(280px, 1fr) minmax(320px, 2fr);
-      gap: 1.5rem;
-      align-items: start;
-    }
-
-    .page-layout .card {
-      margin-bottom: 0;
-    }
-
-    .column {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-
-    .page-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
-    }
-
-    .back-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      padding: 0.75rem 1.5rem;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      transition: background 0.3s;
-      background: #004892;
-    }
-
-    .back-button:hover {
-      background: #003f73;
-    }
-
-    .page-toolbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-
-    .toolbar-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.75rem 1.25rem;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      transition: background 0.3s;
-      background: #6b7280;
-    }
-
-    .toolbar-link:hover {
-      background: #4b5563;
-    }
-
-    @media (max-width: 1100px) {
-      .page-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .upload-column {
-        order: 1;
-      }
-
-      .workflow-column {
-        order: 2;
-      }
-    }
-
-    .card h2 {
-      margin-bottom: 0;
-      color: #333;
-      font-size: 1.2rem;
-      border-bottom: 2px solid #004892;
-      padding-bottom: 0.5rem;
-    }
-
-    .section-header {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-bottom: 1rem;
-    }
-
-    .section-header h2 {
-      margin-bottom: 0;
-    }
-
-    .workflow-box {
-      background: #f5f6f8;
-      border: 1px solid #d8dce3;
-      border-radius: 8px;
-      padding: 1rem 1.1rem;
-    }
-
-    .workflow-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .step {
-      display: grid;
-      grid-template-columns: 32px minmax(0, 1fr);
-      gap: 0.75rem;
-      align-items: start;
-      padding: 0.8rem 0;
-      border-bottom: 1px solid #e2e6ec;
-    }
-
-    .step-num {
-      background: #365b7d;
-      color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      margin-top: 0.05rem;
-    }
-
-    .step-title {
-      font-weight: 600;
-      margin-bottom: 0.2rem;
-    }
-
-    .step:last-child {
-      border-bottom: none;
-    }
-
-    .upload-area {
-      background: #f7f7f9;
-      padding: 1.5rem;
-      border-radius: 8px;
-      border: 2px dashed #90a4b8;
-    }
-
-    .upload-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 0.9rem;
-    }
-
-    .status-strip {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .upload-form-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .upload-flow-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.85rem;
-      align-items: stretch;
-    }
-
-    .upload-step {
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-      padding: 0.9rem;
-      border-radius: 8px;
-      border: 1px solid #d8dce3;
-      background: #ffffff;
-      min-height: 178px;
-    }
-
-    .upload-step-head {
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-      min-height: 4.8rem;
-    }
-
-    .upload-step-label {
-      font-size: 0.76rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      color: #365b7d;
-      text-transform: uppercase;
-    }
-
-    .upload-step-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #203040;
-    }
-
-    .upload-step-action {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      min-height: 48px;
-      padding: 0.75rem 1rem;
-      border-radius: 6px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.2;
-      text-align: center;
-      margin-top: auto;
-    }
-
-    .upload-divider {
-      height: 1px;
-      background: linear-gradient(90deg, rgba(0, 72, 146, 0.16), rgba(0, 72, 146, 0.02));
-      margin: 0.15rem 0 0.1rem;
-    }
-
-    .reset-box {
-      max-width: 460px;
-      background: #fff4f2;
-      border: 1px solid #e7b4ae;
-      border-radius: 8px;
-      padding: 0.9rem 1rem;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    }
-
-    .reset-box-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #8b3028;
-      margin-bottom: 0.55rem;
-    }
-
-    .reset-box .btn {
-      min-height: 38px;
-      padding: 0.5rem 0.9rem;
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-
-    .upload-note {
-      font-size: 0.85rem;
-      color: #5f6b7a;
-      line-height: 1.45;
-    }
-
-    .external-action-link {
-      gap: 0.5rem;
-      color: #004892;
-      text-decoration: none;
-      border: 1px solid #b8c8d8;
-      background: #ffffff;
-      transition: background 0.2s, border-color 0.2s, color 0.2s;
-    }
-
-    .external-action-link:hover {
-      background: #eef4fb;
-      border-color: #7aa3c8;
-      color: #003670;
-      text-decoration: none;
-    }
-
-    .primary-upload-btn {
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset;
-    }
-
-    .file-input-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    .file-picker-trigger {
-      gap: 0.5rem;
-      width: 100%;
-      border: 1px solid #b8c8d8;
-      background: #ffffff;
-      color: #004892;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s, color 0.2s;
-    }
-
-    .file-picker-trigger:hover {
-      background: #eef4fb;
-      border-color: #7aa3c8;
-      color: #003670;
-    }
-
-    .file-picker-trigger:focus-visible {
-      outline: 3px solid rgba(0, 72, 146, 0.35);
-      outline-offset: 2px;
-    }
-
-    .file-picker-name {
-      min-height: 2.3rem;
-      padding: 0.55rem 0.7rem;
-      border: 1px solid #d7e1ec;
-      border-radius: 6px;
-      background: #f7fafc;
-      color: #415364;
-      font-size: 0.82rem;
-      line-height: 1.35;
-      display: flex;
-      align-items: center;
-    }
-
-    .file-picker-name.is-selected {
-      border-color: #b8c8d8;
-      background: #eef4fb;
-      color: #203040;
-      font-weight: 600;
-    }
-
-    .danger-zone-label {
-      font-size: 0.77rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      color: #8b3028;
-      text-transform: uppercase;
-    }
-
-    .admin-footer {
-      margin-top: 1.5rem;
-      font-size: 0.75rem;
-      color: #777;
-      text-align: right;
-    }
-
-    .admin-footer a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .admin-footer a:hover {
-      text-decoration: underline;
-    }
-
-    .btn {
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .btn-primary {
-      background: #004892;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #003670;
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #218838;
-    }
-
-    .btn-danger {
-      background: #c0392b;
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #a93226;
-    }
-
-    .btn-warning {
-      background: #ffc107;
-      color: #333;
-    }
-
-    .btn-warning:hover {
-      background: #e0a800;
-    }
-
-    .btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    .action-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1rem;
-    }
-
-    .action-card {
-      background: #f8f9fa;
-      padding: 1.5rem;
-      border-radius: 8px;
-      border: 1px solid #ddd;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .action-card .btn {
-      align-self: flex-start;
-    }
-
-    .action-card h3 {
-      margin-bottom: 0.5rem;
-      font-size: 1rem;
-    }
-
-    .action-card p {
-      font-size: 0.85rem;
-      color: #666;
-      margin-bottom: 1rem;
-    }
-
-    .message {
-      padding: 1rem;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-    }
-
-    #message-container {
-      margin-bottom: 1rem;
-    }
-
-    .message.success {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-
-    .message.error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-    .master-status {
-      padding: 0.75rem;
-      border-radius: 4px;
-      font-size: 0.9rem;
-      margin: 0;
-      flex: 1 1 320px;
-    }
-
-    .master-status.loaded {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .master-status.empty {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .upload-info-note {
-      padding: 0.75rem 0.9rem;
-      border-radius: 6px;
-      border: 1px solid #d7e1ec;
-      background: #f7fafc;
-      color: #415364;
-      font-size: 0.84rem;
-      line-height: 1.45;
-    }
-
-    .upload-info-note strong {
-      color: #203040;
-    }
-
-    @media (max-width: 760px) {
-      .upload-area {
-        padding: 0.6rem;
-      }
-
-      .upload-flow-grid {
-        grid-template-columns: 1fr;
-        gap: 0.4rem;
-      }
-
-      .upload-step {
-        min-height: 0;
-        padding: 0.5rem;
-      }
-
-      .upload-step-head {
-        min-height: 0;
-      }
-
-      .upload-step-action {
-        min-height: 40px;
-        padding: 0.55rem 0.75rem;
-      }
-    }
-
-    .stats-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-      font-size: 0.85rem;
-    }
-
-    .stats-table th,
-    .stats-table td {
-      padding: 0.5rem;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-    }
-
-    .stats-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-    }
-
-    .skill-column {
-      text-align: center;
-    }
-
-    /* Operations-console density overrides. */
-    body { max-width: 1600px; }
-    .page-layout {
-      grid-template-columns: minmax(230px, 0.62fr) minmax(620px, 2.38fr);
-      gap: 0.55rem;
-    }
-    .column { gap: 0.55rem; }
-    .card {
-      padding: 0.7rem;
-      margin-bottom: 0.55rem;
-      border: 1px solid var(--ops-line);
-      border-radius: var(--ops-radius);
-      box-shadow: var(--ops-shadow);
-    }
-    .section-header { gap: 0.1rem; margin-bottom: 0.55rem; }
-    .card h2 { margin: 0; padding: 0; border: 0; color: var(--ops-ink); font-size: 0.98rem; }
-    .workflow-box { padding: 0.35rem 0.65rem; border-radius: 6px; background: var(--ops-surface-soft); }
-    .step { grid-template-columns: 24px minmax(0, 1fr); gap: 0.55rem; padding: 0.48rem 0; }
-    .step-num { width: 22px; height: 22px; font-size: 0.72rem; background: var(--ops-primary); }
-    .step-title { margin: 0; font-size: 0.78rem; }
-    .upload-area { padding: 0.65rem; border: 1px solid var(--ops-line-strong); border-radius: 6px; background: var(--ops-surface-soft); }
-    .upload-panel, .upload-form-stack { gap: 0.55rem; }
-    .master-status { padding: 0.48rem 0.6rem; font-size: 0.75rem; border-radius: 5px; }
-    .upload-flow-grid { gap: 0.55rem; }
-    .upload-step { min-height: 132px; gap: 0.38rem; padding: 0.62rem; border-radius: 6px; }
-    .upload-step-head { min-height: 2.2rem; gap: 0.18rem; }
-    .upload-step-label { font-size: 0.65rem; letter-spacing: 0.06em; }
-    .upload-step-title { font-size: 0.84rem; }
-    .upload-step-action { min-height: 34px; padding: 0.42rem 0.62rem; border-radius: 4px; font-size: 0.77rem; }
-    .file-picker-name { min-height: 1.8rem; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
-    .upload-info-note { padding: 0.48rem 0.58rem; font-size: 0.72rem; line-height: 1.35; }
-    .reset-box {
-      max-width: none;
-      display: grid;
-      grid-template-columns: minmax(155px, 1fr) auto;
-      grid-template-areas:
-        "warning action"
-        "title action";
-      align-items: center;
-      gap: 0.65rem;
-      padding: 0.52rem 0.62rem;
-      border-radius: 6px;
-    }
-    .reset-box-title { grid-area: title; margin: 0; font-size: 0.75rem; }
-    .danger-zone-label { grid-area: warning; font-size: 0.64rem; }
-    .reset-box .btn { grid-area: action; min-height: 34px; padding: 0.35rem 0.7rem; font-size: 0.73rem; }
-    #message-container { margin-bottom: 0.55rem; }
-    .message { padding: 0.55rem 0.65rem; margin-bottom: 0.55rem; font-size: 0.76rem; }
-    .admin-footer { margin-top: 0.55rem; }
-    @media (max-width: 1100px) {
-      .page-layout { grid-template-columns: 1fr; }
-      .upload-column { order: 1; }
-      .workflow-column { order: 2; }
-    }
-    @media (max-width: 760px) {
-      .reset-box {
-        grid-template-columns: 1fr;
-        grid-template-areas: "warning" "title" "note" "action";
-      }
-    }
+  .import-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 0.75rem; align-items: start; }
+  .master-status { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--c-line); font-size: var(--fs-md); }
+  .master-status.empty { color: var(--c-warning); font-weight: 700; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; padding: 0.85rem; }
+  .step { display: grid; align-content: start; gap: 0.4rem; padding: 0.65rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: var(--c-surface-2); }
+  .step__label { color: var(--c-primary); font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+  .step__title { font-weight: 750; }
+  .file-input-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .file-picker-name { color: var(--c-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+  .file-picker-name.is-selected { color: var(--c-ink); font-weight: 700; }
+  .import-note { margin: 0 0.85rem 0.85rem; }
+  .message { margin-bottom: 0.65rem; padding: 0.55rem 0.75rem; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 650; }
+  .message.success { background: var(--c-success-soft); border: 1px solid #a7d8bb; color: var(--c-success); }
+  .message.error { background: var(--c-danger-soft); border: 1px solid #efb7b0; color: var(--c-danger); }
+  .next-steps { display: grid; gap: 0.35rem; }
+  .next-steps a { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--c-line); border-radius: var(--radius-sm); color: var(--c-ink); text-decoration: none; }
+  .next-steps a:hover { border-color: var(--c-primary); background: var(--c-primary-soft); }
+  .next-steps a span { color: var(--c-muted); font-size: var(--fs-xs); }
+  .admin-footer { margin-top: 0.75rem; text-align: right; font-size: var(--fs-xs); }
+  .admin-footer a { color: var(--c-muted); }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Import' %}
   {% set header_subtitle = 'CSV & system' %}
-  {% set header_mode = 'global' %}
   {% set active_page = 'upload' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
@@ -639,153 +38,101 @@
   <div class="ops-shell">
   <div class="ops-page-head">
     <div>
-      <div class="ops-eyebrow">Source data</div>
-      <h2>Master CSV intake</h2>
+      <div class="ops-eyebrow">Schedule data</div>
+      <h2>Master CSV import</h2>
     </div>
     <div class="ops-actions">
-      <a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_files_page') }}">Open files</a>
-      <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_tomorrow') }}">Planning</a>
+      <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_files_page') }}">Files &amp; backups</a>
     </div>
   </div>
 
   <div id="message-container"></div>
 
-  <div class="page-layout">
-    <div class="column workflow-column">
-      <!-- Workflow Overview -->
-      <div class="card">
-        <div class="section-header">
-          <h2>System-Workflow</h2>
-        </div>
-        <div class="workflow-box">
-          <div class="workflow-steps">
-            <div class="step">
-              <div class="step-num">1</div>
-              <div>
-                <div class="step-title">Master CSV</div>
-              </div>
-            </div>
-            <div class="step">
-              <div class="step-num">2</div>
-              <div>
-                <div class="step-title">Planning</div>
-              </div>
-            </div>
-            <div class="step">
-              <div class="step-num">3</div>
-              <div>
-                <div class="step-title">Auto-Live</div>
-                <div>{{ scheduler_config.daily_reset_time }} Uhr</div>
-              </div>
-            </div>
-            <div class="step">
-              <div class="step-num">4</div>
-              <div>
-                <div class="step-title">Today</div>
-              </div>
-            </div>
+  <div class="import-grid">
+    <section class="ui-panel upload-column" aria-label="Master CSV upload">
+      <div id="master-status" class="master-status empty">No Master CSV loaded</div>
+      <form id="master-upload-form" enctype="multipart/form-data">
+        <div class="steps">
+          <div class="step">
+            <div class="step__label">1. Export</div>
+            <div class="step__title">Open MedSpace</div>
+            <a class="ui-btn ui-btn--secondary" href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
+              target="_blank" rel="noopener noreferrer">Open export</a>
+          </div>
+          <div class="step">
+            <div class="step__label">2. Choose file</div>
+            <div class="step__title">Medweb CSV</div>
+            <label class="ui-btn ui-btn--secondary" for="master-csv-file" role="button" tabindex="0"
+              onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();document.getElementById('master-csv-file').click();}">Choose file</label>
+            <div class="file-picker-name" id="master-file-name">No file selected</div>
+            <input class="file-input-hidden" type="file" id="master-csv-file" name="file" accept=".csv" required>
+          </div>
+          <div class="step">
+            <div class="step__label">3. Upload</div>
+            <div class="step__title">Update master</div>
+            <button type="submit" class="ui-btn" id="master-upload-btn">Upload Master CSV</button>
           </div>
         </div>
-      </div>
-    </div>
+      </form>
+      <div class="ui-note import-note">Uploading only replaces the stored Master CSV. The live day and prepared planning days stay unchanged until you reset a planning date (Planning) or rebuild today (Today → ⋯).</div>
+    </section>
 
-    <div class="column upload-column">
-      <!-- Master CSV Upload -->
-      <div class="card">
-        <div class="section-header">
-          <h2>Master CSV Upload</h2>
-        </div>
-
-        <div class="upload-area">
-          <div class="upload-panel">
-            <div class="status-strip">
-              <div id="master-status" class="master-status empty">
-                Keine Master-CSV geladen
-              </div>
-            </div>
-            <form id="master-upload-form" enctype="multipart/form-data">
-              <div class="upload-form-stack">
-                <div class="upload-flow-grid">
-                  <div class="upload-step">
-                    <div class="upload-step-head">
-                      <div class="upload-step-label">1. Export</div>
-                      <div class="upload-step-title">MedSpace öffnen</div>
-                    </div>
-                    <a
-                      class="external-action-link upload-step-action"
-                      href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
-                      target="_blank"
-                      rel="noopener noreferrer">
-                      Export öffnen
-                    </a>
-                  </div>
-                  <div class="upload-step">
-                    <div class="upload-step-head">
-                      <div class="upload-step-label">2. Datei auswählen</div>
-                      <div class="upload-step-title">Medweb CSV wählen</div>
-                    </div>
-                    <label class="file-picker-trigger upload-step-action" for="master-csv-file" role="button" tabindex="0"
-                      onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();document.getElementById('master-csv-file').click();}">Datei auswählen</label>
-                    <div class="file-picker-name" id="master-file-name">Keine Datei ausgewählt</div>
-                    <input class="file-input-hidden" type="file" id="master-csv-file" name="file" accept=".csv" required>
-                  </div>
-                  <div class="upload-step">
-                    <div class="upload-step-head">
-                      <div class="upload-step-label">3. Hochladen</div>
-                      <div class="upload-step-title">Master aktualisieren</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary primary-upload-btn upload-step-action" id="master-upload-btn">
-                      Master-CSV hochladen
-                    </button>
-                  </div>
-                </div>
-                <div class="upload-info-note">
-                  <strong>Hinweis:</strong> Upload Master CSV ersetzt nur die gespeicherte Master-Datei.
-                  Eine bereits vorbereitete <strong>Planning</strong>-Planung bleibt bestehen, bis du
-                  <strong>Planning</strong> für das gewünschte Datum erneut lädst.
-                </div>
-                <div class="upload-divider"></div>
-                <div class="reset-box">
-                  <div class="danger-zone-label">Nur bei echtem Tages-Reset</div>
-                  <div class="reset-box-title">HARD RELOAD TODAY</div>
-                  <button class="btn btn-danger" id="load-today-btn" type="button" onclick="loadTodayFromMaster()">
-                    HARD RELOAD TODAY
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
+    <section class="ui-panel" aria-label="Next steps">
+      <div class="ui-panel__head"><h3 class="ui-panel__title">Next steps</h3></div>
+      <div class="ui-panel__body next-steps" id="next-steps"></div>
+    </section>
   </div>
 
   <div class="admin-footer">
-    <a href="{{ url_for('static', filename='verfahrensverzeichniss.txt') }}" target="_blank" rel="noopener">
-      Verfahrensverzeichnis
-    </a>
+    <a href="{{ url_for('static', filename='verfahrensverzeichniss.txt') }}" target="_blank" rel="noopener">Verfahrensverzeichnis</a>
   </div>
   </div>
 
   <script>
-    // Check master CSV status on load
-    checkMasterStatus();
+    const t = text => (window.RadimoI18n?.t ? window.RadimoI18n.t(text) : text);
+    const escapeHtml = value => {
+      const div = document.createElement('div');
+      div.textContent = value == null ? '' : String(value);
+      return div.innerHTML;
+    };
+
+    function formatDate(iso) {
+      if (!iso) return '–';
+      const date = new Date(`${iso}T00:00:00`);
+      return date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
 
     function updateSelectedFileName() {
       const input = document.getElementById('master-csv-file');
       const nameEl = document.getElementById('master-file-name');
-      if (!input || !nameEl) return;
       const file = input.files && input.files.length ? input.files[0] : null;
-      if (file) {
-        nameEl.textContent = file.name;
-        nameEl.classList.add('is-selected');
-      } else {
-        nameEl.textContent = 'Keine Datei ausgewählt';
-        nameEl.classList.remove('is-selected');
-      }
+      nameEl.textContent = file ? file.name : t('No file selected');
+      nameEl.classList.toggle('is-selected', Boolean(file));
     }
 
     document.getElementById('master-csv-file').addEventListener('change', updateSelectedFileName);
+
+    function renderNextSteps(data) {
+      const links = [
+        `<a href="/prep-tomorrow"><strong>${escapeHtml(t('Open Planning'))}</strong><span>${escapeHtml(t('prepare a future day'))}</span></a>`,
+        `<a href="/prep-today"><strong>${escapeHtml(t('Open Today'))}</strong><span>${escapeHtml(t('live changes, rebuild from CSV'))}</span></a>`,
+      ];
+      if (data && data.last_date) {
+        const cursor = new Date();
+        cursor.setHours(0, 0, 0, 0);
+        let added = 0;
+        for (let step = 0; step < 21 && added < 5; step += 1) {
+          cursor.setDate(cursor.getDate() + 1);
+          const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+          if (iso > data.last_date) break;
+          if (cursor.getDay() === 0 || cursor.getDay() === 6) continue;
+          if (data.first_date && iso < data.first_date) continue;
+          links.push(`<a href="/prep-tomorrow?date=${iso}"><strong>${escapeHtml(t('Planning'))} ${escapeHtml(formatDate(iso))}</strong><span>${escapeHtml(t('open this date'))}</span></a>`);
+          added += 1;
+        }
+      }
+      document.getElementById('next-steps').innerHTML = links.join('');
+    }
 
     async function checkMasterStatus() {
       try {
@@ -794,80 +141,53 @@
         const statusEl = document.getElementById('master-status');
         if (data.exists) {
           statusEl.className = 'master-status loaded';
-          statusEl.innerHTML = `Master-CSV geladen: <strong>${data.filename}</strong> (${data.modified})`;
+          let html = `<span class="ui-badge ui-badge--ok">${escapeHtml(t('Master CSV loaded'))}</span>`
+            + ` <strong>${escapeHtml(data.filename)}</strong> <span>${escapeHtml(data.modified)}</span>`;
+          if (data.first_date) {
+            html += `<span class="ui-kv">`
+              + `<span class="ui-kv__item"><span class="ui-kv__label">${escapeHtml(t('Covers'))}</span><span class="ui-kv__value">${escapeHtml(formatDate(data.first_date))} – ${escapeHtml(formatDate(data.last_date))}</span></span>`
+              + `<span class="ui-kv__item"><span class="ui-kv__label">${escapeHtml(t('Days'))}</span><span class="ui-kv__value">${data.day_count}</span></span>`
+              + (data.worker_count != null ? `<span class="ui-kv__item"><span class="ui-kv__label">${escapeHtml(t('People'))}</span><span class="ui-kv__value">${data.worker_count}</span></span>` : '')
+              + `<span class="ui-kv__item"><span class="ui-kv__label">${escapeHtml(t('Rows'))}</span><span class="ui-kv__value">${data.rows}</span></span>`
+              + `</span>`;
+          }
+          statusEl.innerHTML = html;
         } else {
           statusEl.className = 'master-status empty';
-          statusEl.textContent = 'Keine Master-CSV geladen';
+          statusEl.textContent = t('No Master CSV loaded');
         }
+        renderNextSteps(data);
       } catch (e) {
         console.error('Error checking master status:', e);
+        renderNextSteps(null);
       }
     }
 
-    // Master CSV upload
     document.getElementById('master-upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       const formData = new FormData(this);
       const btn = document.getElementById('master-upload-btn');
       const msgContainer = document.getElementById('message-container');
-
       btn.disabled = true;
-      btn.textContent = 'Uploading...';
-
+      btn.textContent = t('Uploading...');
       try {
-        const response = await fetch('/upload-master-csv', {
-          method: 'POST',
-          body: formData
-        });
+        const response = await fetch('/upload-master-csv', { method: 'POST', body: formData });
         const result = await response.json();
-
         if (response.ok && result.success) {
-          msgContainer.innerHTML = `<div class="message success">${result.message}</div>`;
-          checkMasterStatus();
+          msgContainer.innerHTML = `<div class="message success">${escapeHtml(result.message)} · ${escapeHtml(t('Live and planned days are unchanged.'))}</div>`;
+          await checkMasterStatus();
           document.getElementById('master-upload-form').reset();
           updateSelectedFileName();
         } else {
-          msgContainer.innerHTML = `<div class="message error">${result.error || 'Upload failed'}</div>`;
+          msgContainer.innerHTML = `<div class="message error">${escapeHtml(result.error || 'Upload failed')}</div>`;
         }
       } catch (error) {
-        msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;
+        msgContainer.innerHTML = `<div class="message error">Error: ${escapeHtml(error.message)}</div>`;
       }
-
       btn.disabled = false;
-      btn.textContent = 'Master-CSV hochladen';
+      btn.textContent = t('Upload Master CSV');
     });
 
-    async function loadTodayFromMaster() {
-      const btn = document.getElementById('load-today-btn');
-      const msgContainer = document.getElementById('message-container');
-
-      if (!confirm('HARD RELOAD TODAY from Master CSV? (Resets counters)')) return;
-
-      btn.disabled = true;
-      btn.textContent = 'HARD RELOAD TODAY...';
-
-      try {
-        const response = await fetch('/load-today-from-master', { method: 'POST' });
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-          msgContainer.innerHTML = `
-            <div class="message success">
-              ${result.message}<br>
-              <strong>Modalities:</strong> ${result.modalities_loaded.join(', ')}<br>
-              <strong>Workers:</strong> ${result.total_workers}
-            </div>
-          `;
-        } else {
-          msgContainer.innerHTML = `<div class="message error">${result.error || 'Load failed'}</div>`;
-        }
-      } catch (error) {
-        msgContainer.innerHTML = `<div class="message error">Error: ${error.message}</div>`;
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'HARD RELOAD TODAY';
-    }
-
+    checkMasterStatus();
   </script>
 {% endblock %}

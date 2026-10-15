@@ -3037,6 +3037,7 @@ def admin_tools_page() -> Any:
     )
     return render_template(
         'admin_tools.html',
+        health_payload=_build_health_payload(),
         readiness_payload=readiness_payload,
         readiness_http_status=readiness_http_status,
         files_manifest=_build_admin_files_manifest(),
@@ -3478,12 +3479,47 @@ def master_csv_status() -> Any:
     if os.path.exists(MASTER_CSV_PATH):
         stat = os.stat(MASTER_CSV_PATH)
         modified = datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M')
-        return jsonify({
+        payload = {
             'exists': True,
             'filename': 'master_medweb.csv',
             'modified': modified,
             'size': stat.st_size
-        })
+        }
+        # Read-only content summary for the Import page (date range, people, rows).
+        cols = APP_CONFIG.get('medweb_mapping', {}).get('columns', {})
+        date_col = cols.get('date', 'Datum')
+        worker_col = cols.get('employee_personalnummer', 'Personalnummer')
+        name_col = cols.get('employee_name', 'Name des Mitarbeiters')
+        try:
+            summary_df = None
+            for sep in (',', ';'):
+                for encoding in ('utf-8', 'latin1'):
+                    try:
+                        candidate = pd.read_csv(MASTER_CSV_PATH, sep=sep, encoding=encoding, dtype=str)
+                    except UnicodeDecodeError:
+                        continue
+                    if date_col in candidate.columns:
+                        summary_df = candidate
+                    break
+                if summary_df is not None:
+                    break
+            if summary_df is not None:
+                dates = sorted({
+                    parsed for parsed in (
+                        pd.to_datetime(summary_df[date_col], dayfirst=True, errors='coerce').dropna().dt.date
+                    )
+                })
+                id_col = worker_col if worker_col in summary_df.columns else name_col
+                payload.update({
+                    'rows': int(len(summary_df)),
+                    'first_date': dates[0].isoformat() if dates else None,
+                    'last_date': dates[-1].isoformat() if dates else None,
+                    'day_count': len(dates),
+                    'worker_count': int(summary_df[id_col].dropna().nunique()) if id_col in summary_df.columns else None,
+                })
+        except Exception as exc:
+            payload['summary_error'] = str(exc)
+        return jsonify(payload)
     return jsonify({'exists': False})
 
 @routes.route('/upload-master-csv', methods=['POST'])

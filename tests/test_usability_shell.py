@@ -241,10 +241,10 @@ def test_admin_tools_stay_compact_and_reachable_on_narrow_pages():
     client = _admin_client()
 
     upload_html = client.get('/upload').get_data(as_text=True)
-    assert 'class="column workflow-column"' in upload_html
-    assert 'class="column upload-column"' in upload_html
-    assert '.upload-column {' in upload_html
-    assert 'order: 1;' in upload_html
+    assert 'workflow-column' not in upload_html
+    assert 'upload-column' in upload_html
+    assert 'load-today-btn' not in upload_html  # rebuilding today lives on the Today page
+    assert 'id="next-steps"' in upload_html
 
     workload_html = client.get('/worker-load').get_data(as_text=True)
     assert 'id="recent-filter-worker"' in workload_html
@@ -276,7 +276,7 @@ def test_page_titles_follow_short_naming_contract():
         '/skill-roster': 'RadIMO Cortex | Skills',
         '/button-weights': 'RadIMO Cortex | Weights',
         '/upload': 'RadIMO Cortex | Import',
-        '/admin/tools': 'RadIMO Cortex | Tools',
+        '/admin/tools': 'RadIMO Cortex | System',
         '/admin/settings': 'RadIMO Cortex | Settings',
         '/admin/files': 'RadIMO Cortex | Files',
         '/admin/logs': 'RadIMO Cortex | Logs',

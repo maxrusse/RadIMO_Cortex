@@ -4,105 +4,37 @@
 {% block title %}RadIMO Cortex | Files{% endblock %}
 
 {% block styles %}
-  body { max-width: 1600px; }
-  .section-jumps {
-    position: sticky;
-    top: 0.35rem;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    margin: 0;
-    padding: 0.28rem;
-    border: 1px solid var(--ops-line);
-    border-radius: 5px;
-    background: rgba(255, 255, 255, 0.97);
-  }
-  .section-jumps a {
-    padding: 0.3rem 0.55rem;
-    border-radius: 4px;
-    color: var(--ops-primary);
-    font-size: 0.72rem;
-    font-weight: 750;
-    text-decoration: none;
-  }
-  .section-jumps a:hover,
-  .section-jumps a:focus-visible { background: #eaf1f6; }
-  #managed-files-grid,
-  #staged-days,
-  #recoverable-backups { scroll-margin-top: 4rem; }
-  .files-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
-  .managed-card,
-  .wide-card {
-    background: #fff;
-    border: 1px solid var(--ops-line);
-    border-radius: var(--ops-radius);
-    padding: 0.68rem;
-    min-width: 0;
-    box-shadow: var(--ops-shadow);
-  }
-  .managed-card { border-top: 3px solid #86abc6; }
-  .wide-card { margin-top: 0.55rem; overflow: hidden; }
-  .card-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: flex-start; }
-  .card-head h2 { margin: 0; font-size: 0.94rem; color: var(--ops-ink); }
-  .badge {
-    padding: 0.14rem 0.4rem; border-radius: 999px; font-size: 0.65rem; font-weight: 850;
-    white-space: nowrap;
-  }
-  .badge-ok { background: #dcfce7; color: #166534; }
-  .badge-missing { background: #fee2e2; color: #991b1b; }
-  .path {
-    display: block; padding: 0.3rem 0.4rem; border-radius: 4px; background: #f1f5f9;
-    color: #36536b; font: 0.67rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
-    overflow-wrap: anywhere;
-  }
-  .meta-row { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.32rem; color: var(--ops-muted); font-size: 0.68rem; }
-  .toolbar { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; margin-top: 0.45rem; }
-  details.upload-panel { margin-top: 0.5rem; border-top: 1px solid #e2e8f0; padding-top: 0.4rem; }
-  details.upload-panel summary { cursor: pointer; font-size: 0.76rem; font-weight: 750; color: #31546d; }
-  .upload-form { display: grid; gap: 0.4rem; margin-top: 0.45rem; }
-  .upload-form input[type='file'], .upload-form input[type='date'] {
-    width: 100%; padding: 0.38rem; border: 1px solid #cbd5e1; border-radius: 4px; font: inherit; font-size: 0.76rem;
-  }
-  .ack { display: flex; gap: 0.35rem; align-items: flex-start; color: #5b4a32; font-size: 0.73rem; line-height: 1.3; }
-  .message { padding: 0.55rem 0.7rem; margin-bottom: 0.65rem; border-radius: 5px; font-size: 0.82rem; font-weight: 700; }
-  .message.success { background: #ecfdf3; border: 1px solid #a7f3d0; color: #166534; }
-  .message.warning { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
-  .message.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
-  .table-wrap { width: 100%; max-width: 100%; overflow: auto; max-height: 440px; }
-  .files-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-  .files-table th, .files-table td { padding: 0.38rem; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  .files-table th { position: sticky; top: 0; background: #eaf0f5; color: #294b65; z-index: 1; font-size: .67rem; text-transform: uppercase; letter-spacing: .025em; }
-  .files-table code { font-size: 0.69rem; overflow-wrap: anywhere; }
-  .section-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; }
-  .section-head h2 { margin: 0; font-size: 0.94rem; color: var(--ops-ink); }
-  .section-note { color: #64748b; font-size: 0.75rem; }
-  .editor-backdrop {
-    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-    background: rgba(15, 23, 42, 0.62); padding: 1rem; z-index: 1000;
-  }
+  .section-jumps { display: inline-flex; gap: 0.15rem; padding: 2px; border-radius: var(--radius); background: var(--c-surface-3); }
+  .section-jumps a { padding: 0.25rem 0.7rem; border-radius: var(--radius-sm); color: var(--c-muted); font-size: var(--fs-sm); font-weight: 650; text-decoration: none; }
+  .section-jumps a:hover { background: #fff; color: var(--c-ink); }
+  #staged-days, #recoverable-backups { scroll-margin-top: 1rem; }
+  .files-table td { vertical-align: middle; }
+  .files-table .file-name strong { display: block; }
+  .files-table .file-name code { color: var(--c-muted); font: var(--fs-xs)/1.3 var(--mono); }
+  .files-table .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; justify-content: flex-end; }
+  .files-table tr.upload-row > td { background: var(--c-surface-2); }
+  .upload-form { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+  .upload-form input[type='file'], .upload-form input[type='date'] { font: inherit; font-size: var(--fs-sm); }
+  .upload-form input[type='date'] { height: 28px; padding: 0.1rem 0.35rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); }
+  .upload-form label { display: inline-flex; gap: 0.35rem; align-items: center; color: var(--c-muted); font-size: var(--fs-xs); font-weight: 700; }
+  .ack { display: inline-flex; gap: 0.35rem; align-items: center; color: #6d4108 !important; font-weight: 600 !important; }
+  .message { margin-bottom: 0.65rem; padding: 0.55rem 0.75rem; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 700; }
+  .message.success { background: var(--c-success-soft); border: 1px solid #a7d8bb; color: var(--c-success); }
+  .message.warning { background: var(--c-warning-soft); border: 1px solid #ecc98a; color: var(--c-warning); }
+  .message.error { background: var(--c-danger-soft); border: 1px solid #efb7b0; color: var(--c-danger); }
+  .table-wrap { max-height: 420px; overflow: auto; }
+  .editor-backdrop { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, 0.62); }
   .editor-backdrop.show { display: flex; }
-  .editor-panel {
-    width: min(1100px, 96vw); height: min(780px, 92vh); display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0.5rem;
-    background: #fff; border-radius: 8px; padding: 0.75rem; box-shadow: 0 18px 50px rgba(0,0,0,.35);
-  }
+  .editor-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0.5rem; width: min(1100px, 96vw); height: min(780px, 92vh); padding: 0.75rem; border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-2); }
   .editor-panel h2 { margin: 0; font-size: 1rem; }
-  .editor-meta { color: #64748b; font-size: 0.74rem; }
-  #managed-file-editor {
-    width: 100%; height: 100%; resize: none; padding: 0.6rem; border: 1px solid #94a3b8;
-    border-radius: 5px; font: 0.78rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
-    tab-size: 2;
-  }
-  @media (max-width: 1050px) { .files-grid { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 680px) { .files-grid { grid-template-columns: 1fr; } }
+  .editor-meta { color: var(--c-muted); font-size: var(--fs-xs); }
+  .editor-panel .toolbar { display: flex; justify-content: flex-end; gap: 0.4rem; }
+  #managed-file-editor { width: 100%; height: 100%; resize: none; padding: 0.6rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); font: 0.78rem/1.4 var(--mono); tab-size: 2; }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Files' %}
   {% set header_subtitle = 'Edit, reload & recover' %}
-  {% set header_mode = 'global' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
@@ -111,37 +43,40 @@
   <div class="ops-shell">
   <div class="ops-page-head">
     <div>
-      <div class="ops-eyebrow">Recovery workspace</div>
-      <h2>Managed files & snapshots</h2>
+      <div class="ops-eyebrow">Schedule data</div>
+      <h2>Files &amp; backups</h2>
     </div>
-  <nav class="section-jumps" aria-label="File sections">
-    <a href="#managed-files-grid">Managed files</a>
-    <a href="#staged-days">Staging</a>
-    <a href="#recoverable-backups">Backups</a>
-  </nav>
+    <nav class="section-jumps" aria-label="File sections">
+      <a href="#managed-files-grid">Managed files</a>
+      <a href="#staged-days">Staging</a>
+      <a href="#recoverable-backups">Backups</a>
+    </nav>
   </div>
 
-  <section class="ops-metric-grid" aria-label="File inventory">
-    <article class="ops-metric"><span class="ops-metric__label">Managed files</span><strong class="ops-metric__value">{{ manifest.targets|length }}</strong></article>
-    <article class="ops-metric"><span class="ops-metric__label">Available</span><strong class="ops-metric__value ops-metric__value--ok">{{ manifest.targets|selectattr('exists')|list|length }}</strong></article>
-    <article class="ops-metric"><span class="ops-metric__label">Staged snapshots</span><strong class="ops-metric__value">{{ manifest.staged_days|length }}</strong></article>
-    <article class="ops-metric"><span class="ops-metric__label">Recoverable backups</span><strong class="ops-metric__value">{{ manifest.managed_backups|length }}</strong></article>
+  <div id="message-container" role="status" aria-live="polite"></div>
+
+  <section class="ui-panel" id="managed-files-grid" aria-label="Managed files">
+    <div class="ui-panel__head">
+      <h3 class="ui-panel__title">Managed files</h3>
+      <span class="ui-panel__hint">Active configuration and data. Every change is validated and backed up first.</span>
+    </div>
+    <div id="managed-files-content"></div>
   </section>
 
-  <div id="message-container" role="status" aria-live="polite"></div>
-  <section id="managed-files-grid" class="files-grid"></section>
-
-  <section class="wide-card" id="staged-days">
-    <div class="section-head">
-      <div><h2>Prep days / staged snapshots</h2></div>
+  <section class="ui-panel" id="staged-days" aria-label="Staged days">
+    <div class="ui-panel__head">
+      <h3 class="ui-panel__title">Prep days / staged snapshots</h3>
+      <span class="ui-panel__hint">One active file per planning date; older versions can be restored.</span>
     </div>
     <div id="staged-days-content"></div>
   </section>
 
-  <section class="wide-card" id="recoverable-backups">
-    <div class="section-head">
-      <div><h2>Recoverable backups</h2><div class="section-note" id="backup-path-note"></div></div>
-      <button type="button" class="btn btn-outline" id="refresh-manifest-btn">Refresh</button>
+  <section class="ui-panel" id="recoverable-backups" aria-label="Recoverable backups">
+    <div class="ui-panel__head">
+      <h3 class="ui-panel__title">Recoverable backups</h3>
+      <span class="ui-panel__hint" id="backup-path-note"></span>
+      <span class="ui-toolbar__spacer"></span>
+      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" id="refresh-manifest-btn">Refresh</button>
     </div>
     <div id="managed-backups-content"></div>
   </section>
@@ -152,8 +87,8 @@
       <div class="editor-meta" id="managed-editor-meta"></div>
       <textarea id="managed-file-editor" data-initial-focus spellcheck="false"></textarea>
       <div class="toolbar">
-        <button type="button" class="btn btn-secondary btn-cancel" id="managed-editor-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary" data-dialog-submit id="managed-editor-save">Validate, back up &amp; apply</button>
+        <button type="button" class="ui-btn ui-btn--secondary btn-cancel" id="managed-editor-cancel">Cancel</button>
+        <button type="button" class="ui-btn" data-dialog-submit id="managed-editor-save">Validate, back up &amp; apply</button>
       </div>
     </div>
   </div>
