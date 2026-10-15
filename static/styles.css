@@ -377,7 +377,6 @@ body.theme-admin {
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--selector-color, #004892);
 }
 
-.header-selector .selector-link[data-skill] { border-radius: 999px; }
 .header-selector .selector-link[data-modality] { min-width: 3.2rem; text-align: center; }
 
 .header-context {
@@ -650,7 +649,7 @@ body.theme-admin {
   min-height: 26px;
   padding: 0.18rem 0.6rem;
   border: 1px solid var(--c-line-strong);
-  border-radius: 999px;
+  border-radius: 3px;
   background: #fff;
   color: var(--c-ink);
   font: inherit;
@@ -675,7 +674,7 @@ body.theme-admin {
 .ui-chip__count {
   min-width: 1.1rem;
   padding: 0 0.25rem;
-  border-radius: 999px;
+  border-radius: 3px;
   background: rgba(0, 0, 0, 0.08);
   font-size: 0.68rem;
   text-align: center;
@@ -711,20 +710,19 @@ body.theme-admin {
   box-shadow: var(--shadow-1);
 }
 
-/* Local tabs */
+/* Local tabs: flat, underline marks the active view */
 .ui-tabs {
   display: flex;
-  gap: 0.15rem;
+  gap: 1.25rem;
   margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--c-line-strong);
 }
 
 .ui-tab {
   margin-bottom: -1px;
-  padding: 0.5rem 0.9rem;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 0.45rem 0.1rem 0.5rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
   background: transparent;
   color: var(--c-muted);
   font: inherit;
@@ -734,15 +732,13 @@ body.theme-admin {
   cursor: pointer;
 }
 
-.ui-tab:hover { color: var(--c-ink); background: rgba(255, 255, 255, 0.6); }
+.ui-tab:hover { color: var(--c-ink); }
 
 .ui-tab.is-active,
 .ui-tab[aria-selected="true"],
 .ui-tab[aria-current="page"] {
-  border-color: var(--c-line-strong);
-  background: var(--c-page);
+  border-bottom-color: var(--c-primary);
   color: var(--c-ink);
-  box-shadow: inset 0 3px 0 var(--c-primary);
 }
 
 /* Scope bar: says where edits land (live vs. staged) */
@@ -765,7 +761,7 @@ body.theme-admin {
 
 .ui-scope__tag {
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: 3px;
   background: var(--scope-color, var(--c-primary));
   color: #fff;
   font-size: var(--fs-xs);
@@ -830,7 +826,7 @@ body.theme-admin {
   align-items: center;
   gap: 0.25rem;
   padding: 0.08rem 0.45rem;
-  border-radius: 999px;
+  border-radius: 3px;
   background: var(--c-surface-3);
   color: var(--c-muted);
   font-size: 0.7rem;
@@ -878,7 +874,7 @@ body.theme-admin {
   align-items: center;
   gap: 0.3rem;
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: 3px;
   background: var(--c-warning-soft);
   color: var(--c-warning);
   font-size: var(--fs-xs);
@@ -1031,7 +1027,7 @@ body.theme-admin {
   align-items: center;
   gap: 0.28rem;
   padding: 0.14rem 0.42rem;
-  border-radius: 999px;
+  border-radius: 3px;
   background: var(--c-success-soft);
   color: var(--c-success);
   font-size: 0.68rem;

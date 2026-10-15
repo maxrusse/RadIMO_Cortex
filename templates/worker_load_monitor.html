@@ -100,8 +100,8 @@
     .people-table tbody tr.worker-row:hover td { background: #f4f8fb; }
     .people-table tbody tr.worker-row.is-open td { background: var(--c-primary-soft); }
     .people-table .worker-col { font-weight: 600; }
-    .people-table .worker-col::before { content: '▸ '; color: var(--c-faint); }
-    .people-table tr.is-open .worker-col::before { content: '▾ '; color: var(--c-primary); }
+    .people-table .worker-col::before { content: '›'; display: inline-block; width: 0.9rem; margin-right: 0.15rem; color: var(--c-faint); font-weight: 700; line-height: 1; text-align: center; transform-origin: 50% 50%; transition: transform 0.15s; }
+    .people-table tr.is-open .worker-col::before { transform: rotate(90deg); color: var(--c-primary); }
     .people-table tr.is-below-threshold .worker-col { color: var(--c-muted); font-weight: 400; }
 
     .dev-cell { width: 34%; min-width: 260px; }
@@ -251,7 +251,7 @@
     .recent-pill {
       display: inline-block;
       padding: 0.06rem 0.45rem;
-      border-radius: 999px;
+      border-radius: 3px;
       font-size: 0.7rem;
       font-weight: 750;
     }

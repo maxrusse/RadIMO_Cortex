@@ -40,13 +40,13 @@ let sortState = {
   for (const [mod, settings] of Object.entries(MODALITY_SETTINGS)) {
     const navColor = settings.nav_color || '#6c757d';
     css += `.badge-${mod}{background:${navColor};}`;
-    css += `.load-table .mod-header-${mod}{background:${navColor}!important;color:white!important;border-bottom:4px solid rgba(0,0,0,.22);}`;
+    css += `.load-table .mod-header-${mod}{background:${navColor}!important;color:white!important;}`;
   }
   for (const [skill, settings] of Object.entries(SKILL_SETTINGS)) {
     const btnColor = settings.button_color || '#6c757d';
     const textColor = settings.text_color || '#ffffff';
     const safeSkill = skill.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    css += `.load-table .skill-header-${safeSkill}{background:${btnColor}!important;color:${textColor}!important;border-radius:999px 999px 0 0;}`;
+    css += `.load-table .skill-header-${safeSkill}{background:#fff!important;color:#24384a!important;box-shadow:inset 0 3px 0 ${btnColor};}`;
   }
   style.textContent = css;
   document.head.appendChild(style);
@@ -575,7 +575,7 @@ function renderAdvancedTable(variant) {
   });
 
   const totalSortKey = safeVariant === 'weight' ? 'weight' : 'count';
-  const totalLabel = safeVariant === 'weight' ? 'Derived Total' : 'Total';
+  const totalLabel = safeVariant === 'weight' ? 'Derived total' : 'Total';
   headerTop += `<th rowspan="2" class="sortable" data-sort="${totalSortKey}" onclick="sortTable('${tableKey}', '${totalSortKey}')">${totalLabel}</th></tr>`;
   headerSub += '</tr>';
   thead.innerHTML = headerTop + headerSub;
