@@ -237,7 +237,7 @@ If you later receive a real hostname, replace `server_name _;` with that intrane
 - `/readyz` returns HTTP `200`
 - `/status` renders correctly
 - admin login works with the rotated password
-- current roster and weights are visible in the Tools menu
+- current roster and weights are visible under Administration → Skills and Weights
 - current uploaded Master CSV is recognized
 - live or staged backups load as expected
 

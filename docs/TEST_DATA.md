@@ -117,7 +117,7 @@ Default output folder:
 1. Start app locally (`flask --app app run --debug`).
 2. Open admin page `/upload`.
 3. Upload `test_data/generated/<scenario>/master_medweb.csv`.
-4. Use **HARD RELOAD TODAY** and inspect `/`, `/timetable`, and `/prep-today`.
+4. Use **Today → ⋯ → Rebuild today from CSV** and inspect `/`, `/timetable`, and `/prep-today`.
 5. For a scenario roster, back up the current `data/worker_skill_roster.json`,
    replace it with the scenario fixture, then use **Tools → Files → Reload** (or
    restart the app) before testing. Restore the original runtime file afterward.

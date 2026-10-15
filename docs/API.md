@@ -81,6 +81,10 @@ scope, or line values return `400`.
 | POST | `/api/live-schedule/update-row`, `/api/live-schedule/apply-worker-plan`, `/api/live-schedule/create-worker-plan`, `/api/live-schedule/resolve-task-preview`, `/api/live-schedule/add-gap-batch` |
 | POST | `/api/prep-next-day/update-row`, `/api/prep-next-day/apply-worker-plan`, `/api/prep-next-day/create-worker-plan`, `/api/prep-next-day/resolve-task-preview`, `/api/prep-next-day/add-gap-batch` |
 
+`/api/master-csv-status` returns `exists`, `filename`, `modified`, and `size`, plus a
+read-only content summary when the stored CSV can be parsed: `rows`, `first_date`,
+`last_date`, `day_count`, and `worker_count` (or `summary_error`).
+
 Worker-plan endpoints treat the full worker plan as the mutation unit; an empty
 `shifts` list removes that worker from the selected modalities. Staged-data
 requests accept `target_date` in `YYYY-MM-DD` form; invalid dates return `400`.
