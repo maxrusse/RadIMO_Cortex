@@ -3,25 +3,6 @@
 {% block title %}RadIMO Cortex | {{ skill_labels[skill] }} Live{% endblock %}
 
 {% block styles %}
-    :root {
-      --disabled-color: #888;
-
-      /* Global & Other Colors */
-      --primary-color: #004892;
-      --global-accent: #004892;
-      --body-bg: #f0f0f0;
-      --header-bg: #fff;
-      --tab-bg: #fff;
-      --tab-color: #000;
-      --card-bg: #fff;
-      --info-box-border: #dc3545;
-      --info-item-bg: #fff;
-      --info-item-shadow: rgba(0, 0, 0, 0.05);
-      --card-header-bg: #f8f9fa;
-      --stats-header-bg: #f8f9fa;
-      --table-header-bg: #f8f9fa;
-      --highlight-bg: rgba(0, 0, 0, 0.05);
-    }
 
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -317,6 +298,7 @@
         document.body.style.setProperty('--skill-bg', skillDef.button_color + '22');
         document.body.style.setProperty('--skill-nav', skillDef.button_color);
         document.body.style.setProperty('--skill-hover', skillDef.button_color + 'dd');
+        window.RadimoUI.watermark(skillDef.label || currentSkill);
       }
 
       // Border colors for skill selector

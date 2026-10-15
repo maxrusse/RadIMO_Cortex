@@ -44,8 +44,7 @@
 
     .wl-toolbar { padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--c-line); }
     .wl-toolbar .ui-chip { min-height: 24px; padding: 0.12rem 0.5rem; font-size: var(--fs-xs); }
-    .wl-note { padding: 0.35rem 0.85rem; color: var(--c-muted); font-size: var(--fs-xs); border-bottom: 1px solid var(--c-line); }
-    .wl-note strong { color: var(--c-ink); }
+
     .matrix-only { display: none; }
     body.mode-advanced-weight .matrix-only,
     body.mode-advanced-count .matrix-only { display: inline-flex; }
@@ -208,7 +207,7 @@
     .leaders-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
     .leaders-card { padding: 0.65rem 0.75rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: #fff; }
     .leaders-card h4 { margin: 0; color: var(--c-ink); font-size: var(--fs-sm); font-weight: 750; }
-    .leaders-note { margin: 0.1rem 0 0.4rem; color: var(--c-muted); font-size: var(--fs-xs); line-height: 1.35; }
+    
     .leaders-list { margin: 0; padding-left: 1.1rem; color: #314150; font-size: var(--fs-sm); }
     .leaders-list li + li { margin-top: 0.2rem; }
 
@@ -217,7 +216,7 @@
     .daily-load-card-header { display: flex; justify-content: space-between; align-items: baseline; }
     .daily-load-card-header h4 { margin: 0; color: var(--c-ink); font-size: var(--fs-sm); }
     .daily-load-total { color: var(--c-muted); font-size: var(--fs-xs); font-weight: 700; }
-    .daily-load-note { margin: 0.1rem 0 0.4rem; color: var(--c-muted); font-size: var(--fs-xs); }
+    
     .daily-load-chart-wrap { overflow-x: auto; border: 1px solid #e3ebf3; border-radius: var(--radius-sm); background: #fbfdff; }
     .daily-load-chart { display: block; width: 100%; min-width: 560px; height: 260px; }
     .daily-load-empty { padding: 0.6rem; color: var(--c-muted); font-style: italic; text-align: center; }
@@ -229,7 +228,7 @@
     .flow-meta-label { color: var(--c-muted); }
     .flow-meta-value { color: var(--c-ink); font-weight: 750; }
     .flow-diagram-wrap { overflow-x: auto; }
-    .flow-diagram { display: block; min-width: 760px; }
+    .flow-diagram { display: block; width: 100%; max-width: 1100px; height: auto; margin: 0 auto; }
     .flow-diagram-empty { padding: 1rem; color: var(--c-muted); font-style: italic; text-align: center; }
 
     /* Log */

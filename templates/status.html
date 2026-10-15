@@ -4,26 +4,19 @@
 {% block title %}RadIMO Cortex | Status{% endblock %}
 
 {% block styles %}
-    .status-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-bottom: 0.55rem; }
-    .status-card { display: flex; align-items: center; justify-content: space-between; gap: 0.65rem; }
-    .status-card__label { color: var(--c-muted); font-size: 0.69rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
-    .status-card__value { margin-top: .15rem; color: var(--c-ink); font-size: 1rem; font-weight: 850; }
-    .status-card__meta { color: var(--c-muted); font-size: .67rem; overflow-wrap: anywhere; }
-    .probe-links { display: flex; gap: .3rem; flex-wrap: wrap; }
-    .checks-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
-    .checks-table th, .checks-table td { padding: .45rem; border-bottom: 1px solid #e1e8ef; text-align: left; vertical-align: top; }
-    .checks-table th { background: #eaf0f5; color: #294b65; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; }
-    .check-status { font-weight: 850; }
+    .status-summary { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.75rem 0.9rem; }
+    .status-state { padding: 0.35rem 0.8rem; border-radius: var(--radius); color: #fff; font-size: 1.05rem; font-weight: 850; letter-spacing: 0.04em; }
+    .status-state--ok { background: var(--c-success); }
+    .status-state--error { background: var(--c-danger); }
+    .status-summary .ui-kv { font-size: var(--fs-md); }
+    .checks-table td.check-status { font-weight: 800; white-space: nowrap; }
     .check-status--ok { color: var(--c-success); }
     .check-status--warning { color: var(--c-warning); }
     .check-status--error { color: var(--c-danger); }
-    @media (max-width: 760px) { .status-card-grid { grid-template-columns: 1fr; } }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Status' %}
-  {% set header_subtitle = 'Health & readiness' %}
-  {% set header_mode = 'global' %}
   {% set active_page = '' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
@@ -36,60 +29,38 @@
   {% set error_count = checks|selectattr('status', 'equalto', 'ERROR')|list|length %}
 
   <div class="ops-shell">
-    <div class="ops-page-head">
-      <span></span>
-      <div class="ops-actions">
-        <button class="ops-button" type="button" onclick="location.reload()">Run checks again</button>
-        {% if is_admin %}<a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_logs_page') }}">Open logs</a>{% endif %}
-      </div>
-    </div>
-
-    <section class="status-card-grid" aria-label="Probe summary">
-      <article class="ops-card status-card">
-        <div><div class="status-card__label">Health</div><div class="status-card__value">OK</div><div class="status-card__meta">{{ health_payload.get('timestamp', '-') }}</div></div>
-        <span class="ops-badge">healthy</span>
-      </article>
-      <article class="ops-card status-card">
-        <div><div class="status-card__label">Readiness</div><div class="status-card__value">{{ 'READY' if ready_ok else 'NOT READY' }}</div><div class="status-card__meta">{{ readiness_payload.get('timestamp', '-') }}</div></div>
-        <span class="ops-badge {{ '' if ready_ok else 'ops-badge--error' }}">{{ 'ready' if ready_ok else 'attention' }}</span>
-      </article>
-      <article class="ops-card status-card">
-        <div><div class="status-card__label">Checks</div><div class="status-card__value">{{ checks|length }} total</div><div class="status-card__meta">{{ warning_count }} warning · {{ error_count }} error</div></div>
-        <div class="probe-links">
-          <a class="ops-button ops-button--outline" href="{{ url_for('routes.healthz') }}" target="_blank" rel="noopener">/healthz</a>
-          <a class="ops-button ops-button--outline" href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
-        </div>
-      </article>
+    <section class="ui-panel status-summary" aria-label="Probe summary">
+      <span class="status-state {{ 'status-state--ok' if ready_ok else 'status-state--error' }}">{{ 'READY' if ready_ok else 'NOT READY' }}</span>
+      <span class="ui-kv">
+        <span class="ui-kv__item"><span class="ui-kv__label">Health</span><span class="ui-kv__value">OK</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Checks</span><span class="ui-kv__value">{{ checks|length }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Warnings</span><span class="ui-kv__value {{ 'check-status--warning' if warning_count }}">{{ warning_count }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Errors</span><span class="ui-kv__value {{ 'check-status--error' if error_count }}">{{ error_count }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Checked</span><span class="ui-kv__value">{{ (readiness_payload.get('timestamp') or '-')[:19]|replace('T', ' ') }}</span></span>
+      </span>
+      <span class="ui-toolbar__spacer"></span>
+      <a class="ui-btn ui-btn--ghost ui-btn--sm" href="{{ url_for('routes.healthz') }}" target="_blank" rel="noopener">/healthz</a>
+      <a class="ui-btn ui-btn--ghost ui-btn--sm" href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
+      <button class="ui-btn ui-btn--secondary" type="button" onclick="location.reload()">Run checks again</button>
     </section>
 
-  <section class="ops-panel">
-    <div class="ops-section-head">
-      <div><h2 class="ops-section-title">Readiness Checks</h2></div>
-      {% if is_admin %}<a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_files_page') }}">Open files</a>{% endif %}
-    </div>
-    <table class="checks-table">
-      <thead>
-        <tr>
-          <th>Check</th>
-          <th>Status</th>
-          <th>Detail</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for check in (checks|rejectattr('status', 'equalto', 'OK')|list) + (checks|selectattr('status', 'equalto', 'OK')|list) %}
-        {% set check_status = (check.get('status', 'UNKNOWN')|upper) %}
-        <tr>
-          <td>{{ check.get('name', '-') }}</td>
-          <td class="check-status check-status--{{ check_status|lower }}">{{ check_status }}</td>
-          <td>{{ check.get('detail', '-') }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="3">No readiness checks returned.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    <section class="ui-panel" aria-label="Readiness checks">
+      <div class="ui-panel__head"><h3 class="ui-panel__title">Readiness checks</h3></div>
+      <table class="ui-table checks-table">
+        <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody>
+          {% for check in (checks|rejectattr('status', 'equalto', 'OK')|list) + (checks|selectattr('status', 'equalto', 'OK')|list) %}
+          {% set check_status = (check.get('status', 'UNKNOWN')|upper) %}
+          <tr>
+            <td>{{ check.get('name', '-') }}</td>
+            <td class="check-status check-status--{{ check_status|lower }}">{{ check_status }}</td>
+            <td>{{ check.get('detail', '-') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3">No readiness checks returned.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
   </div>
 {% endblock %}

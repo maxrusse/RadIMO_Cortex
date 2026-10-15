@@ -10,14 +10,12 @@
   .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; padding: 0.85rem; }
   .step { display: grid; align-content: start; gap: 0.4rem; padding: 0.65rem; border: 1px solid var(--c-line); border-radius: var(--radius); background: var(--c-surface-2); }
   .step__label { color: var(--c-primary); font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
-  .step__title { font-weight: 750; }
+  
   .file-input-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .file-picker-name { color: var(--c-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
   .file-picker-name.is-selected { color: var(--c-ink); font-weight: 700; }
   .import-note { margin: 0 0.85rem 0.85rem; }
-  .message { margin-bottom: 0.65rem; padding: 0.55rem 0.75rem; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 650; }
-  .message.success { background: var(--c-success-soft); border: 1px solid #a7d8bb; color: var(--c-success); }
-  .message.error { background: var(--c-danger-soft); border: 1px solid #efb7b0; color: var(--c-danger); }
+
   .next-steps { display: grid; gap: 0.35rem; }
   .next-steps a { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--c-line); border-radius: var(--radius-sm); color: var(--c-ink); text-decoration: none; }
   .next-steps a:hover { border-color: var(--c-primary); background: var(--c-primary-soft); }

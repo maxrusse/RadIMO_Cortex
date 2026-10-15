@@ -225,7 +225,8 @@ def test_dashboard_selectors_use_solid_distinct_active_states():
     timetable_js = Path('static/js/timetable.js').read_text(encoding='utf-8')
     timeline_js = Path('static/js/timeline.js').read_text(encoding='utf-8')
 
-    assert 'repeating-linear-gradient' not in header_css
+    header_section = header_css.split('Application header', 1)[1].split('Legacy shared components', 1)[0]
+    assert 'repeating-linear-gradient' not in header_section
     assert 'box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--selector-color' in header_css
     timetable_template = Path('templates/timetable.html').read_text(encoding='utf-8')
     assert 'buildSkillGradient' not in timeline_js

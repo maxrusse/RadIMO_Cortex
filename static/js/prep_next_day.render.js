@@ -332,7 +332,7 @@ function renderTable(tab) {
 
     const totalRows = shiftsToRender.length;
     const isDuplicate = shifts.length > 1;
-    const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} shifts</span>` : '';
+    const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} ${window.RadimoUI.text('shifts', 'Dienste')}</span>` : '';
     const hasNonGapShift = shifts.some(shift => !shift.is_gap_entry);
     const hasGapRows = (group.allGaps || []).length > 0;
     const warningMessages = [];

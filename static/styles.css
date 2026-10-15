@@ -28,7 +28,7 @@
   --danger-color: #dc3545;
   --danger-hover: #c82333;
   --disabled-color: #888;
-  --body-bg: #f0f0f0;
+  --body-bg: #edf1f5;
   --header-bg: #fff;
   --card-bg: #fff;
   --tab-bg: #fff;
@@ -1286,3 +1286,174 @@ body.theme-admin {
 }
 
 .ui-toast__close:hover { background: var(--c-surface-3); color: var(--c-ink); }
+
+/* ==========================================================================
+   Timeline (shared by Schedule, Today and Planning; static/js/timeline.js)
+   ========================================================================== */
+:root { --worker-col-width: 140px; }
+
+.timeline-wrapper { overflow-x: auto; overflow-y: visible; }
+
+.timeline-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--worker-col-width) 1fr;
+  min-width: 700px;
+}
+
+.time-header,
+.time-header-label {
+  position: sticky;
+  top: 0;
+  border-bottom: 2px solid var(--c-line);
+  background: var(--c-surface-2);
+}
+
+.time-header { grid-column: 2; display: flex; z-index: 10; }
+.time-header-label { grid-column: 1; left: 0; z-index: 11; padding: 0.5rem; font-size: var(--fs-sm); font-weight: 650; }
+.time-slot { flex: 1; padding: 0.4rem 0; border-left: 1px solid #eee; color: var(--c-muted); font-size: 0.7rem; text-align: center; }
+.time-slot:first-child { border-left: none; }
+.worker-row { display: contents; }
+
+.worker-name-cell {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  min-height: var(--timeline-row, 32px);
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-timeline {
+  position: relative;
+  height: var(--timeline-row, 32px);
+  border-bottom: 1px solid #eee;
+  background: repeating-linear-gradient(90deg, #eef0f2 0 1px, transparent 1px calc(100% / 14));
+}
+
+.shift-bar {
+  position: absolute;
+  top: calc((var(--timeline-row, 32px) - 26px) / 2);
+  height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+
+.shift-bar:hover { z-index: 2; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+
+.shift-bar__label {
+  position: absolute;
+  inset: 0 5px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+
+.shift-bar--multi { border-color: #b7c2cc; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55); }
+.shift-bar__label--multi { inset: 2px 3px; gap: 6px; text-shadow: none; }
+
+.shift-bar__skill-label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 0.69rem;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.shift-bar--neutral { border-style: dashed; border-color: rgba(0, 0, 0, 0.25); background: #e0e0e0; }
+
+.gap-bar,
+.legend-box.legend-gap {
+  border: 1px dashed #757575;
+  background: repeating-linear-gradient(45deg, #9e9e9e 0 4px, #bdbdbd 4px 8px);
+}
+
+.gap-bar {
+  position: absolute;
+  top: calc((var(--timeline-row, 32px) - 20px) / 2);
+  height: 20px;
+  border-radius: 3px;
+  overflow: hidden;
+  opacity: 0.85;
+  cursor: default;
+}
+
+.gap-bar:hover { z-index: 2; opacity: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+
+.current-time-line {
+  position: absolute;
+  top: 28px;
+  bottom: 0;
+  z-index: 8;
+  width: 2px;
+  background: #dc3545;
+  pointer-events: none;
+}
+
+.current-time-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #dc3545;
+}
+
+.timeline-legend,
+.legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: var(--fs-sm); }
+.legend-item { display: flex; align-items: center; gap: 0.35rem; }
+.legend-box { width: 16px; height: 16px; border: 1px solid rgba(0, 0, 0, 0.2); border-radius: 3px; }
+.timeline-grid .empty-state { grid-column: 1 / -1; padding: 2rem 1rem; color: var(--c-muted); text-align: center; }
+
+/* Legacy .btn markup on administration pages (e.g. dialogs rendered by JS) uses the ui-btn look.
+   Live pages are excluded: their assignment buttons must stay unchanged. */
+.theme-admin .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.theme-admin .btn-primary { background: var(--c-primary); color: #fff; }
+.theme-admin .btn-primary:hover { background: var(--c-primary-strong); }
+.theme-admin .btn-success { background: var(--c-success); color: #fff; }
+.theme-admin .btn-danger { background: var(--c-danger); color: #fff; }
+.theme-admin .btn-secondary,
+.theme-admin .btn-outline,
+.theme-admin .btn-warning { background: #fff; color: var(--c-ink); border-color: var(--c-line-strong); }
+.theme-admin .btn-secondary:hover,
+.theme-admin .btn-outline:hover { background: var(--c-surface-2); }
+.theme-admin .btn-small { min-height: 24px; padding: 0.15rem 0.45rem; font-size: var(--fs-xs); }
+
+/* Before the first assignment the result area keeps its space but stays invisible */
+.live-result:has(> .live-result__empty) { border-color: transparent; background: transparent; }
+.live-result__empty { visibility: hidden; }

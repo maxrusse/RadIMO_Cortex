@@ -109,5 +109,31 @@
     return toast;
   }
 
-  window.RadimoUI = { setDirty, hasDirty, notify, text };
+  /**
+   * Sparse diagonal watermark of the current selection (e.g. "CT") in the page background.
+   * Drawn as an SVG tile so it stays behind all content and never affects layout.
+   */
+  function watermark(label) {
+    const value = String(label || '').trim().toUpperCase();
+    if (!value) return;
+    const safe = value.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
+    const fontSize = 120;
+    const textWidth = Math.ceil(value.length * fontSize * 0.78);
+    const gap = 220;
+    const tileW = 2 * (textWidth + gap);
+    const tileH = 360;
+    // One rotated, seamless pattern; staggered rows keep it sparse and never clip a word.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="2800" height="1800">`
+      + `<defs><pattern id="wm" width="${tileW}" height="${tileH}" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">`
+      + `<g fill="#ffffff" fill-opacity="0.42" font-family="Segoe UI, system-ui, sans-serif" font-weight="900" font-size="${fontSize}" letter-spacing="6">`
+      + `<text x="${gap / 2}" y="${fontSize}">${safe}</text>`
+      + `<text x="${tileW / 2 + gap / 2}" y="${tileH / 2 + fontSize}">${safe}</text>`
+      + `</g></pattern></defs><rect width="100%" height="100%" fill="url(#wm)"/></svg>`;
+    document.body.style.backgroundImage = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+    document.body.style.backgroundRepeat = 'no-repeat';
+    document.body.style.backgroundAttachment = 'fixed';
+    document.body.style.backgroundPosition = 'center top';
+  }
+
+  window.RadimoUI = { setDirty, hasDirty, notify, text, watermark };
 })();

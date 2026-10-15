@@ -544,6 +544,9 @@
     ['active workers (1 or w) per skill, all modalities; hatched = nobody', 'aktive Personen (1 oder w) je Skill über alle Modalitäten; schraffiert = niemand'],
     ['Save or exit Quick Edit to open the full editor', 'Zum vollständigen Bearbeiten erst speichern oder Schnellbearbeitung beenden'],
     // == area: workload ==
+    ["Requested skill", "Angefragter Skill"],
+    ["Absorbing target skill", "Aufnehmender Ziel-Skill"],
+    ["shifts", "Dienste"],
     ["Derived total", "Abgeleitete Summe"],
     ['People', 'Personen'],
     ['Day overview', 'Tagesbild'],

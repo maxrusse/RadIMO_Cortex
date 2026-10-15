@@ -966,13 +966,13 @@ function renderFlowDiagram(data) {
   });
 
   const width = 960;
-  const leftX = 120;
-  const rightX = 760;
-  const nodeWidth = 120;
+  const nodeWidth = 190;
+  const leftX = 20;
+  const rightX = width - 20 - nodeWidth;
   const rowHeight = 28;
   const rowGap = 10;
   const topPadding = 42;
-  const bottomPadding = 24;
+  const bottomPadding = 12;
 
   function layoutSide(skillList, totalKey) {
     const skillOrder = SKILLS.filter(function(skill) { return skillList.includes(skill); });
@@ -1000,7 +1000,7 @@ function renderFlowDiagram(data) {
 
   const leftLayout = layoutSide(activeSkills, 'out_total');
   const rightLayout = layoutSide(activeSkills, 'in_total');
-  const height = Math.max(leftLayout.height, rightLayout.height, 220);
+  const height = Math.max(leftLayout.height, rightLayout.height, 100);
   const leftPos = {};
   const rightPos = {};
   leftLayout.nodes.forEach(function(node) { leftPos[node.skill] = node; });
@@ -1044,7 +1044,7 @@ function renderFlowDiagram(data) {
       const totalAnchor = align === 'left' ? 'end' : 'start';
       return `
         <g>
-          <rect x="${x}" y="${node.y}" width="${nodeWidth}" height="${rowHeight}" rx="7" fill="#ffffff" stroke="${node.color}" stroke-width="1.2"></rect>
+          <rect x="${x}" y="${node.y}" width="${nodeWidth}" height="${rowHeight}" rx="3" fill="#ffffff" stroke="${node.color}" stroke-width="1.2"></rect>
           <text x="${textX}" y="${node.y + 18}" font-size="11" font-weight="700" fill="#243447" text-anchor="${anchor}">${escapeHtml(node.label)}</text>
           <text x="${totalX}" y="${node.y + 18}" font-size="11" font-weight="700" fill="${node.color}" text-anchor="${totalAnchor}">${formatFlowValue(node.total)}</text>
           <title>${escapeHtml(node.label)}</title>
@@ -1054,12 +1054,12 @@ function renderFlowDiagram(data) {
   }
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('width', String(width));
-  svg.setAttribute('height', String(height));
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
   svg.innerHTML = `
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"></rect>
-    <text x="${leftX}" y="22" font-size="13" font-weight="700" fill="#004892">Requested Skill</text>
-    <text x="${rightX + nodeWidth}" y="22" font-size="13" font-weight="700" text-anchor="end" fill="#004892">Absorbing Target Skill</text>
+    <text x="${leftX}" y="22" font-size="13" font-weight="700" fill="#24384a">${escapeHtml(t('Requested skill'))}</text>
+    <text x="${rightX + nodeWidth}" y="22" font-size="13" font-weight="700" text-anchor="end" fill="#24384a">${escapeHtml(t('Absorbing target skill'))}</text>
     ${linkSvg}
     ${renderNodes(leftLayout.nodes, leftX, 'left')}
     ${renderNodes(rightLayout.nodes, rightX, 'right')}

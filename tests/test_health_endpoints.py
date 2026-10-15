@@ -76,7 +76,7 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/status")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Readiness Checks", response.data)
+        self.assertIn(b"Readiness checks", response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
