@@ -98,6 +98,13 @@ requests accept `target_date` in `YYYY-MM-DD` form; invalid dates return `400`.
 | GET | `/api/performance/data`, `/api/worker-load/data`, `/api/worker-load/daily-load`, `/api/worker-load/recent-distributions` |
 | GET, POST | `/api/manual-adjustments` |
 
+`/api/worker-load/data` includes scheduled workers and workers with recorded
+assignments or manual correction balances, even after their schedule rows are
+removed. Historical modality entries retain assignment counts and weighted totals;
+their shift times are empty. Workers without worked hours have a zero hourly ratio
+and do not enter the median baseline. They remain available for corrections through
+`/api/manual-adjustments`.
+
 ## Error convention
 
 Errors are JSON with an `error` message. Some endpoints additionally return
