@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 
-SCRIPT_PATH = Path("/home/dpxuser/radimo_dev/scripts/replay_distribution_day.py")
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "replay_distribution_day.py"
 SPEC = importlib.util.spec_from_file_location("replay_distribution_day", SCRIPT_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

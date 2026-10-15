@@ -5143,6 +5143,39 @@ def get_worker_load_data() -> Any:
 
             all_workers[canonical_id]['modalities'][modality] = mod_data
 
+    # Keep recorded balances reachable for correction after a worker leaves the schedule.
+    historical_worker_ids = set(global_worker_data.get('manual_weight_totals', {}) or {})
+    for modality in allowed_modalities:
+        historical_worker_ids.update(
+            (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).keys()
+        )
+    for canonical_id in sorted(historical_worker_ids):
+        if canonical_id not in all_workers:
+            all_workers[canonical_id] = {
+                'canonical_id': canonical_id,
+                'name': _get_preferred_display_name(canonical_id),
+                'modalities': {},
+                'skills': {},
+                'skill_weights': {},
+            }
+
+    # Assignment history may also outlive an individual modality's schedule row.
+    for canonical_id, worker_data in all_workers.items():
+        for modality in allowed_modalities:
+            counts = (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).get(canonical_id)
+            if counts is None or modality in worker_data['modalities']:
+                continue
+            skill_counts = {skill: int(counts.get(skill, 0) or 0) for skill in SKILL_COLUMNS}
+            worker_data['modalities'][modality] = {
+                'start_time': '',
+                'end_time': '',
+                'modifier': 1.0,
+                'skills': {},
+                'skill_counts': skill_counts,
+                'assignment_total': sum(skill_counts.values()),
+                'weighted_total': 0.0,
+            }
+
     # Add global weighted counts and assignments
     for canonical_id, worker_data in all_workers.items():
         worker_data['balance_weight'] = round(float(get_global_base_weighted_count(canonical_id)), 4)

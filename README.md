@@ -253,6 +253,28 @@ Validates: config file, admin password, upload folder, modalities, skills, medwe
 
 ---
 
+## Tests
+
+Run the regression suite from the repository root in the project virtual environment:
+
+```bash
+python -m pytest -q
+```
+
+Browser regressions in `tests/browser/` check person-name and identifier escaping in
+Chromium. They require the optional development tool Playwright and its Chromium
+browser; pytest skips this module if the Playwright Python package is absent.
+Run them explicitly in an environment with those tools installed:
+
+```bash
+python -m pytest -q tests/browser
+```
+
+The browser tests use an isolated page with intercepted requests and require no
+running application or live data.
+
+---
+
 ## Security
 
 - **Local configuration**: Copy tracked `config.demo.yaml` to ignored `config.yaml`; never commit live credentials
