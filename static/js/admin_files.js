@@ -7,7 +7,6 @@
   const grid = document.getElementById('managed-files-content');
   const stagedContainer = document.getElementById('staged-days-content');
   const backupsContainer = document.getElementById('managed-backups-content');
-  const messageContainer = document.getElementById('message-container');
   const editorModal = document.getElementById('managed-editor-modal');
   const editor = document.getElementById('managed-file-editor');
 
@@ -30,11 +29,7 @@
   }
 
   function showMessage(kind, text, details = '') {
-    messageContainer.innerHTML = `
-      <div class="message ${escapeHtml(kind)}">
-        ${escapeHtml(text)}${details ? `<div style="font-weight:500;margin-top:.2rem;">${escapeHtml(details)}</div>` : ''}
-      </div>`;
-    messageContainer.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    window.RadimoUI.notify(kind, text, details);
   }
 
   function targetByKey(key) {
@@ -179,7 +174,7 @@
       renderPage();
       const kind = result.restart_required ? 'warning' : 'success';
       const message = result.restart_required
-        ? `${result.message}. Structural changes require a controlled service restart.`
+        ? `${result.message}. ${window.RadimoUI.text('Structural changes require a controlled service restart.', 'Strukturelle Änderungen erfordern einen kontrollierten Neustart des Dienstes.')}`
         : (result.message || 'File replaced and runtime verified.');
       showMessage(kind, message, describeResult(result));
     } catch (error) {
@@ -282,7 +277,7 @@
     if (entry.format === 'JSON') {
       try { JSON.parse(editor.value); }
       catch (error) {
-        showMessage('error', `JSON validation failed: ${error.message}`);
+        showMessage('error', window.RadimoUI.text(`JSON validation failed: ${error.message}`, `JSON-Prüfung fehlgeschlagen: ${error.message}`));
         editor.focus();
         return;
       }

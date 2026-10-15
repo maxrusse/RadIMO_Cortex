@@ -307,8 +307,8 @@
       <button type="button" data-mode="matrix" onclick="setMode(currentMatrixMode())">Matrix</button>
     </div>
     <div class="ui-segmented matrix-only" aria-label="Matrix measure">
-      <button type="button" data-mode="advanced-weight" onclick="setMode('advanced-weight')">Weight</button>
-      <button type="button" data-mode="advanced-count" onclick="setMode('advanced-count')">Count</button>
+      <button type="button" data-mode="advanced-weight" onclick="setMode('advanced-weight')" title="Derived load: assignment count × configured skill-modality weight from the current config.">Weight</button>
+      <button type="button" data-mode="advanced-count" onclick="setMode('advanced-count')" title="Raw assignment counts for auditing. Useful when small modalities like X-ray would distort weighted comparisons.">Count</button>
     </div>
     <span class="ui-toolbar__sep" aria-hidden="true"></span>
     <div class="ui-toolbar__group">
@@ -335,10 +335,6 @@
       <input type="checkbox" id="filter-hide-zero" onchange="applyFilters()"> Hide zero
     </label>
   </div>
-  <div class="wl-note" id="people-note">
-    <span>Filters select which workers are shown; totals stay global across all modalities.</span>
-    <span>Deviation compares weight per worked hour with the median of all workers with enough hours. Click a row for details and corrections.</span>
-  </div>
 
   <div class="people-compact">
     <div class="table-container">
@@ -351,7 +347,7 @@
             <th class="sortable num" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">Correction</th>
             <th class="sortable num" data-sort="weight" onclick="sortTable('global', 'weight')">Total</th>
             <th class="sortable num" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
-            <th class="sortable dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')">Deviation from median</th>
+            <th class="sortable dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')" title="Weight per worked hour compared with the median of all workers with enough hours. Filters only select rows; totals stay global.">Deviation from median</th>
           </tr>
         </thead>
         <tbody id="tbody-global"></tbody>
@@ -361,7 +357,6 @@
 
   <div class="people-matrix">
     <div class="matrix-weight">
-      <p class="wl-note">Derived load: assignment count × configured skill-modality weight from the current config.</p>
       <div class="table-container">
         <table class="load-table compact-grid" id="table-advanced-weight">
           <thead id="thead-advanced-weight"></thead>
@@ -370,7 +365,6 @@
       </div>
     </div>
     <div class="matrix-count">
-      <p class="wl-note">Raw assignment counts for auditing. Useful when small modalities like X-ray would distort weighted comparisons.</p>
       <div class="table-container">
         <table class="load-table compact-grid" id="table-advanced-count">
           <thead id="thead-advanced-count"></thead>
@@ -392,23 +386,19 @@
 
     <div class="leaders-grid">
       <div class="leaders-card">
-        <h4>Absorbierte Last nach Skill</h4>
-        <p class="leaders-note">Zugewiesene gewichtete Last, die bisher bei Mitarbeitenden angekommen ist.</p>
+        <h4 title="Zugewiesene gewichtete Last, die bisher bei Mitarbeitenden angekommen ist.">Absorbierte Last nach Skill</h4>
         <ol class="leaders-list" id="leaders-skill-total"></ol>
       </div>
       <div class="leaders-card">
-        <h4>Absorbierte Last nach Modalität</h4>
-        <p class="leaders-note">Gleiche zugewiesene Last, nach Modalität aggregiert.</p>
+        <h4 title="Gleiche zugewiesene Last, nach Modalität aggregiert.">Absorbierte Last nach Modalität</h4>
         <ol class="leaders-list" id="leaders-modality-total"></ol>
       </div>
       <div class="leaders-card">
-        <h4>Overflow nach angefragtem Skill</h4>
-        <p class="leaders-note">Anteil der angefragten Last, der nicht im Ursprungsskill blieb.</p>
+        <h4 title="Anteil der angefragten Last, der nicht im Ursprungsskill blieb.">Overflow nach angefragtem Skill</h4>
         <ol class="leaders-list" id="leaders-overflow-skills"></ol>
       </div>
       <div class="leaders-card">
-        <h4>Overflow-Hotspots</h4>
-        <p class="leaders-note">Größte gewichtete Bewegungen von angefragtem Skill zu Zielskill.</p>
+        <h4 title="Größte gewichtete Bewegungen von angefragtem Skill zu Zielskill.">Overflow-Hotspots</h4>
         <ol class="leaders-list" id="leaders-overflow"></ol>
       </div>
     </div>
@@ -416,10 +406,9 @@
     <div class="daily-load-grid">
       <div class="daily-load-card">
         <div class="daily-load-card-header">
-          <h4>Angefragte Last · Skills</h4>
+          <h4 title="Kumulativ, gewichtet nach Skill-/Modalitätsmatrix; x = 07:00–21:00.">Angefragte Last · Skills</h4>
           <span class="daily-load-total" id="daily-load-skill-total">0</span>
         </div>
-        <p class="daily-load-note">Kumulativ, gewichtet nach Skill-/Modalitätsmatrix; x = 07:00–21:00.</p>
         <div class="daily-load-chart-wrap">
           <svg id="daily-load-skill-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Skill"></svg>
         </div>
@@ -428,10 +417,9 @@
       </div>
       <div class="daily-load-card">
         <div class="daily-load-card-header">
-          <h4>Angefragte Last · Modalitäten</h4>
+          <h4 title="Gleiche Last wie links, nach CT/MR/X-ray aggregiert.">Angefragte Last · Modalitäten</h4>
           <span class="daily-load-total" id="daily-load-modality-total">0</span>
         </div>
-        <p class="daily-load-note">Gleiche Last wie links, nach CT/MR/X-ray aggregiert.</p>
         <div class="daily-load-chart-wrap">
           <svg id="daily-load-modality-chart" class="daily-load-chart" role="img" aria-label="Kumulative Tageslast nach Modalität"></svg>
         </div>

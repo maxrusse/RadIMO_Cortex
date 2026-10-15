@@ -37,10 +37,7 @@
 
   <div class="ops-shell">
     <div class="ops-page-head">
-      <div>
-        <div class="ops-eyebrow">System diagnostics</div>
-        <h2>Readiness protocol</h2>
-      </div>
+      <span></span>
       <div class="ops-actions">
         <button class="ops-button" type="button" onclick="location.reload()">Run checks again</button>
         {% if is_admin %}<a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_logs_page') }}">Open logs</a>{% endif %}

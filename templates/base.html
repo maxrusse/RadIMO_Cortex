@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script src="{{ url_for('static', filename='js/i18n.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/dialog_focus.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/ui_shell.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/ui_shell.js') }}"></script>
   {% block head_extra %}{% endblock %}
   <style>
     {% block base_styles %}{% endblock %}
@@ -22,6 +22,7 @@
   <main id="main-content" tabindex="-1">
     {% block content %}{% endblock %}
   </main>
+  <div id="ui-toast-stack" class="ui-toast-stack" role="status" aria-live="polite"></div>
 </body>
 
 </html>

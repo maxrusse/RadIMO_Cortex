@@ -278,7 +278,7 @@
     {% include 'partials/strict_worker_select_modal.html' %}
     <div class="live-below">
       <div id="result" class="live-result" aria-live="polite">
-        <div class="live-result__empty">Click a button to assign the next case. The abbreviation is copied automatically.</div>
+        <div class="live-result__empty">–</div>
       </div>
       <div class="live-history" aria-label="Last assignments on this PC">
         <div class="live-history__title">Last assignments on this PC</div>
@@ -550,7 +550,7 @@
 
           if (!response.ok) {
             if (response.status === 401) {
-              alert('Sitzung abgelaufen. Bitte neu einloggen.');
+              window.RadimoUI.notify('warning', window.RadimoUI.text('Session expired. Please sign in again.', 'Sitzung abgelaufen. Bitte neu einloggen.'));
               window.location.href = '/login?modality=' + currentModality;
               return;
             }
@@ -576,11 +576,11 @@
             infoTexts.push(...(data.info_texts || []));
             closeEditModal();
           } else {
-            alert('Fehler: ' + (data.error || 'Unbekannter Fehler'));
+            window.RadimoUI.notify('error', window.RadimoUI.text('Error: ', 'Fehler: ') + (data.error || window.RadimoUI.text('Unknown error', 'Unbekannter Fehler')));
           }
         } catch (e) {
           console.error('Save error:', e);
-          alert('Fehler beim Speichern: ' + e.message);
+          window.RadimoUI.notify('error', window.RadimoUI.text('Saving failed: ', 'Fehler beim Speichern: ') + e.message);
         }
       };
 

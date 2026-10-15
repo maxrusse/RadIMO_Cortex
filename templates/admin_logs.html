@@ -42,10 +42,7 @@
   {% set present_logs = sources|selectattr('exists')|list|length %}
   <div class="ops-shell">
   <div class="ops-page-head">
-    <div>
-      <div class="ops-eyebrow">System</div>
-      <h2>Logs</h2>
-    </div>
+    <span></span>
     <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>
   </div>
 
@@ -74,7 +71,7 @@
   </section>
 
   <section class="ui-panel" aria-label="Log sources and export">
-    <div class="ui-panel__head"><h3 class="ui-panel__title">Sources &amp; download</h3><span class="ui-panel__hint">Select sources for the combined ZIP download.</span></div>
+    <div class="ui-panel__head"><h3 class="ui-panel__title">Sources &amp; download</h3></div>
     <table class="ui-table sources-table">
       <thead><tr><th>Include</th><th>Source</th><th>State</th><th class="num">Size</th><th>Modified</th><th class="num">Rotated</th><th>File</th><th>Single download</th></tr></thead>
       <tbody>

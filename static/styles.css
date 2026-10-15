@@ -1239,3 +1239,54 @@ body.theme-admin {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Shared notification stack (RadimoUI.notify) */
+.ui-toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(400px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.ui-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.5rem 0.6rem 0.8rem;
+  border: 1px solid var(--c-line);
+  border-left: 4px solid var(--toast-color, var(--c-primary));
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow-2);
+  color: var(--c-ink);
+  font-size: var(--fs-md);
+  pointer-events: auto;
+}
+
+.ui-toast--success { --toast-color: var(--c-success); }
+.ui-toast--info { --toast-color: var(--c-primary); }
+.ui-toast--warning { --toast-color: var(--c-warning); }
+.ui-toast--error { --toast-color: var(--c-danger); }
+.ui-toast__body { flex: 1 1 auto; min-width: 0; }
+.ui-toast__text { font-weight: 700; overflow-wrap: anywhere; }
+.ui-toast__detail { margin-top: 0.15rem; color: var(--c-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+
+.ui-toast__close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ui-toast__close:hover { background: var(--c-surface-3); color: var(--c-ink); }

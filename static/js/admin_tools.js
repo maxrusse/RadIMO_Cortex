@@ -47,8 +47,8 @@
   }
 
   function show(kind, text) {
-    message.className = `runtime-message ${kind}`;
-    message.textContent = text;
+    message.textContent = '';
+    if (text) window.RadimoUI.notify(kind || 'info', text);
   }
 
   button.addEventListener('click', async () => {

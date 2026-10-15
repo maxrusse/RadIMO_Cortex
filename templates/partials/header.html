@@ -7,9 +7,6 @@
     <div class="app-header__branding">
       <a class="app-brand" href="{{ url_for('routes.index', modality=modality|default('ct') if modality|default('ct') != 'all' else modality_order[0]) }}">RadIMO <strong>Cortex</strong></a>
       <h1 class="app-header__title">{{ _page_heading }}</h1>
-      {% if header_subtitle %}
-      <p class="app-header__subtitle">{{ header_subtitle }}</p>
-      {% endif %}
     </div>
     <div class="app-header__actions">
       {% if header_links %}

@@ -57,7 +57,6 @@
     </div>
     <span class="weights-legend" id="weightsLegend"></span>
     <span class="ui-toolbar__spacer"></span>
-    <span id="statusMessage" class="weights-status" aria-live="polite"></span>
     <button class="ui-btn ui-btn--secondary" type="button" onclick="loadWeights()">Reload</button>
     <span class="ui-dirty" data-dirty-for="weights" hidden></span>
     <button class="ui-btn ui-btn--success" type="button" id="saveWeightsButton" onclick="saveWeights()">Save</button>
@@ -75,7 +74,6 @@
   <section class="ui-panel">
     <div class="ui-panel__head">
       <h3 class="ui-panel__title">Special tasks</h3>
-      <span class="ui-panel__hint">One weight per task, applied to every modality the task is shown in.</span>
     </div>
     <div class="ui-panel__body" style="overflow-x: auto;">
       <table class="matrix-table">
@@ -372,13 +370,8 @@
       }
     }
 
-    let statusTimer = null;
     function showStatus(message, type) {
-      const status = document.getElementById('statusMessage');
-      status.textContent = message;
-      status.className = `weights-status ${type}`;
-      clearTimeout(statusTimer);
-      statusTimer = setTimeout(() => { status.textContent = ''; status.className = 'weights-status'; }, 4000);
+      window.RadimoUI.notify(type, message);
     }
   </script>
 {% endblock %}

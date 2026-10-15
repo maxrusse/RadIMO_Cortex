@@ -29,13 +29,7 @@ function countActiveBySkillAndModality(groups) {
   return counts;
 }
 
-function filterToCoverageGap(tab, skill, modKey) {
-  const filter = tableFilters[tab] || {};
-  const alreadyActive = filter.skill === skill && filter.modality === modKey;
-  filterBySkill(tab, alreadyActive ? '' : skill);
-  filterByModality(tab, alreadyActive ? '' : modKey);
-}
-
+// Plain warning line: which modality × skill combinations nobody covers (1 or w) on this day.
 function renderCoverageGaps(tab) {
   const container = document.getElementById(`coverage-gaps-${tab}`);
   if (!container) return;
@@ -44,39 +38,21 @@ function renderCoverageGaps(tab) {
     container.innerHTML = '';
     return;
   }
-  const t = text => window.RadimoI18n?.t(text) || text;
   const counts = countActiveBySkillAndModality(groups);
-  const filter = tableFilters[tab] || {};
-  const gaps = [];
+  const parts = [];
   MODALITIES.forEach(mod => {
     const modKey = mod.toLowerCase();
-    SKILLS.forEach(skill => {
-      if (counts[skill][modKey] === 0) gaps.push({ skill, modKey, label: `${(MODALITY_SETTINGS[modKey]?.label || mod).toUpperCase()} · ${skill}` });
-    });
+    const missing = SKILLS.filter(skill => counts[skill][modKey] === 0);
+    if (!missing.length) return;
+    const modLabel = (MODALITY_SETTINGS[modKey]?.label || mod).toUpperCase();
+    parts.push(`<span class="prep-coverage__group"><span class="prep-coverage__mod" style="--mod-color:${getModalityColor(modKey)}">${escapeHtml(modLabel)}</span> ${escapeHtml(missing.join(', '))}</span>`);
   });
-
-  if (!gaps.length) {
-    container.innerHTML = `<span class="prep-coverage__ok">✓ ${escapeHtml(t('Every skill is covered in every modality.'))}</span>`;
+  if (!parts.length) {
+    container.innerHTML = '';
     return;
   }
-
-  const byModality = new Map();
-  gaps.forEach(gap => {
-    if (!byModality.has(gap.modKey)) byModality.set(gap.modKey, []);
-    byModality.get(gap.modKey).push(gap);
-  });
-  const groupsHtml = [...byModality.entries()].map(([modKey, modGaps]) => {
-    const modLabel = (MODALITY_SETTINGS[modKey]?.label || modKey).toUpperCase();
-    const chips = modGaps.map(gap => {
-      const active = filter.skill === gap.skill && filter.modality === gap.modKey;
-      return `<button type="button" class="ui-chip${active ? ' is-active' : ''}"
-        onclick="filterToCoverageGap('${tab}', '${escapeHtml(gap.skill)}', '${gap.modKey}')"
-        title="${escapeHtml(t('Show only this combination'))}">${escapeHtml(gap.skill)}</button>`;
-    }).join('');
-    return `<span class="prep-coverage__group"><span class="prep-coverage__mod" style="--mod-color:${getModalityColor(modKey)}">${escapeHtml(modLabel)}</span>${chips}</span>`;
-  }).join('');
-  container.innerHTML = `<span class="prep-coverage__label">${escapeHtml(t('No coverage:'))}</span>${groupsHtml}`
-    + `<span class="prep-coverage__hint">${escapeHtml(t('Nobody with 1 or w on this day. Click to filter.'))}</span>`;
+  const label = window.RadimoUI.text('Nobody with 1 or w on this day for:', 'An diesem Tag niemand mit 1 oder w für:');
+  container.innerHTML = `<span class="prep-coverage__label">⚠ ${escapeHtml(label)}</span>${parts.join('<span class="prep-coverage__sep">·</span>')}`;
 }
 
 function renderCoverageStrip(tab) {
@@ -159,7 +135,7 @@ function renderCoverageStrip(tab) {
     return `<div class="coverage-row"><div class="coverage-row__label" title="${escapeHtml(skill)}">${escapeHtml(skill)}</div><div class="coverage-row__track">${segHtml}</div></div>`;
   }).join('');
 
-  container.innerHTML = `<div class="coverage-strip__title">${escapeHtml(t('Coverage over the day'))} <span>· ${escapeHtml(t('active workers (1 or w) per skill, all modalities; hatched = nobody'))}</span></div>${rows}`;
+  container.innerHTML = `<div class="coverage-strip__title">${escapeHtml(t('Coverage over the day'))} <span>· ${escapeHtml(t('1 or w, all modalities · hatched = nobody'))}</span></div>${rows}`;
 }
 
 async function renderPreparedDays() {

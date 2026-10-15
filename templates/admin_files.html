@@ -42,10 +42,7 @@
 
   <div class="ops-shell">
   <div class="ops-page-head">
-    <div>
-      <div class="ops-eyebrow">Schedule data</div>
-      <h2>Files &amp; backups</h2>
-    </div>
+    <span></span>
     <nav class="section-jumps" aria-label="File sections">
       <a href="#managed-files-grid">Managed files</a>
       <a href="#staged-days">Staging</a>
@@ -53,12 +50,9 @@
     </nav>
   </div>
 
-  <div id="message-container" role="status" aria-live="polite"></div>
-
   <section class="ui-panel" id="managed-files-grid" aria-label="Managed files">
     <div class="ui-panel__head">
       <h3 class="ui-panel__title">Managed files</h3>
-      <span class="ui-panel__hint">Active configuration and data. Every change is validated and backed up first.</span>
     </div>
     <div id="managed-files-content"></div>
   </section>
@@ -66,7 +60,6 @@
   <section class="ui-panel" id="staged-days" aria-label="Staged days">
     <div class="ui-panel__head">
       <h3 class="ui-panel__title">Prep days / staged snapshots</h3>
-      <span class="ui-panel__hint">One active file per planning date; older versions can be restored.</span>
     </div>
     <div id="staged-days-content"></div>
   </section>

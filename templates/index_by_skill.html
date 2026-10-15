@@ -239,7 +239,7 @@
     {% include 'partials/strict_worker_select_modal.html' %}
     <div class="live-below">
       <div id="result" class="live-result" aria-live="polite">
-        <div class="live-result__empty">Click a button to assign the next case. The abbreviation is copied automatically.</div>
+        <div class="live-result__empty">–</div>
       </div>
       <div class="live-history" aria-label="Last assignments on this PC">
         <div class="live-history__title">Last assignments on this PC</div>
@@ -579,7 +579,7 @@
           renderInfoTextsAll();
           closeEditModal();
         } catch (error) {
-          alert('Fehler beim Speichern: ' + error.message);
+          window.RadimoUI.notify('error', window.RadimoUI.text('Saving failed: ', 'Fehler beim Speichern: ') + error.message);
         }
       };
 

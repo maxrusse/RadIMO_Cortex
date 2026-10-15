@@ -142,7 +142,7 @@ async function toggleEditMode(tab) {
   pendingChanges[tab] = {};  // Reset pending changes
   applyEditModeUI(tab);
   if (tab === 'today' && document.getElementById('auto-refresh-today')?.checked) {
-    updatePrepRefreshStatus(tab, editMode[tab] ? 'Paused during edits' : 'Auto-refresh on');
+    updatePrepRefreshStatus(tab, editMode[tab] ? 'Paused during edits' : '');
   }
   if (wasActive && !editMode[tab]) {
     await loadData();
@@ -650,11 +650,11 @@ async function saveInlineChanges(tab) {
 
   // Show appropriate message based on results
   if (errors.length === 0) {
-    updateSaveInlineStatus(tab, `Saved ${successCount} change${successCount !== 1 ? 's' : ''}`, 'success');
+    updateSaveInlineStatus(tab, window.RadimoUI.text(`Saved ${successCount} change${successCount !== 1 ? 's' : ''}`, `${successCount} Änderung${successCount !== 1 ? 'en' : ''} gespeichert`), 'success');
   } else if (successCount > 0) {
-    updateSaveInlineStatus(tab, `Saved ${successCount}, failed ${errors.length}: ${errors[0]}`, 'error');
+    updateSaveInlineStatus(tab, window.RadimoUI.text(`Saved ${successCount}, failed ${errors.length}: ${errors[0]}`, `${successCount} gespeichert, ${errors.length} fehlgeschlagen: ${errors[0]}`), 'error');
   } else {
-    updateSaveInlineStatus(tab, `All ${errors.length} changes failed: ${errors[0]}`, 'error');
+    updateSaveInlineStatus(tab, window.RadimoUI.text(`All ${errors.length} changes failed: ${errors[0]}`, `Alle ${errors.length} Änderungen fehlgeschlagen: ${errors[0]}`), 'error');
   }
 
   succeededKeys.forEach(key => {
@@ -717,10 +717,8 @@ function updatePrepLastEditLabel(text) {
 
 function updatePrepLoadResultLabel(text, kind = 'info', mode = 'tomorrow') {
   const statusEl = document.getElementById(mode === 'today' ? 'load-status-today' : 'load-status-tomorrow');
-  if (!statusEl) return;
-
-  statusEl.textContent = text || '';
-  statusEl.style.color = kind === 'error' ? '#dc3545' : kind === 'success' ? '#28a745' : '';
+  if (statusEl) statusEl.textContent = '';
+  if (text && kind !== 'info') window.RadimoUI.notify(kind, text);
 }
 
 function setSnapshotVersion(tab, value) {
@@ -775,33 +773,7 @@ function markDraftShiftMaterialized(shiftIdx) {
 const saveStatusTimers = { today: null, tomorrow: null };
 
 function updateSaveInlineStatus(tab, message, kind = 'info') {
-  const statusEl = document.getElementById(`save-status-${tab}`);
-  if (!statusEl) return;
-
-  if (saveStatusTimers[tab]) {
-    clearTimeout(saveStatusTimers[tab]);
-    saveStatusTimers[tab] = null;
-  }
-
-  if (!message) {
-    statusEl.textContent = '';
-    statusEl.className = 'prep-inline-save-status';
-    return;
-  }
-
-  statusEl.textContent = message;
-  statusEl.className = `prep-inline-save-status ${kind === 'success' ? 'is-success' : kind === 'error' ? 'is-error' : 'is-info'}`;
-
-  if (kind !== 'info') {
-    saveStatusTimers[tab] = setTimeout(() => {
-      const currentEl = document.getElementById(`save-status-${tab}`);
-      if (currentEl && currentEl.textContent === message) {
-        currentEl.textContent = '';
-        currentEl.className = 'prep-inline-save-status';
-      }
-      saveStatusTimers[tab] = null;
-    }, 5000);
-  }
+  if (message) window.RadimoUI.notify(kind, message);
 }
 
 function getSnapshotConflictMessage(result) {
@@ -916,7 +888,7 @@ function shiftPrepDate(offsetDays) {
   const nextValue = `${yyyy}-${mm}-${dd}`;
 
   if (prepMinDate && nextValue < prepMinDate) {
-    showMessage('error', `Prep-Datum muss ab ${prepMinDate} liegen.`);
+    showMessage('error', window.RadimoUI.text(`Planning date must be on or after ${prepMinDate}.`, `Planungsdatum muss ab ${prepMinDate} liegen.`));
     return;
   }
 
@@ -937,7 +909,7 @@ function onPrepDateInputChange() {
   if (!value) return;
   const previousDate = prepTargetDate;
   if (prepMinDate && value < prepMinDate) {
-    showMessage('error', `Prep-Datum muss ab ${prepMinDate} liegen.`);
+    showMessage('error', window.RadimoUI.text(`Planning date must be on or after ${prepMinDate}.`, `Planungsdatum muss ab ${prepMinDate} liegen.`));
     inputEl.value = prepMinDate;
     setPrepTargetMeta({ dateValue: prepMinDate });
     updatePrepTargetUI();
@@ -947,7 +919,7 @@ function onPrepDateInputChange() {
   updatePrepTargetUI();
   const hasPendingChanges = Object.keys(pendingChanges.tomorrow || {}).length > 0;
   if (hasPendingChanges) {
-    const message = `Changing the selected date will overwrite unsaved Quick Edit changes and reload the staged tomorrow data for ${value}. Continue?`;
+    const message = window.RadimoUI.text(`Changing the selected date discards unsaved Quick Edit changes and loads the planning data for ${value}. Continue?`, `Beim Datumswechsel werden ungespeicherte Schnelländerungen verworfen und die Planung für ${value} geladen. Fortfahren?`);
     if (!window.confirm(message)) {
       setPrepTargetMeta({ dateValue: previousDate });
       updatePrepTargetUI();
@@ -1031,7 +1003,7 @@ async function loadTabData(tab) {
   } catch (error) {
     console.error(`Load error for ${tab}:`, error);
     if (requestId === loadRequestId[tab]) {
-      showMessage('error', `Error loading ${tab} data: ${error.message}`);
+      showMessage('error', window.RadimoUI.text(`Error loading data: ${error.message}`, `Fehler beim Laden der Daten: ${error.message}`));
       dataLoaded[tab] = false;
     }
   }
@@ -1091,7 +1063,7 @@ function togglePrepAutoRefresh(tab) {
     updatePrepRefreshStatus(tab, 'Auto-refresh off');
     return;
   }
-  updatePrepRefreshStatus(tab, 'Auto-refresh on');
+  updatePrepRefreshStatus(tab, '');
   prepAutoRefreshInterval[tab] = setInterval(function() {
     refreshPrepTab(tab, { silent: true });
   }, 30000);
@@ -1165,7 +1137,7 @@ async function deleteWorkerEntries(tab, groupIdx) {
 
   const allEntries = group.allEntries || [];
   const workerLabel = getWorkerDisplayName(group.worker);
-  if (!confirm(`Delete all ${allEntries.length} entries for ${workerLabel}?`)) return;
+  if (!confirm(window.RadimoUI.text(`Delete all ${allEntries.length} entries for ${workerLabel}?`, `Alle ${allEntries.length} Einträge für ${workerLabel} löschen?`))) return;
 
   const endpoint = tab === 'today'
     ? '/api/live-schedule/apply-worker-plan'
@@ -1180,7 +1152,7 @@ async function deleteWorkerEntries(tab, groupIdx) {
       reloadOnConflict: true,
       includeSnapshotVersion: false,
     });
-    showMessage('success', `Deleted all entries for ${workerLabel}`);
+    showMessage('success', window.RadimoUI.text(`Deleted all entries for ${workerLabel}`, `Alle Einträge für ${workerLabel} gelöscht`));
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -1462,8 +1434,8 @@ async function deleteShiftFromModal(shiftIdx) {
   const isLastShift = shifts.length === 1;
   const workerLabel = getWorkerDisplayName(group.worker);
   const confirmMessage = isLastShift
-    ? `Delete this shift (${shift.start_time}-${shift.end_time})? This is the last shift for ${workerLabel}, so the worker will be removed. Continue?`
-    : `Delete this shift (${shift.start_time}-${shift.end_time})?`;
+    ? window.RadimoUI.text(`Delete this shift (${shift.start_time}-${shift.end_time})? This is the last shift for ${workerLabel}, so the worker will be removed. Continue?`, `Diesen Dienst (${shift.start_time}–${shift.end_time}) löschen? Es ist der letzte Dienst von ${workerLabel}; die Person wird entfernt. Fortfahren?`)
+    : window.RadimoUI.text(`Delete this shift (${shift.start_time}-${shift.end_time})?`, `Diesen Dienst (${shift.start_time}–${shift.end_time}) löschen?`);
 
   if (!confirm(confirmMessage)) return;
 
@@ -1605,7 +1577,7 @@ async function deleteShiftInline(tab, groupIdx, shiftIdx) {
   const shift = shifts[shiftIdx];
   if (!shift) return;
 
-  if (!confirm(`Delete this shift (${shift.start_time}-${shift.end_time})?`)) return;
+  if (!confirm(window.RadimoUI.text(`Delete this shift (${shift.start_time}-${shift.end_time})?`, `Diesen Dienst (${shift.start_time}–${shift.end_time}) löschen?`))) return;
 
   // Queue delete for save, and hide shift from view immediately
   Object.entries(shift.modalities).forEach(([modKey, modData]) => {
@@ -1852,7 +1824,7 @@ async function addShiftFromModal() {
         timeSegments: [{ start: startTime, end: endTime }],
       }
     ];
-    showMessage('success', `Added new ${isGap ? 'gap' : 'shift'} for ${getWorkerDisplayName(group.worker)}. Save edits to apply.`);
+    showMessage('success', window.RadimoUI.text(`Added new ${isGap ? 'gap' : 'shift'} for ${getWorkerDisplayName(group.worker)}. Save edits to apply.`, `${isGap ? 'Lücke' : 'Dienst'} für ${getWorkerDisplayName(group.worker)} hinzugefügt. Zum Übernehmen speichern.`));
     lastAddedShiftMeta = { worker: group.worker, shiftKey: addedShiftKey };
     renderEditModalContent();
     return;
@@ -2358,7 +2330,7 @@ async function saveAddWorkerModal() {
     });
 
     closeModal(true);
-    showMessage('success', `${getWorkerDisplayName(workerId)} added`);
+    showMessage('success', window.RadimoUI.text(`${getWorkerDisplayName(workerId)} added`, `${getWorkerDisplayName(workerId)} hinzugefügt`));
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -2369,7 +2341,7 @@ async function saveAddWorkerModal() {
         if (reopenEditModalForWorker(tab, existingWorker)) {
           document.getElementById('modal-title').textContent = `Edit Worker (${tab === 'today' ? 'Today' : 'Tomorrow'})`;
           document.getElementById('edit-modal').classList.add('show');
-          showMessage('info', `${getWorkerDisplayName(existingWorker)} already exists. Opened Edit Worker instead.`);
+          showMessage('info', window.RadimoUI.text(`${getWorkerDisplayName(existingWorker)} already exists. Opened Edit Worker instead.`, `${getWorkerDisplayName(existingWorker)} existiert bereits. Stattdessen wurde „Bearbeiten“ geöffnet.`));
         }
       }
       return;
@@ -2425,7 +2397,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
 
   // If not in edit mode, show confirmation popup
   if (!editMode[tab]) {
-    const msg = `Add ${duration}-min break for ${getWorkerDisplayName(group.worker)}?\n\nTime: ${gapStart} - ${gapEnd}`;
+    const msg = window.RadimoUI.text(`Add ${duration}-min break for ${getWorkerDisplayName(group.worker)}?\n\nTime: ${gapStart} - ${gapEnd}`, `${duration}-Min.-Pause für ${getWorkerDisplayName(group.worker)} eintragen?\n\nZeit: ${gapStart}–${gapEnd}`);
     if (!confirm(msg)) return;
   }
 
@@ -2461,7 +2433,7 @@ async function onQuickGap30(tab, gIdx, durationMinutes) {
       reloadOnConflict: true,
     });
 
-    showMessage('success', `Added break (${gapStart}-${gapEnd}) for ${getWorkerDisplayName(group.worker)}`);
+    showMessage('success', window.RadimoUI.text(`Added break (${gapStart}-${gapEnd}) for ${getWorkerDisplayName(group.worker)}`, `Pause (${gapStart}–${gapEnd}) für ${getWorkerDisplayName(group.worker)} eingetragen`));
     await loadData();
   } catch (error) {
     if (error.isConflict) {
@@ -2588,10 +2560,9 @@ async function loadFromCSV(mode, options = {}) {
       return;
     }
     const hasPendingChanges = Object.keys(pendingChanges.tomorrow || {}).length > 0;
-    const targetLabel = targetDate ? ` for ${targetDate}` : '';
     const message = hasPendingChanges
-      ? `HARD RELOAD SELECTED DATE${targetLabel} will overwrite the current staged tomorrow changes and discard unsaved Quick Edit edits. Continue?`
-      : `HARD RELOAD SELECTED DATE${targetLabel} will overwrite the current staged tomorrow data from the Master CSV. Continue?`;
+      ? window.RadimoUI.text(`Reset ${targetDate || 'the selected day'} from the Master CSV? All planning edits of this day are replaced and unsaved Quick Edit changes are discarded.`, `${targetDate || 'Den gewählten Tag'} aus der Master-CSV zurücksetzen? Alle Planungsänderungen dieses Tages werden ersetzt und ungespeicherte Schnelländerungen verworfen.`)
+      : window.RadimoUI.text(`Reset ${targetDate || 'the selected day'} from the Master CSV? All planning edits of this day are replaced.`, `${targetDate || 'Den gewählten Tag'} aus der Master-CSV zurücksetzen? Alle Planungsänderungen dieses Tages werden ersetzt.`);
     if (shouldConfirm && !window.confirm(message)) {
       return;
     }
@@ -2626,19 +2597,13 @@ async function loadFromCSV(mode, options = {}) {
       updatePrepLoadResultLabel(result.error || 'Error', 'error', mode === 'today' ? 'today' : 'tomorrow');
     }
   } catch (error) {
-    updatePrepLoadResultLabel('Error: ' + error.message, 'error', mode === 'today' ? 'today' : 'tomorrow');
+    updatePrepLoadResultLabel(window.RadimoUI.text('Error: ', 'Fehler: ') + error.message, 'error', mode === 'today' ? 'today' : 'tomorrow');
   }
 }
 
 // Show message (XSS-safe)
 function showMessage(type, message) {
-  const container = document.getElementById('message-container');
-  const div = document.createElement('div');
-  div.className = `message ${type}`;
-  div.textContent = message;  // textContent is XSS-safe
-  container.innerHTML = '';
-  container.appendChild(div);
-  setTimeout(() => { container.innerHTML = ''; }, 5000);
+  window.RadimoUI.notify(type, message);
 }
 
 function updatePrepOverlayTop() {

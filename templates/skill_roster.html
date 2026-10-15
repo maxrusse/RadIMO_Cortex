@@ -151,7 +151,6 @@
       <span><b class="value--1">-1</b> excluded</span>
     </span>
     <span class="ui-toolbar__spacer"></span>
-    <span id="statusMessage" class="roster-status" aria-live="polite"></span>
     <button class="ui-btn ui-btn--secondary" type="button" onclick="openAddWorkerDialog()">+ Add worker</button>
     <button class="ui-btn ui-btn--secondary" type="button" onclick="loadRoster()">Reload</button>
     <span class="ui-dirty" data-dirty-for="roster" hidden></span>
@@ -209,7 +208,6 @@
     <div class="ui-toolbar" style="padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--c-line);">
       <input type="search" class="worker-search" style="max-width: 260px;" placeholder="Search names or IDs" aria-label="Search workers in overview"
         oninput="document.getElementById('workerSearchInput').value = this.value; renderWorkerList(); renderOverview()" id="overviewSearchInput">
-      <span class="ui-panel__hint">Bottom row: workers with 1 or w per column; red = nobody.</span>
     </div>
     <div class="overview-wrap">
       <table class="overview-table" id="overviewTable"></table>
@@ -369,10 +367,10 @@
           if (selectedWorker && rosterData[selectedWorker]) renderWorkerMatrix();
           renderOverview();
         } else {
-          showStatus('Load failed: ' + (data.error || 'Unknown error'), 'error');
+          showStatus(window.RadimoUI.text('Load failed: ', 'Laden fehlgeschlagen: ') + (data.error || 'Unknown error'), 'error');
         }
       } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
+        showStatus(window.RadimoUI.text('Error: ', 'Fehler: ') + error.message, 'error');
       }
     }
 
@@ -530,12 +528,12 @@
             setRosterView('person');
             selectWorker(importedId);
           }
-          showStatus(`Imported ${result.display_name || result.full_name || importedId}`, 'success');
+          showStatus(window.RadimoUI.text('Imported ', 'Importiert: ') + (result.display_name || result.full_name || importedId), 'success');
         } else {
-          showStatus('Import failed: ' + (result.error || 'Unknown error'), 'error');
+          showStatus(window.RadimoUI.text('Import failed: ', 'Import fehlgeschlagen: ') + (result.error || 'Unknown error'), 'error');
         }
       } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
+        showStatus(window.RadimoUI.text('Error: ', 'Fehler: ') + error.message, 'error');
       }
     }
 
@@ -645,7 +643,7 @@
       }
       markDirty();
       renderWorkerMatrix();
-      showStatus(`${label}: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'}`, 'success');
+      showStatus(window.RadimoUI.text(`${label}: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'}`, `${label}: ${updatedCells} Zelle${updatedCells === 1 ? '' : 'n'} gesetzt`), 'success');
     }
 
     function applySbzDonePreset() {
@@ -665,7 +663,7 @@
       }
       markDirty();
       renderWorkerMatrix();
-      showStatus(`SBZ done: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'} to 0`, 'success');
+      showStatus(window.RadimoUI.text(`SBZ done: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'} to 0`, `SBZ fertig: ${updatedCells} Zelle${updatedCells === 1 ? '' : 'n'} auf 0 gesetzt`), 'success');
     }
 
     // ---------------------------------------------------------------- overview
@@ -816,12 +814,12 @@
           await loadRoster(true);
           const count = result.added_count || 0;
           const list = (result.added_workers || []).join(', ');
-          showStatus(`Imported ${count} new worker(s)` + (list ? `: ${list}` : ''), 'success');
+          showStatus(window.RadimoUI.text(`Imported ${count} new worker(s)`, `${count} neue Mitarbeiter importiert`) + (list ? `: ${list}` : ''), 'success');
         } else {
-          showStatus('Import failed: ' + (result.error || 'Unknown error'), 'error');
+          showStatus(window.RadimoUI.text('Import failed: ', 'Import fehlgeschlagen: ') + (result.error || 'Unknown error'), 'error');
         }
       } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
+        showStatus(window.RadimoUI.text('Error: ', 'Fehler: ') + error.message, 'error');
       }
     }
 
@@ -839,20 +837,15 @@
           renderOverview();
           showStatus('Saved!', 'success');
         } else {
-          showStatus('Save failed: ' + (result.error || 'Unknown error'), 'error');
+          showStatus(window.RadimoUI.text('Save failed: ', 'Speichern fehlgeschlagen: ') + (result.error || 'Unknown error'), 'error');
         }
       } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
+        showStatus(window.RadimoUI.text('Error: ', 'Fehler: ') + error.message, 'error');
       }
     }
 
-    let statusTimer = null;
     function showStatus(message, type) {
-      const el = document.getElementById('statusMessage');
-      el.textContent = message;
-      el.className = 'roster-status ' + type;
-      clearTimeout(statusTimer);
-      statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'roster-status'; }, 5000);
+      window.RadimoUI.notify(type, message);
     }
   </script>
 {% endblock %}

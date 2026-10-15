@@ -36,17 +36,6 @@
   {% include 'partials/header.html' %}
 
   <div class="ops-shell">
-  <div class="ops-page-head">
-    <div>
-      <div class="ops-eyebrow">Schedule data</div>
-      <h2>Master CSV import</h2>
-    </div>
-    <div class="ops-actions">
-      <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_files_page') }}">Files &amp; backups</a>
-    </div>
-  </div>
-
-  <div id="message-container"></div>
 
   <div class="import-grid">
     <section class="ui-panel upload-column" aria-label="Master CSV upload">
@@ -55,13 +44,11 @@
         <div class="steps">
           <div class="step">
             <div class="step__label">1. Export</div>
-            <div class="step__title">Open MedSpace</div>
             <a class="ui-btn ui-btn--secondary" href="https://login.medspace.com/freiburg/radiologie.nsf/berichten?openform&disp=export"
               target="_blank" rel="noopener noreferrer">Open export</a>
           </div>
           <div class="step">
             <div class="step__label">2. Choose file</div>
-            <div class="step__title">Medweb CSV</div>
             <label class="ui-btn ui-btn--secondary" for="master-csv-file" role="button" tabindex="0"
               onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();document.getElementById('master-csv-file').click();}">Choose file</label>
             <div class="file-picker-name" id="master-file-name">No file selected</div>
@@ -69,12 +56,11 @@
           </div>
           <div class="step">
             <div class="step__label">3. Upload</div>
-            <div class="step__title">Update master</div>
             <button type="submit" class="ui-btn" id="master-upload-btn">Upload Master CSV</button>
           </div>
         </div>
       </form>
-      <div class="ui-note import-note">Uploading only replaces the stored Master CSV. The live day and prepared planning days stay unchanged until you reset a planning date (Planning) or rebuild today (Today → ⋯).</div>
+      <div class="ui-note import-note">Only the stored Master CSV is replaced; live and planned days stay unchanged.</div>
     </section>
 
     <section class="ui-panel" aria-label="Next steps">
@@ -167,22 +153,21 @@
       e.preventDefault();
       const formData = new FormData(this);
       const btn = document.getElementById('master-upload-btn');
-      const msgContainer = document.getElementById('message-container');
       btn.disabled = true;
       btn.textContent = t('Uploading...');
       try {
         const response = await fetch('/upload-master-csv', { method: 'POST', body: formData });
         const result = await response.json();
         if (response.ok && result.success) {
-          msgContainer.innerHTML = `<div class="message success">${escapeHtml(result.message)} · ${escapeHtml(t('Live and planned days are unchanged.'))}</div>`;
+          window.RadimoUI.notify('success', result.message, 'Live and planned days are unchanged.');
           await checkMasterStatus();
           document.getElementById('master-upload-form').reset();
           updateSelectedFileName();
         } else {
-          msgContainer.innerHTML = `<div class="message error">${escapeHtml(result.error || 'Upload failed')}</div>`;
+          window.RadimoUI.notify('error', result.error || 'Upload failed');
         }
       } catch (error) {
-        msgContainer.innerHTML = `<div class="message error">Error: ${escapeHtml(error.message)}</div>`;
+        window.RadimoUI.notify('error', error.message);
       }
       btn.disabled = false;
       btn.textContent = t('Upload Master CSV');

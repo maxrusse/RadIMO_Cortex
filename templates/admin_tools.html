@@ -67,10 +67,7 @@
 
   <div class="ops-shell">
     <div class="ops-page-head">
-      <div>
-        <div class="ops-eyebrow">System</div>
-        <h2>System status</h2>
-      </div>
+      <span></span>
       <div class="ops-actions">
         <button class="ui-btn ui-btn--secondary" type="button" onclick="location.reload()">Run checks again</button>
       </div>
@@ -155,15 +152,6 @@
       </div>
 
       <div>
-        <section class="ui-panel" aria-label="Administration">
-          <div class="ui-panel__head"><h3 class="ui-panel__title">Administration</h3></div>
-          <div class="ui-panel__body sys-links">
-            <a class="sys-link" href="{{ url_for('routes.upload_file') }}"><strong>Import</strong><span>Upload the Master CSV</span></a>
-            <a class="sys-link" href="{{ url_for('routes.admin_files_page') }}"><strong>Files &amp; backups</strong><span>Configuration, roster, staged days, restore</span></a>
-            <a class="sys-link" href="{{ url_for('routes.admin_logs_page') }}"><strong>Logs</strong><span>Preview, filter and download</span></a>
-            <a class="sys-link" href="{{ url_for('routes.admin_settings_page') }}"><strong>Settings</strong><span>Language, time zone, access protection</span></a>
-          </div>
-        </section>
 
         <section class="ui-panel" aria-label="Maintenance">
           <div class="ui-panel__head"><h3 class="ui-panel__title">Maintenance</h3></div>

@@ -1267,27 +1267,17 @@
       gap: 0.3rem 0.5rem;
       padding: 0.4rem 0.75rem;
       border-bottom: 1px solid var(--c-line);
-      background: var(--c-surface-2);
+      background: var(--c-warning-soft);
       font-size: var(--fs-sm);
     }
 
     .prep-coverage:empty { display: none; }
-    .prep-coverage__label { color: var(--c-danger); font-weight: 750; }
+    .prep-coverage__label { color: #8a3b12; font-weight: 750; }
     .prep-coverage__ok { color: var(--c-success); font-weight: 650; }
     .prep-coverage__hint { color: var(--c-muted); font-size: var(--fs-xs); }
 
-    .prep-coverage .ui-chip {
-      min-height: 22px;
-      padding: 0.08rem 0.5rem;
-      border-color: #e7b4ae;
-      background: var(--c-danger-soft);
-      color: var(--c-danger);
-      font-size: var(--fs-xs);
-    }
-
-    .prep-coverage .ui-chip.is-active { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
-
-    .prep-coverage__group { display: inline-flex; align-items: center; gap: 0.2rem; }
+    .prep-coverage__group { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--c-ink); }
+    .prep-coverage__sep { color: var(--c-faint); }
 
     .prep-coverage__mod {
       padding: 0.05rem 0.4rem;
@@ -1456,7 +1446,6 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <div id="message-container"></div>
 
   {% macro schedule_editor(tab) %}
     <section class="prep-editor" aria-label="Schedule editor">
@@ -1544,14 +1533,14 @@
   <div id="content-today" class="tab-content active">
     <div class="ui-scope ui-scope--live prep-scope">
       <span class="ui-scope__tag">Live</span>
-      <span class="ui-scope__text">Changes apply immediately to today's schedule. <strong>Counters are not reset.</strong></span>
+      <span class="ui-scope__text">Effective immediately · counters are not reset</span>
       <span class="ui-toolbar__spacer"></span>
       <span id="load-status-today" class="prep-action-status" aria-live="polite"></span>
       <label class="prep-check">
         <input type="checkbox" id="auto-refresh-today" onchange="togglePrepAutoRefresh('today')" checked> Auto-refresh
       </label>
       <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="refreshPrepTab('today')">Refresh</button>
-      <span id="prep-refresh-status-today" class="prep-refresh-status">Auto-refresh on</span>
+      <span id="prep-refresh-status-today" class="prep-refresh-status"></span>
       <details class="prep-more-menu">
         <summary class="ui-btn ui-btn--secondary ui-btn--sm" aria-label="More actions" title="More actions">⋯</summary>
         <div class="prep-more-menu__panel">

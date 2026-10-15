@@ -58,5 +58,56 @@
     });
   });
 
-  window.RadimoUI = { setDirty, hasDirty };
+  /** Pick the text for the active UI language (for messages with inserted values). */
+  function text(en, de) {
+    return window.RadimoI18n?.language === 'en' ? en : de;
+  }
+
+  /**
+   * Shared notification stack (bottom right). Success/info hide after 5 s,
+   * warnings and errors stay until closed.
+   * @param {'success'|'info'|'warning'|'error'} kind
+   * @param {string} message
+   * @param {string} [detail]
+   */
+  function notify(kind, message, detail = '') {
+    let stack = document.getElementById('ui-toast-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'ui-toast-stack';
+      stack.className = 'ui-toast-stack';
+      stack.setAttribute('role', 'status');
+      stack.setAttribute('aria-live', 'polite');
+      document.body.appendChild(stack);
+    }
+    const toast = document.createElement('div');
+    const tone = ['success', 'info', 'warning', 'error'].includes(kind) ? kind : 'info';
+    toast.className = `ui-toast ui-toast--${tone}`;
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    const body = document.createElement('div');
+    body.className = 'ui-toast__body';
+    const title = document.createElement('div');
+    title.className = 'ui-toast__text';
+    title.textContent = t(String(message || ''));
+    body.appendChild(title);
+    if (detail) {
+      const extra = document.createElement('div');
+      extra.className = 'ui-toast__detail';
+      extra.textContent = t(String(detail));
+      body.appendChild(extra);
+    }
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'ui-toast__close';
+    close.setAttribute('aria-label', t('Close'));
+    close.textContent = '×';
+    close.addEventListener('click', () => toast.remove());
+    toast.append(body, close);
+    stack.appendChild(toast);
+    while (stack.children.length > 4) stack.firstElementChild.remove();
+    if (tone === 'success' || tone === 'info') setTimeout(() => toast.remove(), 5000);
+    return toast;
+  }
+
+  window.RadimoUI = { setDirty, hasDirty, notify, text };
 })();

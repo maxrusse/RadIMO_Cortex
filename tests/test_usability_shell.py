@@ -90,7 +90,8 @@ def test_lesser_used_admin_pages_share_the_operations_console_shell():
         html = response.get_data(as_text=True)
         assert response.status_code == 200, route
         assert 'class="ops-shell"' in html, route
-        assert 'class="ops-page-head"' in html, route
+        # The page title lives in the header only; no second title below it.
+        assert 'class="ops-eyebrow"' not in html, route
 
 
 def test_admin_settings_uses_a_timezone_dropdown_without_legacy_hints():
