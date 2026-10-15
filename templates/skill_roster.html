@@ -4,626 +4,343 @@
 {% block title %}RadIMO Cortex | Skills{% endblock %}
 
 {% block styles %}
+    .rules-tabs { margin-bottom: 0.6rem; }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1800px;
-      margin: 0 auto;
-    }
+    .roster-toolbar { margin-bottom: 0.75rem; padding: 0.5rem 0.8rem; }
+    .roster-legend { display: inline-flex; align-items: center; gap: 0.55rem; font-size: var(--fs-sm); color: var(--c-muted); }
+    .roster-legend b { display: inline-block; min-width: 1.6rem; padding: 0 0.25rem; border-radius: 3px; text-align: center; }
+    .roster-status { font-size: var(--fs-sm); font-weight: 650; }
+    .roster-status.success { color: var(--c-success); }
+    .roster-status.error { color: var(--c-danger); }
 
-    .toolbar {
-      background: #fff;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-    }
+    /* value colours: eligibility, never modality */
+    .value-1 { background: #e3f4e8 !important; color: #17783f !important; border-color: #8fd0a3 !important; font-weight: 800; }
+    .value-w { background: #e4effc !important; color: #1f5fb4 !important; border-color: #95bdf0 !important; font-weight: 800; }
+    .value-0 { background: #fdf5df !important; color: #8a6400 !important; border-color: #ecd391 !important; }
+    .value--1 { background: #fff !important; color: #c9a3a0 !important; border-color: #ead9d7 !important; }
 
-    .btn {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
+    .roster-view { display: none; }
+    body.roster-mode-person .roster-view--person,
+    body.roster-mode-overview .roster-view--overview { display: block; }
 
-    .btn-primary {
-      background: #004892;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #003670;
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #218838;
-    }
-
-    .btn-secondary {
-      background: #6c757d;
-      color: white;
-    }
-
-    .btn-secondary:hover {
-      background: #5a6268;
-    }
-
-    .main-layout {
-      display: grid;
-      grid-template-columns: minmax(260px, 320px) minmax(440px, 1fr) minmax(285px, 330px);
-      gap: 1rem;
-      align-items: start;
-    }
-
-    .card {
-      background: white;
-      border-radius: 8px;
-      padding: 1rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-
-    .worker-list {
-      min-width: 0;
-      height: calc(100vh - 13.5rem);
-      min-height: 420px;
-      max-height: 760px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      position: sticky;
-      top: 0.5rem;
-    }
-
-    .worker-list h3 {
-      margin-bottom: 0.75rem;
-      font-size: 1rem;
-      color: #333;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 0.5rem;
-    }
-
-    .worker-list-tools {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .worker-search {
-      width: 100%;
-      padding: 0.55rem 0.65rem;
-      border: 1px solid #d7d7d7;
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
-
-    .worker-search:focus {
-      outline: 2px solid #004892;
-      border-color: transparent;
-    }
-
-    .worker-list-meta {
-      font-size: 0.8rem;
-      color: #666;
-    }
-
-    #workerListContainer {
-      min-height: 0;
-      overflow-y: auto;
-      padding-right: 0.2rem;
-    }
-
-    .worker-detail {
-      min-width: 0;
-    }
-
-    .worker-admin-panel {
-      display: grid;
-      gap: 0.75rem;
-      position: sticky;
-      top: 0.5rem;
-    }
-
-    .worker-admin-panel .card {
-      padding: 0.75rem;
-    }
-
-    .worker-admin-panel h3 {
-      margin: 0 0 0.55rem;
-      font-size: 0.92rem;
-      color: #173d5e;
-    }
-
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
+    /* Person view */
+    .person-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0.75rem; align-items: start; }
+    .worker-list { position: sticky; top: 0.75rem; }
+    .worker-list .ui-panel__body { padding: 0.5rem; }
+    .worker-search { width: 100%; height: 30px; padding: 0.2rem 0.5rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); font: inherit; }
+    .worker-list-meta { margin: 0.35rem 0.2rem; color: var(--c-muted); font-size: var(--fs-xs); }
+    #workerListContainer { display: grid; gap: 1px; max-height: calc(100vh - 260px); overflow: auto; }
 
     .worker-item {
-      width: 100%;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      font-family: inherit;
-      text-align: left;
-      padding: 0.6rem 0.75rem;
-      cursor: pointer;
-      border-radius: 4px;
-      margin-bottom: 0.25rem;
-      font-size: 0.9rem;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .worker-item:hover {
-      background: #f0f0f0;
-    }
-
-    .worker-item:focus-visible {
-      outline: 2px solid #004892;
-      outline-offset: -2px;
-    }
-
-    .worker-item.active {
-      background: #004892;
-      color: white;
-    }
-
-    .worker-list-empty {
-      padding: 0.75rem;
-      color: #666;
-      font-size: 0.9rem;
-      font-style: italic;
-    }
-
-    .worker-detail h3 {
-      margin-bottom: 1rem;
-      font-size: 1rem;
-    }
-
-    .matrix-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-
-    .matrix-table th,
-    .matrix-table td {
-      padding: 0.5rem;
-      text-align: center;
-      border: 1px solid #e0e0e0;
-    }
-
-    .matrix-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-      font-size: 0.8rem;
-    }
-
-    .matrix-table th.skill-col {
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: 0.32rem 0.5rem;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--c-ink);
+      font: inherit;
+      font-size: var(--fs-sm);
       text-align: left;
-      min-width: 100px;
-      background: #7c3f12;
-      color: #fff;
+      cursor: pointer;
     }
 
-    .matrix-table td.skill-name {
-      text-align: left;
-      font-weight: 500;
-      background: #fff1df;
-      color: #6f350d;
-      border-left: 4px solid #d97706;
-    }
+    .worker-item:hover { background: var(--c-surface-2); }
+    .worker-item.active { background: var(--c-primary); color: #fff; font-weight: 700; }
+    .worker-item__dirty { width: 0.5rem; height: 0.5rem; flex: none; border-radius: 50%; background: var(--c-warning); }
+    .worker-list-empty { padding: 0.5rem; color: var(--c-muted); font-size: var(--fs-sm); font-style: italic; }
 
-    .matrix-table th:not(.skill-col) {
-      background: #1e5d7b;
-      color: #fff;
-      border-bottom: 4px solid #0f3d56;
-    }
+    .person-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .person-head h3 { margin: 0; font-size: 1.05rem; }
+    .modifier-row { display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-sm); }
+    .modifier-input { width: 4.5rem; height: 28px; padding: 0.1rem 0.35rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); font: inherit; }
+    .modifier-help { color: var(--c-muted); font-size: var(--fs-xs); }
 
-    .matrix-table td.invalid {
-      background: #f5f5f5;
-      color: #bbb;
-    }
-
-    .skill-input {
-      width: 50px;
-      padding: 0.3rem;
-      text-align: center;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.85rem;
-    }
-
-    .skill-input:focus {
-      outline: 2px solid #004892;
-      border-color: transparent;
-    }
-
-    .skill-input.value-1 {
-      background: #d4edda;
-      border-color: #28a745;
-    }
-
-    .skill-input.value-0 {
-      background: #fff3cd;
-      border-color: #ffc107;
-    }
-
-    .skill-input.value--1 {
-      background: #f8d7da;
-      border-color: #dc3545;
-    }
-
-    .skill-input.value-w {
-      background: #cce5ff;
-      border-color: #007bff;
-    }
+    .matrix-table { border-collapse: collapse; font-size: var(--fs-sm); }
+    .matrix-table th { padding: 0.35rem 0.6rem; color: #fff; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.04em; }
+    .matrix-table th.skill-col { background: var(--c-surface-3); color: var(--c-ink); text-align: left; }
+    .matrix-table td { padding: 0.25rem 0.6rem; border-bottom: 1px solid #e6ecf2; text-align: center; }
+    .matrix-table td.skill-name { min-width: 8rem; border-left: 4px solid; font-weight: 700; text-align: left; }
+    .matrix-table td.invalid { color: var(--c-faint); }
 
     .skill-select {
-      width: 60px;
-      padding: 0.3rem;
+      width: 3.4rem;
+      height: 26px;
+      border: 1px solid var(--c-line-strong);
+      border-radius: var(--radius-sm);
+      font: inherit;
+      font-weight: 700;
       text-align: center;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.85rem;
       cursor: pointer;
     }
 
-    .skill-select:focus {
-      outline: 2px solid #004892;
-      border-color: transparent;
-    }
+    /* Overview view */
+    .overview-wrap { max-height: calc(100vh - 230px); overflow: auto; }
+    .overview-table { border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); }
+    .overview-table th, .overview-table td { padding: 0.12rem 0.18rem; border-bottom: 1px solid #e8edf2; text-align: center; white-space: nowrap; }
+    .overview-table thead th { position: sticky; z-index: 3; background: var(--c-surface-3); }
+    .overview-table thead tr:first-child th { top: 0; height: 24px; color: #fff; font-weight: 800; }
+    .overview-table thead tr:nth-child(2) th { top: 24px; color: var(--c-ink); font-weight: 700; }
+    .overview-table th.mod-start, .overview-table td.mod-start { border-left: 2px solid #b9c6d2; }
+    .overview-table .name-col { position: sticky; left: 0; z-index: 2; min-width: 12rem; max-width: 15rem; padding: 0.12rem 0.5rem; background: #fff; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+    .overview-table thead .name-col { z-index: 4; background: var(--c-surface-3); color: var(--c-ink) !important; vertical-align: bottom; }
+    .overview-table tbody tr:hover td { background: #f6f9fc; }
+    .overview-table tbody tr:hover .name-col { background: #f6f9fc; }
+    .overview-table .name-col button { padding: 0; border: 0; background: none; color: var(--c-ink); font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+    .overview-table .name-col button:hover { color: var(--c-primary); text-decoration: underline; }
+    .overview-table .name-col .worker-item__dirty { display: inline-block; margin-left: 0.3rem; }
+    .overview-table tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--c-surface-2); font-weight: 750; }
+    .overview-table tfoot .name-col { z-index: 3; background: var(--c-surface-2); }
+    .overview-table tfoot td.is-zero { background: var(--c-danger-soft); color: var(--c-danger); }
 
-    .csv-import {
-      margin: 0;
-      padding: 0.75rem;
-      border: 1px solid #d9e4f2;
-      border-radius: 6px;
-      background: #f7fbff;
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .csv-import label,
-    .add-worker label {
-      font-weight: 600;
-      font-size: 0.85rem;
-      color: #333;
-    }
-
-    .csv-worker-select {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      background: white;
-    }
-
-    .csv-worker-select:focus {
-      outline: 2px solid #004892;
-      border-color: transparent;
-    }
-
-    .csv-import-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .csv-import-actions .btn {
-      flex: 0 0 auto;
-    }
-
-    .csv-import-note {
-      font-size: 0.8rem;
-      color: #666;
-      line-height: 1.4;
-    }
-
-    .modifier-row {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      padding: 0.75rem;
-      background: #f8f9fa;
-      border-radius: 6px;
-      border: 1px solid #e0e0e0;
-    }
-
-    .modifier-row label {
-      font-weight: 500;
-      color: #333;
-    }
-
-    .modifier-input {
-      width: 80px;
-      padding: 0.4rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
-
-    .modifier-help {
-      font-size: 0.8rem;
-      color: #666;
-    }
-
-    .bulk-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .bulk-actions .btn {
-      flex: 0 0 auto;
-    }
-
-    .add-worker {
-      margin: 0;
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .add-worker input {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-bottom: 0;
-      font-size: 0.85rem;
-    }
-
-    .add-worker button {
-      width: 100%;
-    }
-
-    .status-message {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      padding: 1rem 1.5rem;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      display: none;
-      z-index: 1000;
-      pointer-events: none;
-    }
-
-    .status-message.success {
-      background: #d4edda;
-      color: #155724;
-      display: block;
-    }
-
-    .status-message.error {
-      background: #f8d7da;
-      color: #721c24;
-      display: block;
-    }
-
-    .empty-state {
+    .cell-select {
+      width: 2.3rem;
+      height: 22px;
+      padding: 0;
+      border: 1px solid var(--c-line);
+      border-radius: 3px;
+      font: inherit;
+      font-size: 0.72rem;
       text-align: center;
-      padding: 3rem;
-      color: #666;
+      text-align-last: center;
+      appearance: none;
+      cursor: pointer;
     }
 
-    @media (max-width: 1150px) {
-      .main-layout {
-        grid-template-columns: minmax(260px, 320px) minmax(440px, 1fr);
-      }
+    .cell-select:focus { outline: 2px solid var(--c-primary); outline-offset: 0; }
 
-      .worker-admin-panel {
-        grid-column: 1 / -1;
-        position: static;
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .main-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .worker-list {
-        position: static;
-        height: 300px;
-        min-height: 0;
-      }
-
-      .worker-admin-panel {
-        grid-column: auto;
-        grid-template-columns: 1fr;
-        order: -1;
-      }
-    }
+    /* Add worker dialog */
+    .roster-dialog { width: min(640px, 92vw); padding: 0; border: 0; border-radius: var(--radius); box-shadow: var(--shadow-2); }
+    .roster-dialog::backdrop { background: rgba(15, 30, 45, 0.45); }
+    .roster-dialog__head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--c-line); }
+    .roster-dialog__head h3 { margin: 0; font-size: 1rem; }
+    .roster-dialog section { display: grid; gap: 0.4rem; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--c-line); }
+    .roster-dialog section h4 { margin: 0; font-size: var(--fs-md); }
+    .roster-dialog select, .roster-dialog input { height: 30px; padding: 0.2rem 0.45rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); font: inherit; }
+    .roster-dialog .hint { color: var(--c-muted); font-size: var(--fs-xs); }
+    .roster-dialog .row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .roster-dialog footer { display: flex; justify-content: flex-end; padding: 0.6rem 0.9rem; }
 {% endblock %}
+
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Skills' %}
   {% set header_subtitle = 'Worker capabilities' %}
-  {% set header_mode = 'global' %}
   {% set active_page = 'skill_matrix' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <div class="toolbar">
-    <div>
-      <strong>Values:</strong>
-      <span style="color: #28a745;">1 = assigned</span> ·
-      <span style="color: #007bff;">w = weighted (training)</span> ·
-      <span style="color: #856404;">0 = helper</span> ·
-      <span style="color: #dc3545;">-1 = excluded</span>
+  <nav class="ui-tabs rules-tabs" aria-label="Team and rules">
+    <a class="ui-tab" href="{{ url_for('routes.skill_roster_page') }}" aria-current="page">Skills</a>
+    <a class="ui-tab" href="{{ url_for('routes.button_weights_page') }}">Weights</a>
+  </nav>
+
+  <div class="ui-panel ui-toolbar roster-toolbar">
+    <div class="ui-segmented" aria-label="View">
+      <button type="button" data-roster-view="person" onclick="setRosterView('person')">Person</button>
+      <button type="button" data-roster-view="overview" onclick="setRosterView('overview')">Overview</button>
     </div>
-    <div style="display: flex; gap: 0.5rem;">
-      <button class="btn btn-primary" onclick="importNewWorkers()">Import new workers</button>
-      <button class="btn btn-secondary" onclick="loadRoster()">Reload</button>
-      <button class="btn btn-success" onclick="saveRoster()">Save</button>
+    <span class="roster-legend" aria-label="Values">
+      <span><b class="value-1">1</b> assigned</span>
+      <span><b class="value-w">w</b> weighted (training)</span>
+      <span><b class="value-0">0</b> helper</span>
+      <span><b class="value--1">-1</b> excluded</span>
+    </span>
+    <span class="ui-toolbar__spacer"></span>
+    <span id="statusMessage" class="roster-status" aria-live="polite"></span>
+    <button class="ui-btn ui-btn--secondary" type="button" onclick="openAddWorkerDialog()">+ Add worker</button>
+    <button class="ui-btn ui-btn--secondary" type="button" onclick="loadRoster()">Reload</button>
+    <span class="ui-dirty" data-dirty-for="roster" hidden></span>
+    <button class="ui-btn ui-btn--success" type="button" id="saveRosterButton" onclick="saveRoster()">Save</button>
+  </div>
+
+  <div class="ui-note ui-note--warn" id="csvMissingNote" style="margin-bottom: 0.75rem;" hidden>
+    <span id="csvMissingText"></span>
+    <button class="ui-btn ui-btn--sm ui-btn--secondary" type="button" onclick="openAddWorkerDialog()" style="margin-left: 0.5rem;">Review</button>
+  </div>
+
+  <!-- Person view -->
+  <div class="roster-view roster-view--person">
+    <div class="person-layout">
+      <section class="ui-panel worker-list" aria-label="Workers">
+        <div class="ui-panel__body">
+          <input type="search" id="workerSearchInput" class="worker-search" placeholder="Search names or IDs"
+            aria-label="Search workers" oninput="renderWorkerList(); renderOverview()">
+          <div id="workerListMeta" class="worker-list-meta"></div>
+          <div id="workerListContainer"></div>
+        </div>
+      </section>
+
+      <section class="ui-panel worker-detail" aria-label="Selected worker">
+        <div id="noWorkerSelected" class="ui-empty">Select a worker to edit skills</div>
+        <div id="workerDetailContent" hidden>
+          <div class="ui-panel__head person-head">
+            <h3 id="selectedWorkerTitle">-</h3>
+            <span class="ui-toolbar__spacer"></span>
+            <button class="ui-btn ui-btn--danger-outline ui-btn--sm" type="button" onclick="deleteWorker()">Delete</button>
+          </div>
+          <div class="ui-panel__body">
+            <div class="ui-toolbar" style="margin-bottom: 0.6rem;">
+              <label class="modifier-row" for="workerModifier">W modifier
+                <input type="number" id="workerModifier" class="modifier-input" step="0.1" min="0.1" max="3.0" value="{{ default_w_modifier }}" onchange="updateModifier(this.value)">
+              </label>
+              <span class="modifier-help">Applied only to weighted 'w' assignments. Default {{ default_w_modifier }}</span>
+              <span class="ui-toolbar__spacer"></span>
+              <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="setSelectedWorkerBulkValue(-1, 'All -1')">All -1</button>
+              <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="setSelectedWorkerBulkValue(0, 'All 0')">All 0</button>
+              <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="applySbzDonePreset()">SBZ done</button>
+            </div>
+            <table class="matrix-table">
+              <thead><tr id="matrixHeader"></tr></thead>
+              <tbody id="matrixBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 
-  <div class="main-layout">
-    <!-- Worker List -->
-    <div class="card worker-list">
-      <h3>Workers</h3>
-      <div class="worker-list-tools">
-        <input
-          type="search"
-          id="workerSearchInput"
-          class="worker-search"
-          placeholder="Search names or IDs"
-          aria-label="Search workers"
-          oninput="renderWorkerList()"
-        >
-        <div id="workerListMeta" class="worker-list-meta"></div>
-      </div>
-      <div id="workerListContainer"></div>
+  <!-- Overview -->
+  <section class="roster-view roster-view--overview ui-panel" aria-label="All workers">
+    <div class="ui-toolbar" style="padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--c-line);">
+      <input type="search" class="worker-search" style="max-width: 260px;" placeholder="Search names or IDs" aria-label="Search workers in overview"
+        oninput="document.getElementById('workerSearchInput').value = this.value; renderWorkerList(); renderOverview()" id="overviewSearchInput">
+      <span class="ui-panel__hint">Bottom row: workers with 1 or w per column; red = nobody.</span>
     </div>
-
-    <!-- Worker Detail -->
-    <div class="card worker-detail">
-      <div id="noWorkerSelected" class="empty-state">
-        <p>Select a worker to edit skills</p>
-      </div>
-      <div id="workerDetailContent" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h3 id="selectedWorkerTitle">Worker: -</h3>
-          <button class="btn btn-secondary" style="background: #dc3545;" onclick="deleteWorker()">Delete</button>
-        </div>
-        <div class="modifier-row">
-          <label for="workerModifier">W Modifier:</label>
-          <input type="number" id="workerModifier" class="modifier-input" step="0.1" min="0.1" max="3.0" value="{{ default_w_modifier }}" onchange="updateModifier(this.value)">
-          <span class="modifier-help">(Applied only to weighted 'w' assignments. Default {{ default_w_modifier }})</span>
-        </div>
-        <div class="bulk-actions">
-          <button class="btn btn-secondary" type="button" onclick="setSelectedWorkerBulkValue(-1, 'All -1')">All -1</button>
-          <button class="btn btn-secondary" type="button" onclick="setSelectedWorkerBulkValue(0, 'All 0')">All 0</button>
-          <button class="btn btn-primary" type="button" onclick="applySbzDonePreset()">SBZ done</button>
-        </div>
-        <div style="overflow-x: auto;">
-          <table class="matrix-table">
-            <thead>
-              <tr id="matrixHeader"></tr>
-            </thead>
-            <tbody id="matrixBody"></tbody>
-          </table>
-        </div>
-      </div>
+    <div class="overview-wrap">
+      <table class="overview-table" id="overviewTable"></table>
     </div>
+  </section>
 
-    <aside class="worker-admin-panel" aria-label="Worker import and creation">
-      <section class="card csv-import">
-        <h3>Import missing worker from CSV</h3>
-        <label class="visually-hidden" for="csvWorkerSelect">Import missing worker from CSV</label>
-        <select id="csvWorkerSelect" class="csv-worker-select"></select>
-        <div id="csvWorkerMeta" class="csv-import-note"></div>
-        <div class="csv-import-actions">
-          <button class="btn btn-primary" type="button" onclick="importSelectedCsvWorker()">Import selected CSV worker</button>
-          <button class="btn btn-secondary" type="button" onclick="loadRoster()">Refresh CSV list</button>
-        </div>
-      </section>
-      <section class="card add-worker">
-        <h3>Manual add worker</h3>
-        <label class="visually-hidden" for="newWorkerId">Manual add worker</label>
-        <input type="text" id="newWorkerId" placeholder="Medweb Name (ID) or ID">
-        <div class="csv-import-note">Bitte Medweb-Schreibweise bzw. Medweb-ID verwenden, sonst kann ein separater Worker-Eintrag entstehen.</div>
-        <button class="btn btn-primary" onclick="addWorker()">Add Worker</button>
-      </section>
-    </aside>
-  </div>
-
-  <div id="statusMessage" class="status-message"></div>
+  <!-- Add worker dialog -->
+  <dialog class="roster-dialog" id="addWorkerDialog" aria-labelledby="addWorkerTitle">
+    <div class="roster-dialog__head">
+      <h3 id="addWorkerTitle">Add worker</h3>
+      <button class="ui-btn ui-btn--ghost ui-btn--sm" type="button" onclick="closeAddWorkerDialog()" aria-label="Close">✕</button>
+    </div>
+    <section>
+      <h4>Import missing worker from CSV</h4>
+      <label class="visually-hidden" for="csvWorkerSelect">Import missing worker from CSV</label>
+      <select id="csvWorkerSelect" class="csv-worker-select"></select>
+      <div id="csvWorkerMeta" class="hint"></div>
+      <div class="row">
+        <button class="ui-btn" type="button" onclick="importSelectedCsvWorker()">Import selected CSV worker</button>
+        <button class="ui-btn ui-btn--secondary" type="button" onclick="importNewWorkers()">Import all new workers</button>
+        <button class="ui-btn ui-btn--ghost" type="button" onclick="loadRoster()">Refresh CSV list</button>
+      </div>
+      <div class="hint">CSV imports are stored immediately and reload the roster; save other pending changes first.</div>
+    </section>
+    <section>
+      <h4>Manual add worker</h4>
+      <label class="visually-hidden" for="newWorkerId">Manual add worker</label>
+      <input type="text" id="newWorkerId" placeholder="Medweb name (ID) or ID">
+      <div class="hint">Bitte Medweb-Schreibweise bzw. Medweb-ID verwenden, sonst kann ein separater Worker-Eintrag entstehen.</div>
+      <div class="row"><button class="ui-btn" type="button" onclick="addWorker()">Add worker</button></div>
+    </section>
+    <footer><button class="ui-btn ui-btn--secondary" type="button" onclick="closeAddWorkerDialog()">Close</button></footer>
+  </dialog>
 
   <script src="{{ url_for('static', filename='js/worker_name_utils.js') }}"></script>
   <script>
     let rosterData = {};
-    let workerNames = {};  // Mapping from worker ID to display name
+    let baselineRoster = {};
+    let workerNames = {};
     let skills = [];
     let modalities = [];
     let selectedWorker = null;
-    let isDirty = false;  // Track unsaved changes
     let csvCandidates = [];
+    let rosterView = localStorage.getItem('radimo.roster.view') === 'overview' ? 'overview' : 'person';
     const validSkillsMap = JSON.parse('{{ valid_skills_map|tojson|safe }}');
     const modalitySettings = {{ modality_settings|tojson|safe }};
     const skillSettings = {{ skill_settings|tojson|safe }};
     const defaultWModifier = {{ default_w_modifier|tojson|safe }};
     window.WORKER_NAME_DISPLAY_STYLE = {{ worker_name_display_style|tojson|safe }};
     const SBZ_DONE_SKILLS = new Set(['AOU', 'CVT', 'MDH']);
+    const VALUE_OPTIONS = ['1', 'w', '0', '-1'];
+
+    function t(text) {
+      return window.RadimoI18n?.t ? window.RadimoI18n.t(text) : text;
+    }
+
+    function isEnglish() {
+      return window.RadimoI18n?.language === 'en';
+    }
 
     function isValidCombination(modality, skill) {
       if (!validSkillsMap[modality]) return true;
       return validSkillsMap[modality].includes(skill);
     }
 
-    // Mark data as dirty (unsaved changes)
+    function normalizeValue(value) {
+      const str = String(value ?? 0).toLowerCase();
+      return VALUE_OPTIONS.includes(str) ? str : '0';
+    }
+
+    function parseValue(str) {
+      return str === 'w' ? 'w' : parseInt(str, 10);
+    }
+
+    // ---------------------------------------------------------------- changes
+    function getChangedWorkers() {
+      const ids = new Set([...Object.keys(rosterData), ...Object.keys(baselineRoster)]);
+      return [...ids].filter(id => JSON.stringify(rosterData[id] ?? null) !== JSON.stringify(baselineRoster[id] ?? null));
+    }
+
+    function updateDirtyState() {
+      const changed = getChangedWorkers().length;
+      const saveButton = document.getElementById('saveRosterButton');
+      if (saveButton) {
+        saveButton.textContent = changed
+          ? `${t('Save')} (${changed} ${changed === 1 ? t('worker') : t('workers')})`
+          : t('Save');
+        saveButton.disabled = changed === 0;
+      }
+      window.RadimoUI?.setDirty('roster', changed);
+    }
+
     function markDirty() {
-      if (!isDirty) {
-        isDirty = true;
-        updateSaveButtonState();
-      }
+      updateDirtyState();
+      renderWorkerList();
     }
 
-    // Mark data as clean (saved)
     function markClean() {
-      isDirty = false;
-      updateSaveButtonState();
+      baselineRoster = JSON.parse(JSON.stringify(rosterData));
+      updateDirtyState();
+      renderWorkerList();
     }
 
-    // Update save button to show unsaved state
-    function updateSaveButtonState() {
-      const saveBtn = document.querySelector('.btn-success');
-      if (saveBtn) {
-        saveBtn.textContent = isDirty ? 'Save *' : 'Save';
-        saveBtn.style.boxShadow = isDirty ? '0 0 0 2px #ffc107' : '';
-      }
+    function isWorkerChanged(workerId) {
+      return JSON.stringify(rosterData[workerId] ?? null) !== JSON.stringify(baselineRoster[workerId] ?? null);
     }
 
-    // Warn before leaving with unsaved changes
-    window.addEventListener('beforeunload', function (e) {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-        return '';
-      }
+    // ---------------------------------------------------------------- views
+    function setRosterView(view) {
+      rosterView = view === 'overview' ? 'overview' : 'person';
+      localStorage.setItem('radimo.roster.view', rosterView);
+      document.body.classList.toggle('roster-mode-person', rosterView === 'person');
+      document.body.classList.toggle('roster-mode-overview', rosterView === 'overview');
+      document.querySelectorAll('[data-roster-view]').forEach(btn => {
+        btn.setAttribute('aria-pressed', btn.dataset.rosterView === rosterView ? 'true' : 'false');
+      });
+      const overviewSearch = document.getElementById('overviewSearchInput');
+      if (overviewSearch) overviewSearch.value = document.getElementById('workerSearchInput').value;
+      if (rosterView === 'overview') renderOverview();
+      else if (selectedWorker) renderWorkerMatrix();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setRosterView(rosterView);
+      loadRoster(true);
     });
-
-    document.addEventListener('DOMContentLoaded', () => loadRoster(true));
     document.addEventListener('radimo:languagechange', () => {
       renderWorkerList();
       renderCsvWorkerSelect();
+      updateDirtyState();
     });
-
-    function isEnglish() {
-      return window.RadimoI18n?.language === 'en';
-    }
 
     function hexToRgba(hex, alpha) {
       const normalized = String(hex || '').replace('#', '');
@@ -633,14 +350,12 @@
     }
 
     async function loadRoster(force = false) {
-      if (isDirty && !force && !confirm(window.RadimoI18n?.language === 'en'
+      if (getChangedWorkers().length && !force && !confirm(isEnglish()
         ? 'Discard unsaved skill-matrix changes and reload?'
         : 'Ungespeicherte Änderungen an der Skill-Matrix verwerfen und neu laden?')) return;
       try {
         const response = await fetch('/api/admin/skill_roster');
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
         const data = await response.json();
         if (data.success) {
           rosterData = data.roster;
@@ -648,12 +363,11 @@
           skills = data.skills;
           modalities = data.modalities;
           csvCandidates = data.csv_candidates || [];
-          renderWorkerList();
-          renderCsvWorkerSelect();
-          if (selectedWorker && rosterData[selectedWorker]) {
-            renderWorkerMatrix();
-          }
           markClean();
+          renderCsvWorkerSelect();
+          renderCsvMissingNote();
+          if (selectedWorker && rosterData[selectedWorker]) renderWorkerMatrix();
+          renderOverview();
         } else {
           showStatus('Load failed: ' + (data.error || 'Unknown error'), 'error');
         }
@@ -670,44 +384,11 @@
       return window.WorkerNameUtils.buildSortKey(name);
     }
 
-    function renderWorkerList() {
-      const container = document.getElementById('workerListContainer');
-      const meta = document.getElementById('workerListMeta');
-      const query = getWorkerSearchQuery();
-      const workerIds = Object.keys(rosterData)
-        .sort((a, b) => {
-          const aKey = buildWorkerSortKey(getWorkerDisplayName(a));
-          const bKey = buildWorkerSortKey(getWorkerDisplayName(b));
-          return aKey.localeCompare(bKey) || getWorkerDisplayName(a).localeCompare(getWorkerDisplayName(b));
-        });
-      const filteredWorkerIds = query
-        ? workerIds.filter(workerId => workerMatchesQuery(workerId, query))
-        : workerIds;
-
-      container.innerHTML = '';
-      if (meta) {
-        meta.textContent = query
-          ? (isEnglish()
-            ? `${filteredWorkerIds.length} of ${workerIds.length} shown`
-            : `${filteredWorkerIds.length} von ${workerIds.length} angezeigt`)
-          : (isEnglish()
-            ? `${workerIds.length} worker${workerIds.length === 1 ? '' : 's'}`
-            : `${workerIds.length} Mitarbeiter`);
-      }
-
-      if (filteredWorkerIds.length === 0) {
-        container.innerHTML = `<div class="worker-list-empty">${isEnglish() ? 'No workers match this search.' : 'Keine passenden Mitarbeiter gefunden.'}</div>`;
-        return;
-      }
-
-      filteredWorkerIds.forEach(workerId => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'worker-item' + (selectedWorker === workerId ? ' active' : '');
-        button.textContent = getWorkerDisplayName(workerId);
-        button.title = workerId;  // Tooltip shows the ID
-        button.onclick = () => selectWorker(workerId);
-        container.appendChild(button);
+    function getSortedWorkerIds() {
+      return Object.keys(rosterData).sort((a, b) => {
+        const aKey = buildWorkerSortKey(getWorkerDisplayName(a));
+        const bKey = buildWorkerSortKey(getWorkerDisplayName(b));
+        return aKey.localeCompare(bKey) || getWorkerDisplayName(a).localeCompare(getWorkerDisplayName(b));
       });
     }
 
@@ -723,13 +404,56 @@
       return workerId.toLowerCase().includes(query) || displayName.includes(query) || rawName.includes(query);
     }
 
+    function renderWorkerList() {
+      const container = document.getElementById('workerListContainer');
+      const meta = document.getElementById('workerListMeta');
+      if (!container) return;
+      const query = getWorkerSearchQuery();
+      const workerIds = getSortedWorkerIds();
+      const filteredWorkerIds = workerIds.filter(workerId => workerMatchesQuery(workerId, query));
+      if (meta) {
+        meta.textContent = query
+          ? (isEnglish() ? `${filteredWorkerIds.length} of ${workerIds.length} shown` : `${filteredWorkerIds.length} von ${workerIds.length} angezeigt`)
+          : (isEnglish() ? `${workerIds.length} workers` : `${workerIds.length} Mitarbeiter`);
+      }
+      if (!filteredWorkerIds.length) {
+        container.innerHTML = `<div class="worker-list-empty">${isEnglish() ? 'No workers match this search.' : 'Keine passenden Mitarbeiter gefunden.'}</div>`;
+        return;
+      }
+      container.innerHTML = '';
+      filteredWorkerIds.forEach(workerId => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'worker-item' + (selectedWorker === workerId ? ' active' : '');
+        button.title = workerId;
+        button.onclick = () => selectWorker(workerId);
+        const label = document.createElement('span');
+        label.textContent = getWorkerDisplayName(workerId);
+        button.appendChild(label);
+        if (isWorkerChanged(workerId)) {
+          const dot = document.createElement('span');
+          dot.className = 'worker-item__dirty';
+          dot.title = t('Unsaved changes');
+          button.appendChild(dot);
+        }
+        container.appendChild(button);
+      });
+    }
+
+    function renderCsvMissingNote() {
+      const note = document.getElementById('csvMissingNote');
+      if (!note) return;
+      note.hidden = csvCandidates.length === 0;
+      document.getElementById('csvMissingText').textContent = isEnglish()
+        ? `${csvCandidates.length} worker(s) from the Master CSV have no skills entry yet.`
+        : `${csvCandidates.length} Person(en) aus der Master-CSV haben noch keinen Skills-Eintrag.`;
+    }
+
     function renderCsvWorkerSelect() {
       const select = document.getElementById('csvWorkerSelect');
       const meta = document.getElementById('csvWorkerMeta');
       if (!select) return;
-
       select.innerHTML = '';
-
       if (!csvCandidates.length) {
         const option = document.createElement('option');
         option.value = '';
@@ -743,7 +467,6 @@
         }
         return;
       }
-
       select.disabled = false;
       const promptOption = document.createElement('option');
       promptOption.value = '';
@@ -751,7 +474,6 @@
       promptOption.selected = true;
       promptOption.disabled = true;
       select.appendChild(promptOption);
-
       csvCandidates.forEach(candidate => {
         const option = document.createElement('option');
         option.value = candidate.worker_id;
@@ -759,7 +481,6 @@
         option.title = candidate.source_activity || '';
         select.appendChild(option);
       });
-
       if (meta) {
         const autoEligible = csvCandidates.filter(candidate => candidate.auto_import_eligible).length;
         const manualOnly = csvCandidates.length - autoEligible;
@@ -767,6 +488,14 @@
           ? `${csvCandidates.length} missing CSV worker${csvCandidates.length === 1 ? '' : 's'} available${autoEligible ? ` · ${autoEligible} shift rows` : ''}${manualOnly ? ` · ${manualOnly} manual-only` : ''}`
           : `${csvCandidates.length} fehlende CSV-Mitarbeiter${autoEligible ? ` · ${autoEligible} mit Schichtzeilen` : ''}${manualOnly ? ` · ${manualOnly} nur manuell` : ''}`;
       }
+    }
+
+    function openAddWorkerDialog() {
+      document.getElementById('addWorkerDialog').showModal();
+    }
+
+    function closeAddWorkerDialog() {
+      document.getElementById('addWorkerDialog').close();
     }
 
     async function importSelectedCsvWorker() {
@@ -777,7 +506,6 @@
         showStatus('Please select a CSV worker first', 'error');
         return;
       }
-
       try {
         const response = await fetch('/api/admin/skill_roster/import_csv_worker', {
           method: 'POST',
@@ -788,12 +516,13 @@
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || `Server error: ${response.status}`);
         }
-
         const result = await response.json();
         if (result.success) {
           await loadRoster();
           const importedId = result.worker_id || workerId;
           if (rosterData[importedId]) {
+            closeAddWorkerDialog();
+            setRosterView('person');
             selectWorker(importedId);
           }
           showStatus(`Imported ${result.display_name || result.full_name || importedId}`, 'success');
@@ -805,121 +534,77 @@
       }
     }
 
+    // ---------------------------------------------------------------- person view
     function selectWorker(workerId) {
       selectedWorker = workerId;
       renderWorkerList();
       renderWorkerMatrix();
-      document.getElementById('noWorkerSelected').style.display = 'none';
-      document.getElementById('workerDetailContent').style.display = 'block';
-      document.getElementById('selectedWorkerTitle').textContent = 'Worker: ' + getWorkerDisplayName(workerId);
+      document.getElementById('noWorkerSelected').hidden = true;
+      document.getElementById('workerDetailContent').hidden = false;
+      document.getElementById('selectedWorkerTitle').textContent = getWorkerDisplayName(workerId);
+    }
+
+    function buildValueSelect(className, value, onChange) {
+      const select = document.createElement('select');
+      select.className = className;
+      VALUE_OPTIONS.forEach(optionValue => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        select.appendChild(option);
+      });
+      select.value = normalizeValue(value);
+      applyValueColor(select, select.value);
+      select.addEventListener('change', function () {
+        applyValueColor(this, this.value);
+        onChange(parseValue(this.value));
+      });
+      return select;
     }
 
     function renderWorkerMatrix() {
       if (!selectedWorker || !rosterData[selectedWorker]) return;
       const workerData = rosterData[selectedWorker];
-
-      // Header: Skill followed by the configured modalities.
       const header = document.getElementById('matrixHeader');
       header.innerHTML = '<th class="skill-col">Skill</th>';
       modalities.forEach(mod => {
         const th = document.createElement('th');
-        th.textContent = mod.toUpperCase();
-        const color = modalitySettings[mod]?.nav_color || '#1e5d7b';
-        th.style.background = color;
-        th.style.borderBottomColor = color;
+        th.textContent = (modalitySettings[mod]?.label || mod).toUpperCase();
+        th.style.background = modalitySettings[mod]?.nav_color || '#1e5d7b';
         header.appendChild(th);
       });
-
-      // Body: each skill row
       const tbody = document.getElementById('matrixBody');
       tbody.innerHTML = '';
-
       skills.forEach(skill => {
         const row = document.createElement('tr');
-
-        // Skill name
         const skillCell = document.createElement('td');
         skillCell.className = 'skill-name';
         skillCell.textContent = skill;
         const skillColor = skillSettings[skill]?.button_color || '#d97706';
         skillCell.style.borderLeftColor = skillColor;
-        skillCell.style.background = hexToRgba(skillColor, 0.12);
-        skillCell.style.color = '#17202a';
+        skillCell.style.background = hexToRgba(skillColor, 0.1);
         row.appendChild(skillCell);
-
-        // Value for each modality
         modalities.forEach(mod => {
           const cell = document.createElement('td');
-
           if (!isValidCombination(mod, skill)) {
             cell.className = 'invalid';
             cell.textContent = '—';
-            row.appendChild(cell);
-            return;
-          }
-
-          // Get value from flat structure: "skill_modality" format
-          const key = `${skill}_${mod}`;
-          let value = workerData[key];
-          if (value === undefined) value = 0;
-
-          // Roster baseline supports passive, excluded, and weighted training.
-          const select = document.createElement('select');
-          select.className = 'skill-select skill-input';
-
-          const options = [
-            { value: '1', label: '1' },
-            { value: 'w', label: 'w' },
-            { value: '0', label: '0' },
-            { value: '-1', label: '-1' }
-          ];
-
-          options.forEach(opt => {
-            const option = document.createElement('option');
-            option.value = opt.value;
-            option.textContent = opt.label;
-            select.appendChild(option);
-          });
-
-          const strValue = String(value).toLowerCase();
-          if (strValue === 'w') {
-            select.value = 'w';
-          } else if (strValue === '1') {
-            select.value = '1';
-          } else if (strValue === '-1') {
-            select.value = '-1';
           } else {
-            select.value = '0';
+            cell.appendChild(buildValueSelect('skill-select skill-input', workerData[`${skill}_${mod}`], value => {
+              updateSkill(selectedWorker, mod, skill, value);
+            }));
           }
-          applyValueColor(select, select.value);
-
-          select.addEventListener('change', function () {
-            const val = this.value === 'w' ? 'w' : parseInt(this.value, 10);
-            updateSkill(mod, skill, val);
-            applyValueColor(this, val);
-            markDirty();
-          });
-
-          cell.appendChild(select);
           row.appendChild(cell);
         });
-
         tbody.appendChild(row);
       });
-
-      // Update w modifier input
-      const modifierInput = document.getElementById('workerModifier');
       const modifier = workerData.modifier !== undefined ? workerData.modifier : defaultWModifier;
-      modifierInput.value = modifier;
+      document.getElementById('workerModifier').value = modifier;
     }
 
     function applyValueColor(element, val) {
       element.classList.remove('value--1', 'value-0', 'value-1', 'value-w');
-      const strVal = String(val).toLowerCase();
-      if (strVal === '1') element.classList.add('value-1');
-      else if (strVal === 'w') element.classList.add('value-w');
-      else if (strVal === '0') element.classList.add('value-0');
-      else if (strVal === '-1') element.classList.add('value--1');
+      element.classList.add(`value-${normalizeValue(val)}`);
     }
 
     function updateModifier(value) {
@@ -932,31 +617,27 @@
       markDirty();
     }
 
-    function updateSkill(modality, skill, value) {
-      if (!rosterData[selectedWorker]) return;
-      // Write to flat structure: "skill_modality" format
-      const key = `${skill}_${modality}`;
-      rosterData[selectedWorker][key] = value;
+    function updateSkill(workerId, modality, skill, value) {
+      if (!rosterData[workerId]) return;
+      rosterData[workerId][`${skill}_${modality}`] = value;
+      markDirty();
+      updateOverviewCounts();
     }
 
     function setSelectedWorkerBulkValue(value, label) {
       if (!selectedWorker || !rosterData[selectedWorker]) return;
       let updatedCells = 0;
-
       skills.forEach(skill => {
         modalities.forEach(mod => {
           if (!isValidCombination(mod, skill)) return;
-          const key = `${skill}_${mod}`;
-          rosterData[selectedWorker][key] = value;
+          rosterData[selectedWorker][`${skill}_${mod}`] = value;
           updatedCells += 1;
         });
       });
-
-      if (updatedCells === 0) {
+      if (!updatedCells) {
         showStatus('No editable cells found for this worker', 'error');
         return;
       }
-
       markDirty();
       renderWorkerMatrix();
       showStatus(`${label}: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'}`, 'success');
@@ -965,34 +646,114 @@
     function applySbzDonePreset() {
       if (!selectedWorker || !rosterData[selectedWorker]) return;
       let updatedCells = 0;
-
       skills.forEach(skill => {
         if (!SBZ_DONE_SKILLS.has(String(skill).toUpperCase())) return;
         modalities.forEach(mod => {
           if (!isValidCombination(mod, skill)) return;
-          const key = `${skill}_${mod}`;
-          rosterData[selectedWorker][key] = 0;
+          rosterData[selectedWorker][`${skill}_${mod}`] = 0;
           updatedCells += 1;
         });
       });
-
-      if (updatedCells === 0) {
+      if (!updatedCells) {
         showStatus('SBZ done preset did not match any editable cells', 'error');
         return;
       }
-
       markDirty();
       renderWorkerMatrix();
       showStatus(`SBZ done: set ${updatedCells} cell${updatedCells === 1 ? '' : 's'} to 0`, 'success');
     }
 
+    // ---------------------------------------------------------------- overview
+    function overviewColumns() {
+      const columns = [];
+      modalities.forEach(mod => skills.forEach((skill, index) => columns.push({ mod, skill, first: index === 0 })));
+      return columns;
+    }
+
+    function renderOverview() {
+      const table = document.getElementById('overviewTable');
+      if (!table || rosterView !== 'overview' || !skills.length) return;
+      const columns = overviewColumns();
+      const query = getWorkerSearchQuery();
+      const workerIds = getSortedWorkerIds().filter(id => workerMatchesQuery(id, query));
+
+      let head = '<thead><tr><th class="name-col" rowspan="2">' + t('Worker') + '</th>';
+      modalities.forEach(mod => {
+        head += `<th class="mod-start" colspan="${skills.length}" style="background:${modalitySettings[mod]?.nav_color || '#1e5d7b'}">${(modalitySettings[mod]?.label || mod).toUpperCase()}</th>`;
+      });
+      head += '</tr><tr>';
+      columns.forEach(col => {
+        head += `<th class="${col.first ? 'mod-start' : ''}" title="${col.skill} · ${col.mod.toUpperCase()}">${String(col.skill).slice(0, 3)}</th>`;
+      });
+      head += '</tr></thead>';
+      table.innerHTML = head + '<tbody></tbody><tfoot></tfoot>';
+
+      const tbody = table.querySelector('tbody');
+      workerIds.forEach(workerId => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.className = 'name-col';
+        const nameButton = document.createElement('button');
+        nameButton.type = 'button';
+        nameButton.textContent = getWorkerDisplayName(workerId);
+        nameButton.title = t('Open in person view');
+        nameButton.onclick = () => { setRosterView('person'); selectWorker(workerId); };
+        nameCell.appendChild(nameButton);
+        if (isWorkerChanged(workerId)) {
+          const dot = document.createElement('span');
+          dot.className = 'worker-item__dirty';
+          nameCell.appendChild(dot);
+        }
+        row.appendChild(nameCell);
+        columns.forEach(col => {
+          const cell = document.createElement('td');
+          if (col.first) cell.className = 'mod-start';
+          if (!isValidCombination(col.mod, col.skill)) {
+            cell.textContent = '—';
+            cell.style.color = 'var(--c-faint)';
+          } else {
+            const select = buildValueSelect('cell-select', rosterData[workerId][`${col.skill}_${col.mod}`], value => {
+              updateSkill(workerId, col.mod, col.skill, value);
+              const dirtyDot = nameCell.querySelector('.worker-item__dirty');
+              if (isWorkerChanged(workerId) && !dirtyDot) {
+                const dot = document.createElement('span');
+                dot.className = 'worker-item__dirty';
+                nameCell.appendChild(dot);
+              } else if (!isWorkerChanged(workerId) && dirtyDot) {
+                dirtyDot.remove();
+              }
+            });
+            select.title = `${getWorkerDisplayName(workerId)} · ${col.skill} · ${col.mod.toUpperCase()}`;
+            select.setAttribute('aria-label', select.title);
+            cell.appendChild(select);
+          }
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+      updateOverviewCounts();
+    }
+
+    function updateOverviewCounts() {
+      const table = document.getElementById('overviewTable');
+      const tfoot = table?.querySelector('tfoot');
+      if (!tfoot) return;
+      let html = `<tr><td class="name-col">${t('Active (1 or w)')}</td>`;
+      overviewColumns().forEach(col => {
+        if (!isValidCombination(col.mod, col.skill)) {
+          html += `<td class="${col.first ? 'mod-start' : ''}">—</td>`;
+          return;
+        }
+        const count = Object.values(rosterData).filter(worker => ['1', 'w'].includes(normalizeValue(worker[`${col.skill}_${col.mod}`]))).length;
+        html += `<td class="${col.first ? 'mod-start ' : ''}${count === 0 ? 'is-zero' : ''}">${count}</td>`;
+      });
+      tfoot.innerHTML = html + '</tr>';
+    }
+
+    // ---------------------------------------------------------------- add / delete / save
     function parseWorkerInput(inputValue) {
-      // Parse input like "Dr. Name (ID)" or just "ID"
-      // Returns { id, fullName }
       const match = inputValue.match(/^(.+?)\s*\(([^)]+)\)$/);
-      if (match) {
-        return { id: match[2].trim(), fullName: inputValue };
-      }
+      if (match) return { id: match[2].trim(), fullName: inputValue };
       return { id: inputValue, fullName: null };
     }
 
@@ -1003,30 +764,24 @@
         showStatus('Please enter a worker ID or "Name (ID)"', 'error');
         return;
       }
-
       const { id: workerId, fullName } = parseWorkerInput(inputValue);
       if (rosterData[workerId]) {
         showStatus('Worker already exists', 'error');
         return;
       }
-
-      // Create new worker with flat Skill×Modality combinations (all set to 0)
       rosterData[workerId] = { modifier: defaultWModifier };
       if (fullName) {
         rosterData[workerId].full_name = fullName;
-        workerNames[workerId] = fullName;  // Update display cache
+        workerNames[workerId] = fullName;
       }
       skills.forEach(skill => {
         modalities.forEach(mod => {
-          if (isValidCombination(mod, skill)) {
-            const key = `${skill}_${mod}`;
-            rosterData[workerId][key] = 0;
-          }
+          if (isValidCombination(mod, skill)) rosterData[workerId][`${skill}_${mod}`] = 0;
         });
       });
-
       input.value = '';
-      renderWorkerList();
+      closeAddWorkerDialog();
+      setRosterView('person');
       selectWorker(workerId);
       markDirty();
       showStatus('Worker added (save to keep)', 'success');
@@ -1034,34 +789,29 @@
 
     function deleteWorker() {
       if (!selectedWorker) return;
-      if (!confirm('Delete worker ' + getWorkerDisplayName(selectedWorker) + '?')) return;
-
+      if (!confirm(t('Delete worker') + ' ' + getWorkerDisplayName(selectedWorker) + '?')) return;
       delete rosterData[selectedWorker];
       selectedWorker = null;
-      renderWorkerList();
-      document.getElementById('noWorkerSelected').style.display = 'block';
-      document.getElementById('workerDetailContent').style.display = 'none';
+      document.getElementById('noWorkerSelected').hidden = false;
+      document.getElementById('workerDetailContent').hidden = true;
       markDirty();
+      renderOverview();
       showStatus('Worker deleted (save to keep)', 'success');
     }
 
     async function importNewWorkers() {
-      if (isDirty && !confirm(window.RadimoI18n?.language === 'en'
+      if (getChangedWorkers().length && !confirm(isEnglish()
         ? 'Discard unsaved changes and import new workers?'
         : 'Ungespeicherte Änderungen verwerfen und neue Mitarbeiter importieren?')) return;
       try {
         const response = await fetch('/api/admin/skill_roster/import_new', { method: 'POST' });
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
         const result = await response.json();
         if (result.success) {
           await loadRoster(true);
           const count = result.added_count || 0;
           const list = (result.added_workers || []).join(', ');
-          const suffix = list ? `: ${list}` : '';
-          showStatus(`Imported ${count} new worker(s)` + suffix, 'success');
+          showStatus(`Imported ${count} new worker(s)` + (list ? `: ${list}` : ''), 'success');
         } else {
           showStatus('Import failed: ' + (result.error || 'Unknown error'), 'error');
         }
@@ -1077,12 +827,11 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roster: rosterData })
         });
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
         const result = await response.json();
         if (result.success) {
           markClean();
+          renderOverview();
           showStatus('Saved!', 'success');
         } else {
           showStatus('Save failed: ' + (result.error || 'Unknown error'), 'error');
@@ -1092,11 +841,13 @@
       }
     }
 
+    let statusTimer = null;
     function showStatus(message, type) {
       const el = document.getElementById('statusMessage');
       el.textContent = message;
-      el.className = 'status-message ' + type;
-      setTimeout(() => { el.className = 'status-message'; }, 4000);
+      el.className = 'roster-status ' + type;
+      clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'roster-status'; }, 5000);
     }
   </script>
 {% endblock %}

@@ -111,7 +111,8 @@ def test_compact_admin_forms_have_accessible_names_and_local_table_scroll():
     assert 'aria-label="Search workers"' in roster_html
 
     weights_html = client.get('/button-weights').get_data(as_text=True)
-    assert "input.setAttribute('aria-label', `Weight:" in weights_html
+    assert "input.setAttribute('aria-label', label)" in weights_html
+    assert "`Weight: ${skill}" in weights_html
 
     prep_html = client.get('/prep-today').get_data(as_text=True)
     assert '.table-container {' in prep_html
@@ -256,8 +257,8 @@ def test_admin_tools_stay_compact_and_reachable_on_narrow_pages():
     assert 'href="#recoverable-backups"' in files_html
 
     roster_html = client.get('/skill-roster').get_data(as_text=True)
-    assert '.worker-admin-panel {' in roster_html
-    assert 'order: -1;' in roster_html
+    assert 'id="addWorkerDialog"' in roster_html
+    assert 'data-roster-view="overview"' in roster_html
 
     timetable_html = client.get('/timetable').get_data(as_text=True)
     assert 'Zurück zur Hauptseite' not in timetable_html

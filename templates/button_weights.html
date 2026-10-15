@@ -1,235 +1,165 @@
 {% extends "base.html" %}
+{% set page_theme = 'admin' %}
 
 {% block title %}RadIMO Cortex | Weights{% endblock %}
 
 {% block styles %}
+    .rules-tabs { margin-bottom: 0.6rem; }
+    .weights-toolbar { margin-bottom: 0.75rem; padding: 0.5rem 0.8rem; }
+    .weights-legend { color: var(--c-muted); font-size: var(--fs-sm); }
+    .weights-status { font-size: var(--fs-sm); font-weight: 650; }
+    .weights-status.success { color: var(--c-success); }
+    .weights-status.error { color: var(--c-danger); }
+    .mode-strict-active .ui-segmented > [aria-pressed="true"] { color: var(--c-warning); }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1800px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      margin-bottom: 1rem;
-    }
-
-    .btn {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .btn-secondary {
-      background: #6c757d;
-      color: white;
-    }
-
-    .btn-secondary:hover {
-      background: #5a6268;
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #218838;
-    }
-
-    /* Mode toggle button colors */
-    .btn-mode-normal {
-      background: #2f8c7a;
-      color: #ffffff;
-    }
-    .btn-mode-normal:hover {
-      background: #247060;
-    }
-    .btn-mode-strict {
-      background: #c75a2a;
-      color: #ffffff;
-    }
-    .btn-mode-strict:hover {
-      background: #a34820;
-    }
-    .btn-mode-inactive {
-      background: #e0e0e0;
-      color: #666666;
-    }
-    .btn-mode-inactive:hover {
-      background: #d0d0d0;
-    }
-
-    .matrix-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-
-    .matrix-table th,
-    .matrix-table td {
-      padding: 0.5rem;
-      text-align: center;
-      border: 1px solid #e0e0e0;
-    }
-
-    .matrix-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-      font-size: 0.8rem;
-    }
-
-    .matrix-table th.skill-col {
-      text-align: left;
-      min-width: 100px;
-      background: #7c3f12;
-      color: #fff;
-    }
-
-    .matrix-table td.skill-name {
-      text-align: left;
-      font-weight: 500;
-      background: #fff1df;
-      color: #6f350d;
-      border-left: 4px solid #d97706;
-    }
-
-    .matrix-table th:not(.skill-col) {
-      background: #1e5d7b;
-      color: #fff;
-      border-bottom: 4px solid #0f3d56;
-    }
-
-    .matrix-table td.invalid {
-      background: #f5f5f5;
-      color: #bbb;
-    }
+    .matrix-table { border-collapse: collapse; font-size: var(--fs-sm); }
+    .matrix-table th { padding: 0.35rem 0.7rem; background: var(--c-surface-3); color: var(--c-ink); font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.03em; text-align: center; white-space: nowrap; }
+    .matrix-table th.mod-col { color: #fff; }
+    .matrix-table th.skill-col { text-align: left; }
+    .matrix-table td { padding: 0.22rem 0.7rem; border-bottom: 1px solid #e6ecf2; text-align: center; }
+    .matrix-table td.skill-name { min-width: 8rem; border-left: 4px solid var(--skill-color, var(--c-line-strong)); font-weight: 700; text-align: left; }
+    .matrix-table td.invalid { color: var(--c-faint); }
+    .matrix-table td.meta { color: var(--c-muted); font-size: var(--fs-xs); text-align: left; }
 
     .weight-input {
-      width: 108px;
-      min-width: 108px;
-      padding: 0.35rem 1.6rem 0.35rem 0.45rem;
+      width: 5rem;
+      height: 26px;
+      padding: 0.1rem 0.35rem;
+      border: 1px solid var(--c-line-strong);
+      border-radius: var(--radius-sm);
+      font: inherit;
       text-align: right;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      font-variant-numeric: tabular-nums;
     }
 
-    .weight-input:focus {
-      outline: 2px solid #004892;
-      border-color: transparent;
-    }
-
-    .status-message {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      padding: 1rem 1.5rem;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      display: none;
-      z-index: 1000;
-      pointer-events: none;
-    }
-    .status-message.success {
-      background: #d4edda;
-      color: #155724;
-      display: block;
-    }
-    .status-message.error {
-      background: #f8d7da;
-      color: #721c24;
-      display: block;
-    }
+    .weight-input:placeholder-shown { background: var(--c-surface-2); }
+    .weight-input::placeholder { color: #9aa7b3; font-style: italic; }
+    .weight-input.is-changed { border-color: var(--c-warning); box-shadow: inset 0 0 0 1px var(--c-warning); }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Weights' %}
   {% set header_subtitle = 'Assignment weights' %}
-  {% set header_mode = 'global' %}
   {% set active_page = 'button_weights' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <section class="card" style="margin-bottom: 1.5rem;">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
-      <div>
-        <strong>Defaults:</strong>
-        <span>Normal defaults to 1.0 when blank.</span>
-        <span>Strict defaults to Normal when blank.</span>
-      </div>
-      <div style="display:flex; gap:0.5rem;">
-        <button class="btn btn-secondary" onclick="loadWeights()">Reload</button>
-        <button class="btn btn-success" onclick="saveWeights()">Save</button>
-      </div>
-    </div>
-    <div style="margin-top:1rem; display:flex; gap:0.5rem;">
-      <button id="mode-normal" class="btn btn-mode-normal" onclick="setMode('normal')">Normal</button>
-      <button id="mode-strict" class="btn btn-mode-inactive" onclick="setMode('strict')">Strict</button>
-    </div>
-  </section>
+  <nav class="ui-tabs rules-tabs" aria-label="Team and rules">
+    <a class="ui-tab" href="{{ url_for('routes.skill_roster_page') }}">Skills</a>
+    <a class="ui-tab" href="{{ url_for('routes.button_weights_page') }}" aria-current="page">Weights</a>
+  </nav>
 
-  <section class="card">
-    <div style="overflow-x:auto;">
+  <div class="ui-panel ui-toolbar weights-toolbar" id="weightsToolbar">
+    <div class="ui-segmented" aria-label="Weight mode">
+      <button type="button" id="mode-normal" onclick="setMode('normal')">Normal</button>
+      <button type="button" id="mode-strict" onclick="setMode('strict')">Strict</button>
+    </div>
+    <span class="weights-legend" id="weightsLegend"></span>
+    <span class="ui-toolbar__spacer"></span>
+    <span id="statusMessage" class="weights-status" aria-live="polite"></span>
+    <button class="ui-btn ui-btn--secondary" type="button" onclick="loadWeights()">Reload</button>
+    <span class="ui-dirty" data-dirty-for="weights" hidden></span>
+    <button class="ui-btn ui-btn--success" type="button" id="saveWeightsButton" onclick="saveWeights()">Save</button>
+  </div>
+
+  <section class="ui-panel">
+    <div class="ui-panel__body" style="overflow-x: auto;">
       <table class="matrix-table">
-        <thead>
-          <tr id="weightMatrixHeader"></tr>
-        </thead>
+        <thead><tr id="weightMatrixHeader"></tr></thead>
         <tbody id="weightMatrixBody"></tbody>
       </table>
     </div>
   </section>
-  <section class="card">
-    <div style="margin-bottom:0.35rem; font-weight:600;">Special Tasks</div>
-    <div style="overflow-x:auto;">
+
+  <section class="ui-panel">
+    <div class="ui-panel__head">
+      <h3 class="ui-panel__title">Special tasks</h3>
+      <span class="ui-panel__hint">One weight per task, applied to every modality the task is shown in.</span>
+    </div>
+    <div class="ui-panel__body" style="overflow-x: auto;">
       <table class="matrix-table">
-        <thead>
-          <tr id="specialWeightMatrixHeader"></tr>
-        </thead>
+        <thead><tr id="specialWeightMatrixHeader"></tr></thead>
         <tbody id="specialWeightMatrixBody"></tbody>
       </table>
     </div>
   </section>
 
-  <div id="statusMessage" class="status-message"></div>
-
   <script>
     let currentMode = 'normal';
     let weights = { normal: {}, strict: {}, special: { normal: {}, strict: {} } };
+    let savedWeights = JSON.stringify(weights);
     let skills = [];
     let modalities = [];
     let specialTasks = [];
-    let isDirty = false;
     const validSkillsMap = JSON.parse('{{ valid_skills_map|tojson|safe }}');
+    const modalitySettings = {{ modalities|tojson|safe }};
+    const skillDefinitions = {{ skill_definitions|tojson|safe }};
+
+    function t(text) {
+      return window.RadimoI18n?.t ? window.RadimoI18n.t(text) : text;
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
-      loadWeights();
+      loadWeights(true);
     });
+    document.addEventListener('radimo:languagechange', updateLegend);
+
+    function updateLegend() {
+      const legend = document.getElementById('weightsLegend');
+      if (!legend) return;
+      legend.textContent = currentMode === 'normal'
+        ? t('Blank = default 1.0 (shown in grey).')
+        : t('Blank = same as Normal (shown in grey). Strict applies to the * buttons.');
+    }
 
     function setMode(mode) {
       captureCurrentMode();
       currentMode = mode;
-      document.getElementById('mode-normal').className = mode === 'normal' ? 'btn btn-mode-normal' : 'btn btn-mode-inactive';
-      document.getElementById('mode-strict').className = mode === 'strict' ? 'btn btn-mode-strict' : 'btn btn-mode-inactive';
+      document.getElementById('mode-normal').setAttribute('aria-pressed', mode === 'normal' ? 'true' : 'false');
+      document.getElementById('mode-strict').setAttribute('aria-pressed', mode === 'strict' ? 'true' : 'false');
+      document.getElementById('weightsToolbar').classList.toggle('mode-strict-active', mode === 'strict');
+      updateLegend();
       renderMatrix();
     }
 
+    function countChanges() {
+      const saved = JSON.parse(savedWeights);
+      const current = collectAllWeights();
+      let count = 0;
+      const compare = (a = {}, b = {}) => {
+        new Set([...Object.keys(a), ...Object.keys(b)]).forEach(key => {
+          if (a[key] !== b[key]) count += 1;
+        });
+      };
+      compare(saved.normal, current.normal);
+      compare(saved.strict, current.strict);
+      compare(saved.special?.normal, current.special.normal);
+      compare(saved.special?.strict, current.special.strict);
+      return count;
+    }
+
+    function updateDirtyState() {
+      const changes = countChanges();
+      window.RadimoUI?.setDirty('weights', changes);
+      document.getElementById('saveWeightsButton').disabled = changes === 0;
+      const saved = JSON.parse(savedWeights);
+      document.querySelectorAll('.weight-input').forEach(input => {
+        const raw = input.value.trim();
+        const value = raw === '' ? undefined : parseFloat(raw);
+        let savedValue;
+        if (input.dataset.type === 'special') {
+          const mods = JSON.parse(input.dataset.modalities || '[]');
+          savedValue = mods.length ? saved.special?.[currentMode]?.[`${input.dataset.task}_${mods[0]}`] : undefined;
+        } else {
+          savedValue = saved[currentMode]?.[`${input.dataset.skill}_${input.dataset.modality}`];
+        }
+        input.classList.toggle('is-changed', value !== savedValue);
+      });
+    }
+
     async function loadWeights(force = false) {
-      if (isDirty && !force && !confirm(window.RadimoI18n?.language === 'en'
+      if (countChanges() && !force && !confirm(window.RadimoI18n?.language === 'en'
         ? 'Discard unsaved weight changes and reload?'
         : 'Ungespeicherte Gewichtsänderungen verwerfen und neu laden?')) return;
       try {
@@ -239,12 +169,14 @@
         if (!data.success) throw new Error(data.error || 'Load failed');
         weights = data.weights || { normal: {}, strict: {}, special: { normal: {}, strict: {} } };
         weights.special = weights.special || { normal: {}, strict: {} };
+        weights.special.normal = weights.special.normal || {};
+        weights.special.strict = weights.special.strict || {};
+        savedWeights = JSON.stringify(weights);
         skills = data.skills || [];
         modalities = data.modalities || [];
         specialTasks = data.special_tasks || [];
-        isDirty = false;
-        renderMatrix();
-        showStatus('Loaded', 'success');
+        setMode(currentMode);
+        if (!force) showStatus(t('Reloaded'), 'success');
       } catch (err) {
         showStatus(err.message, 'error');
       }
@@ -255,12 +187,40 @@
       return validSkillsMap[modality].includes(skill);
     }
 
+    function formatWeight(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? String(Math.round(number * 1000) / 1000) : '';
+    }
+
+    function effectivePlaceholder(key, isSpecial) {
+      if (currentMode === 'normal') return '1.0';
+      const normal = isSpecial ? weights.special?.normal?.[key] : weights.normal?.[key];
+      return normal !== undefined ? formatWeight(normal) : '1.0';
+    }
+
+    function buildWeightInput(attrs, value, placeholder, label) {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.05';
+      input.min = '0.1';
+      input.className = 'weight-input';
+      Object.entries(attrs).forEach(([key, val]) => { input.dataset[key] = val; });
+      input.placeholder = placeholder;
+      input.title = `${t('Effective when blank')}: ${placeholder}`;
+      input.setAttribute('aria-label', label);
+      input.value = value !== undefined ? value : '';
+      input.addEventListener('input', updateDirtyState);
+      return input;
+    }
+
     function renderMatrix() {
       const header = document.getElementById('weightMatrixHeader');
       header.innerHTML = '<th class="skill-col">Skill</th>';
       modalities.forEach(mod => {
         const th = document.createElement('th');
-        th.textContent = mod.toUpperCase();
+        th.className = 'mod-col';
+        th.textContent = (modalitySettings[mod]?.label || mod).toUpperCase();
+        th.style.background = modalitySettings[mod]?.nav_color || '#1e5d7b';
         header.appendChild(th);
       });
 
@@ -271,6 +231,8 @@
         const skillCell = document.createElement('td');
         skillCell.className = 'skill-name';
         skillCell.textContent = skill;
+        const skillDef = skillDefinitions.find(def => def.name === skill || def.label === skill);
+        if (skillDef?.button_color) skillCell.style.setProperty('--skill-color', skillDef.button_color);
         row.appendChild(skillCell);
 
         modalities.forEach(mod => {
@@ -279,22 +241,10 @@
           if (!isValidCombination(mod, skill)) {
             cell.className = 'invalid';
             cell.textContent = '—';
-            row.appendChild(cell);
-            return;
+          } else {
+            cell.appendChild(buildWeightInput({ skill, modality: mod }, weights[currentMode]?.[key],
+              effectivePlaceholder(key, false), `Weight: ${skill} · ${mod.toUpperCase()} · ${currentMode}`));
           }
-          const input = document.createElement('input');
-          input.type = 'number';
-          input.step = '0.05';
-          input.min = '0.1';
-          input.placeholder = '1.0';
-          input.className = 'weight-input';
-          input.dataset.skill = skill;
-          input.dataset.modality = mod;
-          input.setAttribute('aria-label', `Weight: ${skill} · ${mod.toUpperCase()} · ${currentMode}`);
-          const value = weights[currentMode]?.[key];
-          input.value = value !== undefined ? value : '';
-          input.addEventListener('input', () => { isDirty = true; });
-          cell.appendChild(input);
           row.appendChild(cell);
         });
         tbody.appendChild(row);
@@ -303,10 +253,10 @@
       const specialHeader = document.getElementById('specialWeightMatrixHeader');
       specialHeader.innerHTML = `
         <th class="skill-col">Task</th>
-        <th>Base Skill</th>
+        <th>Base skill</th>
         <th>Modality views</th>
         <th>Skill views</th>
-        <th>Target Skill × Modality</th>
+        <th>Target skill × modality</th>
         <th>Overflow</th>
         <th>Weight</th>
       `;
@@ -315,121 +265,89 @@
       specialBody.innerHTML = '';
       specialTasks.forEach(task => {
         const row = document.createElement('tr');
-        const taskCell = document.createElement('td');
-        taskCell.className = 'skill-name';
-        taskCell.textContent = task.label || task.name || task.slug;
-        row.appendChild(taskCell);
-
-        const baseSkillCell = document.createElement('td');
-        baseSkillCell.textContent = task.base_skill || '—';
-        row.appendChild(baseSkillCell);
-
         const visibleMods = (task.modalities_dashboards || []).map(m => m.toUpperCase());
-        const targetPairs = (task.target_skill_modalities || [])
-          .filter(pair => Array.isArray(pair) && pair.length === 2);
-        const targetMods = targetPairs
-          .map(pair => pair[1])
-          .filter(m => m)
-          .map(m => m.toUpperCase());
+        const targetPairs = (task.target_skill_modalities || []).filter(pair => Array.isArray(pair) && pair.length === 2);
+        const targetMods = targetPairs.map(pair => pair[1]).filter(m => m).map(m => m.toUpperCase());
         const weightMods = visibleMods.length ? visibleMods : [...new Set(targetMods)];
-        const visibleCell = document.createElement('td');
-        visibleCell.textContent = visibleMods.length ? visibleMods.join(', ') : '—';
-        row.appendChild(visibleCell);
-
-        const skillDashboards = (task.skill_dashboards || []).map(s => s);
-        const skillCell = document.createElement('td');
-        skillCell.textContent = skillDashboards.length ? skillDashboards.join(', ') : '—';
-        row.appendChild(skillCell);
-
-        const targetCell = document.createElement('td');
-        const targetLabels = targetPairs.map(pair => `${pair[0]}_${pair[1]}`);
-        targetCell.textContent = targetLabels.length ? targetLabels.join(', ') : '—';
-        row.appendChild(targetCell);
-
-        const overflowCell = document.createElement('td');
-        overflowCell.textContent = task.allow_overflow === false ? 'No' : 'Yes';
-        row.appendChild(overflowCell);
+        const skillDashboards = task.skill_dashboards || [];
+        const cells = [
+          { text: task.label || task.name || task.slug, className: 'skill-name' },
+          { text: task.base_skill || '—', className: 'meta' },
+          { text: visibleMods.length ? visibleMods.join(', ') : '—', className: 'meta' },
+          { text: skillDashboards.length ? skillDashboards.join(', ') : '—', className: 'meta' },
+          { text: targetPairs.length ? targetPairs.map(pair => `${pair[0]} · ${String(pair[1]).toUpperCase()}`).join(', ') : '—', className: 'meta' },
+          { text: task.allow_overflow === false ? t('No') : t('Yes'), className: 'meta' },
+        ];
+        cells.forEach(spec => {
+          const td = document.createElement('td');
+          td.className = spec.className;
+          td.textContent = spec.text;
+          row.appendChild(td);
+        });
 
         const weightCell = document.createElement('td');
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.step = '0.05';
-        input.min = '0.1';
-        input.placeholder = '1.0';
-        input.className = 'weight-input';
-        input.dataset.task = task.slug;
-        input.dataset.type = 'special';
-        input.dataset.modalities = JSON.stringify(weightMods.map(mod => mod.toLowerCase()));
-        input.setAttribute('aria-label', `Weight: ${task.label || task.name || task.slug} · ${currentMode}`);
-
+        const mods = weightMods.map(mod => mod.toLowerCase());
         const taskWeights = weights.special?.[currentMode] || {};
-        const taskModalityWeights = weightMods
-          .map(mod => taskWeights[`${task.slug}_${mod.toLowerCase()}`])
-          .filter(value => value !== undefined);
-        const allSame = taskModalityWeights.length > 0
-          && taskModalityWeights.every(value => value === taskModalityWeights[0]);
-        input.value = allSame ? taskModalityWeights[0] : '';
-        input.addEventListener('input', () => { isDirty = true; });
-
-        if (!weightMods.length) {
-          input.disabled = true;
-          input.placeholder = '—';
-        }
-
+        const values = mods.map(mod => taskWeights[`${task.slug}_${mod}`]).filter(value => value !== undefined);
+        const allSame = values.length > 0 && values.every(value => value === values[0]);
+        const firstKey = mods.length ? `${task.slug}_${mods[0]}` : '';
+        const input = buildWeightInput(
+          { task: task.slug, type: 'special', modalities: JSON.stringify(mods) },
+          allSame ? values[0] : undefined,
+          mods.length ? effectivePlaceholder(firstKey, true) : '—',
+          `Weight: ${task.label || task.name || task.slug} · ${currentMode}`
+        );
+        if (!mods.length) input.disabled = true;
         weightCell.appendChild(input);
         row.appendChild(weightCell);
         specialBody.appendChild(row);
       });
+      updateDirtyState();
     }
 
-    function captureCurrentMode() {
-      weights[currentMode] = {};
-      weights.special = weights.special || { normal: {}, strict: {} };
-      weights.special[currentMode] = {};
+    function readInputsInto(target) {
       document.querySelectorAll('.weight-input').forEach(input => {
         if (input.disabled || input.value.trim() === '') return;
         const value = parseFloat(input.value);
         if (Number.isNaN(value)) return;
         if (input.dataset.type === 'special') {
           JSON.parse(input.dataset.modalities || '[]').forEach(modality => {
-            weights.special[currentMode][`${input.dataset.task}_${modality}`] = value;
+            target.special[`${input.dataset.task}_${modality}`] = value;
           });
         } else {
-          weights[currentMode][`${input.dataset.skill}_${input.dataset.modality}`] = value;
+          target.skill[`${input.dataset.skill}_${input.dataset.modality}`] = value;
         }
       });
     }
 
+    function captureCurrentMode() {
+      if (!document.querySelector('.weight-input')) return;
+      const target = { skill: {}, special: {} };
+      readInputsInto(target);
+      weights[currentMode] = target.skill;
+      weights.special = weights.special || { normal: {}, strict: {} };
+      weights.special[currentMode] = target.special;
+    }
+
+    function collectAllWeights() {
+      const target = { skill: {}, special: {} };
+      readInputsInto(target);
+      const result = JSON.parse(JSON.stringify(weights));
+      result.special = result.special || { normal: {}, strict: {} };
+      if (document.querySelector('.weight-input')) {
+        result[currentMode] = target.skill;
+        result.special[currentMode] = target.special;
+      }
+      return result;
+    }
+
     async function saveWeights() {
       captureCurrentMode();
-      const payload = { normal: {}, strict: {}, special: { normal: {}, strict: {} } };
-      document.querySelectorAll('.weight-input').forEach(input => {
-        const type = input.dataset.type || 'skill';
-        const raw = input.value.trim();
-        if (raw === '') return;
-        const value = parseFloat(raw);
-        if (Number.isNaN(value)) return;
-        if (type === 'special') {
-          const mods = JSON.parse(input.dataset.modalities || '[]');
-          mods.forEach(modality => {
-            const specialKey = `${input.dataset.task}_${modality}`;
-            payload.special[currentMode][specialKey] = value;
-          });
-        } else {
-          const mod = input.dataset.modality;
-          const key = `${input.dataset.skill}_${mod}`;
-          payload[currentMode][key] = value;
-        }
-      });
-
-      if (currentMode === 'normal') {
-        payload.strict = weights.strict || {};
-        payload.special.strict = weights.special?.strict || {};
-      } else {
-        payload.normal = weights.normal || {};
-        payload.special.normal = weights.special?.normal || {};
-      }
-
+      const payload = {
+        normal: weights.normal || {},
+        strict: weights.strict || {},
+        special: { normal: weights.special?.normal || {}, strict: weights.special?.strict || {} },
+      };
       try {
         const response = await fetch('/api/admin/button_weights', {
           method: 'POST',
@@ -440,24 +358,21 @@
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Save failed');
         weights = payload;
-        isDirty = false;
-        showStatus('Saved', 'success');
+        savedWeights = JSON.stringify(payload);
+        renderMatrix();
+        showStatus(t('Saved'), 'success');
       } catch (err) {
         showStatus(err.message, 'error');
       }
     }
 
-    window.addEventListener('beforeunload', event => {
-      if (!isDirty) return;
-      event.preventDefault();
-      event.returnValue = '';
-    });
-
+    let statusTimer = null;
     function showStatus(message, type) {
       const status = document.getElementById('statusMessage');
       status.textContent = message;
-      status.className = `status-message ${type}`;
-      setTimeout(() => { status.className = 'status-message'; }, 2500);
+      status.className = `weights-status ${type}`;
+      clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => { status.textContent = ''; status.className = 'weights-status'; }, 4000);
     }
   </script>
 {% endblock %}
