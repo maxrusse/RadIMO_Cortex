@@ -590,6 +590,17 @@
     ['corrections today', 'Korrekturen heute'],
     ['No entries match the current filters.', 'Keine Einträge passen zum Filter.'],
     // == area: live-schedule ==
+    ['Click a button to assign the next case. The abbreviation is copied automatically.', 'Knopf drücken, um den nächsten Fall zuzuweisen. Das Kürzel wird automatisch kopiert.'],
+    ['Last assignments on this PC', 'Letzte Zuweisungen an diesem PC'],
+    ['No assignments on this PC yet.', 'Noch keine Zuweisungen an diesem PC.'],
+    ['Copy abbreviation', 'Kürzel kopieren'],
+    ['copied', 'kopiert'],
+    ['Copy not possible', 'Kopieren nicht möglich'],
+    ['Nobody available', 'Niemand verfügbar'],
+    ['Abbreviation is copied automatically – paste with CTRL+V in RadCenter', 'Kürzel wird automatisch kopiert – Einfügen mit STRG+V im RadCenter'],
+    ['+ Add note', '+ Hinweis hinzufügen'],
+    ['Only present now', 'Nur jetzt Anwesende'],
+    ['present now', 'jetzt anwesend'],
     // == area: skills-weights ==
     // == area: system ==
     ['RadIMO Cortex', 'RadIMO Cortex']

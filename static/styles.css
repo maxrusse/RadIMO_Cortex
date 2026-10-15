@@ -1098,3 +1098,135 @@ body.theme-admin {
   font: inherit;
   font-size: var(--fs-md);
 }
+
+/* ==========================================================================
+   Live assignment surroundings (the button grid itself is styled per page
+   and intentionally untouched)
+   ========================================================================== */
+.live-below {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.live-result {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 118px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(16, 36, 56, 0.1);
+  border-left: 6px solid var(--modality-nav, var(--c-primary));
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.live-result__empty { color: var(--c-muted); font-size: var(--fs-md); }
+.live-result__person { color: var(--c-ink); font-size: 2.1rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; }
+.live-result__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 1rem; margin-top: 0.3rem; color: var(--c-muted); font-size: 0.95rem; }
+.live-result__context { color: var(--c-ink); font-weight: 650; }
+.live-result__copy { font-weight: 750; }
+.live-result__copy.is-ok { color: var(--c-success); }
+.live-result__copy.is-error { color: var(--c-danger); }
+.live-result--error { border-left-color: var(--c-danger); background: var(--c-danger-soft); }
+.live-result--error .live-result__person { color: #7a1c13; font-size: 1.5rem; }
+
+.live-history {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(16, 36, 56, 0.1);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.live-history__title {
+  margin-bottom: 0.3rem;
+  color: var(--c-muted);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.live-history__row {
+  display: grid;
+  grid-template-columns: 3rem 7rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.18rem 0;
+  border-top: 1px solid #edf1f5;
+  font-size: var(--fs-sm);
+}
+
+.live-history__row:first-of-type { border-top: 0; }
+.live-history__time { color: var(--c-muted); font-variant-numeric: tabular-nums; }
+.live-history__context { overflow: hidden; color: var(--c-muted); text-overflow: ellipsis; white-space: nowrap; }
+.live-history__person { overflow: hidden; color: var(--c-ink); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+
+.live-history__copy {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.live-history__copy:hover { background: var(--c-primary-soft); }
+.live-history__copy.is-copied { border-color: var(--c-success); background: var(--c-success-soft); color: var(--c-success); }
+.live-history__empty { color: var(--c-muted); font-size: var(--fs-sm); font-style: italic; }
+
+.live-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.75rem;
+  color: #3e5466;
+  font-size: var(--fs-sm);
+}
+
+.live-hints__item::before { content: 'ⓘ '; color: var(--c-faint); }
+
+.live-hints__action {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c-primary);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.live-hints__action:hover { text-decoration: underline; }
+
+.live-notes {
+  margin-bottom: 0.25rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(192, 57, 43, 0.3);
+  border-left: 5px solid #c0392b;
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.live-notes__head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; }
+.live-notes__title { margin: 0; color: #8f2a1e; font-size: 0.95rem; font-weight: 800; }
+.live-notes__group { margin-top: 0.35rem; color: var(--c-muted); font-size: var(--fs-xs); font-weight: 800; text-transform: uppercase; }
+.live-notes__item { padding: 0.2rem 0; color: var(--c-ink); font-size: 0.95rem; line-height: 1.35; }
+.live-notes__item + .live-notes__item { border-top: 1px solid #f1e3e1; }
+
+.live-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  color: #6d7b88;
+  font-size: 11px;
+}
+
+.live-footer a { color: #5d6d7c; }

@@ -168,6 +168,8 @@ function buildTimeline() {
     return;
   }
 
+  presentWorkers = computePresentWorkers(timelineData);
+
   // Render using shared module
   TimelineChart.render({
     gridEl: grid,
@@ -187,7 +189,61 @@ function buildTimeline() {
   }
   currentTimeIntervalId = window.setInterval(function() {
     TimelineChart.updateCurrentTimeLine(grid, 'current-time-line');
+    presentWorkers = computePresentWorkers(timelineData);
+    markPresentRows();
   }, 60000);
+  markPresentRows();
+}
+
+let presentWorkers = new Set();
+
+/**
+ * Workers with a shift segment (not a gap) covering the current time.
+ * @param {Object[]} entries
+ * @returns {Set<string>}
+ */
+function computePresentWorkers(entries) {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const toMinutes = function(value) {
+    const parts = String(value || '').split(':').map(Number);
+    return Number.isFinite(parts[0]) ? parts[0] * 60 + (parts[1] || 0) : null;
+  };
+  const present = new Set();
+  const onGap = new Set();
+  entries.forEach(function(entry) {
+    const start = toMinutes(entry.start_time);
+    const end = toMinutes(entry.end_time);
+    if (start === null || end === null || minutes < start || minutes >= end) return;
+    const rowType = String(entry.row_type || '').toLowerCase();
+    const worker = entry.PPL || entry.worker;
+    if (rowType === 'gap' || rowType === 'gap_segment') onGap.add(worker);
+    else present.add(worker);
+  });
+  onGap.forEach(function(worker) { present.delete(worker); });
+  return present;
+}
+
+function markPresentRows() {
+  const grid = document.getElementById('timeline-grid');
+  if (!grid) return;
+  const rows = grid.querySelectorAll('.worker-row');
+  rows.forEach(function(row) {
+    row.classList.toggle('is-absent-now', !presentWorkers.has(row.dataset.worker));
+  });
+  const count = document.getElementById('presentNowCount');
+  if (count) {
+    const label = window.RadimoI18n?.t ? window.RadimoI18n.t('present now') : 'present now';
+    count.textContent = `${presentWorkers.size} ${label}`;
+  }
+}
+
+/**
+ * @param {boolean} enabled
+ * @returns {void}
+ */
+function togglePresentNow(enabled) {
+  document.getElementById('timeline-grid')?.classList.toggle('only-present', Boolean(enabled));
 }
 
 // Change modality while preserving skill filter
@@ -219,11 +275,11 @@ function changeModality(event, modality) {
  */
 function filterBySkill(skillSlug) {
   const grid = document.getElementById('timeline-grid');
-  const buttons = document.querySelectorAll('.skill-filter-bar .filter-btn[data-skill]');
+  const buttons = document.querySelectorAll('#skillFilterBar .filter-btn[data-skill]');
 
   // Update button states
   buttons.forEach(function(button) {
-    button.classList.toggle('active', button.dataset.skill === skillSlug);
+    button.classList.toggle('is-active', button.dataset.skill === skillSlug);
   });
 
   // Update filter state

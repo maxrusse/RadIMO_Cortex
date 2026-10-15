@@ -34,11 +34,6 @@
       background: var(--modality-bg, var(--body-bg));
     }
 
-    .result-panel,
-    .clipboard-note {
-      background: var(--modality-bg, #fff);
-    }
-
     .card {
       background: var(--card-bg);
       border-radius: 8px;
@@ -121,108 +116,6 @@
       color: #fff;
       font-weight: 700;
       border: 2px dashed rgba(255, 255, 255, 0.6);
-    }
-
-    .result-panel {
-      border-radius: 8px;
-      padding: 1rem;
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-
-    .assigned-person {
-      font-size: 2rem;
-      font-weight: 600;
-      margin: 0.5rem 0;
-    }
-
-    .assigned-context {
-      font-size: 1.2rem;
-      color: #666;
-      margin-bottom: 0.25rem;
-    }
-
-    .previous-assignment-strong {
-      font-weight: 700;
-      color: #2b2b2b;
-    }
-
-    .timer {
-      color: #666;
-      font-size: 1rem;
-    }
-
-    .clipboard-note {
-      color: var(--primary-color);
-      padding: 0.45rem 0.6rem;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      margin-top: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      border: 1px solid rgba(0, 72, 146, 0.18);
-      background: rgba(255, 255, 255, 0.72);
-    }
-
-    .small-button {
-      font-size: 0.9rem;
-      padding: 0.3rem 0.6rem;
-      border-radius: 4px;
-      text-decoration: none;
-      color: #fff;
-      background: var(--primary-color);
-      margin-left: 0.5rem;
-    }
-
-    .info-box {
-      border: 1px solid rgba(192, 57, 43, 0.35);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-top: 1rem;
-      background: rgba(255, 255, 255, 0.84);
-    }
-
-    .info-item {
-      background: var(--info-item-bg);
-      padding: 0.75rem;
-      margin-bottom: 0.5rem;
-      border-radius: 4px;
-      font-size: 1rem;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
-      border: 1px solid rgba(0, 0, 0, 0.06);
-    }
-
-    .info-item:last-child {
-      margin-bottom: 0;
-    }
-
-    /* Info Edit Button */
-    .info-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-
-    .info-header h3 {
-      margin: 0;
-      font-size: 0.9rem;
-      color: #666;
-    }
-
-    .edit-btn {
-      padding: 0.3rem 0.6rem;
-      font-size: 0.8rem;
-      background: #004892;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .edit-btn:hover {
-      background: #003670;
     }
 
     /* Modal */
@@ -308,37 +201,6 @@
       margin-top: 0.5rem;
     }
 
-    /* Footer */
-    .footer {
-      margin-top: 1.5rem;
-      text-align: center;
-      font-size: 11px;
-      color: #888;
-    }
-
-    .footer a {
-      color: #666;
-    }
-
-    .footer-meta {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .last-assignment {
-      font-size: 0.8rem;
-      color: #666;
-      padding: 0.5rem 1rem;
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 4px;
-      margin-bottom: 0.5rem;
-      display: none;
-    }
-
-    .last-assignment.visible {
-      display: block;
-    }
 {% endblock %}
 
 {% block body_attrs %} data-modality="{{ modality }}"{% endblock %}
@@ -414,31 +276,35 @@
       {% endfor %}
     </div>
     {% include 'partials/strict_worker_select_modal.html' %}
-    <div id="result"></div>
-    <div class="clipboard-note">
-      <div>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</div>
-      {% set skill_hint = namespace(text='') %}
-      {% for skill_def in skill_definitions if skill_def.show_abbreviation_hint %}
-        {% set skill_hint.text = skill_hint.text ~ (', ' if skill_hint.text else '') ~ skill_def.label ~ ' = ' ~ skill_def.tooltip %}
-      {% endfor %}
-      {% if skill_hint.text %}
-      <div>{{ skill_hint.text }}</div>
-      {% endif %}
+    <div class="live-below">
+      <div id="result" class="live-result" aria-live="polite">
+        <div class="live-result__empty">Click a button to assign the next case. The abbreviation is copied automatically.</div>
+      </div>
+      <div class="live-history" aria-label="Last assignments on this PC">
+        <div class="live-history__title">Last assignments on this PC</div>
+        <div id="liveHistory"></div>
+      </div>
     </div>
-    <div class="info-box">
-      <div class="info-header">
-        <h3>Hinweise</h3>
+    {% set skill_hint = namespace(text='') %}
+    {% for skill_def in skill_definitions if skill_def.show_abbreviation_hint %}
+      {% set skill_hint.text = skill_hint.text ~ (', ' if skill_hint.text else '') ~ skill_def.label ~ ' = ' ~ skill_def.tooltip %}
+    {% endfor %}
+    <div class="live-hints">
+      <span class="live-hints__item">Abbreviation is copied automatically – paste with CTRL+V in RadCenter</span>
+      {% if skill_hint.text %}<span class="live-hints__item">{{ skill_hint.text }}</span>{% endif %}
+      {% if is_admin %}<button type="button" class="live-hints__action" onclick="openEditModal()"{% if info_texts %} hidden{% endif %}>+ Add note</button>{% endif %}
+    </div>
+    <div class="info-box live-notes" id="liveNotes"{% if not info_texts %} hidden{% endif %}>
+      <div class="live-notes__head">
+        <h3 class="live-notes__title">Notes</h3>
         {% if is_admin %}
-        <button class="edit-btn" onclick="openEditModal()">Bearbeiten</button>
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="openEditModal()">Edit</button>
         {% endif %}
       </div>
       <div class="info-texts" id="infoTextsContainer">
         {% for info in info_texts %}
-        <div class="info-item">{{ info }}</div>
+        <div class="info-item live-notes__item">{{ info }}</div>
         {% endfor %}
-        {% if not info_texts %}
-        <div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>
-        {% endif %}
       </div>
     </div>
   </section>
@@ -458,22 +324,20 @@
   </div>
   {% endif %}
 
-  <!-- Footer -->
-  <div class="footer">
-    <div id="lastAssignment" class="last-assignment"></div>
-    <div class="footer-meta">RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum & EULA</a>
-      {% if show_probe_badges %}
-      <a href="{{ url_for('routes.status_page') }}"
-        class="probe-badge probe-badge--{{ health_badge_status }}"
-        title="Health: {{ health_badge_text }}">H</a>
-      <a href="{{ url_for('routes.status_page') }}"
-        class="probe-badge probe-badge--{{ ready_badge_status }}"
-        title="Ready: {{ ready_badge_text }}">R</a>
-      {% endif %}
-    </div>
+  <div class="live-footer">
+    RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum &amp; EULA</a>
+    {% if show_probe_badges %}
+    <a href="{{ url_for('routes.status_page') }}"
+      class="probe-badge probe-badge--{{ health_badge_status }}"
+      title="Health: {{ health_badge_text }}">H</a>
+    <a href="{{ url_for('routes.status_page') }}"
+      class="probe-badge probe-badge--{{ ready_badge_status }}"
+      title="Ready: {{ ready_badge_text }}">R</a>
+    {% endif %}
   </div>
 
   <script src="{{ url_for('static', filename='js/assignment_ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/live_history.js') }}"></script>
   <script src="{{ url_for('static', filename='js/strict_worker_select.js') }}"></script>
   <script>
     (function injectDynamicStyles() {
@@ -515,8 +379,6 @@
     let timerInterval, lastClickTime, disableTimeout;
     let currentModality = "{{ modality }}";
     let lastSkillUsed = "";
-    // Track current and previous assignments for footer display
-    let currentAssignment = null;  // {person, skill, time}
 
     // Utility: Escape HTML to prevent XSS
     function escapeHtml(text) {
@@ -578,48 +440,32 @@
     function showAssignmentError(error, context, forceStrict = false) {
       const message = window.RadimoI18n?.language === 'en' ? 'Assignment failed' : 'Zuweisung fehlgeschlagen';
       const detail = AssignmentUI.message(error, { strict: forceStrict });
-      document.getElementById('result').innerHTML = `
-        <div class="result-panel result-panel--error" role="alert">
-          <div class="assigned-person">${escapeHtml(message)}</div>
-          <div class="assigned-context">${escapeHtml(context || lastSkillUsed)} · ${escapeHtml(detail)}</div>
+      const resultDiv = document.getElementById('result');
+      resultDiv.className = 'live-result live-result--error result-panel--error';
+      resultDiv.innerHTML = `
+        <div role="alert">
+          <div class="live-result__person">${escapeHtml(message)}</div>
+          <div class="live-result__meta"><span class="live-result__context">${escapeHtml(context || lastSkillUsed)}</span> <span>${escapeHtml(detail)}</span></div>
         </div>`;
     }
 
-    function showResult(person, skill) {
+    function renderResultPanel(person, context) {
       const resultDiv = document.getElementById('result');
-      const displayPerson = person || "Niemand verfügbar";
-      const escapedPerson = escapeHtml(displayPerson);
-
+      resultDiv.className = 'live-result';
       resultDiv.innerHTML = `
-        <div class="result-panel">
-          <div class="assigned-person">${escapedPerson}</div>
-          <div class="assigned-context">${escapeHtml(skill || lastSkillUsed)}</div>
-          <div class="timer" id="timer"></div>
-        </div>
-      `;
+        <div class="live-result__person">${escapeHtml(person || 'Niemand verfügbar')}</div>
+        <div class="live-result__meta">
+          <span class="live-result__context">${escapeHtml(context)}</span>
+          <span id="liveCopyStatus" class="live-result__copy"></span>
+          <span class="timer" id="timer"></span>
+        </div>`;
       startTimer();
+      LiveHistory.showAssignment({ person, context });
+    }
 
-      // Extract abbreviation from parentheses and copy to clipboard
-      const match = person.match(/\(([^)]+)\)/);
-      if (match && match[1]) copyTextToClipboard(match[1]);
-
-      // Update last assignment footer - show PREVIOUS assignment, not current
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-      const lastEl = document.getElementById('lastAssignment');
-
-      // Show previous assignment in footer (if exists)
-      if (currentAssignment) {
-        lastEl.innerHTML = `Vorherige Zuweisung: ${escapeHtml(currentAssignment.time)} · <span class="previous-assignment-strong">${escapeHtml(currentAssignment.person)}</span> · <span class="previous-assignment-strong">${escapeHtml(currentAssignment.skill)}</span>`;
-        lastEl.classList.add('visible');
-      }
-
-      // Store current assignment for next time (becomes "previous" on next click)
-      currentAssignment = {
-        person: displayPerson,
-        skill: skill || lastSkillUsed,
-        time: timeStr
-      };
+    function showResult(person, skill) {
+      const modalityLabel = (currentModality || '').toUpperCase();
+      renderResultPanel(person, `${skill || lastSkillUsed} · ${modalityLabel}`);
     }
 
     function startTimer() {
@@ -635,7 +481,9 @@
       const hours = Math.floor(secondsElapsed / 3600);
       const minutes = Math.floor((secondsElapsed % 3600) / 60);
       const seconds = secondsElapsed % 60;
-      document.getElementById('timer').textContent =
+      const timerEl = document.getElementById('timer');
+      if (!timerEl) return;
+      timerEl.textContent =
         "Zeit seit letzter Zuweisung: " +
         hours.toString().padStart(2, '0') + ":" +
         minutes.toString().padStart(2, '0') + ":" +
@@ -715,11 +563,14 @@
             const container = document.getElementById('infoTextsContainer');
             if (data.info_texts && data.info_texts.length > 0) {
               container.innerHTML = data.info_texts
-                .map(text => `<div class="info-item">${escapeHtml(text)}</div>`)
+                .map(text => `<div class="info-item live-notes__item">${escapeHtml(text)}</div>`)
                 .join('');
             } else {
-              container.innerHTML = '<div class="info-item" style="color: #999; font-style: italic;">Keine Hinweise vorhanden</div>';
+              container.innerHTML = '';
             }
+            const hasNotes = Boolean(data.info_texts && data.info_texts.length);
+            document.getElementById('liveNotes').hidden = !hasNotes;
+            document.querySelector('.live-hints__action')?.toggleAttribute('hidden', hasNotes);
             // Update local copy
             infoTexts.length = 0;
             infoTexts.push(...(data.info_texts || []));
