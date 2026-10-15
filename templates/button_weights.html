@@ -147,13 +147,12 @@
       document.querySelectorAll('.weight-input').forEach(input => {
         const raw = input.value.trim();
         const value = raw === '' ? undefined : parseFloat(raw);
-        let savedValue;
         if (input.dataset.type === 'special') {
-          const mods = JSON.parse(input.dataset.modalities || '[]');
-          savedValue = mods.length ? saved.special?.[currentMode]?.[`${input.dataset.task}_${mods[0]}`] : undefined;
-        } else {
-          savedValue = saved[currentMode]?.[`${input.dataset.skill}_${input.dataset.modality}`];
+          // Special tasks may hold differing per-modality values; compare with what was shown.
+          input.classList.toggle('is-changed', input.value !== input.dataset.initial);
+          return;
         }
+        const savedValue = saved[currentMode]?.[`${input.dataset.skill}_${input.dataset.modality}`];
         input.classList.toggle('is-changed', value !== savedValue);
       });
     }
@@ -172,6 +171,8 @@
         weights.special.normal = weights.special.normal || {};
         weights.special.strict = weights.special.strict || {};
         savedWeights = JSON.stringify(weights);
+        document.getElementById('weightMatrixBody').innerHTML = '';
+        document.getElementById('specialWeightMatrixBody').innerHTML = '';
         skills = data.skills || [];
         modalities = data.modalities || [];
         specialTasks = data.special_tasks || [];
@@ -209,6 +210,7 @@
       input.title = `${t('Effective when blank')}: ${placeholder}`;
       input.setAttribute('aria-label', label);
       input.value = value !== undefined ? value : '';
+      input.dataset.initial = input.value;
       input.addEventListener('input', updateDirtyState);
       return input;
     }
@@ -305,39 +307,43 @@
       updateDirtyState();
     }
 
-    function readInputsInto(target) {
+    // Apply visible fields onto a copy of the stored maps. Untouched fields keep the stored
+    // keys as they are (e.g. special tasks with differing per-modality weights, or keys
+    // without a field), so saving never drops values the page does not show.
+    function applyInputs(skillMap, specialMap) {
       document.querySelectorAll('.weight-input').forEach(input => {
-        if (input.disabled || input.value.trim() === '') return;
-        const value = parseFloat(input.value);
-        if (Number.isNaN(value)) return;
-        if (input.dataset.type === 'special') {
-          JSON.parse(input.dataset.modalities || '[]').forEach(modality => {
-            target.special[`${input.dataset.task}_${modality}`] = value;
-          });
-        } else {
-          target.skill[`${input.dataset.skill}_${input.dataset.modality}`] = value;
-        }
+        if (input.disabled || input.value === input.dataset.initial) return;
+        const raw = input.value.trim();
+        const value = raw === '' ? undefined : parseFloat(raw);
+        if (raw !== '' && Number.isNaN(value)) return;
+        const keys = input.dataset.type === 'special'
+          ? JSON.parse(input.dataset.modalities || '[]').map(modality => `${input.dataset.task}_${modality}`)
+          : [`${input.dataset.skill}_${input.dataset.modality}`];
+        const target = input.dataset.type === 'special' ? specialMap : skillMap;
+        keys.forEach(key => {
+          if (value === undefined) delete target[key];
+          else target[key] = value;
+        });
       });
     }
 
     function captureCurrentMode() {
       if (!document.querySelector('.weight-input')) return;
-      const target = { skill: {}, special: {} };
-      readInputsInto(target);
-      weights[currentMode] = target.skill;
       weights.special = weights.special || { normal: {}, strict: {} };
-      weights.special[currentMode] = target.special;
+      const skillMap = { ...(weights[currentMode] || {}) };
+      const specialMap = { ...(weights.special[currentMode] || {}) };
+      applyInputs(skillMap, specialMap);
+      weights[currentMode] = skillMap;
+      weights.special[currentMode] = specialMap;
+      document.querySelectorAll('.weight-input').forEach(input => { input.dataset.initial = input.value; });
     }
 
     function collectAllWeights() {
-      const target = { skill: {}, special: {} };
-      readInputsInto(target);
       const result = JSON.parse(JSON.stringify(weights));
       result.special = result.special || { normal: {}, strict: {} };
-      if (document.querySelector('.weight-input')) {
-        result[currentMode] = target.skill;
-        result.special[currentMode] = target.special;
-      }
+      result[currentMode] = result[currentMode] || {};
+      result.special[currentMode] = result.special[currentMode] || {};
+      applyInputs(result[currentMode], result.special[currentMode]);
       return result;
     }
 

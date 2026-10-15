@@ -2576,6 +2576,12 @@ async function loadFromCSV(mode, options = {}) {
     if (shouldConfirm && !window.confirm(window.RadimoI18n?.t(message) || message)) {
       return;
     }
+    // Queued Quick Edit changes refer to the old day; they must never be replayed onto the rebuilt one.
+    pendingChanges.today = {};
+    if (editMode.today) {
+      editMode.today = false;
+      applyEditModeUI('today');
+    }
   } else {
     if (editMode.tomorrow) {
       showMessage('error', 'Exit Quick Edit before reloading the selected date.');

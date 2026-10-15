@@ -3486,6 +3486,9 @@ def master_csv_status() -> Any:
             'size': stat.st_size
         }
         # Read-only content summary for the Import page (date range, people, rows).
+        # The endpoint itself is public (as before); the summary is admin-only.
+        if not has_admin_access():
+            return jsonify(payload)
         cols = APP_CONFIG.get('medweb_mapping', {}).get('columns', {})
         date_col = cols.get('date', 'Datum')
         worker_col = cols.get('employee_personalnummer', 'Personalnummer')
@@ -3618,6 +3621,19 @@ def preload_from_master() -> Any:
                     'message': f'Gespeicherte Staging-Daten für {staged_target_date.strftime("%Y-%m-%d")} geladen',
                 }
                 return jsonify(result)
+
+        # Opening a date must never silently replace an existing (possibly edited)
+        # planning file with CSV data. Only an explicit reset (force_csv) may do that.
+        saved_snapshot = STAGED_DAY_DIR / f'Cortex_ALL_staged_{requested_date.isoformat()}.json'
+        if saved_snapshot.exists():
+            return jsonify({
+                'success': False,
+                'target_date': requested_date.isoformat(),
+                'error': (
+                    f'Gespeicherte Planung für {requested_date.isoformat()} konnte nicht geladen werden. '
+                    'Datei unter Dateien & Backups prüfen oder den Tag bewusst zurücksetzen.'
+                ),
+            }), 409
 
     with lock:
         reload_info = _maybe_reload_runtime_config(manual=True)

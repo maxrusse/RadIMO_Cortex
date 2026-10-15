@@ -506,6 +506,11 @@
         showStatus('Please select a CSV worker first', 'error');
         return;
       }
+      // The import is stored on the server and the roster reloads afterwards; ask before
+      // discarding local drafts, otherwise the next save would drop the imported worker.
+      if (getChangedWorkers().length && !confirm(isEnglish()
+        ? 'Discard unsaved skill-matrix changes and import this CSV worker?'
+        : 'Ungespeicherte Änderungen an der Skill-Matrix verwerfen und diesen CSV-Mitarbeiter importieren?')) return;
       try {
         const response = await fetch('/api/admin/skill_roster/import_csv_worker', {
           method: 'POST',
@@ -518,7 +523,7 @@
         }
         const result = await response.json();
         if (result.success) {
-          await loadRoster();
+          await loadRoster(true);
           const importedId = result.worker_id || workerId;
           if (rosterData[importedId]) {
             closeAddWorkerDialog();

@@ -1128,6 +1128,35 @@ class TestHealthEndpoints(unittest.TestCase):
         mock_preload.assert_not_called()
         mock_save_state.assert_called_once()
 
+    @patch("routes.preload_next_workday")
+    @patch("routes.reload_staged_data_from_disk", return_value=False)
+    @patch("routes.get_next_workday", return_value=datetime(2026, 4, 8))
+    @patch("routes._maybe_reload_runtime_config")
+    @patch("routes.os.path.exists", return_value=True)
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_preload_never_overwrites_unloadable_saved_day_without_force(
+        self,
+        _mock_admin,
+        _mock_exists,
+        _mock_reload_runtime,
+        _mock_next_workday,
+        _mock_reload_staged,
+        mock_preload,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            staged_dir = routes_module.Path(tmp_dir)
+            snapshot = staged_dir / "Cortex_ALL_staged_2026-04-09.json"
+            snapshot.write_text("{corrupt", encoding="utf-8")
+            with patch("routes.STAGED_DAY_DIR", staged_dir):
+                response = self.client.post(
+                    "/preload-from-master",
+                    json={"target_date": "2026-04-09", "force_csv": False},
+                )
+            self.assertEqual(response.status_code, 409)
+            self.assertFalse(response.get_json()["success"])
+            mock_preload.assert_not_called()
+            self.assertEqual(snapshot.read_text(encoding="utf-8"), "{corrupt")
+
     @patch("routes.save_state")
     @patch("routes.reload_staged_data_from_disk", return_value=True)
     @patch("routes._get_staged_target_date", return_value=datetime(2026, 4, 8).date())

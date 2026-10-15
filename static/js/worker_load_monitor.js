@@ -485,6 +485,9 @@ function renderGlobalTable() {
   if (thresholdEl) thresholdEl.textContent = formatValue(getValidWorkerThresholdHours(), 1);
 
   const filteredWorkers = getFilteredWorkers();
+  // Keep the worker with an open detail/correction form visible even if a filter would hide it.
+  const expandedWorker = expandedWorkerId ? findWorker(expandedWorkerId) : null;
+  if (expandedWorker && !filteredWorkers.includes(expandedWorker)) filteredWorkers.push(expandedWorker);
   const sorted = sortWorkers(filteredWorkers, 'global');
   const preservedDetail = document.querySelector('#tbody-global tr.detail-row');
   if (!sorted.length) {
