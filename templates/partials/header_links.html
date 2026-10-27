@@ -1,43 +1,32 @@
-{# Standard header links partial - reduces duplication across templates #}
-{#
+{# Primary navigation links.
   Usage:
     {% set header_nav = namespace(links=[]) %}
-    {% set active_page = 'dashboard' %}
+    {% set active_page = 'dashboard' %}   (or page_mode = 'today' / 'tomorrow' for prep pages)
     {% include 'partials/header_links.html' %}
     {% set header_links = header_nav.links %}
 
-  active_page options: 'dashboard', 'performance', 'balance_detail', 'manual_adjustments', 'skill_matrix', 'button_weights',
-                       'change_today', 'prep_tomorrow', 'upload', 'timetable'
-
-  For prep pages, use page_mode instead:
-    {% set header_nav = namespace(links=[]) %}
-    {% set page_mode = 'today' %}  (or 'tomorrow')
-    {% include 'partials/header_links.html' %}
-    {% set header_links = header_nav.links %}
-
-  Required context: is_admin, modality (optional, defaults to 'ct')
-  Required namespace: header_nav
+  active_page options: 'dashboard', 'timetable', 'balance_detail', 'performance', 'manual_adjustments',
+                       'skill_matrix', 'button_weights', 'upload'
+  Administration pages are reached through the menu in partials/header.html.
 #}
 
 {% set _requested_mod = modality|default('ct') %}
 {% set _mod = (modality_order[0] if _requested_mod == 'all' else _requested_mod) %}
 {% set _change_today_active = active_page == 'change_today' or page_mode == 'today' %}
 {% set _prep_tomorrow_active = active_page == 'prep_tomorrow' or page_mode == 'tomorrow' %}
+{% set _workload_active = active_page in ['balance_detail', 'performance', 'manual_adjustments'] %}
 
 {% if is_admin %}
   {% set header_nav.links = [
-    {'href': url_for('routes.logout', modality=_mod), 'label': 'Logout', 'accent': True},
-    {'href': url_for('routes.performance_page', modality=_mod), 'label': 'Analysis', 'active': active_page == 'performance'},
-    {'href': url_for('routes.worker_load_monitor', modality=_mod), 'label': 'Workload', 'active': active_page == 'balance_detail'},
+    {'href': url_for('routes.index', modality=_mod), 'label': 'Live', 'active': active_page == 'dashboard'},
+    {'href': url_for('routes.timetable', modality='all'), 'label': 'Schedule', 'active': active_page == 'timetable'},
     {'href': url_for('routes.prep_today'), 'label': 'Today', 'active': _change_today_active},
     {'href': url_for('routes.prep_tomorrow'), 'label': 'Planning', 'active': _prep_tomorrow_active},
-    {'href': url_for('routes.timetable', modality='all'), 'label': 'Schedule', 'active': active_page == 'timetable'},
-    {'href': url_for('routes.index', modality=_mod), 'label': 'Live', 'active': active_page == 'dashboard'}
+    {'href': url_for('routes.worker_load_monitor', modality=_mod), 'label': 'Workload', 'active': _workload_active}
   ] %}
 {% else %}
   {% set header_nav.links = [
-    {'href': url_for('routes.login', modality=_mod), 'label': 'Admin', 'accent': True},
-    {'href': url_for('routes.timetable', modality='all'), 'label': 'Schedule', 'active': active_page == 'timetable'},
-    {'href': url_for('routes.index', modality=_mod), 'label': 'Live', 'active': active_page == 'dashboard'}
+    {'href': url_for('routes.index', modality=_mod), 'label': 'Live', 'active': active_page == 'dashboard'},
+    {'href': url_for('routes.timetable', modality='all'), 'label': 'Schedule', 'active': active_page == 'timetable'}
   ] %}
 {% endif %}

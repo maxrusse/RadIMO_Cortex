@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 
-SCRIPT_PATH = Path("/home/dpxuser/radimo_dev/scripts/simulate_distribution_counterfactual.py")
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "simulate_distribution_counterfactual.py"
 SPEC = importlib.util.spec_from_file_location("simulate_distribution_counterfactual", SCRIPT_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

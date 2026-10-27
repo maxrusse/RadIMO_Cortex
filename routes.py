@@ -3037,6 +3037,7 @@ def admin_tools_page() -> Any:
     )
     return render_template(
         'admin_tools.html',
+        health_payload=_build_health_payload(),
         readiness_payload=readiness_payload,
         readiness_http_status=readiness_http_status,
         files_manifest=_build_admin_files_manifest(),
@@ -3478,12 +3479,50 @@ def master_csv_status() -> Any:
     if os.path.exists(MASTER_CSV_PATH):
         stat = os.stat(MASTER_CSV_PATH)
         modified = datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M')
-        return jsonify({
+        payload = {
             'exists': True,
             'filename': 'master_medweb.csv',
             'modified': modified,
             'size': stat.st_size
-        })
+        }
+        # Read-only content summary for the Import page (date range, people, rows).
+        # The endpoint itself is public (as before); the summary is admin-only.
+        if not has_admin_access():
+            return jsonify(payload)
+        cols = APP_CONFIG.get('medweb_mapping', {}).get('columns', {})
+        date_col = cols.get('date', 'Datum')
+        worker_col = cols.get('employee_personalnummer', 'Personalnummer')
+        name_col = cols.get('employee_name', 'Name des Mitarbeiters')
+        try:
+            summary_df = None
+            for sep in (',', ';'):
+                for encoding in ('utf-8', 'latin1'):
+                    try:
+                        candidate = pd.read_csv(MASTER_CSV_PATH, sep=sep, encoding=encoding, dtype=str)
+                    except UnicodeDecodeError:
+                        continue
+                    if date_col in candidate.columns:
+                        summary_df = candidate
+                    break
+                if summary_df is not None:
+                    break
+            if summary_df is not None:
+                dates = sorted({
+                    parsed for parsed in (
+                        pd.to_datetime(summary_df[date_col], dayfirst=True, errors='coerce').dropna().dt.date
+                    )
+                })
+                id_col = worker_col if worker_col in summary_df.columns else name_col
+                payload.update({
+                    'rows': int(len(summary_df)),
+                    'first_date': dates[0].isoformat() if dates else None,
+                    'last_date': dates[-1].isoformat() if dates else None,
+                    'day_count': len(dates),
+                    'worker_count': int(summary_df[id_col].dropna().nunique()) if id_col in summary_df.columns else None,
+                })
+        except Exception as exc:
+            payload['summary_error'] = str(exc)
+        return jsonify(payload)
     return jsonify({'exists': False})
 
 @routes.route('/upload-master-csv', methods=['POST'])
@@ -3582,6 +3621,19 @@ def preload_from_master() -> Any:
                     'message': f'Gespeicherte Staging-Daten für {staged_target_date.strftime("%Y-%m-%d")} geladen',
                 }
                 return jsonify(result)
+
+        # Opening a date must never silently replace an existing (possibly edited)
+        # planning file with CSV data. Only an explicit reset (force_csv) may do that.
+        saved_snapshot = STAGED_DAY_DIR / f'Cortex_ALL_staged_{requested_date.isoformat()}.json'
+        if saved_snapshot.exists():
+            return jsonify({
+                'success': False,
+                'target_date': requested_date.isoformat(),
+                'error': (
+                    f'Gespeicherte Planung für {requested_date.isoformat()} konnte nicht geladen werden. '
+                    'Datei unter Dateien & Backups prüfen oder den Tag bewusst zurücksetzen.'
+                ),
+            }), 409
 
     with lock:
         reload_info = _maybe_reload_runtime_config(manual=True)
@@ -4890,19 +4942,8 @@ def get_performance_data() -> Any:
 @routes.route('/performance')
 @admin_required
 def performance_page() -> Any:
-    load_monitor_config = dict(APP_CONFIG.get('worker_load_monitor', {}))
-    modality = resolve_modality_from_request()
-    return render_template(
-        'performance.html',
-        modality=modality,
-        skills=SKILL_COLUMNS,
-        skill_settings=SKILL_SETTINGS,
-        modalities=list(MODALITY_SETTINGS.keys()),
-        modality_settings=MODALITY_SETTINGS,
-        load_monitor_config=load_monitor_config,
-        ui_colors=APP_CONFIG.get('ui_colors', {}),
-        is_admin=True,
-    )
+    """The former Analysis page is the Day overview tab of the Workload page."""
+    return redirect(url_for('routes.worker_load_monitor', view='day'))
 
 
 # =============================================================================
@@ -4912,13 +4953,8 @@ def performance_page() -> Any:
 @routes.route('/manual-adjustments')
 @admin_required
 def manual_adjustments_page() -> Any:
-    modality = resolve_modality_from_request()
-    return render_template(
-        'manual_adjustments.html',
-        modality=modality,
-        ui_colors=APP_CONFIG.get('ui_colors', {}),
-        is_admin=True,
-    )
+    """Corrections are booked from a worker's row on the Workload page."""
+    return redirect(url_for('routes.worker_load_monitor', view='people'))
 
 
 @routes.route('/api/manual-adjustments', methods=['GET', 'POST'])
@@ -5106,6 +5142,39 @@ def get_worker_load_data() -> Any:
                 mod_data['assignment_total'] += count
 
             all_workers[canonical_id]['modalities'][modality] = mod_data
+
+    # Keep recorded balances reachable for correction after a worker leaves the schedule.
+    historical_worker_ids = set(global_worker_data.get('manual_weight_totals', {}) or {})
+    for modality in allowed_modalities:
+        historical_worker_ids.update(
+            (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).keys()
+        )
+    for canonical_id in sorted(historical_worker_ids):
+        if canonical_id not in all_workers:
+            all_workers[canonical_id] = {
+                'canonical_id': canonical_id,
+                'name': _get_preferred_display_name(canonical_id),
+                'modalities': {},
+                'skills': {},
+                'skill_weights': {},
+            }
+
+    # Assignment history may also outlive an individual modality's schedule row.
+    for canonical_id, worker_data in all_workers.items():
+        for modality in allowed_modalities:
+            counts = (global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}).get(canonical_id)
+            if counts is None or modality in worker_data['modalities']:
+                continue
+            skill_counts = {skill: int(counts.get(skill, 0) or 0) for skill in SKILL_COLUMNS}
+            worker_data['modalities'][modality] = {
+                'start_time': '',
+                'end_time': '',
+                'modifier': 1.0,
+                'skills': {},
+                'skill_counts': skill_counts,
+                'assignment_total': sum(skill_counts.values()),
+                'weighted_total': 0.0,
+            }
 
     # Add global weighted counts and assignments
     for canonical_id, worker_data in all_workers.items():

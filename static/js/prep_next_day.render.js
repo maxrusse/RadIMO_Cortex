@@ -91,14 +91,15 @@ function applyEditModeUI(tab) {
   // Update edit mode toggle button
   const btn = document.getElementById(`edit-mode-btn-${tab}`);
   if (btn) {
-    btn.textContent = editMode[tab] ? 'Exit Edit Mode' : 'Quick Edit';
-    btn.className = editMode[tab] ? 'btn btn-warning' : 'btn btn-secondary';
+    btn.textContent = editMode[tab] ? 'Exit Quick Edit' : 'Quick Edit';
+    btn.classList.toggle('is-editing', Boolean(editMode[tab]));
   }
+  document.getElementById(`content-${tab}`)?.classList.toggle('is-editing', Boolean(editMode[tab]));
 
   // Show/hide and update save button
   const saveBtn = document.getElementById(`save-inline-btn-${tab}`);
   if (saveBtn) {
-    saveBtn.style.display = editMode[tab] ? 'inline-block' : 'none';
+    saveBtn.hidden = !editMode[tab];
   }
   updateSaveButtonCount(tab);
   if (tab === 'tomorrow' && typeof updatePrepSelectionControls === 'function') {
@@ -261,7 +262,8 @@ function renderSummary(tab, groups) {
       const navColor = modSettings.nav_color || '#6c757d';
       html += `<tr><td style="text-align:left; font-weight:600; background:${navColor}20;">${mod.toUpperCase()}</td>`;
       SKILLS.forEach(skill => {
-        html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+        const value = counts[skill][mod.toLowerCase()];
+        html += `<td${value === 0 ? ' class="is-zero"' : ''}>${value}</td>`;
       });
       html += '</tr>';
     });
@@ -278,7 +280,8 @@ function renderSummary(tab, groups) {
       const btnColor = skillSettings.button_color || '#6c757d';
       html += `<tr><td style="text-align:left; font-weight:600; background:${btnColor}20;">${escapeHtml(skill)}</td>`;
       MODALITIES.forEach(mod => {
-        html += `<td>${counts[skill][mod.toLowerCase()]}</td>`;
+        const value = counts[skill][mod.toLowerCase()];
+        html += `<td${value === 0 ? ' class="is-zero"' : ''}>${value}</td>`;
       });
       html += '</tr>';
     });
@@ -286,6 +289,7 @@ function renderSummary(tab, groups) {
 
   html += '</tbody></table>';
   summaryEl.innerHTML = html;
+  if (typeof renderCoverageGaps === 'function') renderCoverageGaps(tab);
 }
 
 function renderTable(tab) {
@@ -328,7 +332,7 @@ function renderTable(tab) {
 
     const totalRows = shiftsToRender.length;
     const isDuplicate = shifts.length > 1;
-    const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} shifts</span>` : '';
+    const duplicateBadge = isDuplicate ? `<span class="duplicate-badge">${shifts.length} ${window.RadimoUI.text('shifts', 'Dienste')}</span>` : '';
     const hasNonGapShift = shifts.some(shift => !shift.is_gap_entry);
     const hasGapRows = (group.allGaps || []).length > 0;
     const warningMessages = [];
@@ -364,9 +368,9 @@ function renderTable(tab) {
         const firstSeg = segments[0] || {};
         const lastSeg = segments[segments.length - 1] || firstSeg;
         let shiftEditor = `<div style="display:flex; gap:0.2rem; align-items:center; font-size:0.7rem;">
-            <input type="time" value="${firstSeg.start || '07:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'start', this.value)" style="padding: 0.1rem; font-size: 0.7rem; width: 65px;">
-            -
-            <input type="time" value="${lastSeg.end || '15:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'end', this.value)" style="padding: 0.1rem; font-size: 0.7rem; width: 65px;">
+            <input type="time" class="grid-time-input" aria-label="Start" value="${firstSeg.start || '07:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'start', this.value)">
+            –
+            <input type="time" class="grid-time-input" aria-label="End" value="${lastSeg.end || '15:00'}" onchange="onInlineTimeChange('${tab}', ${gIdx}, ${shiftIdx}, 'end', this.value)">
             <button type="button" class="btn-inline-delete" onclick="deleteShiftInline('${tab}', ${gIdx}, ${shiftIdx})" title="Delete this shift">×</button>
           </div>`;
         tr.innerHTML += `<td class="grid-cell shift-col">${shiftEditor}</td>`;
@@ -479,14 +483,14 @@ function renderTable(tab) {
       if (shiftIdx === 0) {
         // Hide Edit/Del buttons in quick edit mode to avoid confusion
         if (isEditMode) {
-          tr.innerHTML += `<td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle; color: #999; font-size: 0.7rem;">
-            <em>Save to edit</em>
+          tr.innerHTML += `<td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
+            <span class="action-cell__hint" title="Save or exit Quick Edit to open the full editor">—</span>
           </td>`;
         } else {
           tr.innerHTML += `
             <td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
-              <button class="btn btn-small btn-primary" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
-              <button class="btn btn-small btn-danger" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete all">Delete</button>
+              <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm row-action" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
+              <button type="button" class="ui-btn ui-btn--danger-outline ui-btn--sm row-action" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete all">Delete</button>
             </td>`;
         }
       }
@@ -1008,4 +1012,5 @@ function renderTimeline(tab) {
     </div>`;
     legendEl.innerHTML = legendHtml;
   }
+  if (typeof renderCoverageStrip === 'function') renderCoverageStrip(tab);
 }

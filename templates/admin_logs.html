@@ -1,38 +1,39 @@
 {% extends "base.html" %}
+{% set page_theme = 'admin' %}
 
 {% block title %}RadIMO Cortex | Logs{% endblock %}
 
 {% block styles %}
-  {% include 'partials/admin_theme.html' %}
-  body { max-width: 1600px; }
-  .log-controls { display: flex; gap: 0.45rem; align-items: end; flex-wrap: wrap; margin-bottom: 0.55rem; }
-  .log-controls label { display: grid; gap: 0.2rem; font-size: 0.73rem; color: #52677a; font-weight: 700; }
-  .log-controls input[type='number'] { width: 88px; min-height: 30px; padding: 0.3rem; border: 1px solid var(--ops-line-strong); border-radius: 4px; font: inherit; }
-  .log-controls .hint { flex: 1 1 300px; margin-left: 0.2rem; }
-  .log-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
-  .log-card h3 { margin: 0; font-size: 0.92rem; color: var(--ops-ink); }
-  .log-head { display: flex; justify-content: space-between; gap: 0.4rem; }
-  .log-card .ops-path { margin: 0.38rem 0; }
-  .toolbar { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.45rem; }
-  .source-select { display: flex; gap: 0.3rem; align-items: center; color: #334e68; font-size: 0.73rem; font-weight: 700; }
-  .preview-card { margin-top: 0.55rem; padding: 0; overflow: hidden; }
-  .preview-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem; }
-  .preview-head { padding: 0.58rem 0.65rem 0; }
-  .preview-head h2 { margin: 0; font-size: 0.92rem; color: var(--ops-ink); }
-  #log-preview {
-    min-height: 290px; max-height: 58vh; overflow: auto; margin: 0; padding: 0.7rem;
-    border-radius: 0; background: var(--ops-code); color: #dbeafe;
-    font: 0.7rem/1.48 ui-monospace, SFMono-Regular, Consolas, monospace;
-    white-space: pre-wrap; overflow-wrap: anywhere;
+  .log-preview-panel .ui-toolbar { padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--c-line); }
+  .log-preview-panel label { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--c-muted); font-size: var(--fs-xs); font-weight: 700; }
+  .log-preview-panel select, .log-preview-panel input, .export-band input {
+    height: 28px; padding: 0.1rem 0.4rem; border: 1px solid var(--c-line-strong); border-radius: var(--radius-sm); color: var(--c-ink); font: inherit; font-size: var(--fs-sm);
   }
-  .hint { color: #5f7182; font-size: 0.76rem; line-height: 1.4; }
-  @media (max-width: 950px) { .log-grid { grid-template-columns: 1fr; } }
+  .preview-meta { padding: 0.3rem 0.85rem; color: var(--c-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+  #log-preview {
+    height: calc(100vh - 330px);
+    min-height: 320px;
+    margin: 0;
+    padding: 0.6rem 0.85rem;
+    overflow: auto;
+    background: #0e1b28;
+    color: #d6e2ee;
+    font: 0.74rem/1.45 var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #log-preview .log-line--error { color: #ff9b91; font-weight: 700; }
+  #log-preview .log-line--warning { color: #ffd27a; }
+  #log-preview .log-line--hidden { display: none; }
+  .sources-table td { vertical-align: middle; }
+  .sources-table .ui-path { display: block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .export-band { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.55rem 0.85rem; border-top: 1px solid var(--c-line); background: var(--c-surface-2); font-size: var(--fs-sm); }
+  .export-band a[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Logs' %}
   {% set header_subtitle = 'Preview & download' %}
-  {% set header_mode = 'global' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
@@ -41,52 +42,61 @@
   {% set present_logs = sources|selectattr('exists')|list|length %}
   <div class="ops-shell">
   <div class="ops-page-head">
-    <div>
-      <div class="ops-eyebrow">Diagnostics</div>
-      <h2>Live log workstation</h2>
-    </div>
+    <span></span>
     <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>
   </div>
 
-  <section class="ops-panel log-controls" aria-label="Log controls">
-    <label>Preview lines<input id="preview-lines" type="number" min="20" max="1000" step="20" value="120"></label>
-    <label>Download tail lines<input id="download-lines" type="number" min="1" max="50000" step="100" value="5000"></label>
-    <a class="btn" id="download-selected-tail" href="{{ default_tail_url }}">Download selected tails</a>
-    <a class="btn btn-secondary" id="download-selected-full" href="{{ default_full_url }}">Download selected full logs</a>
-  </section>
-
-  <section class="log-grid" aria-label="Log sources">
-    {% for source in sources %}
-    <article class="ops-card log-card" data-log-source="{{ source.key }}" data-preview-url="{{ source.preview_url }}">
-      <div class="log-head">
-        <h3>{{ source.label }}</h3>
-        <span class="ops-badge {{ '' if source.exists else 'ops-badge--missing' }}">{{ 'live' if source.exists else 'missing' }}</span>
+  <section class="ui-panel log-preview-panel" aria-label="Log preview">
+    <div class="ui-toolbar">
+      <label>Source
+        <select id="preview-source">
+          {% for source in sources %}
+          <option value="{{ source.key }}"{% if not source.exists %} disabled{% endif %}>{{ source.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Lines<input id="preview-lines" type="number" min="20" max="1000" step="20" value="300" style="width: 5.5rem;"></label>
+      <div class="ui-segmented" aria-label="Level filter">
+        <button type="button" data-level="">All</button>
+        <button type="button" data-level="warning">Warnings + errors</button>
+        <button type="button" data-level="error">Errors only</button>
       </div>
-      <code class="ops-path">{{ source.path }}</code>
-      <div class="ops-meta">
-        <span>{{ source.size_bytes if source.size_bytes is not none else '—' }} bytes</span>
-        <span>{{ source.modified or 'unavailable' }}</span>
-        <span>{{ source.rotated_count }} rotated</span>
-      </div>
-      <div class="toolbar">
-        <label class="source-select"><input type="checkbox" data-source-check="{{ source.key }}" checked> Include</label>
-        <button type="button" class="btn" data-preview-source="{{ source.key }}" {{ 'disabled' if not source.exists else '' }}>Preview tail</button>
-        <a class="btn btn-outline" href="{{ source.download_tail_url }}">Tail ZIP</a>
-        <a class="btn btn-outline" href="{{ source.download_full_url }}">Full ZIP</a>
-      </div>
-    </article>
-    {% endfor %}
-  </section>
-
-  <section class="ops-panel preview-card">
-    <div class="preview-head">
-      <div><h2 id="preview-title">Log preview</h2><div class="hint" id="preview-meta">Select a source above. Preview is read-only.</div></div>
-      <div class="toolbar">
-        <button type="button" class="btn btn-outline" id="refresh-preview" disabled>Refresh</button>
-        <button type="button" class="btn btn-outline" id="copy-preview" disabled>Copy</button>
-      </div>
+      <span class="ui-toolbar__spacer"></span>
+      <span class="ui-panel__hint" id="preview-count"></span>
+      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" id="refresh-preview" disabled>Refresh</button>
+      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" id="copy-preview" disabled>Copy</button>
     </div>
-    <pre id="log-preview">No log selected.</pre>
+    <div class="preview-meta" id="preview-meta">Preview is read-only.</div>
+    <pre id="log-preview" tabindex="0">No log selected.</pre>
+  </section>
+
+  <section class="ui-panel" aria-label="Log sources and export">
+    <div class="ui-panel__head"><h3 class="ui-panel__title">Sources &amp; download</h3></div>
+    <table class="ui-table sources-table">
+      <thead><tr><th>Include</th><th>Source</th><th>State</th><th class="num">Size</th><th>Modified</th><th class="num">Rotated</th><th>File</th><th>Single download</th></tr></thead>
+      <tbody>
+        {% for source in sources %}
+        <tr data-log-source="{{ source.key }}">
+          <td><input type="checkbox" data-source-check="{{ source.key }}" checked aria-label="Include {{ source.label }}"></td>
+          <td><strong>{{ source.label }}</strong></td>
+          <td><span class="ui-badge {{ 'ui-badge--ok' if source.exists else 'ui-badge--error' }}">{{ 'live' if source.exists else 'missing' }}</span></td>
+          <td class="num">{{ source.size_bytes if source.size_bytes is not none else '—' }}</td>
+          <td>{{ source.modified or '—' }}</td>
+          <td class="num">{{ source.rotated_count }}</td>
+          <td><code class="ui-path" title="{{ source.path }}">{{ source.filename }}</code></td>
+          <td>
+            <a class="ui-btn ui-btn--ghost ui-btn--sm" href="{{ source.download_tail_url }}">Tail ZIP</a>
+            <a class="ui-btn ui-btn--ghost ui-btn--sm" href="{{ source.download_full_url }}">Full ZIP</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="export-band">
+      <label>Download tail lines <input id="download-lines" type="number" min="1" max="50000" step="100" value="5000" style="width: 6rem;"></label>
+      <a class="ui-btn" id="download-selected-tail" href="{{ default_tail_url }}">Download selected tails</a>
+      <a class="ui-btn ui-btn--secondary" id="download-selected-full" href="{{ default_full_url }}">Download selected full logs</a>
+    </div>
   </section>
   </div>
 

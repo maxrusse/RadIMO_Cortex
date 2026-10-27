@@ -73,19 +73,19 @@ Admin pages require a session via `/login` when `admin_access_protection_enabled
 **Admin pages (password protected when enabled):**
 | Page | URL | Description |
 |------|-----|-------------|
-| Analysis | `/performance` | Management-level balance overview |
-| Workload | `/worker-load` | Detailed load monitoring |
-| Today | `/prep-today` | Edit the current live schedule |
+| Today | `/prep-today` | Edit the current live schedule; rebuild today from CSV |
 | Planning | `/prep-tomorrow` | Prepare staged future workdays |
-| Corrections | `/manual-adjustments` | Publish manual load corrections |
+| Workload | `/worker-load` | People (balance, details, corrections), Day overview, Log |
 | Skills | `/skill-roster` | Edit worker skills |
 | Weights | `/button-weights` | Configure button and special-task weights |
-| Import | `/upload` | Upload Master CSV and run `HARD RELOAD TODAY` |
-| Tools | `/admin/tools` | Operational overview and admin shortcuts |
+| Import | `/upload` | Upload Master CSV |
+| Files & backups | `/admin/files` | Managed files, staged days, restore |
+| System status | `/admin/tools` | Readiness, log signal, app reload |
+| Logs / Settings | `/admin/logs`, `/admin/settings` | Diagnostics and configuration |
 
-The primary admin navigation contains Analysis, Workload, Today, Planning,
-Schedule, and Live. The **Tools** menu contains Overview, Settings, Corrections,
-Skills, Weights, Import, Files, Logs, and Status.
+The primary admin navigation contains Live, Schedule, Today, Planning, and
+Workload. The **Administration** menu groups Skills and Weights, Import and
+Files & backups, and System status, Logs, and Settings.
 
 ---
 
@@ -95,7 +95,7 @@ Master CSV (current source file)
     ↓
 Upload via /upload (Master CSV)
     ↓
-HARD RELOAD TODAY (live) or Planning reload (staged)
+Rebuild today from CSV (live) or Planning reset day (staged)
     ↓
 Config-driven parsing (medweb_mapping rules)
     ↓
@@ -137,12 +137,10 @@ Where each control lives:
 - **Skill×Modality matrix**: `/button-weights` (Weights page)
 
 ### Admin Pages
-1. **Analysis** (`/performance`) - Management overview
-2. **Workload** (`/worker-load`) - Simple summary, advanced matrix, and flow chart
-3. **Today / Planning** (`/prep-today`, `/prep-tomorrow`) - Live edits and multiday staged planning
-4. **Corrections** (`/manual-adjustments`) - Manual load adjustments
-5. **Skills / Weights** (`/skill-roster`, `/button-weights`) - Worker capabilities and routing weights
-6. **Import / Tools** (`/upload`, `/admin/tools`) - Source data and operations
+1. **Workload** (`/worker-load`) - People with deviation from median and inline corrections, Day overview, Log
+2. **Today / Planning** (`/prep-today`, `/prep-tomorrow`) - Live edits and multiday staged planning with coverage gaps
+3. **Skills / Weights** (`/skill-roster`, `/button-weights`) - Worker capabilities and routing weights
+4. **Import / Files & backups / System status** (`/upload`, `/admin/files`, `/admin/tools`) - Source data and operations
 
 ### Navigation & UI Features
 
@@ -152,14 +150,15 @@ Where each control lives:
 - **Schedule** (`/timetable`) - Visual timeline of shifts and gaps
 - **Today** (`/prep-today`) - Live edits for the current day
 - **Planning** (`/prep-tomorrow`) - Staged edits for selected future workdays
-- **Tools menu** - Corrections, Skills, Weights, Import, Files, Logs, Settings, and Status
+- **Workload** (`/worker-load`) - Balance, details, corrections, day overview and log
+- **Administration menu** - Skills, Weights, Import, Files & backups, System status, Logs, and Settings
 
 ### Master CSV Semantics
 
 - Uploading a new Master CSV updates only the stored source file.
 - It does **not** overwrite an already staged Planning snapshot.
 - To refresh staged data from a newly uploaded CSV, run Planning again for the selected target date.
-- `HARD RELOAD TODAY` rebuilds only the current live day from the current Master CSV and resets counters.
+- **Today → Rebuild today from CSV** rebuilds only the current live day from the current Master CSV and resets counters.
 
 ---
 
@@ -251,6 +250,28 @@ python scripts/ops_check.py
 ```
 
 Validates: config file, admin password, upload folder, modalities, skills, medweb mapping rules.
+
+---
+
+## Tests
+
+Run the regression suite from the repository root in the project virtual environment:
+
+```bash
+python -m pytest -q
+```
+
+Browser regressions in `tests/browser/` check person-name and identifier escaping in
+Chromium. They require the optional development tool Playwright and its Chromium
+browser; pytest skips this module if the Playwright Python package is absent.
+Run them explicitly in an environment with those tools installed:
+
+```bash
+python -m pytest -q tests/browser
+```
+
+The browser tests use an isolated page with intercepted requests and require no
+running application or live data.
 
 ---
 

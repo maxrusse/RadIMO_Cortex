@@ -81,6 +81,10 @@ scope, or line values return `400`.
 | POST | `/api/live-schedule/update-row`, `/api/live-schedule/apply-worker-plan`, `/api/live-schedule/create-worker-plan`, `/api/live-schedule/resolve-task-preview`, `/api/live-schedule/add-gap-batch` |
 | POST | `/api/prep-next-day/update-row`, `/api/prep-next-day/apply-worker-plan`, `/api/prep-next-day/create-worker-plan`, `/api/prep-next-day/resolve-task-preview`, `/api/prep-next-day/add-gap-batch` |
 
+`/api/master-csv-status` returns `exists`, `filename`, `modified`, and `size`, plus a
+read-only content summary when the stored CSV can be parsed: `rows`, `first_date`,
+`last_date`, `day_count`, and `worker_count` (or `summary_error`).
+
 Worker-plan endpoints treat the full worker plan as the mutation unit; an empty
 `shifts` list removes that worker from the selected modalities. Staged-data
 requests accept `target_date` in `YYYY-MM-DD` form; invalid dates return `400`.
@@ -93,6 +97,13 @@ requests accept `target_date` in `YYYY-MM-DD` form; invalid dates return `400`.
 | POST | `/api/usage-stats/export`, `/api/usage-stats/reset` |
 | GET | `/api/performance/data`, `/api/worker-load/data`, `/api/worker-load/daily-load`, `/api/worker-load/recent-distributions` |
 | GET, POST | `/api/manual-adjustments` |
+
+`/api/worker-load/data` includes scheduled workers and workers with recorded
+assignments or manual correction balances, even after their schedule rows are
+removed. Historical modality entries retain assignment counts and weighted totals;
+their shift times are empty. Workers without worked hours have a zero hourly ratio
+and do not enter the median baseline. They remain available for corrections through
+`/api/manual-adjustments`.
 
 ## Error convention
 

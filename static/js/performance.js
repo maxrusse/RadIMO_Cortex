@@ -1,9 +1,11 @@
+// Day overview for the Workload page (formerly the Analysis page).
+// Wrapped so its helpers do not collide with worker_load_monitor.js.
+(function () {
 const CONFIG = JSON.parse(document.getElementById('page-config').textContent);
 const SKILLS = CONFIG.skills || [];
 const MODALITIES = CONFIG.modalities || [];
 const SKILL_SETTINGS = CONFIG.skill_settings || {};
 const MODALITY_SETTINGS = CONFIG.modality_settings || {};
-let summaryAutoRefreshInterval = null;
 
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -389,10 +391,5 @@ function loadSummaryData() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  loadSummaryData();
-  if (summaryAutoRefreshInterval) {
-    clearInterval(summaryAutoRefreshInterval);
-  }
-  summaryAutoRefreshInterval = setInterval(loadSummaryData, 30000);
-});
+window.RadimoDayOverview = { load: loadSummaryData };
+})();

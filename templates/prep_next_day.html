@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
 {% set page_mode = initial_tab|default('today') %}
 {% if page_mode == 'today' %}
@@ -12,43 +13,6 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block styles %}
-    {% include 'partials/admin_theme.html' %}
-
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f0f0f0;
-      padding: 1rem;
-      max-width: 1800px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      margin-bottom: 1rem;
-    }
-
-    /* Today/Tomorrow Banners - colors generated dynamically from config */
-    .today-banner,
-    .tomorrow-banner {
-      padding: 1rem;
-      border-radius: 0 8px 8px 8px;
-      margin-bottom: 1rem;
-    }
-
-    .today-banner h2,
-    .tomorrow-banner h2 {
-      margin-bottom: 0.5rem;
-      font-size: 1.2rem;
-    }
-
-    .today-banner p,
-    .tomorrow-banner p {
-      margin: 0.25rem 0;
-      font-size: 0.9rem;
-    }
 
     /* Table Styles */
     .table-container {
@@ -181,53 +145,6 @@
     .gap-indicator::before {
       content: "⏸";
       margin-right: 0.2rem;
-    }
-
-    /* Quick 30-min gap button */
-    .btn-quick-gap {
-      background: #ffc107;
-      border: none;
-      border-radius: 3px;
-      padding: 0.15rem 0.35rem;
-      font-size: 0.75rem;
-      cursor: pointer;
-      margin-left: 0.3rem;
-      vertical-align: middle;
-      transition: background 0.2s, transform 0.1s;
-    }
-
-    .btn-quick-gap:hover {
-      background: #e0a800;
-      transform: scale(1.1);
-    }
-
-    .btn-quick-gap:active {
-      transform: scale(0.95);
-    }
-
-    /* Inline delete button for quick edit mode */
-    .btn-inline-delete {
-      background: #dc3545;
-      border: none;
-      border-radius: 3px;
-      padding: 0.1rem 0.3rem;
-      font-size: 0.65rem;
-      color: white;
-      cursor: pointer;
-      margin-left: 0.25rem;
-      vertical-align: middle;
-      transition: background 0.2s, transform 0.1s;
-      font-weight: 600;
-      line-height: 1;
-    }
-
-    .btn-inline-delete:hover {
-      background: #c82333;
-      transform: scale(1.1);
-    }
-
-    .btn-inline-delete:active {
-      transform: scale(0.95);
     }
 
     .btn-gap-remove {
@@ -368,88 +285,12 @@
     /* .skill-val-1, .skill-val-0, .skill-val--1, .skill-val-w colors generated from config */
 
     /* Multi-modality chips per skill */
-    .mod-skill-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.15rem;
-    }
-
-    .mod-skill-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.15rem;
-      padding: 0.1rem 0.15rem;
-      border-radius: 4px;
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-    }
-
-    .mod-skill-chip .badge {
-      margin: 0;
-    }
-
-    .mod-skill-chip select {
-      padding: 0.1rem;
-      font-size: 0.7rem;
-      width: 38px;
-    }
-
-    .mod-skill-chip.ghost {
-      opacity: 0.7;
-      border-style: dashed;
-    }
 
     .skill-bundle {
       min-width: 70px;
     }
 
     /* Modal modality grid */
-    .modality-grid {
-      display: grid;
-      gap: 0.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    }
-
-    .modality-card {
-      border: 1px solid #dee2e6;
-      border-radius: 8px;
-      padding: 0.5rem;
-      background: #fafafa;
-    }
-
-    .modality-card header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.35rem;
-      margin-bottom: 0.4rem;
-    }
-
-    .modality-card header label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-weight: 600;
-      font-size: 0.85rem;
-    }
-
-    .modality-card .skills-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 0.35rem;
-    }
-
-    .modality-card .skills-grid .skill-pill {
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .modality-card .skills-grid select {
-      padding: 0.2rem;
-      font-size: 0.75rem;
-      width: 44px;
-    }
 
     .skill-value-select {
       background: #fff;
@@ -564,20 +405,6 @@
     }
 
     /* Aggregated skill/modality cells */
-    .agg-cell {
-      text-align: center;
-      font-size: 0.7rem;
-      min-width: 32px;
-    }
-
-    .agg-val {
-      padding: 0.1rem 0.2rem;
-      font-size: 0.72rem;
-      display: inline-block;
-      min-width: 20px;
-      background: #f7f7f7;
-      color: #333;
-    }
 
     .agg-all-1 {
       background: #f7f7f7;
@@ -620,152 +447,9 @@
       color: white;
     }
 
-    /* Modifier < 1: lower weight (freshman) */
-
-    /* View toggle */
-    .view-toggle {
-      display: flex;
-      gap: 0;
-      border: 2px solid #004892;
-      border-radius: 6px;
-      overflow: hidden;
-    }
-
-    .view-toggle-btn {
-      padding: 0.4rem 1rem;
-      border: none;
-      background: white;
-      color: #004892;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .view-toggle-btn:hover {
-      background: #e9ecef;
-    }
-
-    .view-toggle-btn.active {
-      background: #004892;
-      color: white;
-    }
-
-    .view-toggle-container {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    /* Filters */
-    .filter-bar {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 0.75rem;
-      padding: 0.75rem;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .filter-bar label {
-      font-weight: 600;
-      margin-right: 0.5rem;
-      color: #333;
-      font-size: 0.85rem;
-    }
-
-    .filter-btn {
-      padding: 0.4rem 1rem;
-      border: 2px solid #ddd;
-      border-radius: 4px;
-      background: white;
-      color: #333;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: all 0.2s;
-      text-decoration: none;
-      display: inline-block;
-    }
-
-    .filter-btn:hover {
-      background: #f5f5f5;
-      border-color: #999;
-    }
-
-    .filter-btn.active {
-      background: #004892;
-      color: white;
-      border-color: #004892;
-    }
-
-    .filter-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-size: 0.82rem;
-      color: #333;
-    }
-
-    /* Summary */
-    .summary-wrapper {
-      margin-top: 0.75rem;
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 0.75rem;
-    }
-
-    .summary-title {
-      font-weight: 600;
-      font-size: 0.85rem;
-      margin-bottom: 0.4rem;
-      color: #004892;
-    }
-
-    .summary-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.78rem;
-    }
-
-    .summary-table th,
-    .summary-table td {
-      border: 1px solid #ddd;
-      padding: 0.25rem 0.4rem;
-      text-align: center;
-    }
-
-    .summary-table th {
-      background: #eef1f5;
-    }
-
     /* Duplicate worker indicator */
     .worker-name {
       font-weight: 500;
-    }
-
-    .worker-name.duplicate {
-      position: relative;
-    }
-
-    .worker-name.duplicate::after {
-      content: '★';
-      color: #ffc107;
-      margin-left: 0.3rem;
-      font-size: 0.8rem;
-    }
-
-    .duplicate-badge {
-      background: #ffc107;
-      color: #333;
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
-      font-size: 0.65rem;
-      margin-left: 0.3rem;
-      font-weight: 600;
     }
 
     /* Shift time display */
@@ -790,353 +474,11 @@
       color: #721c24;
     }
 
-    /* Buttons */
-    .btn {
-      padding: 0.4rem 0.8rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .btn-primary {
-      background: #004892;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #003670;
-    }
-
-    .btn-secondary {
-      background: #6c757d;
-      color: white;
-    }
-
-    .btn-secondary:hover {
-      background: #5a6268;
-    }
-
-    .btn-success {
-      background: #28a745;
-      color: white;
-    }
-
-    .btn-success:hover {
-      background: #218838;
-    }
-
-    .prep-text-action {
-      background: transparent;
-      border: none;
-      color: #0d6efd;
-      padding: 0;
-      font-size: 0.88rem;
-      font-weight: 700;
-      box-shadow: none;
-      text-decoration: none;
-    }
-
-    .prep-text-action:hover {
-      background: transparent;
-      color: #0a58ca;
-      text-decoration: underline;
-    }
-
-    .prep-inline-save-status {
-      font-size: 0.78rem;
-      font-weight: 700;
-      white-space: nowrap;
-      line-height: 1.2;
-      min-width: 8.5rem;
-      display: inline-flex;
-      align-items: center;
-      visibility: visible;
-    }
-
-    .prep-inline-save-status:empty {
-      visibility: hidden;
-    }
-
-    .prep-inline-save-status.is-success {
-      color: #28a745;
-    }
-
-    .prep-inline-save-status.is-error {
-      color: #dc3545;
-    }
-
-    .prep-inline-save-status.is-info {
-      color: #6c757d;
-    }
-
-    .btn-warning {
-      background: #ffc107;
-      color: #333;
-    }
-
-    .btn-warning:hover {
-      background: #e0a800;
-    }
-
-    .btn-danger {
-      background: #dc3545;
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #c82333;
-    }
-
-    .reload-selected-date-btn {
-      background: #e65100;
-      color: white;
-      display: inline-flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: center;
-      gap: 0.05rem;
-      padding: 0.5rem 0.9rem;
-      box-shadow: 0 2px 6px rgba(230, 81, 0, 0.18);
-      line-height: 1.05;
-      border: 1px solid #bf360c;
-      width: fit-content;
-      align-self: flex-start;
-    }
-
-    .reload-selected-date-btn:hover {
-      background: #d84315;
-      color: white;
-    }
-
-    .reload-selected-date-btn:disabled {
-      background: #bdbdbd;
-      border-color: #9e9e9e;
-      color: #666;
-      box-shadow: none;
-      cursor: not-allowed;
-    }
-
-    .reload-btn-line-main {
-      font-size: 0.82rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .reload-btn-line-sub {
-      font-size: 0.68rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      opacity: 0.95;
-      white-space: nowrap;
-    }
-
-    .btn-small {
-      padding: 0.2rem 0.4rem;
-      font-size: 0.7rem;
-    }
-
     .gap-linked-icon {
       color: #004892;
       margin-right: 0.3rem;
       font-size: 0.8rem;
       cursor: help;
-    }
-
-    .prep-banner-copy {
-      margin-bottom: 0.25rem;
-    }
-
-    .prep-action-status {
-      font-size: 0.78rem;
-      color: #6c757d;
-      font-weight: 600;
-      min-width: 12rem;
-      display: inline-flex;
-      align-items: center;
-      visibility: visible;
-    }
-
-    .prep-action-status:empty {
-      visibility: hidden;
-    }
-
-    .prep-date-input {
-      padding: 0.35rem 0.45rem;
-      border: 1px solid #cfd4da;
-      border-radius: 4px;
-      font-size: 0.9rem;
-      min-width: 11rem;
-    }
-
-    .prep-date-input:disabled {
-      background: #f1f3f5;
-      color: #6c757d;
-      cursor: not-allowed;
-    }
-
-    .prep-top-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-      gap: 1rem;
-      margin-bottom: 1rem;
-      align-items: stretch;
-    }
-
-    .prep-date-card {
-      grid-column: 1 / -1;
-    }
-
-    .prep-panel {
-      background: #f8f9fa;
-      border: 1px solid #dfe3e8;
-      border-radius: 8px;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .prep-panel-title {
-      font-size: 0.92rem;
-      font-weight: 700;
-      color: #212529;
-      margin-bottom: 0.65rem;
-    }
-
-    .prep-panel-copy {
-      margin: 0 0 0.7rem 0;
-      color: #5f6368;
-      font-size: 0.85rem;
-      line-height: 1.4;
-    }
-
-    .prep-date-nav {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .prep-step-btn {
-      min-width: 3rem;
-      text-align: center;
-    }
-
-    .prep-status-row {
-      display: flex;
-      gap: 0.35rem;
-      align-items: baseline;
-      flex-wrap: wrap;
-      font-size: 0.85rem;
-      color: #212529;
-    }
-
-    .prep-load-status-row {
-      margin-top: 0.35rem;
-    }
-
-    .prep-status-label {
-      color: #5f6368;
-      font-weight: 700;
-    }
-
-    .prep-actions-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .prep-action-group {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .prep-actions-side {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.8rem;
-      margin-left: auto;
-      flex-wrap: wrap;
-    }
-
-    .prep-auto-refresh {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      padding: 0.3rem 0.55rem;
-      border: 1px solid #d7e1ec;
-      border-radius: 6px;
-      background: #f7fafc;
-      font-size: 0.76rem;
-      color: #415364;
-      line-height: 1.2;
-    }
-
-    .prep-auto-refresh input[type="checkbox"] {
-      margin: 0;
-    }
-
-    .prep-refresh-btn {
-      min-height: 30px;
-      padding: 0.3rem 0.6rem;
-      font-size: 0.76rem;
-    }
-
-    .prep-refresh-status {
-      color: #617180;
-      min-width: 110px;
-    }
-
-    .prep-legend {
-      font-size: 0.75rem;
-      color: #666;
-    }
-
-    #message-container {
-      position: fixed;
-      top: auto;
-      bottom: 1rem;
-      right: 1rem;
-      z-index: 1200;
-      width: min(380px, calc(100vw - 2rem));
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-      pointer-events: none;
-    }
-
-    /* Message */
-    .message {
-      padding: 0.8rem 0.95rem;
-      border-radius: 4px;
-      display: block;
-      box-shadow: 0 8px 24px rgba(15, 39, 64, 0.16);
-      pointer-events: none;
-    }
-
-    .message.success {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-
-    .message.error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-
-    .message.info {
-      background: #eef4fb;
-      color: #16324d;
-      border: 1px solid #c8d9eb;
     }
 
     /* Add Panel */
@@ -1310,13 +652,6 @@
     }
 
     /* Dropdown select */
-    .worker-select {
-      padding: 0.3rem;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      font-size: 0.8rem;
-      max-width: 150px;
-    }
 
     /* Action buttons cell */
     .action-cell {
@@ -1327,267 +662,341 @@
       margin: 0.1rem;
     }
 
-    /* Timeline Chart Styles */
-    :root {
-      --timeline-start: 6;
-      --timeline-end: 20;
-      --timeline-hours: 14;
-      --worker-col-width: 140px;
+    /* ---- New design: scope bar, toolbar, coverage ---- */
+    /* The matrix scrolls inside its own area so both header rows stay visible. */
+    .prep-editor .table-container {
+      max-height: calc(100vh - 210px);
+      overflow: auto;
     }
 
+    .compact-grid .header-top th { height: 25px; }
+    .compact-grid .header-sub th { top: 25px; }
+    .compact-grid thead th[rowspan] { z-index: 11; }
+
+    .prep-scope { position: relative; z-index: 40; }
+
+    .prep-scope .ui-kv { font-size: var(--fs-sm); }
+
+    .prep-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      color: var(--c-ink);
+      font-size: var(--fs-sm);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .prep-refresh-status {
+      min-width: 7rem;
+      color: var(--c-muted);
+      font-size: var(--fs-xs);
+    }
+
+    .prep-action-status {
+      color: var(--c-muted);
+      font-size: var(--fs-sm);
+      font-weight: 650;
+    }
+
+    .prep-action-status:empty { display: none; }
+
+    .prep-date-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .prep-step-btn { min-width: 28px; font-size: 1rem; }
+
+    .prep-date-input {
+      height: 28px;
+      padding: 0.15rem 0.4rem;
+      border: 1px solid var(--c-line-strong);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      font-size: var(--fs-md);
+      font-weight: 650;
+    }
+
+    .prep-date-input:disabled { background: var(--c-surface-2); color: var(--c-muted); cursor: not-allowed; }
+
+    .prep-staged-days {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .prep-staged-days .ui-chip { --chip-color: var(--c-scope-plan); min-height: 24px; font-size: var(--fs-xs); }
+    .prep-staged-days__label { color: var(--c-muted); font-size: var(--fs-xs); }
+
+    .prep-more-menu { position: relative; }
+    .prep-more-menu summary { list-style: none; }
+    .prep-more-menu summary::-webkit-details-marker { display: none; }
+
+    .prep-more-menu__panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.3rem);
+      z-index: 60;
+      width: 300px;
+      padding: 0.35rem;
+      border: 1px solid var(--c-line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-2);
+    }
+
+    .prep-more-menu__danger {
+      display: grid;
+      gap: 0.15rem;
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--c-ink);
+      font: inherit;
+      font-size: var(--fs-sm);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .prep-more-menu__danger strong { color: var(--c-danger); }
+    .prep-more-menu__danger span { color: var(--c-muted); font-size: var(--fs-xs); }
+    .prep-more-menu__danger:hover { background: var(--c-danger-soft); }
+
+    .prep-editor {
+      margin-bottom: 0.75rem;
+      border: 1px solid var(--c-line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-1);
+    }
+
+    .prep-toolbar {
+      position: relative;
+      z-index: 30;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--c-line);
+      border-radius: var(--radius) var(--radius) 0 0;
+      background: #fff;
+    }
+
+    .prep-filter-chips .ui-chip { min-height: 24px; padding: 0.12rem 0.5rem; font-size: var(--fs-xs); }
+
+    .prep-legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: var(--c-muted);
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+
+    .prep-legend .skill-val { margin-left: 0.35rem; }
+
+    .prep-inline-save-status {
+      font-size: var(--fs-sm);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .prep-inline-save-status:empty { display: none; }
+    .prep-inline-save-status.is-success { color: var(--c-success); }
+    .prep-inline-save-status.is-error { color: var(--c-danger); }
+
+    .prep-coverage {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.3rem 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-bottom: 1px solid var(--c-line);
+      background: var(--c-warning-soft);
+      font-size: var(--fs-sm);
+    }
+
+    .prep-coverage:empty { display: none; }
+    .prep-coverage__label { color: #8a3b12; font-weight: 750; }
+
+    .prep-coverage__group { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--c-ink); }
+    .prep-coverage__sep { color: var(--c-faint); }
+
+    .prep-coverage__mod {
+      padding: 0.05rem 0.4rem;
+      border-radius: var(--radius-sm);
+      background: var(--mod-color, var(--c-muted));
+      color: #fff;
+      font-size: 0.66rem;
+      font-weight: 800;
+    }
+
+    .prep-summary-details { padding: 0 0.75rem 0.6rem; }
+
+    .prep-summary-details > summary {
+      color: var(--c-primary);
+      font-size: var(--fs-sm);
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .summary-wrapper { margin-top: 0.4rem; }
+    .summary-title { display: none; }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-sm);
+    }
+
+    .summary-table th,
+    .summary-table td {
+      padding: 0.2rem 0.4rem;
+      border: 1px solid var(--c-line);
+      text-align: center;
+    }
+
+    .summary-table th { background: var(--c-surface-3); }
+    .summary-table td.is-zero { background: var(--c-danger-soft); color: var(--c-danger); font-weight: 750; }
+
+    /* Coverage over the day (below the timeline) */
+    .coverage-strip:empty { display: none; }
+
+    .coverage-strip {
+      margin-top: 0.75rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid var(--c-line);
+    }
+
+    .coverage-strip__title {
+      margin-bottom: 0.3rem;
+      color: var(--c-ink);
+      font-size: var(--fs-sm);
+      font-weight: 750;
+    }
+
+    .coverage-strip__title span { color: var(--c-muted); font-weight: 400; }
+
+    .coverage-row {
+      display: grid;
+      grid-template-columns: var(--worker-col-width) 1fr;
+      align-items: center;
+      height: 16px;
+    }
+
+    .coverage-row__label {
+      padding-right: 0.5rem;
+      font-size: var(--fs-xs);
+      font-weight: 650;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .coverage-row__track {
+      position: relative;
+      height: 12px;
+      border-radius: 2px;
+      background: var(--c-surface-2);
+      overflow: hidden;
+    }
+
+    .coverage-seg {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 750;
+      line-height: 12px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .coverage-seg--zero {
+      background: repeating-linear-gradient(135deg, #f3c2bd 0 4px, #fbe3e0 4px 8px);
+      color: var(--c-danger);
+    }
+
+    /* Matrix value emphasis: 1/w strong, 0 neutral, -1 muted */
+    .edit-table .skill-val--1 { color: #b5bec8 !important; font-weight: 400; }
+    .grid-input.skill-border--1 { border-color: #d5dbe2 !important; box-shadow: none !important; color: #a3adb8; }
+    .grid-input.skill-border-0 { border-color: #e9d9a6 !important; box-shadow: none !important; }
+    .grid-input.skill-border-1,
+    .grid-input.skill-border-w { font-weight: 800; }
+
+    .grid-time-input {
+      width: 76px;
+      padding: 0.08rem 0.15rem;
+      border: 1px solid var(--c-line-strong);
+      border-radius: 3px;
+      font: inherit;
+      font-size: 0.72rem;
+    }
+
+    .action-cell .row-action {
+      min-height: 22px;
+      padding: 0.1rem 0.45rem;
+      font-size: 0.7rem;
+    }
+
+    .action-cell__hint { color: var(--c-faint); font-size: 0.7rem; }
+
     .timeline-card {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      padding: 1rem;
-      margin-top: 1rem;
+      margin-top: 0;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--c-line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-1);
     }
 
     .timeline-card h3 {
-      margin: 0 0 0.75rem 0;
-      font-size: 1rem;
-      color: #004892;
+      margin: 0 0 0.5rem;
+      color: var(--c-ink);
+      font-size: 0.95rem;
     }
 
-    .timeline-wrapper {
-      overflow-x: auto;
-      overflow-y: visible;
-    }
-
-    .timeline-grid {
-      display: grid;
-      grid-template-columns: var(--worker-col-width) 1fr;
-      min-width: 700px;
-      position: relative;
-    }
-
-    .time-header {
-      grid-column: 2;
-      display: flex;
-      border-bottom: 2px solid #ddd;
-      background: #f8f9fa;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-
-    .time-header-label {
-      grid-column: 1;
-      background: #f8f9fa;
-      border-bottom: 2px solid #ddd;
-      padding: 0.5rem;
-      font-weight: 600;
-      font-size: 0.8rem;
-      position: sticky;
-      top: 0;
-      left: 0;
-      z-index: 11;
-    }
-
-    .time-slot {
-      flex: 1;
-      text-align: center;
-      padding: 0.4rem 0;
-      font-size: 0.7rem;
-      color: #666;
-      border-left: 1px solid #eee;
-    }
-
-    .time-slot:first-child {
-      border-left: none;
-    }
-
-    .worker-row {
-      display: contents;
-    }
-
-    .worker-name-cell {
-      padding: 0.35rem 0.5rem;
-      font-size: 0.78rem;
-      font-weight: 500;
-      background: #fff;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      align-items: center;
-      position: sticky;
-      left: 0;
-      z-index: 5;
-      min-height: 32px;
-    }
-
-    .worker-timeline {
-      position: relative;
-      height: 32px;
-      background: linear-gradient(90deg,
-          transparent calc(100% / 14 * 0), #f0f0f0 calc(100% / 14 * 0), #f0f0f0 calc(100% / 14 * 0 + 1px),
-          transparent calc(100% / 14 * 1), #f0f0f0 calc(100% / 14 * 1), #f0f0f0 calc(100% / 14 * 1 + 1px),
-          transparent calc(100% / 14 * 2), #f0f0f0 calc(100% / 14 * 2), #f0f0f0 calc(100% / 14 * 2 + 1px),
-          transparent calc(100% / 14 * 3), #f0f0f0 calc(100% / 14 * 3), #f0f0f0 calc(100% / 14 * 3 + 1px),
-          transparent calc(100% / 14 * 4), #f0f0f0 calc(100% / 14 * 4), #f0f0f0 calc(100% / 14 * 4 + 1px),
-          transparent calc(100% / 14 * 5), #f0f0f0 calc(100% / 14 * 5), #f0f0f0 calc(100% / 14 * 5 + 1px),
-          transparent calc(100% / 14 * 6), #f0f0f0 calc(100% / 14 * 6), #f0f0f0 calc(100% / 14 * 6 + 1px),
-          transparent calc(100% / 14 * 7), #f0f0f0 calc(100% / 14 * 7), #f0f0f0 calc(100% / 14 * 7 + 1px),
-          transparent calc(100% / 14 * 8), #f0f0f0 calc(100% / 14 * 8), #f0f0f0 calc(100% / 14 * 8 + 1px),
-          transparent calc(100% / 14 * 9), #f0f0f0 calc(100% / 14 * 9), #f0f0f0 calc(100% / 14 * 9 + 1px),
-          transparent calc(100% / 14 * 10), #f0f0f0 calc(100% / 14 * 10), #f0f0f0 calc(100% / 14 * 10 + 1px),
-          transparent calc(100% / 14 * 11), #f0f0f0 calc(100% / 14 * 11), #f0f0f0 calc(100% / 14 * 11 + 1px),
-          transparent calc(100% / 14 * 12), #f0f0f0 calc(100% / 14 * 12), #f0f0f0 calc(100% / 14 * 12 + 1px),
-          transparent calc(100% / 14 * 13), #f0f0f0 calc(100% / 14 * 13), #f0f0f0 calc(100% / 14 * 13 + 1px),
-          transparent 100%);
-      border-bottom: 1px solid #eee;
-    }
-
-    .shift-bar {
-      position: absolute;
-      top: 3px;
-      height: 26px;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 0, 0, 0.15);
-      cursor: default;
-      overflow: hidden;
-      transition: opacity 0.15s;
-    }
-
-    .shift-bar:hover {
-      z-index: 2;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .shift-bar__label {
-      position: absolute;
-      inset: 0 5px;
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      font-size: 0.64rem;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
-    }
-
-    .shift-bar--multi {
-      border-color: #b7c2cc;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 1px rgba(15, 42, 67, 0.1);
-    }
-
-    .shift-bar__label--multi {
-      inset: 2px 3px;
-      gap: 6px;
-      text-shadow: none;
-    }
-
-    .shift-bar__skill-label {
-      display: inline-flex;
-      align-items: center;
-      height: 20px;
-      padding: 0 6px;
+    /* Row tools stay quiet until the row is hovered */
+    .btn-quick-gap,
+    .btn-inline-delete {
+      margin-left: 0.3rem;
+      padding: 0.05rem 0.3rem;
+      border: 1px solid transparent;
       border-radius: 3px;
-      flex: 0 0 auto;
-      font-size: 0.69rem;
-      line-height: 1;
-      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
-    }
-
-    .shift-bar--neutral {
-      background: #e0e0e0;
-      border-style: dashed;
-      border-color: rgba(0, 0, 0, 0.25);
-    }
-
-    /* Gap bars - overlay on shift bars to show breaks/pauses */
-    .gap-bar {
-      position: absolute;
-      top: 6px;
-      height: 20px;
-      border-radius: 3px;
-      cursor: default;
-      overflow: hidden;
-      transition: opacity 0.15s;
-      background: repeating-linear-gradient(
-        45deg,
-        #9e9e9e,
-        #9e9e9e 4px,
-        #bdbdbd 4px,
-        #bdbdbd 8px
-      );
-      border: 1px dashed #757575;
-      opacity: 0.85;
-    }
-
-    .gap-bar:hover {
-      z-index: 2;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-      opacity: 1;
-    }
-
-    .current-time-line {
-      position: absolute;
-      top: 28px;
-      bottom: 0;
-      width: 2px;
-      background: #dc3545;
-      z-index: 8;
-      pointer-events: none;
-    }
-
-    .current-time-line::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -4px;
-      width: 10px;
-      height: 10px;
-      background: #dc3545;
-      border-radius: 50%;
-    }
-
-    .timeline-legend {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-      flex-wrap: wrap;
+      background: transparent;
       font-size: 0.75rem;
+      line-height: 1.2;
+      vertical-align: middle;
+      cursor: pointer;
+      opacity: 0.35;
+      transition: opacity 0.15s, background 0.15s;
     }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
+    tr:hover .btn-quick-gap,
+    tr:hover .btn-inline-delete,
+    .btn-quick-gap:focus-visible,
+    .btn-inline-delete:focus-visible { opacity: 1; }
 
-    .legend-box {
-      width: 16px;
-      height: 16px;
+    .btn-quick-gap:hover { border-color: var(--c-line-strong); background: var(--c-surface-2); }
+    .btn-quick-gap:disabled { opacity: 0.15; cursor: not-allowed; }
+    .btn-inline-delete { color: var(--c-danger); font-weight: 700; }
+    .btn-inline-delete:hover { border-color: #e7b4ae; background: var(--c-danger-soft); }
+
+    .duplicate-badge {
+      margin-left: 0.35rem;
+      padding: 0.05rem 0.35rem;
       border-radius: 3px;
-      border: 1px solid rgba(0, 0, 0, 0.2);
-    }
-
-    .legend-box.legend-gap {
-      background: repeating-linear-gradient(
-        45deg,
-        #9e9e9e,
-        #9e9e9e 4px,
-        #bdbdbd 4px,
-        #bdbdbd 8px
-      );
-      border: 1px dashed #757575;
-    }
-
-    .empty-state {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 2rem 1rem;
-      color: #666;
-      font-size: 0.9rem;
+      background: var(--c-surface-3);
+      color: var(--c-muted);
+      font-size: 0.66rem;
+      font-weight: 700;
     }
 {% endblock %}
 
 {% block content %}
-  <style>
-    .app-header { position: sticky; top: 0.5rem; z-index: 1300; }
-  </style>
   {% if page_mode == 'today' %}
     {% set header_title = 'RadIMO Cortex | Today' %}
     {% set header_subtitle = 'Live schedule' %}
@@ -1604,215 +1013,132 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
-  <div id="message-container"></div>
+
+  {% macro schedule_editor(tab) %}
+    <section class="prep-editor" aria-label="Schedule editor">
+      <div class="prep-toolbar ui-toolbar" id="prep-toolbar-{{ tab }}">
+        <div class="ui-toolbar__group">
+          <button class="ui-btn ui-btn--secondary" type="button" onclick="toggleEditMode('{{ tab }}')" id="edit-mode-btn-{{ tab }}">Quick Edit</button>
+          <button class="ui-btn ui-btn--success" type="button" onclick="saveInlineChanges('{{ tab }}')" id="save-inline-btn-{{ tab }}" hidden>Save</button>
+          <span class="ui-dirty" data-dirty-for="schedule-{{ tab }}" hidden></span>
+          <span id="save-status-{{ tab }}" class="prep-inline-save-status" aria-live="polite"></span>
+        </div>
+        <button class="ui-btn" type="button" onclick="openAddWorkerModal('{{ tab }}')">+ Add Worker</button>
+        <span class="ui-toolbar__sep" aria-hidden="true"></span>
+        <div class="ui-toolbar__group">
+          <span class="ui-toolbar__label">Skill</span>
+          <div class="ui-chips prep-filter-chips" data-filter-kind="skill" data-filter-tab="{{ tab }}">
+            <button class="ui-chip is-active" type="button" data-skill="" onclick="filterBySkill('{{ tab }}', '')">All</button>
+            {% for skill in skills %}
+            <button class="ui-chip" type="button" data-skill="{{ skill }}" onclick="filterBySkill('{{ tab }}', '{{ skill }}')">{{ skill }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="ui-toolbar__group">
+          <span class="ui-toolbar__label">Modality</span>
+          <div class="ui-chips prep-filter-chips" data-filter-kind="modality" data-filter-tab="{{ tab }}">
+            <button class="ui-chip is-active" type="button" data-modality="" onclick="filterByModality('{{ tab }}', '')">All</button>
+            {% for mod in modalities %}
+            <button class="ui-chip" type="button" data-modality="{{ mod|lower }}" onclick="filterByModality('{{ tab }}', '{{ mod|lower }}')">{{ mod|upper }}</button>
+            {% endfor %}
+          </div>
+        </div>
+        <span class="ui-toolbar__spacer"></span>
+        <label class="prep-check">
+          <input type="checkbox" id="filter-hide-zero-{{ tab }}" onchange="updateTableFilter('{{ tab }}')" checked> Hide 0/-1
+        </label>
+        <button id="display-order-toggle-{{ tab }}" class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="toggleDisplayOrder()"
+          title="Current: Modalities as groups, skills as sub-columns. Click to switch.">Mod → Skill</button>
+        <span class="prep-legend" aria-label="Legend">
+          <span class="skill-val skill-val-1">1</span> Active
+          <span class="skill-val skill-val-w">w</span> Weighted
+          <span class="skill-val skill-val-0">0</span> Passive
+          <span class="skill-val skill-val--1">-1</span> Excluded
+        </span>
+      </div>
+
+      <div class="prep-coverage" id="coverage-gaps-{{ tab }}" aria-live="polite"></div>
+
+      <div class="table-container">
+        <table class="edit-table compact-grid" id="edit-table-{{ tab }}">
+          <thead id="table-head-{{ tab }}">
+            <tr>
+              <th>Worker</th>
+              <th>Modality</th>
+              <th>Shift</th>
+              {% for skill in skills %}
+              <th class="skill-cell">{{ skill }}</th>
+              {% endfor %}
+              <th>Shift/Task</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="table-body-{{ tab }}"></tbody>
+        </table>
+      </div>
+      <details class="prep-summary-details">
+        <summary>Active counts by modality &amp; skill</summary>
+        <div id="summary-{{ tab }}" class="summary-wrapper"></div>
+      </details>
+    </section>
+
+    <section class="timeline-card" aria-label="Timeline View">
+      <h3>Timeline View</h3>
+      <div class="timeline-wrapper">
+        <div id="timeline-grid-{{ tab }}" class="timeline-grid">
+          <div class="time-header-label">Worker</div>
+          <div class="time-header" id="time-header-{{ tab }}"></div>
+        </div>
+      </div>
+      <div class="timeline-legend" id="timeline-legend-{{ tab }}"></div>
+      <div class="coverage-strip" id="coverage-strip-{{ tab }}"></div>
+    </section>
+  {% endmacro %}
 
   {% if page_mode == 'today' %}
   <div id="content-today" class="tab-content active">
-    <div class="today-banner">
-      <h2>LIVE CHANGES - Immediate Effect</h2>
-      <p>Changes here apply immediately to today's schedule. <strong>Counters are not reset.</strong></p>
-    </div>
-
-    <div class="card">
-
-      <!-- Controls -->
-      <div class="prep-actions-row" style="margin-bottom: 1rem;">
-        <div class="prep-action-group">
-          <button class="btn btn-secondary" onclick="toggleEditMode('today')" id="edit-mode-btn-today">Quick
-            Edit</button>
-          <button class="btn btn-success" onclick="saveInlineChanges('today')" id="save-inline-btn-today"
-            style="display: none;">Save Changes</button>
-          <span id="save-status-today" class="prep-inline-save-status" aria-live="polite"></span>
-          <span id="load-status-today" class="prep-action-status" aria-live="polite"></span>
-          <button class="btn btn-primary" onclick="openAddWorkerModal('today')">+ Add Worker</button>
+    <div class="ui-scope ui-scope--live prep-scope">
+      <span class="ui-scope__tag">Live</span>
+      <span class="ui-scope__text">Effective immediately · counters are not reset</span>
+      <span class="ui-toolbar__spacer"></span>
+      <span id="load-status-today" class="prep-action-status" aria-live="polite"></span>
+      <label class="prep-check">
+        <input type="checkbox" id="auto-refresh-today" onchange="togglePrepAutoRefresh('today')" checked> Auto-refresh
+      </label>
+      <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="refreshPrepTab('today')">Refresh</button>
+      <span id="prep-refresh-status-today" class="prep-refresh-status"></span>
+      <details class="prep-more-menu">
+        <summary class="ui-btn ui-btn--secondary ui-btn--sm" aria-label="More actions" title="More actions">⋯</summary>
+        <div class="prep-more-menu__panel">
+          <button type="button" class="prep-more-menu__danger" onclick="this.closest('details').removeAttribute('open'); loadFromCSV('today')">
+            <strong>Rebuild today from CSV</strong>
+            <span>Rebuilds the live day from the Master CSV and resets today's assignment counters.</span>
+          </button>
         </div>
-        <div class="prep-actions-side">
-          <div class="prep-legend">
-          <span class="skill-val skill-val-1">1</span> Active
-          <span class="skill-val skill-val-0">0</span> Passive
-          <span class="skill-val skill-val--1">-1</span> Excluded
-          <span class="skill-val skill-val-w">w</span> Weighted
-          </div>
-          <div class="prep-auto-refresh">
-            <input type="checkbox" id="auto-refresh-today" onchange="togglePrepAutoRefresh('today')" checked>
-            <label for="auto-refresh-today">Auto-refresh</label>
-            <button class="btn btn-secondary prep-refresh-btn" type="button" onclick="refreshPrepTab('today')">Refresh</button>
-            <span id="prep-refresh-status-today" class="prep-refresh-status">Auto-refresh on</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="filter-bar">
-        <label>Skill:</label>
-        <button class="filter-btn active" data-skill="" onclick="filterBySkill('today', '')">All</button>
-        {% for skill in skills %}
-        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('today', '{{ skill }}')">{{ skill }}</button>
-        {% endfor %}
-      </div>
-
-      <div class="filter-bar">
-        <label>Modality:</label>
-        <button class="filter-btn active" data-modality="" onclick="filterByModality('today', '')">All</button>
-        {% for mod in modalities %}
-        <button class="filter-btn" data-modality="{{ mod|lower }}" onclick="filterByModality('today', '{{ mod|lower }}')">{{ mod|upper }}</button>
-        {% endfor %}
-        <label class="filter-toggle" style="margin-left: auto;">
-          <input type="checkbox" id="filter-hide-zero-today" onchange="updateTableFilter('today')" checked> Hide 0/-1
-        </label>
-        <button id="display-order-toggle-today" class="btn btn-secondary" onclick="toggleDisplayOrder()"
-          title="Current: Modalities as groups, skills as sub-columns. Click to switch.">Mod → Skill</button>
-      </div>
-
-      <!-- Worker Table - One row per entry -->
-      <div class="table-container">
-        <table class="edit-table compact-grid" id="edit-table-today">
-          <thead id="table-head-today">
-            <tr>
-              <th>Worker</th>
-              <th>Modality</th>
-              <th>Shift</th>
-              {% for skill in skills %}
-              <th class="skill-cell">{{ skill }}</th>
-              {% endfor %}
-              <th>Shift/Task</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="table-body-today"></tbody>
-        </table>
-      </div>
-      <div id="summary-today" class="summary-wrapper"></div>
-      <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
+      </details>
     </div>
-
-    <!-- Timeline Chart for Today -->
-    <div class="timeline-card">
-      <h3>Timeline View</h3>
-      <div class="timeline-wrapper">
-        <div id="timeline-grid-today" class="timeline-grid">
-          <div class="time-header-label">Worker</div>
-          <div class="time-header" id="time-header-today"></div>
-        </div>
-      </div>
-      <div class="timeline-legend" id="timeline-legend-today"></div>
-    </div>
+    {{ schedule_editor('today') }}
   </div>
   {% elif page_mode == 'tomorrow' %}
   <div id="content-tomorrow" class="tab-content active">
-    <div class="tomorrow-banner">
-      <h2>Planning</h2>
-      <p class="prep-banner-copy">Selected day is staged here.</p>
+    <div class="ui-scope ui-scope--plan prep-scope">
+      <span class="ui-scope__tag">Planning</span>
+      <div class="prep-date-nav">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm prep-step-btn" type="button" data-prep-date-step="-1" onclick="shiftPrepDate(-1)" title="Previous day" aria-label="Previous day">‹</button>
+        <input class="prep-date-input" type="date" id="prep-target-date" value="{{ target_date }}" min="{{ prep_min_date }}" onchange="onPrepDateInputChange()" aria-label="Planning date">
+        <button class="ui-btn ui-btn--secondary ui-btn--sm prep-step-btn" type="button" data-prep-date-step="1" onclick="shiftPrepDate(1)" title="Next day" aria-label="Next day">›</button>
+      </div>
+      <div class="prep-staged-days" id="prep-staged-days"></div>
+      <span class="ui-toolbar__spacer"></span>
+      <span class="ui-kv">
+        <span class="ui-kv__item"><span class="ui-kv__label">Loaded day:</span><span class="ui-kv__value" id="prep-data-loaded-label">{{ prep_loaded_label }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Saved at:</span><span class="ui-kv__value" id="prep-last-edit-label">{{ prep_last_edit_label }}</span></span>
+      </span>
+      <span id="load-status-tomorrow" class="prep-action-status" aria-live="polite"></span>
+      <button class="ui-btn ui-btn--danger-outline ui-btn--sm reload-selected-date-btn" type="button" onclick="loadFromCSV('next')"
+        title="Reload the selected date from CSV and overwrite the current staged data.">Reset Day</button>
     </div>
-
-    <div class="prep-top-grid">
-      <div class="card prep-panel prep-date-card">
-        <div class="prep-panel-title">Date Selection</div>
-        <div class="prep-date-nav">
-          <button class="btn btn-secondary prep-step-btn" type="button" data-prep-date-step="-1" onclick="shiftPrepDate(-1)" title="Previous day">&lt;&lt;</button>
-          <input class="prep-date-input" type="date" id="prep-target-date" value="{{ target_date }}" min="{{ prep_min_date }}" onchange="onPrepDateInputChange()" />
-          <button class="btn btn-secondary prep-step-btn" type="button" data-prep-date-step="1" onclick="shiftPrepDate(1)" title="Next day">&gt;&gt;</button>
-        </div>
-      </div>
-
-      <div class="card prep-panel">
-        <div class="prep-panel-title">Data Status</div>
-        <div class="prep-status-row">
-          <span class="prep-status-label">Loaded day:</span>
-          <strong id="prep-data-loaded-label">{{ prep_loaded_label }}</strong>
-        </div>
-        <div class="prep-status-row">
-          <span class="prep-status-label">Saved at:</span>
-          <strong id="prep-last-edit-label">{{ prep_last_edit_label }}</strong>
-        </div>
-        <div class="prep-status-row prep-load-status-row">
-          <span class="prep-status-label">Load result:</span>
-          <span id="load-status-tomorrow" class="prep-action-status"></span>
-        </div>
-      </div>
-
-      <div class="card prep-panel">
-        <div class="prep-panel-title">Reset Day</div>
-        <p class="prep-panel-copy">Reload the selected day from CSV and reset modified shifts.</p>
-        <button class="btn reload-selected-date-btn" onclick="loadFromCSV('next')"
-          title="Reload the selected date from CSV and overwrite the current staged data.">
-          <span class="reload-btn-line-main">Reset Day</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="card">
-      <!-- Controls -->
-      <div class="prep-actions-row" style="margin-bottom: 1rem;">
-        <div class="prep-action-group">
-          <button class="btn btn-secondary" onclick="toggleEditMode('tomorrow')" id="edit-mode-btn-tomorrow">Quick
-            Edit</button>
-          <button class="btn btn-success" onclick="saveInlineChanges('tomorrow')" id="save-inline-btn-tomorrow"
-            style="display: none;">Save Changes</button>
-          <span id="save-status-tomorrow" class="prep-inline-save-status" aria-live="polite"></span>
-          <button class="btn btn-primary" onclick="openAddWorkerModal('tomorrow')">+ Add Worker</button>
-        </div>
-        <div class="prep-legend">
-          <span class="skill-val skill-val-1">1</span> Active
-          <span class="skill-val skill-val-0">0</span> Passive
-          <span class="skill-val skill-val--1">-1</span> Excluded
-          <span class="skill-val skill-val-w">w</span> Weighted
-        </div>
-      </div>
-
-      <div class="filter-bar">
-        <label>Skill:</label>
-        <button class="filter-btn active" data-skill="" onclick="filterBySkill('tomorrow', '')">All</button>
-        {% for skill in skills %}
-        <button class="filter-btn" data-skill="{{ skill }}" onclick="filterBySkill('tomorrow', '{{ skill }}')">{{ skill }}</button>
-        {% endfor %}
-      </div>
-
-      <div class="filter-bar">
-        <label>Modality:</label>
-        <button class="filter-btn active" data-modality="" onclick="filterByModality('tomorrow', '')">All</button>
-        {% for mod in modalities %}
-        <button class="filter-btn" data-modality="{{ mod|lower }}" onclick="filterByModality('tomorrow', '{{ mod|lower }}')">{{ mod|upper }}</button>
-        {% endfor %}
-        <label class="filter-toggle" style="margin-left: auto;">
-          <input type="checkbox" id="filter-hide-zero-tomorrow" onchange="updateTableFilter('tomorrow')" checked> Hide 0/-1
-        </label>
-        <button id="display-order-toggle-tomorrow" class="btn btn-secondary" onclick="toggleDisplayOrder()"
-          title="Current: Modalities as groups, skills as sub-columns. Click to switch.">Mod → Skill</button>
-      </div>
-
-      <!-- Worker Table - One row per entry -->
-      <div class="table-container">
-        <table class="edit-table compact-grid" id="edit-table-tomorrow">
-          <thead id="table-head-tomorrow">
-            <tr>
-              <th>Worker</th>
-              <th>Modality</th>
-              <th>Shift</th>
-              {% for skill in skills %}
-              <th class="skill-cell">{{ skill }}</th>
-              {% endfor %}
-              <th>Shift/Task</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="table-body-tomorrow"></tbody>
-        </table>
-      </div>
-      <div id="summary-tomorrow" class="summary-wrapper"></div>
-      <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">★ = Worker has multiple entries (double shift)</p>
-    </div>
-
-    <!-- Timeline Chart for Tomorrow -->
-    <div class="timeline-card">
-      <h3>Timeline View</h3>
-      <div class="timeline-wrapper">
-        <div id="timeline-grid-tomorrow" class="timeline-grid">
-          <div class="time-header-label">Worker</div>
-          <div class="time-header" id="time-header-tomorrow"></div>
-        </div>
-      </div>
-      <div class="timeline-legend" id="timeline-legend-tomorrow"></div>
-    </div>
+    {{ schedule_editor('tomorrow') }}
   </div>
   {% endif %}
 
@@ -1884,5 +1210,6 @@
   <script src="{{ url_for('static', filename='js/prep_next_day.config.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.state.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.render.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/prep_next_day.coverage.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.actions.js') }}"></script>
 {% endblock %}

@@ -1,118 +1,159 @@
 {% extends 'base.html' %}
+{% set page_theme = 'admin' %}
 
-{% block title %}RadIMO Cortex | Tools{% endblock %}
+{% block title %}RadIMO Cortex | System{% endblock %}
 
 {% block styles %}
-  {% include 'partials/admin_theme.html' %}
-  body { max-width: 1500px; }
-  .workspace-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
-  .workspace-card { display: flex; flex-direction: column; min-height: 118px; }
-  .workspace-card__head { display: flex; justify-content: space-between; align-items: start; gap: 0.5rem; }
-  .workspace-card h3 { margin: 0; color: var(--ops-ink); font-size: 0.94rem; }
-  .workspace-card .ops-actions { margin-top: auto; padding-top: 0.55rem; }
-  .workspace-card .ops-path { margin-top: 0.4rem; }
-  .workspace-paths { display: grid; gap: 0.22rem; margin-top: 0.4rem; }
-  .workspace-code { color: var(--ops-primary); font: 700 0.68rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
-  .runtime-card { border-color: #e5c6b2; background: linear-gradient(145deg, #fff 0%, #fff9f4 100%); }
-  .runtime-reload { background: #a33a16 !important; color: #fff !important; }
-  .runtime-message { min-height: 1.2rem; margin-top: 0.4rem; font-size: 0.78rem; font-weight: 700; }
-  .runtime-message.success { color: #197347; }
-  .runtime-message.error { color: #b42318; }
-  @media (max-width: 1000px) {
-    .workspace-grid { grid-template-columns: 1fr 1fr; }
-  }
-  @media (max-width: 680px) {
-    .workspace-grid { grid-template-columns: 1fr; }
-    .workspace-card { min-height: 0; }
-  }
+  .sys-summary { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.75rem 0.9rem; }
+  .sys-state { padding: 0.35rem 0.8rem; border-radius: var(--radius); color: #fff; font-size: 1.05rem; font-weight: 850; letter-spacing: 0.04em; }
+  .sys-state--ok { background: var(--c-success); }
+  .sys-state--error { background: var(--c-danger); }
+  .sys-summary .ui-kv { font-size: var(--fs-md); }
+
+  .sys-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 0.75rem; align-items: start; }
+
+  .checks-table td.check-status { font-weight: 800; white-space: nowrap; }
+  .check-status--ok { color: var(--c-success); }
+  .check-status--warning { color: var(--c-warning); }
+  .check-status--error { color: var(--c-danger); }
+  .checks-ok summary { padding: 0.5rem 0.85rem; color: var(--c-primary); font-size: var(--fs-sm); font-weight: 650; cursor: pointer; }
+
+  .log-signal { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: var(--fs-md); }
+  .log-signal strong { font-size: 1.1rem; }
+  .log-signal .is-error { color: var(--c-danger); }
+  .log-signal .is-warn { color: var(--c-warning); }
+  .log-signal .is-ok { color: var(--c-success); }
+
+  .runtime-message { min-height: 1.1rem; margin-top: 0.3rem; font-size: var(--fs-sm); font-weight: 700; }
+  .runtime-message.success { color: var(--c-success); }
+  .runtime-message.error { color: var(--c-danger); }
+
+  .tech-details summary { padding: 0.5rem 0.85rem; color: var(--c-muted); font-size: var(--fs-sm); font-weight: 650; cursor: pointer; }
+  .tech-details .ui-table { font-size: var(--fs-xs); }
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | Tools' %}
-  {% set header_subtitle = 'Admin tools' %}
-  {% set header_mode = 'global' %}
+  {% set header_title = 'RadIMO Cortex | System' %}
+  {% set header_subtitle = 'Health & readiness' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
   {% set ready_ok = readiness_http_status == 200 %}
+  {% set checks = readiness_payload.get('checks', []) %}
+  {% set problem_checks = checks|rejectattr('status', 'equalto', 'OK')|list %}
+  {% set ok_checks = checks|selectattr('status', 'equalto', 'OK')|list %}
+  {% set warning_count = checks|selectattr('status', 'equalto', 'WARNING')|list|length %}
+  {% set error_count = checks|selectattr('status', 'equalto', 'ERROR')|list|length %}
   {% set present_files = files_manifest.targets|selectattr('exists')|list|length %}
   {% set present_logs = log_sources|selectattr('exists')|list|length %}
 
   <div class="ops-shell">
     <div class="ops-page-head">
-      <div>
-        <div class="ops-eyebrow">Operations console</div>
-        <h2>Live system control</h2>
-      </div>
+      <span></span>
       <div class="ops-actions">
-        <a class="ops-button ops-button--outline" href="{{ url_for('routes.admin_settings_page') }}">Settings</a>
-        <a class="ops-button" href="{{ url_for('routes.upload_file') }}">Import</a>
+        <button class="ui-btn ui-btn--secondary" type="button" onclick="location.reload()">Run checks again</button>
       </div>
     </div>
 
-    <section class="ops-metric-grid" aria-label="System overview">
-      <article class="ops-metric">
-        <span class="ops-metric__label">Runtime readiness</span>
-        <strong class="ops-metric__value {{ 'ops-metric__value--ok' if ready_ok else 'ops-metric__value--error' }}">{{ 'READY' if ready_ok else 'NOT READY' }}</strong>
-      </article>
-      <article class="ops-metric">
-        <span class="ops-metric__label">Managed files</span>
-        <strong class="ops-metric__value">{{ present_files }}/{{ files_manifest.targets|length }}</strong>
-      </article>
-      <article class="ops-metric">
-        <span class="ops-metric__label">Recoverable backups</span>
-        <strong class="ops-metric__value">{{ files_manifest.managed_backups|length }}</strong>
-      </article>
-      <article class="ops-metric">
-        <span class="ops-metric__label">Log sources</span>
-        <strong class="ops-metric__value">{{ present_logs }}/{{ log_sources|length }}</strong>
-      </article>
+    <section class="ui-panel sys-summary" aria-label="Readiness">
+      <span class="sys-state {{ 'sys-state--ok' if ready_ok else 'sys-state--error' }}">{{ 'READY' if ready_ok else 'NOT READY' }}</span>
+      <span class="ui-kv">
+        <span class="ui-kv__item"><span class="ui-kv__label">Checks</span><span class="ui-kv__value">{{ checks|length }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Warnings</span><span class="ui-kv__value {{ 'check-status--warning' if warning_count }}">{{ warning_count }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Errors</span><span class="ui-kv__value {{ 'check-status--error' if error_count }}">{{ error_count }}</span></span>
+        <span class="ui-kv__item"><span class="ui-kv__label">Checked</span><span class="ui-kv__value">{{ (readiness_payload.get('timestamp') or '-')[:19]|replace('T', ' ') }}</span></span>
+      </span>
     </section>
 
-    <section class="workspace-grid">
-      <article class="ops-card workspace-card">
-        <div class="workspace-card__head"><h3>Files</h3><span class="ops-badge">{{ present_files }} online</span></div>
-        <code class="ops-path">{{ app_root }}</code>
-        <div class="ops-actions"><a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_files_page') }}">Open Files</a></div>
-      </article>
-      <article class="ops-card workspace-card">
-        <div class="workspace-card__head"><h3>Logs</h3><span class="ops-badge">{{ present_logs }} online</span></div>
-        <div class="workspace-paths">{% for source in log_sources %}<code class="workspace-code">{{ source.label }} · {{ source.rotated_count }} rotated</code>{% endfor %}</div>
-        <div class="ops-actions"><a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_logs_page') }}">Open Logs</a></div>
-      </article>
-      <article class="ops-card workspace-card">
-        <div class="workspace-card__head"><h3>Status</h3><span class="ops-badge {{ '' if ready_ok else 'ops-badge--error' }}">{{ 'ready' if ready_ok else 'attention' }}</span></div>
-        <div class="ops-actions">
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.status_page') }}">Open Status</a>
-          <a class="ops-button ops-button--outline" href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a>
-        </div>
-      </article>
-      <article class="ops-card workspace-card runtime-card">
-        <div class="workspace-card__head"><h3>Application runtime</h3><span class="ops-badge ops-badge--warning">controlled</span></div>
-        <div class="ops-actions"><button class="ops-button runtime-reload" id="runtime-reload" type="button">Reload app</button></div>
-        <div class="runtime-message" id="runtime-message" role="status" aria-live="polite"></div>
-      </article>
-      <article class="ops-card workspace-card">
-        <div class="workspace-card__head"><h3>Configuration</h3><span class="ops-badge">structured</span></div>
-        <div class="ops-actions">
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.admin_settings_page') }}">Settings</a>
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.skill_roster_page') }}">Skills</a>
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.button_weights_page') }}">Weights</a>
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.manual_adjustments_page') }}">Corrections</a>
-        </div>
-      </article>
-      <article class="ops-card workspace-card">
-        <div class="workspace-card__head"><h3>Schedule data</h3><span class="ops-badge">operational</span></div>
-        <div class="ops-actions">
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.upload_file') }}">Import</a>
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_today') }}">Today</a>
-          <a class="ops-button ops-button--secondary" href="{{ url_for('routes.prep_tomorrow') }}">Planning</a>
-        </div>
-      </article>
-    </section>
+    <div class="sys-grid">
+      <div>
+        <section class="ui-panel" aria-label="Readiness checks">
+          <div class="ui-panel__head">
+            <h3 class="ui-panel__title">Readiness checks</h3>
+            <span class="ui-panel__hint">{% if problem_checks %}Problems first{% else %}All checks passed{% endif %}</span>
+          </div>
+          {% if problem_checks %}
+          <table class="ui-table checks-table">
+            <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+            <tbody>
+              {% for check in problem_checks|sort(attribute='status') %}
+              {% set check_status = (check.get('status', 'UNKNOWN')|upper) %}
+              <tr>
+                <td>{{ check.get('name', '-') }}</td>
+                <td class="check-status check-status--{{ check_status|lower }}">{{ check_status }}</td>
+                <td>{{ check.get('detail', '-') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endif %}
+          {% if ok_checks %}
+          <details class="checks-ok"{% if not problem_checks %} open{% endif %}>
+            <summary>Passed checks <span class="ui-badge ui-badge--ok">{{ ok_checks|length }}</span></summary>
+            <table class="ui-table checks-table">
+              <tbody>
+                {% for check in ok_checks %}
+                <tr>
+                  <td>{{ check.get('name', '-') }}</td>
+                  <td class="check-status check-status--ok">OK</td>
+                  <td>{{ check.get('detail', '-') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </details>
+          {% endif %}
+          {% if not checks %}<div class="ui-empty">No readiness checks returned.</div>{% endif %}
+        </section>
 
+        <section class="ui-panel" aria-label="Log signal">
+          <div class="ui-panel__head">
+            <h3 class="ui-panel__title">Log signal</h3>
+            <span class="ui-panel__hint">last 500 lines per log source</span>
+          </div>
+          <div class="ui-panel__body log-signal" id="logSignal">
+            <span class="ui-panel__hint">Loading...</span>
+          </div>
+        </section>
+
+        <details class="ui-panel tech-details">
+          <summary>Technical details</summary>
+          <div class="ui-panel__body">
+            <table class="ui-table">
+              <tbody>
+                <tr><td>Application root</td><td><code class="ui-path">{{ app_root }}</code></td></tr>
+                <tr><td>Managed files present</td><td>{{ present_files }}/{{ files_manifest.targets|length }}</td></tr>
+                <tr><td>Recoverable backups</td><td>{{ files_manifest.managed_backups|length }}</td></tr>
+                <tr><td>Log sources present</td><td>{{ present_logs }}/{{ log_sources|length }}</td></tr>
+                <tr><td>Health</td><td>{{ health_payload.get('status', '-') }} · {{ health_payload.get('timestamp', '-') }}</td></tr>
+                <tr><td>Probes</td><td><a href="{{ url_for('routes.healthz') }}" target="_blank" rel="noopener">/healthz</a> · <a href="{{ url_for('routes.readyz') }}" target="_blank" rel="noopener">/readyz</a> · <a href="{{ url_for('routes.status_page') }}">/status</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+
+      <div>
+
+        <section class="ui-panel" aria-label="Maintenance">
+          <div class="ui-panel__head"><h3 class="ui-panel__title">Maintenance</h3></div>
+          <div class="ui-panel__body">
+            <div class="ui-danger-zone">
+              <div class="ui-danger-zone__text">
+                <strong>Reload app</strong>
+                Gunicorn starts fresh workers; active requests can finish. Use after configuration changes that require a restart.
+              </div>
+              <button class="ui-btn ui-btn--danger runtime-reload" id="runtime-reload" type="button">Reload app</button>
+            </div>
+            <div class="runtime-message" id="runtime-message" role="status" aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
+
+  <script id="log-sources" type="application/json">{{ log_sources|map(attribute='key')|list|tojson }}</script>
   <script src="{{ url_for('static', filename='js/admin_tools.js') }}"></script>
 {% endblock %}

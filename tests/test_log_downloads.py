@@ -21,7 +21,7 @@ class TestLogDownloads(unittest.TestCase):
     def _write_log(self, base_dir: Path, relative_path: str, content: str) -> None:
         full_path = base_dir / relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(content, encoding="utf-8")
+        full_path.write_bytes(content.encode("utf-8"))
 
     def test_admin_logs_page_redirects_without_access(self) -> None:
         with patch("routes.has_admin_access", return_value=False):

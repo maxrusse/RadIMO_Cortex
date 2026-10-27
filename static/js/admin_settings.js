@@ -3,7 +3,6 @@
 
   const initialSettings = JSON.parse(document.getElementById('admin-settings-config').textContent || '{}');
   const form = document.getElementById('general-settings-form');
-  const message = document.getElementById('settings-message');
   const advanced = document.getElementById('advanced-config');
   const editor = document.getElementById('full-config-editor');
   const saveFullButton = document.getElementById('save-full-config');
@@ -15,15 +14,7 @@
   }
 
   function showMessage(kind, text, details = '') {
-    message.className = `message ${kind}`;
-    message.textContent = text;
-    if (details) {
-      const detail = document.createElement('div');
-      detail.style.cssText = 'font-weight:500;margin-top:.2rem;';
-      detail.textContent = details;
-      message.appendChild(detail);
-    }
-    message.focus({ preventScroll: true });
+    window.RadimoUI.notify(kind, text, details);
   }
 
   async function parseResponse(response) {

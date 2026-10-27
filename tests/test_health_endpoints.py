@@ -76,7 +76,7 @@ class TestHealthEndpoints(unittest.TestCase):
         response = self.client.get("/status")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Readiness Checks", response.data)
+        self.assertIn(b"Readiness checks", response.data)
 
     @patch("routes.is_access_protection_enabled", return_value=False)
     @patch("routes.is_special_task_strict_button_visible", return_value=False)
@@ -540,13 +540,14 @@ class TestHealthEndpoints(unittest.TestCase):
 
     @patch("routes.has_admin_access", return_value=True)
     def test_performance_page_renders_management_sections(self, _mock_admin) -> None:
-        response = self.client.get("/performance")
+        redirect = self.client.get("/performance")
+        self.assertEqual(redirect.status_code, 302)
+        self.assertIn("/worker-load?view=day", redirect.location)
 
+        response = self.client.get("/worker-load?view=day")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Analysis", response.data)
+        self.assertIn(b"Day overview", response.data)
         self.assertIn("Tageslast".encode("utf-8"), response.data)
-        self.assertIn("Lasttreiber".encode("utf-8"), response.data)
-        self.assertIn("Gesamtansicht".encode("utf-8"), response.data)
         self.assertIn(b'id="summary-overview"', response.data)
         self.assertIn(b'id="daily-load-skill-chart"', response.data)
         self.assertIn(b'id="leaders-skill-total"', response.data)
@@ -644,16 +645,15 @@ class TestHealthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-global"', response.data)
         self.assertIn(b'Weight / Hour', response.data)
-        self.assertIn(b'Total Weight', response.data)
-        self.assertIn(b'<th class="sortable" data-sort="manual_adjustment"', response.data)
-        self.assertIn(b"Weighted Matrix", response.data)
-        self.assertIn(b"Count Matrix", response.data)
-        self.assertIn(b"Recent Events", response.data)
+        self.assertIn(b'Deviation from median', response.data)
+        self.assertIn(b'data-sort="manual_adjustment"', response.data)
+        self.assertIn(b'data-mode="matrix"', response.data)
+        self.assertIn(b'data-mode="advanced-count"', response.data)
+        self.assertIn(b'data-view="log"', response.data)
         self.assertNotIn(b'id="summary-modality"', response.data)
         self.assertNotIn(b'id="summary-skill"', response.data)
         self.assertNotIn(b'id="summary-modality-hour"', response.data)
         self.assertNotIn(b'id="summary-skill-hour"', response.data)
-        self.assertNotIn(b'id="summary-overview"', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_weight_mode_renders_derived_weight_matrix(self, _mock_admin) -> None:
@@ -661,7 +661,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-advanced-weight"', response.data)
-        self.assertIn(b'Derived load view using assignment count', response.data)
+        self.assertIn(b'Derived load: assignment count', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     def test_worker_load_advanced_count_mode_renders_count_matrix(self, _mock_admin) -> None:
@@ -677,7 +677,7 @@ class TestHealthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="table-recent"', response.data)
-        self.assertIn(b'Recent Assignment Events', response.data)
+        self.assertIn(b'data-log-type="assignments"', response.data)
 
     @patch("routes.has_admin_access", return_value=True)
     @patch("routes.allowed_modalities", ["ct"])
@@ -732,16 +732,16 @@ class TestHealthEndpoints(unittest.TestCase):
     def test_manual_adjustments_page_renders(self, _mock_admin) -> None:
         response = self.client.get("/manual-adjustments")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Corrections", response.data)
-        self.assertIn(b"Your name", response.data)
-        self.assertIn(b'id="manual-worker-body"', response.data)
-        self.assertIn(b'js/manual_adjustments.js', response.data)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/worker-load?view=people", response.location)
 
-        script_path = os.path.join(os.path.dirname(__file__), "..", "static/js/manual_adjustments.js")
+        script_path = os.path.join(os.path.dirname(__file__), "..", "static/js/worker_load_monitor.js")
         with open(script_path, encoding="utf-8") as handle:
             script = handle.read()
-        self.assertIn("Manual adjust", script)
+        self.assertIn("Book correction", script)
+        self.assertIn("Your name", script)
+        self.assertIn("fetch('/api/manual-adjustments'", script)
+        self.assertNotIn("admin_password', ", script.split("localStorage.setItem")[1].split(")")[0])
 
     @patch("routes.has_admin_access", return_value=False)
     def test_manual_adjustments_nav_hidden_without_admin_access(self, _mock_admin) -> None:
@@ -1127,6 +1127,35 @@ class TestHealthEndpoints(unittest.TestCase):
         mock_reload_staged.assert_called_once_with(target_date=datetime(2026, 4, 8).date())
         mock_preload.assert_not_called()
         mock_save_state.assert_called_once()
+
+    @patch("routes.preload_next_workday")
+    @patch("routes.reload_staged_data_from_disk", return_value=False)
+    @patch("routes.get_next_workday", return_value=datetime(2026, 4, 8))
+    @patch("routes._maybe_reload_runtime_config")
+    @patch("routes.os.path.exists", return_value=True)
+    @patch("routes.has_admin_access", return_value=True)
+    def test_prep_preload_never_overwrites_unloadable_saved_day_without_force(
+        self,
+        _mock_admin,
+        _mock_exists,
+        _mock_reload_runtime,
+        _mock_next_workday,
+        _mock_reload_staged,
+        mock_preload,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            staged_dir = routes_module.Path(tmp_dir)
+            snapshot = staged_dir / "Cortex_ALL_staged_2026-04-09.json"
+            snapshot.write_text("{corrupt", encoding="utf-8")
+            with patch("routes.STAGED_DAY_DIR", staged_dir):
+                response = self.client.post(
+                    "/preload-from-master",
+                    json={"target_date": "2026-04-09", "force_csv": False},
+                )
+            self.assertEqual(response.status_code, 409)
+            self.assertFalse(response.get_json()["success"])
+            mock_preload.assert_not_called()
+            self.assertEqual(snapshot.read_text(encoding="utf-8"), "{corrupt")
 
     @patch("routes.save_state")
     @patch("routes.reload_staged_data_from_disk", return_value=True)

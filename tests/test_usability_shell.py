@@ -90,7 +90,8 @@ def test_lesser_used_admin_pages_share_the_operations_console_shell():
         html = response.get_data(as_text=True)
         assert response.status_code == 200, route
         assert 'class="ops-shell"' in html, route
-        assert 'class="ops-page-head"' in html, route
+        # The page title lives in the header only; no second title below it.
+        assert 'class="ops-eyebrow"' not in html, route
 
 
 def test_admin_settings_uses_a_timezone_dropdown_without_legacy_hints():
@@ -111,7 +112,8 @@ def test_compact_admin_forms_have_accessible_names_and_local_table_scroll():
     assert 'aria-label="Search workers"' in roster_html
 
     weights_html = client.get('/button-weights').get_data(as_text=True)
-    assert "input.setAttribute('aria-label', `Weight:" in weights_html
+    assert "input.setAttribute('aria-label', label)" in weights_html
+    assert "`Weight: ${skill}" in weights_html
 
     prep_html = client.get('/prep-today').get_data(as_text=True)
     assert '.table-container {' in prep_html
@@ -192,9 +194,8 @@ def test_admin_files_has_valid_title_and_main_tools_navigation():
     assert '<title>RadIMO Cortex | Files</title>' in html
     assert 'href="/admin/tools"' in html
     assert 'href="/admin/logs"' in html
-    assert 'href="/status"' in html
     primary_nav = html.split('<nav class="app-nav"', 1)[1].split('</nav>', 1)[0]
-    tools_menu = html.split('<details class="system-menu"', 1)[1].split('</details>', 1)[0]
+    tools_menu = html.split('<details class="system-menu', 1)[1].split('</details>', 1)[0]
     assert 'href="/timetable?modality=all"' in primary_nav
     assert 'href="/timetable?modality=all"' not in tools_menu
 
@@ -220,12 +221,13 @@ def test_admin_pages_do_not_repeat_the_tools_subnavigation():
 
 
 def test_dashboard_selectors_use_solid_distinct_active_states():
-    header_css = Path('templates/partials/header_styles.html').read_text(encoding='utf-8')
+    header_css = Path('static/styles.css').read_text(encoding='utf-8')
     timetable_js = Path('static/js/timetable.js').read_text(encoding='utf-8')
     timeline_js = Path('static/js/timeline.js').read_text(encoding='utf-8')
 
-    assert 'repeating-linear-gradient' not in header_css
-    assert 'box-shadow: 0 0 0 3px #fff, 0 0 0 6px' in header_css
+    header_section = header_css.split('Application header', 1)[1].split('Legacy shared components', 1)[0]
+    assert 'repeating-linear-gradient' not in header_section
+    assert 'box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--selector-color' in header_css
     timetable_template = Path('templates/timetable.html').read_text(encoding='utf-8')
     assert 'buildSkillGradient' not in timeline_js
     assert 'solidBars' not in timetable_js
@@ -241,17 +243,14 @@ def test_admin_tools_stay_compact_and_reachable_on_narrow_pages():
     client = _admin_client()
 
     upload_html = client.get('/upload').get_data(as_text=True)
-    assert 'class="column workflow-column"' in upload_html
-    assert 'class="column upload-column"' in upload_html
-    assert '.upload-column {' in upload_html
-    assert 'order: 1;' in upload_html
+    assert 'workflow-column' not in upload_html
+    assert 'upload-column' in upload_html
+    assert 'load-today-btn' not in upload_html  # rebuilding today lives on the Today page
+    assert 'id="next-steps"' in upload_html
 
-    corrections_html = client.get('/manual-adjustments').get_data(as_text=True)
-    assert 'id="manual-worker-filter"' in corrections_html
-    assert 'id="manual-adjusted-only"' in corrections_html
-    corrections_js = Path('static/js/manual_adjustments.js').read_text(encoding='utf-8')
-    assert "manual-worker-filter')?.addEventListener('input', renderWorkers)" in corrections_js
-    assert "manual-adjusted-only')?.addEventListener('change', renderWorkers)" in corrections_js
+    workload_html = client.get('/worker-load').get_data(as_text=True)
+    assert 'id="recent-filter-worker"' in workload_html
+    assert 'data-log-type="corrections"' in workload_html
 
     files_html = client.get('/admin/files').get_data(as_text=True)
     assert 'class="section-jumps"' in files_html
@@ -260,8 +259,8 @@ def test_admin_tools_stay_compact_and_reachable_on_narrow_pages():
     assert 'href="#recoverable-backups"' in files_html
 
     roster_html = client.get('/skill-roster').get_data(as_text=True)
-    assert '.worker-admin-panel {' in roster_html
-    assert 'order: -1;' in roster_html
+    assert 'id="addWorkerDialog"' in roster_html
+    assert 'data-roster-view="overview"' in roster_html
 
     timetable_html = client.get('/timetable').get_data(as_text=True)
     assert 'Zurück zur Hauptseite' not in timetable_html
@@ -272,16 +271,14 @@ def test_page_titles_follow_short_naming_contract():
     expected_titles = {
         '/login': 'RadIMO Cortex | Admin',
         '/?modality=ct': 'RadIMO Cortex | CT Live',
-        '/performance': 'RadIMO Cortex | Analysis',
         '/worker-load': 'RadIMO Cortex | Workload',
         '/prep-today': 'RadIMO Cortex | Today',
         '/prep-tomorrow': 'RadIMO Cortex | Planning',
         '/timetable': 'RadIMO Cortex | Schedule',
-        '/manual-adjustments': 'RadIMO Cortex | Corrections',
         '/skill-roster': 'RadIMO Cortex | Skills',
         '/button-weights': 'RadIMO Cortex | Weights',
         '/upload': 'RadIMO Cortex | Import',
-        '/admin/tools': 'RadIMO Cortex | Tools',
+        '/admin/tools': 'RadIMO Cortex | System',
         '/admin/settings': 'RadIMO Cortex | Settings',
         '/admin/files': 'RadIMO Cortex | Files',
         '/admin/logs': 'RadIMO Cortex | Logs',
@@ -301,7 +298,7 @@ def test_page_titles_follow_short_naming_contract():
 def test_primary_navigation_uses_short_names_only():
     html = _admin_client().get('/admin/tools').get_data(as_text=True)
 
-    for label in ('Analysis', 'Workload', 'Today', 'Planning', 'Live', 'Overview', 'Settings', 'Corrections', 'Skills', 'Weights', 'Import', 'Schedule'):
+    for label in ('Workload', 'Today', 'Planning', 'Live', 'Schedule', 'Administration', 'System status', 'Settings', 'Logs', 'Skills', 'Weights', 'Import'):
         assert re.search(rf'>\s*{re.escape(label)}\s*<', html)
     for legacy in ('Performance', 'Adjust Weight', 'Skill Matrix', 'Weight Matrix', 'Change Today', 'Prep Tomorrow', 'Timetable', 'Dashboard', 'Files & Recovery'):
         assert not re.search(rf'>\s*{re.escape(legacy)}\s*<', html)

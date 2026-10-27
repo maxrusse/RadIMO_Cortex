@@ -48,7 +48,7 @@ def test_tools_pages_are_integrated_and_admin_protected():
         assert '/admin/settings' in html
         assert '/admin/files' in html
         assert '/admin/logs' in html
-        assert '/status' in html
+        assert 'class="system-menu' in html
 
 
 def test_runtime_reload_is_admin_only_and_requires_explicit_confirmation():

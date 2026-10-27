@@ -3,25 +3,6 @@
 {% block title %}RadIMO Cortex | {{ skill_labels[skill] }} Live{% endblock %}
 
 {% block styles %}
-    :root {
-      --disabled-color: #888;
-
-      /* Global & Other Colors */
-      --primary-color: #004892;
-      --global-accent: #004892;
-      --body-bg: #f0f0f0;
-      --header-bg: #fff;
-      --tab-bg: #fff;
-      --tab-color: #000;
-      --card-bg: #fff;
-      --info-box-border: #dc3545;
-      --info-item-bg: #fff;
-      --info-item-shadow: rgba(0, 0, 0, 0.05);
-      --card-header-bg: #f8f9fa;
-      --stats-header-bg: #f8f9fa;
-      --table-header-bg: #f8f9fa;
-      --highlight-bg: rgba(0, 0, 0, 0.05);
-    }
 
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -33,11 +14,6 @@
 
     body[data-skill] {
       background: var(--skill-bg, var(--body-bg));
-    }
-
-    .result-panel,
-    .clipboard-note {
-      background: var(--skill-bg, #fff);
     }
 
     .card {
@@ -119,111 +95,6 @@
       border: 2px dashed rgba(255, 255, 255, 0.6);
     }
 
-    .result-panel {
-      border-radius: 8px;
-      padding: 1rem;
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-
-    .assigned-person {
-      font-size: 2rem;
-      font-weight: 600;
-      margin: 0.5rem 0;
-    }
-
-    .assigned-context {
-      font-size: 1.2rem;
-      color: #666;
-      margin-bottom: 0.25rem;
-    }
-
-    .timer {
-      color: #666;
-      font-size: 1rem;
-    }
-
-    .clipboard-note {
-      color: var(--primary-color);
-      padding: 0.45rem 0.6rem;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      margin-top: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      border: 1px solid rgba(0, 72, 146, 0.18);
-      background: rgba(255, 255, 255, 0.72);
-    }
-
-    .small-button {
-      font-size: 0.9rem;
-      padding: 0.3rem 0.6rem;
-      border-radius: 4px;
-      text-decoration: none;
-      color: #fff;
-      background: var(--primary-color);
-      margin-left: 0.5rem;
-    }
-
-    .info-box {
-      border: 1px solid rgba(192, 57, 43, 0.35);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-top: 1rem;
-      background: rgba(255, 255, 255, 0.84);
-    }
-
-    .info-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.4rem;
-    }
-
-    .edit-btn {
-      border: none;
-      background: var(--skill-nav, var(--primary-color));
-      color: #fff;
-      border-radius: 6px;
-      padding: 0.4rem 0.8rem;
-      cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .edit-btn:hover {
-      filter: brightness(1.1);
-    }
-
-    .info-item {
-      background: var(--info-item-bg);
-      padding: 0.45rem 0.6rem;
-      margin-bottom: 0.25rem;
-      border-radius: 4px;
-      font-size: 0.92rem;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
-      border: 1px solid rgba(0, 0, 0, 0.06);
-    }
-
-    .info-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .info-item--label {
-      margin-top: 0.15rem;
-      font-weight: 600;
-      color: #555;
-      background: transparent;
-      box-shadow: none;
-      padding: 0.2rem 0;
-    }
-
-    .info-item--empty {
-      color: #999;
-      font-style: italic;
-    }
-
     .modal-overlay {
       position: fixed;
       inset: 0;
@@ -273,37 +144,6 @@
     .btn-cancel { background: #6c757d; color: #fff; }
     .btn-save { background: #28a745; color: #fff; }
 
-    /* Footer */
-    .footer {
-      margin-top: 1.5rem;
-      text-align: center;
-      font-size: 11px;
-      color: #888;
-    }
-
-    .footer a {
-      color: #666;
-    }
-
-    .footer-meta {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .last-assignment {
-      font-size: 0.8rem;
-      color: #666;
-      padding: 0.5rem 1rem;
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 4px;
-      margin-bottom: 0.5rem;
-      display: none;
-    }
-
-    .last-assignment.visible {
-      display: block;
-    }
 {% endblock %}
 
 {% block body_attrs %} data-skill="{{ skill }}"{% endblock %}
@@ -378,39 +218,39 @@
       {% endif %}
     </div>
     {% include 'partials/strict_worker_select_modal.html' %}
-    <div id="result"></div>
-    <div class="clipboard-note">
-      <span>Kürzel wird automatisch kopiert, Einfügen mit STRG+V im RadCenter</span>
+    <div class="live-below">
+      <div id="result" class="live-result" aria-live="polite">
+        <div class="live-result__empty">–</div>
+      </div>
+      <div class="live-history" aria-label="Last assignments on this PC">
+        <div class="live-history__title">Last assignments on this PC</div>
+        <div id="liveHistory"></div>
+      </div>
     </div>
-    <div class="clipboard-note">
-      {% set skill_hint = namespace(text='') %}
-      {% for skill_def in skill_definitions if skill_def.show_abbreviation_hint %}
-        {% set skill_hint.text = skill_hint.text ~ (', ' if skill_hint.text else '') ~ skill_def.label ~ ' = ' ~ skill_def.tooltip %}
-      {% endfor %}
-      {% if skill_hint.text %}
-      <span>{{ skill_hint.text }}</span>
-      {% endif %}
+    {% set skill_hint = namespace(text='') %}
+    {% for skill_def in skill_definitions if skill_def.show_abbreviation_hint %}
+      {% set skill_hint.text = skill_hint.text ~ (', ' if skill_hint.text else '') ~ skill_def.label ~ ' = ' ~ skill_def.tooltip %}
+    {% endfor %}
+    {% set notes_present = namespace(value=false) %}
+    {% for mod in visible_modalities if info_texts_by_modality.get(mod) %}{% set notes_present.value = true %}{% endfor %}
+    <div class="live-hints">
+      <span class="live-hints__item">Abbreviation is copied automatically – paste with CTRL+V in RadCenter</span>
+      {% if skill_hint.text %}<span class="live-hints__item">{{ skill_hint.text }}</span>{% endif %}
+      {% if is_admin %}<button type="button" class="live-hints__action" onclick="openEditModal()"{% if notes_present.value %} hidden{% endif %}>+ Add note</button>{% endif %}
     </div>
-    <div class="info-box">
-      <div class="info-header">
-        <h3>Hinweise</h3>
+    <div class="info-box live-notes" id="liveNotes"{% if not notes_present.value %} hidden{% endif %}>
+      <div class="live-notes__head">
+        <h3 class="live-notes__title">Notes</h3>
         {% if is_admin %}
-        <button class="edit-btn" onclick="openEditModal()">Bearbeiten</button>
+        <button class="ui-btn ui-btn--secondary ui-btn--sm" type="button" onclick="openEditModal()">Edit</button>
         {% endif %}
       </div>
       <div class="info-texts" id="infoTextsContainer">
-        {% for mod in visible_modalities %}
-        <div class="info-item info-item--label">
-          {{ modality_labels.get(mod, mod|upper) }}
-        </div>
-        {% set mod_infos = info_texts_by_modality.get(mod, []) %}
-        {% if mod_infos %}
-          {% for info in mod_infos %}
-          <div class="info-item">{{ info }}</div>
-          {% endfor %}
-        {% else %}
-        <div class="info-item info-item--empty">Keine Hinweise vorhanden</div>
-        {% endif %}
+        {% for mod in visible_modalities if info_texts_by_modality.get(mod) %}
+        <div class="info-item info-item--label live-notes__group">{{ modality_labels.get(mod, mod|upper) }}</div>
+        {% for info in info_texts_by_modality.get(mod, []) %}
+        <div class="info-item live-notes__item">{{ info }}</div>
+        {% endfor %}
         {% endfor %}
       </div>
     </div>
@@ -430,22 +270,20 @@
   </div>
   {% endif %}
 
-  <!-- Footer -->
-  <div class="footer">
-    <div id="lastAssignment" class="last-assignment"></div>
-    <div class="footer-meta">RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum &amp; EULA</a>
-      {% if show_probe_badges %}
-      <a href="{{ url_for('routes.status_page') }}"
-        class="probe-badge probe-badge--{{ health_badge_status }}"
-        title="Health: {{ health_badge_text }}">H</a>
-      <a href="{{ url_for('routes.status_page') }}"
-        class="probe-badge probe-badge--{{ ready_badge_status }}"
-        title="Ready: {{ ready_badge_text }}">R</a>
-      {% endif %}
-    </div>
+  <div class="live-footer">
+    RadIMO Cortex v20 · <a href="{{ url_for('static', filename='EULA.txt') }}" target="_blank">Impressum &amp; EULA</a>
+    {% if show_probe_badges %}
+    <a href="{{ url_for('routes.status_page') }}"
+      class="probe-badge probe-badge--{{ health_badge_status }}"
+      title="Health: {{ health_badge_text }}">H</a>
+    <a href="{{ url_for('routes.status_page') }}"
+      class="probe-badge probe-badge--{{ ready_badge_status }}"
+      title="Ready: {{ ready_badge_text }}">R</a>
+    {% endif %}
   </div>
 
   <script src="{{ url_for('static', filename='js/assignment_ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/live_history.js') }}"></script>
   <script src="{{ url_for('static', filename='js/strict_worker_select.js') }}"></script>
   <script>
     const currentSkill = "{{ skill }}";
@@ -460,6 +298,7 @@
         document.body.style.setProperty('--skill-bg', skillDef.button_color + '22');
         document.body.style.setProperty('--skill-nav', skillDef.button_color);
         document.body.style.setProperty('--skill-hover', skillDef.button_color + 'dd');
+        window.RadimoUI.watermark(skillDef.label || currentSkill);
       }
 
       // Border colors for skill selector
@@ -582,45 +421,33 @@
       const context = contextLabel ? `${modalityLabel} · ${contextLabel}` : modalityLabel;
       const message = window.RadimoI18n?.language === 'en' ? 'Assignment failed' : 'Zuweisung fehlgeschlagen';
       const detail = AssignmentUI.message(error, { strict: forceStrict });
-      document.getElementById('result').innerHTML = `
-        <div class="result-panel result-panel--error" role="alert">
-          <div class="assigned-person">${escapeHtml(message)}</div>
-          <div class="assigned-context">${escapeHtml(context)} · ${escapeHtml(detail)}</div>
+      const resultDiv = document.getElementById('result');
+      resultDiv.className = 'live-result live-result--error result-panel--error';
+      resultDiv.innerHTML = `
+        <div role="alert">
+          <div class="live-result__person">${escapeHtml(message)}</div>
+          <div class="live-result__meta"><span class="live-result__context">${escapeHtml(context)}</span> <span>${escapeHtml(detail)}</span></div>
         </div>`;
     }
 
-    function showResult(person, modality, contextLabel = null) {
+    function renderResultPanel(person, context) {
       const resultDiv = document.getElementById('result');
-      const displayPerson = person || "Niemand verfügbar";
-      const escapedPerson = escapeHtml(displayPerson);
-
-      const modalityLabel = modalities[modality]?.label || modality || lastModalityUsed;
-      const displayContext = contextLabel
-        ? `${modalityLabel} · ${contextLabel}`
-        : modalityLabel;
+      resultDiv.className = 'live-result';
       resultDiv.innerHTML = `
-        <div class="result-panel">
-          <div class="assigned-person">${escapedPerson}</div>
-          <div class="assigned-context">${escapeHtml(displayContext)}</div>
-          <div class="timer" id="timer"></div>
-        </div>
-      `;
+        <div class="live-result__person">${escapeHtml(person || 'Niemand verfügbar')}</div>
+        <div class="live-result__meta">
+          <span class="live-result__context">${escapeHtml(context)}</span>
+          <span id="liveCopyStatus" class="live-result__copy"></span>
+          <span class="timer" id="timer"></span>
+        </div>`;
       startTimer();
+      LiveHistory.showAssignment({ person, context });
+    }
 
-      // Extract abbreviation from parentheses and copy to clipboard
-      const match = person.match(/\(([^)]+)\)/);
-      if (match && match[1]) copyTextToClipboard(match[1]);
-
-      // Update last assignment footer (textContent is XSS-safe)
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-      const lastEl = document.getElementById('lastAssignment');
-      const mod = modalityLabel || (modality || lastModalityUsed || '').toUpperCase();
-      const footerContext = contextLabel
-        ? `${mod} · ${contextLabel}`
-        : mod;
-      lastEl.textContent = `Letzte Zuweisung: ${timeStr} · ${displayPerson} · ${footerContext}/${currentSkillLabel}`;
-      lastEl.classList.add('visible');
+    function showResult(person, modality, contextLabel = null) {
+      const modalityLabel = modalities[modality]?.label || modality || lastModalityUsed;
+      const parts = [contextLabel || currentSkillLabel, modalityLabel].filter(Boolean);
+      renderResultPanel(person, parts.join(' · '));
     }
 
     function startTimer() {
@@ -636,7 +463,9 @@
       const hours = Math.floor(secondsElapsed / 3600);
       const minutes = Math.floor((secondsElapsed % 3600) / 60);
       const seconds = secondsElapsed % 60;
-      document.getElementById('timer').textContent =
+      const timerEl = document.getElementById('timer');
+      if (!timerEl) return;
+      timerEl.textContent =
         "Zeit seit letzter Zuweisung: " +
         hours.toString().padStart(2, '0') + ":" +
         minutes.toString().padStart(2, '0') + ":" +
@@ -674,21 +503,15 @@
     function renderInfoTextsAll() {
       const container = document.getElementById('infoTextsContainer');
       if (!container) return;
-      if (!visibleModalities || visibleModalities.length === 0) {
-        container.innerHTML = '<div class="info-item info-item--empty">Keine Hinweise vorhanden</div>';
-        return;
-      }
-      container.innerHTML = visibleModalities.map(mod => {
+      const withNotes = (visibleModalities || []).filter(mod => (infoTextsByModality[mod] || []).length > 0);
+      container.innerHTML = withNotes.map(mod => {
         const label = escapeHtml((modalities[mod] && modalities[mod].label) ? modalities[mod].label : mod.toUpperCase());
-        const texts = infoTextsByModality[mod] || [];
-        const body = texts.length > 0
-          ? texts.map(text => `<div class="info-item">${escapeHtml(text)}</div>`).join('')
-          : '<div class="info-item info-item--empty">Keine Hinweise vorhanden</div>';
-        return `
-          <div class="info-item info-item--label">${label}</div>
-          ${body}
-        `;
+        const body = infoTextsByModality[mod].map(text => `<div class="info-item live-notes__item">${escapeHtml(text)}</div>`).join('');
+        return `<div class="info-item info-item--label live-notes__group">${label}</div>${body}`;
       }).join('');
+      const box = document.getElementById('liveNotes');
+      if (box) box.hidden = withNotes.length === 0;
+      document.querySelector('.live-hints__action')?.toggleAttribute('hidden', withNotes.length > 0);
     }
 
     {% if is_admin %}
@@ -738,7 +561,7 @@
           renderInfoTextsAll();
           closeEditModal();
         } catch (error) {
-          alert('Fehler beim Speichern: ' + error.message);
+          window.RadimoUI.notify('error', window.RadimoUI.text('Saving failed: ', 'Fehler beim Speichern: ') + error.message);
         }
       };
 

@@ -4,33 +4,33 @@ Admin access is controlled by `admin_access_protection_enabled` and `admin_passw
 
 ## Navigation
 
-The top admin navigation provides **Analysis**, **Workload**, **Today**, **Planning**, **Schedule**, and **Live**. The **Tools** menu provides:
+The top admin navigation provides **Live**, **Schedule**, **Today**, **Planning**, and **Workload**. The **Administration** menu provides:
 
-| Tool | Route | Use |
-|---|---|---|
-| Overview | `/admin/tools` | readiness, managed-file summary, and guarded app reload |
-| Settings | `/admin/settings` | general configuration settings |
-| Corrections | `/manual-adjustments` | manual load corrections |
-| Skills | `/skill-roster` | persistent worker skill baselines |
-| Weights | `/button-weights` | normal/strict button and special-task weights |
-| Import | `/upload` | Master CSV upload and live-day rebuild |
-| Files | `/admin/files` | managed config, roster, live backup, and staged-day files |
-| Logs | `/admin/logs` | browser access to supported logs |
-| Status | `/status` | health and readiness checks |
+| Group | Page | Route | Use |
+|---|---|---|---|
+| Team & rules | Skills | `/skill-roster` | persistent worker skill baselines (person view and all-worker overview) |
+| Team & rules | Weights | `/button-weights` | normal/strict button and special-task weights |
+| Schedule data | Import | `/upload` | Master CSV upload and content summary |
+| Schedule data | Files & backups | `/admin/files` | managed config, roster, live backup, and staged-day files |
+| System | System status | `/admin/tools` | readiness, log signal, links, and guarded app reload |
+| System | Logs | `/admin/logs` | log preview with level filter and downloads |
+| System | Settings | `/admin/settings` | general configuration settings |
+
+`/status` remains the public readiness page. Corrections are booked on **Workload → People** (click a worker row); `/manual-adjustments` and `/performance` redirect to the Workload page.
 
 ## Schedule work
 
 ### Today (`/prep-today`)
 
-Use **Today** for sickness, time corrections, coverage changes, and gaps affecting the live day. Saving a change updates the live schedule without resetting assignment counters. Use the gap controls to split availability around meetings, boards, or breaks.
+Use **Today** for sickness, time corrections, coverage changes, and gaps affecting the live day. Saving a change updates the live schedule without resetting assignment counters. Use the gap controls to split availability around meetings, boards, or breaks. The line above the matrix lists skill × modality combinations nobody covers; the strip below the timeline shows coverage per skill over the day.
 
 ### Planning (`/prep-tomorrow`)
 
-Use **Planning** for a selected future workday. It is a staged schedule and does not alter today's live assignments. Reloading the selected date from the Master CSV replaces that date's staged data, so check the target date before confirming.
+Use **Planning** for a selected future workday. It is a staged schedule and does not alter today's live assignments. Prepared dates appear as chips next to the date field; `/prep-tomorrow?date=YYYY-MM-DD` opens a date directly. **Reset day** reloads the selected date from the Master CSV and replaces that date's staged data, so check the target date before confirming.
 
-### Import and HARD RELOAD TODAY (`/upload`)
+### Import (`/upload`) and rebuilding today
 
-Upload the current Medweb CSV first. The file becomes `uploads/master_medweb.csv`; upload alone does not change Today or overwrite Planning. **HARD RELOAD TODAY** rebuilds the live day from that CSV and resets live counters. It is a recovery/rebuild action, not the normal way to make a same-day edit.
+Upload the current Medweb CSV first. The file becomes `uploads/master_medweb.csv`; upload alone does not change Today or overwrite Planning. **Today → ⋯ → Rebuild today from CSV** (formerly HARD RELOAD TODAY on Import) rebuilds the live day from that CSV and resets live counters. It is a recovery/rebuild action, not the normal way to make a same-day edit.
 
 ## Skills and weights
 
@@ -47,7 +47,7 @@ The Weight Matrix stores normal and strict assignment weights in `data/button_we
 
 - `config.demo.yaml` is a tracked example. Create and maintain the active `config.yaml` locally; keep production credentials out of source control.
 - In **Files**, upload/restore only the explicitly named managed file and use its reload action where offered. Structural config changes (modalities, skills, or session secret) require a process restart; ordinary settings can be reloaded when the page reports that reload is supported.
-- **Overview → Reload app** sends a guarded Gunicorn worker reload and is available only when the app is actually running under Gunicorn. It is not a substitute for deploying code or resolving failed readiness checks.
+- **System status → Reload app** sends a guarded Gunicorn worker reload and is available only when the app is actually running under Gunicorn. It is not a substitute for deploying code or resolving failed readiness checks.
 - Before manual filesystem recovery, take a dated backup of `data/` and `uploads/`. Do not delete CSVs, roster data, weights, or backup directories as a routine reset. Prefer the Files UI and preserve evidence for escalation.
 
 ## Operational checks
