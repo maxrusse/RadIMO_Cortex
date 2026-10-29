@@ -24,6 +24,7 @@ from lib.utils import (
     get_next_workday,
 )
 from state_manager import StateManager
+from lib.change_audit import record_daily_reset
 
 # Get state references
 _state = StateManager.get_instance()
@@ -146,6 +147,7 @@ def check_and_perform_daily_reset() -> None:
             d['last_reset_date'] = today
             global_worker_data['assignments_per_mod'][mod] = {}
 
+        loaded_today = False
         try:
             staged_day_path = os.path.join(
                 UPLOAD_FOLDER,
@@ -154,7 +156,6 @@ def check_and_perform_daily_reset() -> None:
                 f"Cortex_ALL_staged_{today.isoformat()}.json",
             )
 
-            loaded_today = False
             if os.path.exists(staged_day_path):
                 archive_staged_day_snapshot(today, suffix='bod')
                 loaded_today = initialize_data_from_unified(
@@ -176,6 +177,7 @@ def check_and_perform_daily_reset() -> None:
 
     # Save state OUTSIDE the lock to prevent blocking I/O
     save_state()
+    record_daily_reset(today, loaded_today)
 
 
 def _parse_target_date(value: Optional[Union[str, date, datetime]]) -> Optional[date]:

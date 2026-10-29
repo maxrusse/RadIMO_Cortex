@@ -66,6 +66,7 @@ from config import (
     save_button_weights
 )
 from lib import usage_logger
+from lib.change_audit import install_audit, read_entries, client_identity
 from lib.utils import (
     format_worker_display_name,
     get_local_now,
@@ -138,6 +139,7 @@ from balancer import (
 
 # Create Blueprint
 routes = Blueprint('routes', __name__)
+install_audit(routes, lambda: LOG_ROOT / 'changes.jsonl')
 
 
 @routes.after_app_request
@@ -157,6 +159,10 @@ def add_no_store_headers(response: Response) -> Response:
 
 LOG_ROOT = Path('logs')
 LOG_SOURCE_DEFINITIONS: dict[str, dict[str, str]] = {
+    'changes': {
+        'label': 'Change history',
+        'filename': 'changes.jsonl',
+    },
     'gunicorn': {
         'label': 'Gunicorn',
         'filename': 'gunicorn.log',
@@ -2843,7 +2849,8 @@ def skill_roster_api() -> Any:
         data = request.json
         roster = data.get('roster')
         if roster is not None:
-            save_worker_skill_json(roster)
+            if not save_worker_skill_json(roster):
+                return jsonify({'error': 'Failed to save skill roster'}), 500
             return jsonify({'success': True})
         return jsonify({'error': 'No roster data'}), 400
     
@@ -3123,9 +3130,25 @@ def admin_config_general_update() -> Any:
 @routes.route('/admin/logs')
 @admin_required
 def admin_logs_page() -> Any:
-    """Admin page with direct links for log downloads."""
+    """Admin change history, technical log previews and downloads."""
+    day = request.args.get('day', '')
+    if day:
+        try:
+            day = date.fromisoformat(day).isoformat()
+        except ValueError:
+            return jsonify({'error': 'day must be a valid ISO date'}), 400
+    try:
+        offset = max(0, int(request.args.get('offset', '0')))
+    except ValueError:
+        return jsonify({'error': 'offset must be an integer'}), 400
+    entries, total = read_entries(LOG_ROOT / 'changes.jsonl', day=day or None, offset=offset)
     return render_template(
         'admin_logs.html',
+        change_entries=entries,
+        change_total=total,
+        change_day=day,
+        change_offset=offset,
+        today=get_local_now().date().isoformat(),
         sources=_build_log_sources_manifest(),
         default_tail_url=url_for(
             'routes.download_logs',
@@ -3832,15 +3855,7 @@ def _serialize_manual_adjustments() -> list[dict[str, Any]]:
 
 
 def _get_client_audit_identity() -> dict[str, str]:
-    forwarded_for = request.headers.get('X-Forwarded-For', '')
-    client_ip = forwarded_for.split(',')[0].strip() if forwarded_for else ''
-    if not client_ip:
-        client_ip = request.headers.get('X-Real-IP', '').strip()
-    if not client_ip:
-        client_ip = request.remote_addr or ''
-    return {
-        'client_ip': client_ip,
-    }
+    return client_identity()
 
 
 def _verify_manual_adjustment_payload(data: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[tuple[Any, int]]]:

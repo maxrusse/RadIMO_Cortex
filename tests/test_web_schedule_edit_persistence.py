@@ -180,6 +180,61 @@ class TestWebScheduleEditPersistence(unittest.TestCase):
             self.assertEqual(worker_rows.iloc[1]["end_time"].strftime("%H:%M"), "16:00")
             self.assertEqual(str(worker_rows.iloc[1][SKILL_COLUMNS[0]]), "w")
 
+    def test_persisted_worker_plan_is_audited_with_matching_before_after_rows(self) -> None:
+        import routes as routes_module
+        from lib.change_audit import read_entries
+        with patch.object(routes_module, 'LOG_ROOT', self.upload_dir / 'logs'):
+            response = self.client.post('/api/live-schedule/apply-worker-plan',
+                                        json=self._worker_plan())
+        self.assertEqual(response.status_code, 200)
+        entries, count = read_entries(self.upload_dir / 'logs' / 'changes.jsonl')
+        self.assertEqual(count, 1)
+        self.assertEqual(len(entries[0]['schedule_changes']), len(allowed_modalities))
+        for change in entries[0]['schedule_changes']:
+            self.assertEqual(change['before'][0]['start_time'], '08:00:00')
+            self.assertEqual(change['after'][0]['start_time'], '09:00:00')
+            self.assertEqual(change['after'][0]['Modifier'], 1.25)
+        self.assertTrue(file_ops._load_unified_backup(str(self.live_path), use_staged=False))
+        self.assertEqual(self.state.modality_data[allowed_modalities[0]]['working_hours_df'].iloc[0]['Modifier'], 1.25)
+
+    def test_audit_capture_error_cannot_rollback_an_already_saved_worker_plan(self) -> None:
+        from lib import change_audit
+        original_clean = change_audit.clean
+
+        def fail_on_saved_rows(value):
+            if isinstance(value, list) and value and isinstance(value[0], dict) and 'PPL' in value[0]:
+                raise ValueError('Audit capture failed')
+            return original_clean(value)
+
+        with patch.object(change_audit, 'clean', side_effect=fail_on_saved_rows):
+            response = self.client.post('/api/live-schedule/apply-worker-plan',
+                                        json=self._worker_plan())
+        self.assertEqual(response.status_code, 200)
+        for modality in allowed_modalities:
+            self.assertEqual(self.state.modality_data[modality]['working_hours_df'].iloc[0]['Modifier'], 1.25)
+        self.assertTrue(file_ops._load_unified_backup(str(self.live_path), use_staged=False))
+        self.assertEqual(self.state.modality_data[allowed_modalities[0]]['working_hours_df'].iloc[0]['Modifier'], 1.25)
+
+    def test_live_gap_batch_persists_once_and_audits_saved_rows(self) -> None:
+        import routes as routes_module
+        from lib.change_audit import read_entries
+        with patch.object(routes_module, 'LOG_ROOT', self.upload_dir / 'logs'):
+            response = self.client.post('/api/live-schedule/add-gap-batch', json={
+                'row_index_map': {modality: 0 for modality in allowed_modalities},
+                'gap_type': 'Break', 'gap_start': '10:00', 'gap_end': '11:00',
+                'verify_ppl': 'Alice (A1)',
+            })
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertTrue(file_ops._load_unified_backup(str(self.live_path), use_staged=False))
+        entries, _ = read_entries(self.upload_dir / 'logs' / 'changes.jsonl')
+        self.assertEqual(entries[0]['outcome'], 'success')
+        for change in entries[0]['schedule_changes']:
+            self.assertEqual(len(change['before']), 1)
+            self.assertEqual(len(change['after']), 3)
+        for modality in allowed_modalities:
+            frame = self.state.modality_data[modality]['working_hours_df']
+            self.assertEqual(len(frame[frame['row_type'] == 'gap_segment']), 1)
+
     def test_empty_worker_plan_deletes_worker_across_modalities(self) -> None:
         response = self.client.post(
             "/api/live-schedule/apply-worker-plan",

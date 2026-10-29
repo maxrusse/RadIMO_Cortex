@@ -29,11 +29,26 @@
   .sources-table .ui-path { display: block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .export-band { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.55rem 0.85rem; border-top: 1px solid var(--c-line); background: var(--c-surface-2); font-size: var(--fs-sm); }
   .export-band a[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+  .export-band > a { max-width: 100%; white-space: normal; }
+  .logs-tabs { margin-bottom: .75rem; }
+  .logs-scroll { overflow-x: auto; }
+  .change-table td { vertical-align: top; }
+  .change-table summary { cursor: pointer; color: var(--c-primary); font-weight: 650; }
+  .change-table pre { max-height: 24rem; max-width: 60rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: .6rem; background: var(--c-surface-2); font: .74rem/1.5 var(--mono); }
+  .change-table .change-time, .change-ip { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .logs-note { padding: .5rem .85rem; color: var(--c-muted); font-size: var(--fs-xs); }
+  [data-log-panel][hidden] { display: none; }
+  .change-table { min-width: 760px; }
+  @media (max-width: 900px) {
+    .app-header__main, .app-header__actions, .app-nav { flex-wrap: wrap; }
+    .app-header__actions { margin-left: 0; min-width: 0; }
+    .logs-tabs { flex-wrap: wrap; }
+  }
 {% endblock %}
 
 {% block content %}
   {% set header_title = 'RadIMO Cortex | Logs' %}
-  {% set header_subtitle = 'Preview & download' %}
+  {% set header_subtitle = 'Change history & diagnostics' %}
   {% set header_nav = namespace(links=[]) %}
   {% include 'partials/header_links.html' %}
   {% set header_links = header_nav.links %}
@@ -46,7 +61,55 @@
     <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>
   </div>
 
-  <section class="ui-panel log-preview-panel" aria-label="Log preview">
+  <div class="ui-segmented logs-tabs" role="tablist" aria-label="Protokollansicht">
+    <button id="tab-history" type="button" role="tab" aria-controls="panel-history" aria-selected="true" data-log-tab="history">Änderungsverlauf</button>
+    <button id="tab-technical" type="button" role="tab" aria-controls="panel-technical" aria-selected="false" tabindex="-1" data-log-tab="technical">Technische Protokolle</button>
+    <button id="tab-downloads" type="button" role="tab" aria-controls="panel-downloads" aria-selected="false" tabindex="-1" data-log-tab="downloads">Downloads</button>
+  </div>
+
+  <section id="panel-history" class="ui-panel log-preview-panel" role="tabpanel" aria-labelledby="tab-history" data-log-panel="history">
+    <div class="ui-panel__head"><h3 class="ui-panel__title">Änderungsverlauf</h3><span class="ui-panel__hint">{{ change_total }} Einträge</span></div>
+    <form class="ui-toolbar" method="get" action="{{ url_for('routes.admin_logs_page') }}">
+      <a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page') }}"{% if not change_day %} aria-current="true"{% endif %}>Letzte 50</a>
+      <a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page', day=today) }}"{% if change_day == today %} aria-current="true"{% endif %}>Heute</a>
+      <label>Datum <input type="date" name="day" value="{{ change_day }}" required></label>
+      <button class="ui-btn ui-btn--secondary ui-btn--sm" type="submit">Anzeigen</button>
+      <span class="ui-toolbar__spacer"></span>
+      <a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page', day=change_day, offset=change_offset) }}">Aktualisieren</a>
+    </form>
+    <div class="logs-note">Neueste zuerst · 50 pro Seite · Zeiten in der konfigurierten Zeitzone. Erfasst Änderungen ab Aktivierung; frühere Änderungen lassen sich nicht vollständig rekonstruieren.</div>
+    <div class="logs-scroll">
+    <table class="ui-table change-table">
+      <thead><tr><th>Zeitpunkt</th><th>Aktion / Details</th><th>Zugriff</th><th>Client-IP</th><th>Ergebnis</th></tr></thead>
+      <tbody>
+      {% for entry in change_entries %}
+        <tr>
+          <td class="change-time">{{ entry.timestamp[:19]|replace('T', ' ') }}</td>
+          <td>{% if entry.target_label %}<div>{{ entry.target_label }}</div>{% endif %}<details><summary>{{ entry.action_label or entry.action|replace('_', ' ') }}</summary>
+            <p><code>{{ entry.method }} {{ entry.path }}</code></p>
+            <strong>Angeforderte Änderung</strong><pre data-no-i18n>{{ {'parameters': entry.parameters, 'query': entry.query, 'changes': entry.changes, 'uploads': entry.uploads}|tojson(indent=2) }}</pre>
+            {% if entry.schedule_changes %}<strong>Gespeicherter Plan: vorher / nachher</strong><pre data-no-i18n>{{ entry.schedule_changes|tojson(indent=2) }}</pre>{% endif %}
+            {% if entry.schedule_capture_failed %}<p>Vorher-/Nachher-Details konnten nicht erfasst werden. Die Änderung wurde gespeichert.</p>{% endif %}
+            <strong>Antwort / Ergebnisdetails</strong><pre data-no-i18n>{{ entry.result|tojson(indent=2) }}</pre>
+          </details></td>
+          <td>{{ {'admin': 'Admin', 'basic': 'Basiszugang', 'system': 'System', 'shared / unverified': 'Gemeinsamer Zugang / nicht verifiziert'}.get(entry.actor_role, entry.actor_role) }}</td>
+          <td class="change-ip" title="Direkte Verbindung: {{ entry.peer_ip }}">{{ entry.client_ip or 'Unbekannt' }}</td>
+          <td><span class="ui-badge {{ 'ui-badge--ok' if entry.outcome == 'success' else 'ui-badge--error' if entry.outcome == 'failed' else '' }}">{{ {'success': 'Erfolgreich', 'failed': 'Fehlgeschlagen', 'partial': 'Teilweise ausgeführt', 'redirected': 'Weitergeleitet'}.get(entry.outcome, entry.outcome) }}</span> <small>{{ entry.status or '' }}</small></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5"><div class="ui-empty">Keine Änderungen für diese Ansicht erfasst.</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="export-band">
+      {% if change_offset %}<a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page', day=change_day, offset=[0, change_offset - 50]|max) }}">Neuere Einträge</a>{% endif %}
+      <span>{{ change_offset + 1 if change_entries else 0 }}–{{ change_offset + change_entries|length }} von {{ change_total }}</span>
+      {% if change_offset + 50 < change_total %}<a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page', day=change_day, offset=change_offset + 50) }}">Ältere Einträge</a>{% endif %}
+    </div>
+  </section>
+
+  <section id="panel-technical" class="ui-panel log-preview-panel" role="tabpanel" aria-labelledby="tab-technical" data-log-panel="technical" hidden>
     <div class="ui-toolbar">
       <label>Source
         <select id="preview-source">
@@ -67,12 +130,12 @@
       <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" id="copy-preview" disabled>Copy</button>
     </div>
     <div class="preview-meta" id="preview-meta">Preview is read-only.</div>
-    <pre id="log-preview" tabindex="0">No log selected.</pre>
+    <pre id="log-preview" tabindex="0" data-no-i18n>Kein Protokoll ausgewählt.</pre>
   </section>
 
-  <section class="ui-panel" aria-label="Log sources and export">
+  <section id="panel-downloads" class="ui-panel" role="tabpanel" aria-labelledby="tab-downloads" data-log-panel="downloads" hidden>
     <div class="ui-panel__head"><h3 class="ui-panel__title">Sources &amp; download</h3></div>
-    <table class="ui-table sources-table">
+    <div class="logs-scroll"><table class="ui-table sources-table">
       <thead><tr><th>Include</th><th>Source</th><th>State</th><th class="num">Size</th><th>Modified</th><th class="num">Rotated</th><th>File</th><th>Single download</th></tr></thead>
       <tbody>
         {% for source in sources %}
@@ -91,7 +154,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     <div class="export-band">
       <label>Download tail lines <input id="download-lines" type="number" min="1" max="50000" step="100" value="5000" style="width: 6rem;"></label>
       <a class="ui-btn" id="download-selected-tail" href="{{ default_tail_url }}">Download selected tails</a>

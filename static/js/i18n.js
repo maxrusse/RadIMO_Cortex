@@ -3,6 +3,8 @@
 
   const DEFAULT_LANGUAGE = document.documentElement.dataset.defaultLanguage === 'en' ? 'en' : 'de';
   const translations = [
+    ['Change history & diagnostics', 'Änderungsverlauf & Diagnose'],
+    ['Change history', 'Änderungsverlauf'],
     ['RadIMO Cortex | Schedule', 'RadIMO Cortex | Zeitplan'],
     ['RadIMO Cortex | Analysis', 'RadIMO Cortex | Analyse'],
     ['RadIMO Cortex | Workload', 'RadIMO Cortex | Auslastung'],

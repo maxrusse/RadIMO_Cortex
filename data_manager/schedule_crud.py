@@ -11,6 +11,7 @@ from datetime import datetime, time, date
 from typing import Any, Optional, Dict, List, Tuple
 
 import pandas as pd
+from lib.change_audit import attach_schedule_change
 
 from config import (
     allowed_modalities,
@@ -458,6 +459,8 @@ def _apply_in_place_schedule_row_update(
                 reconcile_live_worker_tracking(modality)
 
             persist_schedule_snapshot(use_staged=use_staged)
+            attach_schedule_change(worker_name, modality, state_before['working_hours_df'],
+                                   df, use_staged)
             return True, {'reindexed': False}
         except Exception as exc:
             data_dict['working_hours_df'] = state_before['working_hours_df']
@@ -784,14 +787,15 @@ def update_schedule_row(
     verify_row_uid: Optional[str] = None,
 ) -> tuple:
     """Public wrapper for updating a schedule row."""
-    return _update_schedule_row(
-        modality,
-        row_index,
-        updates,
-        use_staged,
-        verify_ppl=verify_ppl,
-        verify_row_uid=verify_row_uid,
-    )
+    with _state.lock:
+        return _update_schedule_row(
+            modality,
+            row_index,
+            updates,
+            use_staged,
+            verify_ppl=verify_ppl,
+            verify_row_uid=verify_row_uid,
+        )
 
 
 def _replace_worker_schedule(
@@ -841,6 +845,8 @@ def _replace_worker_schedule(
                 invalidate_work_hours_cache(modality)
                 reconcile_live_worker_tracking(modality)
             persist_schedule_snapshot(use_staged=use_staged)
+            attach_schedule_change(worker_name, modality, state_before['working_hours_df'],
+                                   data_dict['working_hours_df'], use_staged)
             return True, info, None
         except Exception as exc:
             data_dict['working_hours_df'] = state_before['working_hours_df']
@@ -1012,6 +1018,9 @@ def replace_worker_schedule_all(
                 'message': 'Schedule could not be persisted. No changes were applied.',
             }
 
+        for modality in modalities_to_replace:
+            attach_schedule_change(worker_name, modality, state_before[modality]['working_hours_df'],
+                                   data_store[modality]['working_hours_df'], use_staged)
         return True, {'modalities': result_by_modality}, None
 
 
@@ -1026,16 +1035,17 @@ def add_gap_to_schedule_batch(
     row_uid_map: Optional[dict] = None,
 ) -> tuple:
     """Public wrapper for adding a gap to multiple modality rows atomically."""
-    return _add_gap_to_schedule_batch(
-        row_index_map,
-        gap_type,
-        gap_start,
-        gap_end,
-        use_staged,
-        gap_counts_for_hours=gap_counts_for_hours,
-        verify_ppl=verify_ppl,
-        row_uid_map=row_uid_map,
-    )
+    with _state.lock:
+        return _add_gap_to_schedule_batch(
+            row_index_map,
+            gap_type,
+            gap_start,
+            gap_end,
+            use_staged,
+            gap_counts_for_hours=gap_counts_for_hours,
+            verify_ppl=verify_ppl,
+            row_uid_map=row_uid_map,
+        )
 
 
 def _add_gap_to_schedule_batch(
@@ -1120,16 +1130,43 @@ def _add_gap_to_schedule_batch(
             )
             pending_updates.append((modality_key, new_df, info))
 
-        for modality, new_df, _info in pending_updates:
-            data_dict = _get_schedule_data_dict(modality, use_staged)
-            data_dict['working_hours_df'] = new_df
-
-        if not use_staged:
-            for modality, _, _info in pending_updates:
-                reconcile_live_worker_tracking(modality)
+        state_before = {
+            modality: {key: data_dicts[modality].get(key) for key in (
+                'working_hours_df', 'worker_modifiers', 'total_work_hours',
+                'last_modified', 'last_prepped_at')}
+            for modality, _, _ in pending_updates
+        }
+        tracking_before = {
+            key: copy.deepcopy(global_worker_data.get(key))
+            for key in ('assignments_per_mod', 'weighted_counts', 'manual_weight_totals')
+        }
+        try:
+            modified_at = get_local_now()
+            for modality, new_df, _info in pending_updates:
+                data_dict = data_dicts[modality]
+                data_dict['working_hours_df'] = new_df
+                data_dict['total_work_hours'] = _calculate_total_work_hours(new_df)
+                if use_staged:
+                    data_dict['last_modified'] = modified_at
+                    data_dict['last_prepped_at'] = modified_at.strftime('%d.%m.%Y %H:%M')
+                else:
+                    invalidate_work_hours_cache(modality)
+                    reconcile_live_worker_tracking(modality)
+            # One complete snapshot, with failures propagated to the caller.
+            persist_schedule_snapshot(use_staged=use_staged)
+        except Exception:
+            for modality, previous in state_before.items():
+                data_dicts[modality].update(previous)
+                if not use_staged:
+                    invalidate_work_hours_cache(modality)
+            for key, previous in tracking_before.items():
+                global_worker_data[key] = previous
+            selection_logger.exception('Failed to persist gap batch; rolled back')
+            return False, None, 'Schedule could not be persisted. No changes were applied.'
 
         for modality, _, _info in pending_updates:
-            backup_dataframe(modality, use_staged=use_staged)
+            attach_schedule_change(worker_name, modality, state_before[modality]['working_hours_df'],
+                                   data_dicts[modality]['working_hours_df'], use_staged)
 
         log_prefix = "STAGED: " if use_staged else ""
         selection_logger.info(

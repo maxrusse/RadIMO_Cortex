@@ -1,4 +1,5 @@
 import unittest
+import copy
 from datetime import time
 from unittest.mock import patch
 
@@ -11,10 +12,9 @@ from data_manager import schedule_crud
 class TestGapBatch(unittest.TestCase):
     def setUp(self) -> None:
         self.modalities = allowed_modalities[:2]
-        self.original_frames = {
-            modality: schedule_crud.modality_data[modality]["working_hours_df"]
-            for modality in self.modalities
-        }
+        self.original_data = {modality: copy.deepcopy(schedule_crud.modality_data[modality])
+                              for modality in self.modalities}
+        self.original_global = copy.deepcopy(schedule_crud.global_worker_data)
         base_row = {
             "PPL": "Dana",
             "start_time": time(8, 0),
@@ -31,12 +31,15 @@ class TestGapBatch(unittest.TestCase):
             schedule_crud.modality_data[modality]["working_hours_df"] = pd.DataFrame([base_row])
 
     def tearDown(self) -> None:
-        for modality, frame in self.original_frames.items():
-            schedule_crud.modality_data[modality]["working_hours_df"] = frame
+        for modality, data in self.original_data.items():
+            schedule_crud.modality_data[modality].clear()
+            schedule_crud.modality_data[modality].update(data)
+        schedule_crud.global_worker_data.clear()
+        schedule_crud.global_worker_data.update(self.original_global)
 
     def test_add_gap_batch_updates_all_modalities_atomically(self) -> None:
         with (
-            patch.object(schedule_crud, "backup_dataframe"),
+            patch.object(schedule_crud, "persist_schedule_snapshot") as persist,
             patch.object(schedule_crud, "reconcile_live_worker_tracking"),
         ):
             success, _, error = schedule_crud.add_gap_to_schedule_batch(
@@ -47,6 +50,7 @@ class TestGapBatch(unittest.TestCase):
                 use_staged=False,
             )
         self.assertTrue(success, msg=error)
+        persist.assert_called_once_with(use_staged=False)
 
         for modality in self.modalities:
             df = schedule_crud.modality_data[modality]["working_hours_df"]
@@ -62,6 +66,28 @@ class TestGapBatch(unittest.TestCase):
                 list(zip(shifts["start_time"], shifts["end_time"])),
                 [(time(8, 0), time(9, 0)), (time(10, 0), time(12, 0))],
             )
+
+    def test_gap_batch_persistence_failure_restores_all_frames_and_tracking(self) -> None:
+        before = {mod: schedule_crud.modality_data[mod]['working_hours_df'].copy(deep=True)
+                  for mod in self.modalities}
+        tracking_before = copy.deepcopy(schedule_crud.global_worker_data)
+
+        def change_tracking(modality):
+            schedule_crud.global_worker_data['weighted_counts'] = {'synthetic': 999}
+
+        with (
+            patch.object(schedule_crud, 'persist_schedule_snapshot', side_effect=OSError('disk full')),
+            patch.object(schedule_crud, 'reconcile_live_worker_tracking', side_effect=change_tracking),
+            patch.object(schedule_crud, 'attach_schedule_change') as audit,
+        ):
+            success, _, error = schedule_crud.add_gap_to_schedule_batch(
+                {mod: 0 for mod in self.modalities}, 'Break', '09:00', '10:00', False)
+        self.assertFalse(success)
+        self.assertIn('could not be persisted', error)
+        for mod in self.modalities:
+            pd.testing.assert_frame_equal(schedule_crud.modality_data[mod]['working_hours_df'], before[mod])
+        self.assertEqual(schedule_crud.global_worker_data, tracking_before)
+        audit.assert_not_called()
 
 
 if __name__ == "__main__":

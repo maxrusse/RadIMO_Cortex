@@ -12,6 +12,45 @@
   let level = ['error', 'warning'].includes(params.get('level')) ? params.get('level') : '';
   let activeSource = null;
   let lastText = '';
+  let previewRequest = 0;
+  const tabs = Array.from(document.querySelectorAll('[data-log-tab]'));
+
+  function selectTab(name, focus = false) {
+    if (!tabs.some(tab => tab.dataset.logTab === name)) name = 'history';
+    tabs.forEach(tab => {
+      const selected = tab.dataset.logTab === name;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected && focus) tab.focus();
+    });
+    document.querySelectorAll('[data-log-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.logPanel !== name;
+    });
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', name);
+    window.history.replaceState(null, '', url);
+    if (name === 'technical' && !activeSource) {
+      const preferred = sources.find(source => source.key === params.get('source') && source.exists)
+        || sources.find(source => source.key === 'selection' && source.exists)
+        || sources.find(source => source.exists);
+      if (preferred) loadPreview(preferred.key);
+    }
+  }
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectTab(tab.dataset.logTab));
+    tab.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = tabs.length - 1;
+      if (next !== undefined) {
+        event.preventDefault();
+        selectTab(tabs[next].dataset.logTab, true);
+      }
+    });
+  });
 
   function t(text) {
     return window.RadimoI18n?.t ? window.RadimoI18n.t(text) : text;
@@ -45,7 +84,7 @@
 
   function renderPreview() {
     preview.textContent = '';
-    if (!lastText) return;
+    if (!lastText) { preview.textContent = t('Log is empty.'); previewCount.textContent = ''; copyButton.disabled = true; return; }
     const lines = lastText.split('\n');
     let shown = 0;
     let errors = 0;
@@ -65,6 +104,7 @@
     preview.appendChild(fragment);
     previewCount.textContent = `${shown} / ${lines.length} ${t('lines')} · ${errors} ${t('errors')} · ${warnings} ${t('warnings')}`;
     if (level && !shown) preview.textContent = t('No matching lines in this window.');
+    copyButton.disabled = shown === 0;
     preview.scrollTop = preview.scrollHeight;
   }
 
@@ -83,17 +123,21 @@
   async function loadPreview(sourceKey) {
     const source = sources.find(item => item.key === sourceKey);
     if (!source) return;
+    const requestId = ++previewRequest;
     activeSource = sourceKey;
+    lastText = '';
+    previewCount.textContent = '';
     sourceSelect.value = sourceKey;
     const lines = Math.max(20, Math.min(1000, Number(document.getElementById('preview-lines').value) || 300));
-    preview.textContent = t('Loading...');
+    preview.textContent = t('Loading…');
     previewMeta.textContent = source.path;
     refreshButton.disabled = true;
     copyButton.disabled = true;
     try {
       const response = await fetch(`/api/admin/logs/tail?source=${encodeURIComponent(sourceKey)}&lines=${lines}`, { cache: 'no-store' });
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error || `Preview failed (${response.status})`);
+      if (requestId !== previewRequest) return;
+      if (!response.ok || !result.success) throw new Error(result.error || `${t('Preview failed.')} (${response.status})`);
       if (!result.exists) {
         lastText = '';
         preview.textContent = t('Log file does not exist.');
@@ -103,12 +147,13 @@
         if (!lastText) preview.textContent = t('Log is empty.');
         renderPreview();
       }
-      previewMeta.textContent = `${result.path} · ${result.modified || 'unavailable'} · last ${lines} lines maximum`;
-      copyButton.disabled = !lastText;
+      previewMeta.textContent = `${result.modified || t('unavailable')} · ${t('Lines')}: ${lines} · ${source.label}`;
+      previewMeta.title = result.path;
     } catch (error) {
-      preview.textContent = error.message || 'Preview failed.';
+      if (requestId !== previewRequest) return;
+      preview.textContent = error.message || t('Preview failed.');
     } finally {
-      refreshButton.disabled = false;
+      if (requestId === previewRequest) refreshButton.disabled = false;
     }
   }
 
@@ -123,7 +168,7 @@
   copyButton.addEventListener('click', async () => {
     try {
       const visible = Array.from(preview.querySelectorAll('.log-line:not(.log-line--hidden)')).map(line => line.textContent).join('');
-      await navigator.clipboard.writeText(visible || lastText);
+      await navigator.clipboard.writeText(visible);
       copyButton.textContent = t('Copied');
       setTimeout(() => { copyButton.textContent = t('Copy'); }, 1200);
     } catch (_) {
@@ -136,6 +181,5 @@
   document.getElementById('download-selected-full').addEventListener('click', blockDisabledDownload);
   updateDownloadLinks();
   setLevel(level);
-  const preferred = sources.find(source => source.key === 'selection' && source.exists) || sources.find(source => source.exists);
-  if (preferred) loadPreview(preferred.key);
+  selectTab(params.get('tab') || (params.has('level') || params.has('source') ? 'technical' : 'history'));
 })();
