@@ -6,7 +6,7 @@ import pytest
 
 from config import APP_CONFIG, _build_app_config
 import routes
-from lib.change_audit import append_entry, read_entries, record_daily_reset
+from lib.change_audit import read_entries, record_daily_reset
 from tests.test_change_audit import make_client
 
 
@@ -68,18 +68,6 @@ def test_disabled_history_excludes_requests_and_daily_reset(tmp_path, monkeypatc
     assert read_entries(path)[1] == 1
 
 
-def test_legacy_address_metadata_removed_on_append_and_read(tmp_path):
-    path = tmp_path / 'changes.jsonl'
-    entry = {'timestamp': '2026-10-30T10:00:00', 'date': '2026-10-30',
-             'actor_role': 'admin', 'outcome': 'success',
-             'client_ip': 'obsolete', 'result': {'peer_ip': 'obsolete'}}
-    append_entry(path, entry)
-    assert 'obsolete' not in path.read_text()
-    import json
-    path.write_text(json.dumps(entry) + '\n')
-    assert 'obsolete' not in json.dumps(read_entries(path))
-
-
 def test_log_config_defaults():
     config = _build_app_config({})
     assert config['log_retention_days'] == 100
@@ -107,18 +95,3 @@ def test_password_settings_never_echo_secret_and_blank_preserves_it(tmp_path, mo
 def test_full_yaml_config_rejects_invalid_retention(days):
     with pytest.raises(ValueError):
         _build_app_config({'log_retention_days': days})
-
-
-def test_loading_legacy_state_persists_address_removal(tmp_path, monkeypatch):
-    import json
-    from data_manager import state_persistence
-    state_file = tmp_path / 'state.json'
-    state_file.write_text(json.dumps({'global_worker_data': {
-        'manual_weight_adjustments': [{'client_ip': 'obsolete', 'peer_ip': 'obsolete', 'reason': 'retain'}]
-    }}))
-    monkeypatch.setattr(state_persistence, 'STATE_FILE_PATH', str(state_file))
-    monkeypatch.setattr(state_persistence, 'global_worker_data', {'last_reset_date': None, 'last_preload_date': None})
-    monkeypatch.setattr(state_persistence, 'allowed_modalities', [])
-    state_persistence.load_state()
-    assert 'obsolete' not in state_file.read_text()
-    assert 'retain' in state_file.read_text()

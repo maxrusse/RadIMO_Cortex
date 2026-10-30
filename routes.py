@@ -70,7 +70,7 @@ from config import (
 )
 from lib import usage_logger
 from lib.log_retention import maintain_logs, log_write_lock
-from lib.change_audit import install_audit, read_entries, clean
+from lib.change_audit import install_audit, read_entries
 from lib.utils import (
     format_worker_display_name,
     get_local_now,
@@ -3922,7 +3922,7 @@ def _serialize_manual_adjustments() -> list[dict[str, Any]]:
     entries = global_worker_data.get('manual_weight_adjustments', []) or []
     if not isinstance(entries, list):
         return []
-    return clean(list(reversed(entries)))
+    return list(reversed(entries))
 
 
 def _verify_manual_adjustment_payload(data: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[tuple[Any, int]]]:

@@ -1,4 +1,4 @@
-"""Bounded log retention and removal of obsolete address metadata.
+"""Bounded log retention.
 
 Maintenance preserves open file descriptors by compacting in place. Technical
 log handlers and CSV writers must use ``log_write_lock`` while writing.
@@ -15,18 +15,7 @@ from pathlib import Path
 import re
 
 
-_ADDRESS_KEYS = frozenset({'client_ip', 'peer_ip'})
 _DATE_PREFIX = re.compile(rb'^\[?(\d{4}-\d{2}-\d{2})[T ]')
-
-
-def strip_address_metadata(value):
-    """Remove obsolete metadata without interpreting arbitrary user text."""
-    if isinstance(value, dict):
-        return {key: strip_address_metadata(item) for key, item in value.items()
-                if key not in _ADDRESS_KEYS}
-    if isinstance(value, list):
-        return [strip_address_metadata(item) for item in value]
-    return value
 
 
 @contextmanager
@@ -75,7 +64,7 @@ def _jsonl_content(raw, cutoff):
         except (ValueError, TypeError):
             continue
         if entry_date >= cutoff:
-            output.append(json.dumps(strip_address_metadata(entry), ensure_ascii=False).encode() + b'\n')
+            output.append(json.dumps(entry, ensure_ascii=False).encode() + b'\n')
     return b''.join(output)
 
 

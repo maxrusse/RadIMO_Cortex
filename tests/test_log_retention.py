@@ -11,20 +11,17 @@ from lib.log_retention import RetentionFileHandler, maintain_logs
 NOW = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
 
 
-def test_default_hundred_days_and_nested_address_scrubbing(tmp_path):
+def test_default_hundred_days(tmp_path):
     path = tmp_path / 'changes.jsonl'
     entries = [
         {'date': '2026-07-22', 'id': 'expired'},
-        {'date': '2026-07-23', 'id': 'boundary', 'client_ip': 'old',
-         'result': [{'peer_ip': 'old', 'worker': 'Test'}]},
+        {'date': '2026-07-23', 'id': 'boundary'},
         {'date': '2026-10-30', 'id': 'today'},
     ]
     path.write_text(''.join(json.dumps(entry) + '\n' for entry in entries) + 'broken\n')
     maintain_logs(tmp_path, now=NOW)
     retained = [json.loads(line) for line in path.read_text().splitlines()]
     assert [entry['id'] for entry in retained] == ['boundary', 'today']
-    assert retained[0]['result'] == [{'worker': 'Test'}]
-    assert 'client_ip' not in retained[0]
 
 
 def test_technical_multiline_records_and_usage_csv(tmp_path):

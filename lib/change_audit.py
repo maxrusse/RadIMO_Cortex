@@ -60,7 +60,7 @@ def clean(value):
         return {
             str(key): ('[redacted]' if any(word in str(key).lower() for word in
                        ('password', 'secret', 'token', 'cookie', 'authorization')) else clean(item))
-            for key, item in value.items() if str(key).lower() not in {'client_ip', 'peer_ip'}
+            for key, item in value.items()
         }
     if isinstance(value, (list, tuple)):
         return [clean(item) for item in value]
@@ -161,7 +161,7 @@ def read_entries(path, day=None, limit=50, offset=0):
                     if not line.endswith(b'\n'):
                         break  # A writer may still be completing this record.
                     try:
-                        entry = clean(json.loads(line.decode('utf-8', errors='replace')))
+                        entry = json.loads(line.decode('utf-8', errors='replace'))
                     except ValueError:
                         continue
                     if not isinstance(entry, dict) or not all(
