@@ -35,7 +35,7 @@
   .change-table td { vertical-align: top; }
   .change-table summary { cursor: pointer; color: var(--c-primary); font-weight: 650; }
   .change-table pre { max-height: 24rem; max-width: 60rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: .6rem; background: var(--c-surface-2); font: .74rem/1.5 var(--mono); }
-  .change-table .change-time, .change-ip { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .change-table .change-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .logs-note { padding: .5rem .85rem; color: var(--c-muted); font-size: var(--fs-xs); }
   [data-log-panel][hidden] { display: none; }
   .change-table { min-width: 760px; }
@@ -56,6 +56,7 @@
 
   {% set present_logs = sources|selectattr('exists')|list|length %}
   <div class="ops-shell">
+  <form method="post" action="{{ url_for('routes.logs_logout') }}"><button class="ui-btn ui-btn--secondary" type="submit">Log-Zugang abmelden</button></form>
   <div class="ops-page-head">
     <span></span>
     <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>
@@ -77,10 +78,11 @@
       <span class="ui-toolbar__spacer"></span>
       <a class="ui-btn ui-btn--secondary ui-btn--sm" href="{{ url_for('routes.admin_logs_page', day=change_day, offset=change_offset) }}">Aktualisieren</a>
     </form>
+    {% if not change_history_enabled %}<p class="logs-note">Die Erfassung des Änderungsverlaufs ist deaktiviert.</p>{% endif %}
     <div class="logs-note">Neueste zuerst · 50 pro Seite · Zeiten in der konfigurierten Zeitzone. Erfasst Änderungen ab Aktivierung; frühere Änderungen lassen sich nicht vollständig rekonstruieren.</div>
     <div class="logs-scroll">
     <table class="ui-table change-table">
-      <thead><tr><th>Zeitpunkt</th><th>Aktion / Details</th><th>Zugriff</th><th>Client-IP</th><th>Ergebnis</th></tr></thead>
+      <thead><tr><th>Zeitpunkt</th><th>Aktion / Details</th><th>Zugriff</th><th>Ergebnis</th></tr></thead>
       <tbody>
       {% for entry in change_entries %}
         <tr>
@@ -93,11 +95,10 @@
             <strong>Antwort / Ergebnisdetails</strong><pre data-no-i18n>{{ entry.result|tojson(indent=2) }}</pre>
           </details></td>
           <td>{{ {'admin': 'Admin', 'basic': 'Basiszugang', 'system': 'System', 'shared / unverified': 'Gemeinsamer Zugang / nicht verifiziert'}.get(entry.actor_role, entry.actor_role) }}</td>
-          <td class="change-ip" title="Direkte Verbindung: {{ entry.peer_ip }}">{{ entry.client_ip or 'Unbekannt' }}</td>
           <td><span class="ui-badge {{ 'ui-badge--ok' if entry.outcome == 'success' else 'ui-badge--error' if entry.outcome == 'failed' else '' }}">{{ {'success': 'Erfolgreich', 'failed': 'Fehlgeschlagen', 'partial': 'Teilweise ausgeführt', 'redirected': 'Weitergeleitet'}.get(entry.outcome, entry.outcome) }}</span> <small>{{ entry.status or '' }}</small></td>
         </tr>
       {% else %}
-        <tr><td colspan="5"><div class="ui-empty">Keine Änderungen für diese Ansicht erfasst.</div></td></tr>
+        <tr><td colspan="4"><div class="ui-empty">Keine Änderungen für diese Ansicht erfasst.</div></td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -135,6 +136,7 @@
 
   <section id="panel-downloads" class="ui-panel" role="tabpanel" aria-labelledby="tab-downloads" data-log-panel="downloads" hidden>
     <div class="ui-panel__head"><h3 class="ui-panel__title">Sources &amp; download</h3></div>
+    <p class="logs-note" role="note">Sicher aufbewahren und nach der Auswertung löschen.</p>
     <div class="logs-scroll"><table class="ui-table sources-table">
       <thead><tr><th>Include</th><th>Source</th><th>State</th><th class="num">Size</th><th>Modified</th><th class="num">Rotated</th><th>File</th><th>Single download</th></tr></thead>
       <tbody>

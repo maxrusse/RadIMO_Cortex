@@ -17,6 +17,7 @@ def _admin_client():
     client = app.test_client()
     with client.session_transaction() as session:
         session['admin_logged_in'] = True
+        session['logs_access'] = routes._log_password_fingerprint()
     return client
 
 
@@ -371,6 +372,6 @@ def test_log_tail_preview_is_read_only_and_bounded():
         assert payload['path'].endswith('selection.log')
 
 
-def test_log_tail_preview_requires_admin_session():
+def test_log_tail_preview_requires_log_password():
     response = app.test_client().get('/api/admin/logs/tail?source=selection&lines=20')
-    assert response.status_code == 302
+    assert response.status_code == 401

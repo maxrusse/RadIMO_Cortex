@@ -831,7 +831,6 @@ class TestHealthEndpoints(unittest.TestCase):
                     "reason": "Wrong booking correction",
                     "admin_password": "secret",
                 },
-                environ_base={"REMOTE_ADDR": "10.1.2.3"},
             )
 
             self.assertEqual(response.status_code, 200)
@@ -844,7 +843,6 @@ class TestHealthEndpoints(unittest.TestCase):
             )
             entry = payload["entry"]
             self.assertEqual(entry["admin_name"], "MR")
-            self.assertEqual(entry["client_ip"], "10.1.2.3")
             self.assertNotIn("user_agent", entry)
             self.assertEqual(entry["total_after"], 4.0)
             mock_save_state.assert_called_once()

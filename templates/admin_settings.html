@@ -71,6 +71,9 @@
             <label class="toggle-option"><input type="checkbox" name="admin_access_protection_enabled"{% if settings.admin_access_protection_enabled %} checked{% endif %}> Protect admin pages with admin password</label>
           </fieldset>
         </div>
+        <div class="field"><label for="log-password">Separates Log-Passwort</label><input id="log-password" name="log_password" type="password" autocomplete="new-password" placeholder="Leer lassen: unverändert"><p>Erforderlich für Log-Ansicht und Downloads.</p></div>
+        <label><input type="checkbox" name="change_history_enabled"{% if settings.change_history_enabled %} checked{% endif %}> Änderungsverlauf erfassen</label>
+        <div class="field"><label for="log-retention">Aufbewahrung der Protokolle (Tage)</label><input id="log-retention" name="log_retention_days" type="number" min="1" max="36500" required value="{{ settings.log_retention_days }}"></div>
         <div class="toolbar">
           <button class="ui-btn" type="submit" id="save-general-settings">Save settings</button>
         </div>

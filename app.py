@@ -21,9 +21,6 @@ app = Flask(__name__)
 app.secret_key = APP_CONFIG['secret_key']
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
-app.config['AUDIT_TRUSTED_PROXIES'] = os.environ.get(
-    'RADIMO_AUDIT_TRUSTED_PROXIES', '127.0.0.1/32,::1/128'
-)
 
 # Configure permanent session lifetime (365 days for basic access cookie persistence)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)

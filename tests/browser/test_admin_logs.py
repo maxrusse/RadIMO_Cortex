@@ -17,7 +17,10 @@ def log_page():
     app.secret_key = 'test'
     app.register_blueprint(routes.routes)
     with patch('routes.has_admin_access', return_value=True):
-        html = app.test_client().get('/admin/logs').get_data(as_text=True)
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session['logs_access'] = routes._log_password_fingerprint()
+        html = client.get('/admin/logs').get_data(as_text=True)
     with playwright.sync_playwright() as driver:
         browser = driver.chromium.launch()
         page = browser.new_page()

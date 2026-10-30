@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% set page_theme = 'admin' if login_type == 'admin' else 'live' %}
 
-{% block title %}RadIMO Cortex | {% if login_type == 'admin' %}Admin{% else %}Access{% endif %}{% endblock %}
+{% block title %}RadIMO Cortex | {% if login_type == 'logs' %}Logs{% elif login_type == 'admin' %}Admin{% else %}Access{% endif %}{% endblock %}
 
 {% block styles %}
     .login-card {
@@ -33,11 +33,11 @@
 {% endblock %}
 
 {% block content %}
-  {% set header_title = 'RadIMO Cortex | ' ~ ('Admin' if login_type == 'admin' else 'Access') %}
+  {% set header_title = 'RadIMO Cortex | ' ~ ('Logs' if login_type == 'logs' else 'Admin' if login_type == 'admin' else 'Access') %}
   {% include 'partials/header.html' %}
 
   <div class="login-card">
-    <h2>{% if login_type == 'admin' %}Admin login{% else %}Access{% endif %}</h2>
+    <h2>{% if login_type == 'logs' %}Log-Zugang{% elif login_type == 'admin' %}Admin login{% else %}Access{% endif %}</h2>
     {% if passwordless %}
     <p>No password required.</p>
     {% elif login_type != 'admin' %}

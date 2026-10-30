@@ -24,3 +24,20 @@ def isolate_change_history(tmp_path, monkeypatch):
         return original_append(path, entry)
 
     monkeypatch.setattr(change_audit, 'append_entry', append_test_entry)
+
+
+@pytest.fixture(autouse=True)
+def log_test_password(monkeypatch):
+    from config import APP_CONFIG
+    monkeypatch.setitem(APP_CONFIG, 'log_password', 'test-log-password')
+
+
+@pytest.fixture(autouse=True)
+def isolate_log_maintenance(tmp_path, monkeypatch):
+    import routes
+    original = routes.maintain_logs
+    def maintain_test_logs(root, *args, **kwargs):
+        if Path(root).resolve() == REPO_ROOT / 'logs':
+            root = tmp_path / 'logs'
+        return original(root, *args, **kwargs)
+    monkeypatch.setattr(routes, 'maintain_logs', maintain_test_logs)

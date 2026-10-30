@@ -6,13 +6,14 @@ from app import app
 from config import _normalize_no_overflow
 from data_manager.csv_parser import _select_day_times
 from data_manager.worker_management import normalize_skill_mod_key
-from routes import get_admin_password
+from routes import get_admin_password, _log_password_fingerprint
 
 
 def _admin_client():
     client = app.test_client()
     with client.session_transaction() as session:
         session['admin_logged_in'] = True
+        session['logs_access'] = _log_password_fingerprint()
     return client
 
 

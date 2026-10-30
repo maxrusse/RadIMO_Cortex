@@ -5,6 +5,7 @@ This module handles serialization and deserialization of worker data,
 modality data, and assignment tracking to/from the STATE_FILE_PATH.
 """
 import json
+from lib.log_retention import strip_address_metadata
 from datetime import datetime
 
 from config import (
@@ -33,7 +34,7 @@ def save_state():
                 'recent_distributions': global_worker_data.get('recent_distributions', []),
                 'daily_load_events': global_worker_data.get('daily_load_events', []),
                 'manual_weight_totals': global_worker_data.get('manual_weight_totals', {}),
-                'manual_weight_adjustments': global_worker_data.get('manual_weight_adjustments', []),
+                'manual_weight_adjustments': strip_address_metadata(global_worker_data.get('manual_weight_adjustments', [])),
                 'last_reset_date': global_worker_data['last_reset_date'].isoformat() if global_worker_data['last_reset_date'] else None,
                 'last_preload_date': global_worker_data['last_preload_date'].isoformat() if global_worker_data['last_preload_date'] else None,
                 'last_preload_source': global_worker_data.get('last_preload_source'),
@@ -80,7 +81,7 @@ def load_state():
             global_worker_data['recent_distributions'] = gwd.get('recent_distributions', [])
             global_worker_data['daily_load_events'] = gwd.get('daily_load_events', [])
             global_worker_data['manual_weight_totals'] = gwd.get('manual_weight_totals', {})
-            global_worker_data['manual_weight_adjustments'] = gwd.get('manual_weight_adjustments', [])
+            global_worker_data['manual_weight_adjustments'] = strip_address_metadata(gwd.get('manual_weight_adjustments', []))
 
             last_reset_str = gwd.get('last_reset_date')
             if last_reset_str:
@@ -98,6 +99,8 @@ def load_state():
                     if last_reset_str:
                         modality_data[mod]['last_reset_date'] = datetime.fromisoformat(last_reset_str).date()
 
+        if state.get('global_worker_data', {}).get('manual_weight_adjustments', []) != global_worker_data.get('manual_weight_adjustments', []):
+            save_state()  # Persist removal of obsolete address metadata at startup.
         selection_logger.info("State loaded successfully from disk")
     except Exception as e:
         selection_logger.error(f"Failed to load state: {str(e)}", exc_info=True)

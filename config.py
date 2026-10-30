@@ -6,7 +6,7 @@ import yaml
 import copy
 import logging
 from zoneinfo import ZoneInfo
-from logging.handlers import RotatingFileHandler
+from lib.log_retention import RetentionFileHandler as RotatingFileHandler
 from typing import Dict, Any, List, Tuple, Optional, Set
 from lib.utils import (
     coerce_bool,
@@ -123,7 +123,18 @@ def _build_app_config(raw_config: Optional[Dict[str, Any]] = None) -> Dict[str, 
     default_language = str(raw_config.get('default_language', DEFAULT_LANGUAGE)).strip().lower()
     if default_language not in {'de', 'en'}:
         default_language = DEFAULT_LANGUAGE
+    retention_days = raw_config.get('log_retention_days', 100)
+    if isinstance(retention_days, bool) or not str(retention_days).isdigit() or not 1 <= int(retention_days) <= 36500:
+        raise ValueError('log_retention_days must be an integer between 1 and 36500')
+    history_enabled = coerce_bool(raw_config.get('change_history_enabled', True))
+    if history_enabled is None:
+        raise ValueError('change_history_enabled must be true or false')
+    if not isinstance(raw_config.get('log_password', ''), str):
+        raise ValueError('log_password must be a string')
     config: Dict[str, Any] = {
+        'log_password': raw_config.get('log_password', ''),
+        'change_history_enabled': history_enabled,
+        'log_retention_days': int(retention_days),
         'admin_password': raw_config.get('admin_password', DEFAULT_ADMIN_PASSWORD),
         'access_password': raw_config.get('access_password', DEFAULT_ACCESS_PASSWORD),
         'access_protection_enabled': raw_config.get(

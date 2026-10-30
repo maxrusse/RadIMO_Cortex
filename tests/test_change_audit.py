@@ -47,18 +47,16 @@ def make_client(path):
     return app.test_client()
 
 
-def test_changes_include_ip_role_details_and_persisted_before_after(tmp_path):
+def test_changes_include_role_details_and_persisted_before_after(tmp_path):
     path = tmp_path / 'changes.jsonl'
     client = make_client(path)
     with client.session_transaction() as session:
         session['admin_logged_in'] = True
-    response = client.post('/edit', json={'updates': {'Modifier': 1.5}},
-                           environ_base={'REMOTE_ADDR': '192.0.2.8'})
+    response = client.post('/edit', json={'updates': {'Modifier': 1.5}})
     assert response.status_code == 200
     entries, count = read_entries(path)
     assert count == 1
     entry = entries[0]
-    assert entry['client_ip'] == '192.0.2.8'
     assert entry['actor_role'] == 'admin'
     assert entry['outcome'] == 'success'
     assert entry['changes']['updates']['Modifier'] == 1.5
@@ -91,17 +89,6 @@ def test_nested_credentials_are_redacted_in_json_and_form(tmp_path):
     assert 'hidden' not in raw
     assert '[redacted]' in raw
     assert 'Test' in raw
-
-
-def test_forwarded_ip_requires_trusted_peer_and_uses_rightmost_untrusted_hop(tmp_path):
-    path = tmp_path / 'changes.jsonl'
-    client = make_client(path)
-    headers = {'X-Forwarded-For': '198.51.100.99, 192.0.2.8, 127.0.0.1'}
-    client.post('/edit', headers=headers, environ_base={'REMOTE_ADDR': '203.0.113.4'})
-    client.post('/edit', headers=headers, environ_base={'REMOTE_ADDR': '127.0.0.1'})
-    entries, _ = read_entries(path)
-    assert entries[0]['client_ip'] == '192.0.2.8'
-    assert entries[1]['client_ip'] == '203.0.113.4'
 
 
 def test_day_filter_latest_50_pagination_and_corrupt_line(tmp_path):
@@ -153,16 +140,6 @@ def test_timestamp_failure_preserves_response_and_marks_missing_audit(tmp_path):
     assert response.headers['X-Change-History-Status'] == 'write-failed'
 
 
-def test_invalid_proxy_config_fails_closed_without_breaking_edits(tmp_path):
-    path = tmp_path / 'changes.jsonl'
-    client = make_client(path)
-    client.application.config['AUDIT_TRUSTED_PROXIES'] = 'invalid-network'
-    response = client.post('/edit', headers={'X-Forwarded-For': '192.0.2.8'},
-                           environ_base={'REMOTE_ADDR': '127.0.0.1'})
-    assert response.status_code == 200
-    assert read_entries(path)[0][0]['client_ip'] == '127.0.0.1'
-
-
 def test_corrupt_utf8_invalid_records_and_torn_tail_do_not_hide_new_entries(tmp_path):
     path = tmp_path / 'changes.jsonl'
     path.write_bytes(b'{"timestamp": "\\xff"}\n{}\n{"unfinished":')
@@ -182,6 +159,8 @@ def test_admin_history_render_access_filtering_and_download(tmp_path):
     client = make_client(path)
     client.post('/edit', json={'worker': '<script>alert(1)</script>'})
     admin = app.test_client()
+    with admin.session_transaction() as session:
+        session['logs_access'] = routes._log_password_fingerprint()
     with patch.object(routes, 'LOG_ROOT', tmp_path), patch('routes.has_admin_access', return_value=True):
         response = admin.get('/admin/logs')
         assert response.status_code == 200
@@ -193,8 +172,7 @@ def test_admin_history_render_access_filtering_and_download(tmp_path):
         assert admin.get('/admin/logs?offset=invalid').status_code == 400
         assert 'Keine Änderungen' in admin.get('/admin/logs?day=2000-01-01').get_data(as_text=True)
         assert admin.get('/admin/logs/download?sources=changes&scope=full').status_code == 200
-    with patch('routes.has_admin_access', return_value=False):
-        assert admin.get('/admin/logs').status_code == 302
+    assert app.test_client().get('/admin/logs').status_code == 302
 
 
 def test_roster_write_failure_is_reported_and_audited_as_failure(tmp_path):

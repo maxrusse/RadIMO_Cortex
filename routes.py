@@ -4,7 +4,9 @@ from __future__ import annotations
 
 # Standard library imports
 import io
+import fcntl
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -23,6 +25,7 @@ import yaml
 # Third-party imports
 from flask import (
     Blueprint,
+    current_app,
     Response,
     jsonify,
     redirect,
@@ -66,7 +69,8 @@ from config import (
     save_button_weights
 )
 from lib import usage_logger
-from lib.change_audit import install_audit, read_entries, client_identity
+from lib.log_retention import maintain_logs, log_write_lock
+from lib.change_audit import install_audit, read_entries, clean
 from lib.utils import (
     format_worker_display_name,
     get_local_now,
@@ -898,6 +902,9 @@ GENERAL_CONFIG_FIELDS = (
     'skill_roster_auto_import',
     'access_protection_enabled',
     'admin_access_protection_enabled',
+    'log_password',
+    'change_history_enabled',
+    'log_retention_days',
 )
 
 
@@ -924,7 +931,7 @@ def _patch_top_level_yaml_scalars(raw_text: str, updates: dict[str, Any]) -> str
         replacement = f'{key}: {_yaml_scalar(value)}\n'
         pattern = re.compile(rf'^{re.escape(key)}\s*:[^\r\n]*(?:\r?\n|$)', re.MULTILINE)
         if pattern.search(result):
-            result = pattern.sub(replacement, result, count=1)
+            result = pattern.sub(lambda match: replacement, result, count=1)
             continue
 
         lines = result.splitlines(keepends=True)
@@ -975,9 +982,19 @@ def _replace_general_config_settings(data: dict[str, Any]) -> dict[str, Any]:
             'admin_access_protection_enabled',
         ),
     }
+    updates['change_history_enabled'] = _parse_admin_bool(data.get('change_history_enabled', current.get('change_history_enabled', True)), 'change_history_enabled')
+    days = data.get('log_retention_days', current.get('log_retention_days', 100))
+    if isinstance(days, bool) or not str(days).isdigit() or not 1 <= int(days) <= 36500:
+        raise ValueError('log_retention_days must be an integer between 1 and 36500')
+    updates['log_retention_days'] = int(days)
+    password = data.get('log_password')
+    if password is not None and not isinstance(password, str):
+        raise ValueError('log_password must be a string')
+    if password:
+        updates['log_password'] = password
     patched_text = _patch_top_level_yaml_scalars(raw_bytes.decode('utf-8'), updates)
     result = _replace_config_file(patched_text.encode('utf-8'))
-    return {**result, 'settings': updates}
+    return {**result, 'settings': {key: value for key, value in updates.items() if key != 'log_password'}}
 
 
 def _replace_config_file(raw_bytes: bytes) -> dict[str, Any]:
@@ -2361,6 +2378,54 @@ def admin_required(f: Callable) -> Callable:
     return decorated
 
 
+@routes.before_request
+def enforce_log_retention():
+    try:
+        maintain_logs(LOG_ROOT, APP_CONFIG.get('log_retention_days', 100), now=get_local_now())
+    except Exception:
+        current_app.logger.exception('Log retention maintenance failed')
+
+
+def _log_password_fingerprint():
+    return hmac.new(str(APP_CONFIG['secret_key']).encode(),
+                    str(APP_CONFIG.get('log_password', '')).encode(), hashlib.sha256).hexdigest()
+
+
+def logs_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not APP_CONFIG.get('log_password') or not hmac.compare_digest(
+            str(session.get('logs_access', '')), _log_password_fingerprint()
+        ):
+            if request.path.startswith('/api/'):
+                return jsonify(success=False, error='Log-Passwort erforderlich'), 401
+            return redirect(url_for('routes.logs_login'))
+        response = current_app.make_response(f(*args, **kwargs))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    return decorated
+
+
+@routes.route('/logs/login', methods=['GET', 'POST'])
+def logs_login():
+    error = None
+    if request.method == 'POST':
+        configured = str(APP_CONFIG.get('log_password') or '')
+        supplied = request.form.get('password', '')
+        if configured and hmac.compare_digest(supplied.encode(), configured.encode()):
+            session['logs_access'] = _log_password_fingerprint()
+            return redirect(url_for('routes.admin_logs_page'))
+        error = 'Falsches Passwort' if configured else 'Bitte zuerst ein Log-Passwort in den Einstellungen festlegen.'
+    return render_template('login.html', login_type='logs', passwordless=False,
+                           error=error, modality=resolve_modality_from_request())
+
+
+@routes.route('/logs/logout', methods=['POST'])
+def logs_logout():
+    session.pop('logs_access', None)
+    return redirect(url_for('routes.logs_login'))
+
+
 def _build_health_payload() -> dict[str, Any]:
     return {
         'status': 'ok',
@@ -2496,6 +2561,7 @@ def _rotated_log_paths(base_path: Path) -> list[Path]:
 def _read_tail_text(path: Path, lines: int) -> str:
     line_count = max(1, min(int(lines), MAX_LOG_TAIL_LINES))
     with path.open('r', encoding='utf-8', errors='replace') as handle:
+        fcntl.flock(handle, fcntl.LOCK_SH)
         return ''.join(deque(handle, maxlen=line_count))
 
 
@@ -2503,7 +2569,7 @@ def _build_logs_archive_payload(source_keys: list[str], scope: str, lines: int) 
     buffer = io.BytesIO()
     archive_name = f"radimo-logs-{scope}-{get_local_now().strftime('%Y%m%d-%H%M%S')}.zip"
 
-    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+    with log_write_lock(LOG_ROOT), zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for source_key in source_keys:
             meta = LOG_SOURCE_DEFINITIONS[source_key]
             base_path = _log_path(source_key)
@@ -2528,7 +2594,9 @@ def _build_logs_archive_payload(source_keys: list[str], scope: str, lines: int) 
                 continue
 
             for log_path in rotated_paths:
-                archive.write(log_path, arcname=f"{source_key}/{log_path.name}")
+                with log_path.open('rb') as stream:
+                    fcntl.flock(stream, fcntl.LOCK_SH)
+                    archive.writestr(f'{source_key}/{log_path.name}', stream.read())
 
     buffer.seek(0)
     return buffer, archive_name
@@ -3082,6 +3150,8 @@ def admin_settings_page() -> Any:
     return render_template(
         'admin_settings.html',
         settings={
+            'change_history_enabled': APP_CONFIG.get('change_history_enabled', True),
+            'log_retention_days': APP_CONFIG.get('log_retention_days', 100),
             'default_language': APP_CONFIG.get('default_language', 'de'),
             'timezone': APP_CONFIG.get('timezone', 'Europe/Berlin'),
             'worker_name_display_style': APP_CONFIG.get('worker_name_display_style', 'first_last_id'),
@@ -3128,7 +3198,7 @@ def admin_config_general_update() -> Any:
 
 
 @routes.route('/admin/logs')
-@admin_required
+@logs_required
 def admin_logs_page() -> Any:
     """Admin change history, technical log previews and downloads."""
     day = request.args.get('day', '')
@@ -3145,6 +3215,7 @@ def admin_logs_page() -> Any:
     return render_template(
         'admin_logs.html',
         change_entries=entries,
+        change_history_enabled=APP_CONFIG.get('change_history_enabled', True),
         change_total=total,
         change_day=day,
         change_offset=offset,
@@ -3161,14 +3232,14 @@ def admin_logs_page() -> Any:
             sources=','.join(DEFAULT_LOG_SOURCES),
             scope='full',
         ),
-        is_admin=True,
+        is_admin=has_admin_access(),
         active_page='logs',
         active_tool='logs',
     )
 
 
 @routes.route('/api/admin/logs/tail', methods=['GET'])
-@admin_required
+@logs_required
 def admin_log_tail() -> Any:
     source = (request.args.get('source') or '').strip().lower()
     if source not in LOG_SOURCE_DEFINITIONS:
@@ -3199,7 +3270,7 @@ def admin_log_tail() -> Any:
 
 
 @routes.route('/admin/logs/download', methods=['GET'])
-@admin_required
+@logs_required
 def download_logs() -> Any:
     """Download RadIMO and Gunicorn logs as a zip archive."""
     try:
@@ -3851,11 +3922,7 @@ def _serialize_manual_adjustments() -> list[dict[str, Any]]:
     entries = global_worker_data.get('manual_weight_adjustments', []) or []
     if not isinstance(entries, list):
         return []
-    return list(reversed(entries))
-
-
-def _get_client_audit_identity() -> dict[str, str]:
-    return client_identity()
+    return clean(list(reversed(entries)))
 
 
 def _verify_manual_adjustment_payload(data: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[tuple[Any, int]]]:
@@ -5019,7 +5086,6 @@ def manual_adjustments_api() -> Any:
         entry = {
             'timestamp': get_local_now().isoformat(timespec='seconds'),
             'admin_name': validated['admin_name'],
-            **_get_client_audit_identity(),
             'worker_id': worker_id,
             'worker_name': worker['name'],
             'delta': delta,
@@ -5030,7 +5096,8 @@ def manual_adjustments_api() -> Any:
             'total_after': total_after,
             'reason': validated['reason'],
         }
-        audit_entries.append(entry)
+        if APP_CONFIG.get('change_history_enabled', True):
+            audit_entries.append(entry)
 
     save_state()
 

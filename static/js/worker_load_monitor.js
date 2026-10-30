@@ -668,7 +668,7 @@ function renderLogRow(entry) {
   const item = entry.item;
   if (entry.kind === 'correction') {
     const delta = Number(item.delta || 0);
-    const by = [item.admin_name, item.client_ip].filter(Boolean).join(' · ');
+    const by = item.admin_name || '';
     return `<tr class="log-row--correction">
       <td>${escapeHtml(formatDateTime(item.timestamp))}</td>
       <td><span class="recent-pill recent-pill-correction">${escapeHtml(t('Correction'))}</span></td>

@@ -1,5 +1,5 @@
 import logging
-from logging.handlers import RotatingFileHandler
+from lib.log_retention import RetentionFileHandler as RotatingFileHandler
 import os
 import sys
 

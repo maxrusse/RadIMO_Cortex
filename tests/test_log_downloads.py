@@ -17,6 +17,8 @@ class TestLogDownloads(unittest.TestCase):
         app.secret_key = "test-secret"
         app.register_blueprint(routes_blueprint)
         self.client = app.test_client()
+        with self.client.session_transaction() as session:
+            session['logs_access'] = routes._log_password_fingerprint()
 
     def _write_log(self, base_dir: Path, relative_path: str, content: str) -> None:
         full_path = base_dir / relative_path
@@ -25,7 +27,7 @@ class TestLogDownloads(unittest.TestCase):
 
     def test_admin_logs_page_redirects_without_access(self) -> None:
         with patch("routes.has_admin_access", return_value=False):
-            response = self.client.get("/admin/logs")
+            response = self.client.application.test_client().get("/admin/logs")
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login", response.headers["Location"])

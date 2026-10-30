@@ -6,6 +6,7 @@ tool usage patterns and compare against actual work entries from other data sour
 """
 
 import csv
+from lib.log_retention import log_write_lock
 import logging
 from datetime import date
 from pathlib import Path
@@ -82,7 +83,6 @@ def _write_usage_to_csv(export_date: date) -> Optional[Path]:
         Path to CSV file if successful, None otherwise.
     """
     all_columns = _get_all_skill_modality_columns()
-    file_exists = USAGE_STATS_FILE.exists()
 
     row_data = {'date': export_date.strftime('%Y-%m-%d')}
     for skill in SKILL_COLUMNS:
@@ -90,10 +90,10 @@ def _write_usage_to_csv(export_date: date) -> Optional[Path]:
             column = f"{skill}_{modality}"
             row_data[column] = _daily_usage.get((skill, modality), 0)
 
-    with open(USAGE_STATS_FILE, 'a', newline='', encoding='utf-8') as f:
+    with log_write_lock(USAGE_STATS_DIR.parent), open(USAGE_STATS_FILE, 'a', newline='', encoding='utf-8') as f:
         fieldnames = ['date'] + all_columns
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if not file_exists:
+        if f.tell() == 0:
             writer.writeheader()
         writer.writerow(row_data)
 

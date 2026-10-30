@@ -1,6 +1,5 @@
 """Append-only request change history, shared safely by Gunicorn workers."""
 import fcntl
-import ipaddress
 import json
 import logging
 import math
@@ -20,7 +19,7 @@ def audit_now():
 
 ASSIGNMENT_ENDPOINTS = {'routes.assign_worker_api', 'routes.assign_worker_strict_api'}
 EXCLUDED_ENDPOINTS = {
-    'routes.login', 'routes.access_login',
+    'routes.login', 'routes.access_login', 'routes.logs_login', 'routes.logs_logout',
     'routes.resolve_live_task_preview', 'routes.resolve_prep_task_preview',
 }
 ACTION_LABELS = {
@@ -61,7 +60,7 @@ def clean(value):
         return {
             str(key): ('[redacted]' if any(word in str(key).lower() for word in
                        ('password', 'secret', 'token', 'cookie', 'authorization')) else clean(item))
-            for key, item in value.items()
+            for key, item in value.items() if str(key).lower() not in {'client_ip', 'peer_ip'}
         }
     if isinstance(value, (list, tuple)):
         return [clean(item) for item in value]
@@ -88,39 +87,6 @@ def target_label(entry):
                 parts.append(f'{label}: {value}')
                 break
     return ' · '.join(parts)
-
-
-def client_identity():
-    """Trust forwarding headers only from explicitly trusted proxy networks."""
-    peer = request.remote_addr or ''
-    networks = []
-    for item in current_app.config.get('AUDIT_TRUSTED_PROXIES', '127.0.0.1/32,::1/128').split(','):
-        if not item.strip():
-            continue
-        try:
-            networks.append(ipaddress.ip_network(item.strip()))
-        except ValueError:
-            current_app.logger.error('Ignoring invalid audit proxy network: %r', item)
-
-    def trusted(address):
-        try:
-            return any(ipaddress.ip_address(address) in network for network in networks)
-        except ValueError:
-            return False
-
-    client = peer
-    if trusted(peer):
-        chain = request.headers.get('X-Forwarded-For', '').split(',')
-        for address in reversed(chain):
-            address = address.strip()
-            try:
-                ipaddress.ip_address(address)
-            except ValueError:
-                break
-            client = address
-            if not trusted(address):
-                break
-    return {'client_ip': client, 'peer_ip': peer}
 
 
 def append_entry(path, entry):
@@ -163,13 +129,16 @@ def attach_schedule_change(worker, modality, before, after, use_staged):
 
 
 def record_daily_reset(day, loaded):
+    from config import APP_CONFIG
+    if not APP_CONFIG.get('change_history_enabled', True):
+        return
     try:
         now = audit_now()
         append_entry(Path('logs/changes.jsonl'), {
             'id': uuid4().hex, 'timestamp': now.isoformat(timespec='milliseconds'),
             'date': now.date().isoformat(), 'action': 'daily_reset',
             'action_label': ACTION_LABELS['daily_reset'], 'actor_role': 'system',
-            'client_ip': '', 'peer_ip': '', 'method': 'SYSTEM', 'path': '',
+            'method': 'SYSTEM', 'path': '',
             'parameters': {}, 'query': {}, 'changes': {'target_date': day.isoformat()},
             'uploads': [], 'status': None, 'outcome': 'success' if loaded else 'partial',
             'result': {'counters_reset': True, 'staged_schedule_activated': loaded},
@@ -182,6 +151,7 @@ def read_entries(path, day=None, limit=50, offset=0):
     """Read one fixed snapshot in two passes, retaining only the requested page."""
     try:
         with Path(path).open('rb') as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
             snapshot_size = os.fstat(stream.fileno()).st_size
 
             def matching_entries():
@@ -191,7 +161,7 @@ def read_entries(path, day=None, limit=50, offset=0):
                     if not line.endswith(b'\n'):
                         break  # A writer may still be completing this record.
                     try:
-                        entry = json.loads(line.decode('utf-8', errors='replace'))
+                        entry = clean(json.loads(line.decode('utf-8', errors='replace')))
                     except ValueError:
                         continue
                     if not isinstance(entry, dict) or not all(
@@ -219,6 +189,9 @@ def read_entries(path, day=None, limit=50, offset=0):
 def install_audit(blueprint, path_provider):
     @blueprint.before_request
     def prepare_change_audit():
+        from config import APP_CONFIG
+        if not APP_CONFIG.get('change_history_enabled', True):
+            return
         endpoint = request.endpoint
         if not endpoint or endpoint in EXCLUDED_ENDPOINTS:
             return
@@ -232,7 +205,6 @@ def install_audit(blueprint, path_provider):
             'action_label': ACTION_LABELS.get(endpoint.removeprefix('routes.'), 'Änderung'),
             'method': request.method,
             'path': request.path,
-            **client_identity(),
             'actor_role': ('admin' if session.get('admin_logged_in') else
                            'basic' if session.get('access_granted') else 'shared / unverified'),
             'parameters': clean(dict(request.view_args or {})),

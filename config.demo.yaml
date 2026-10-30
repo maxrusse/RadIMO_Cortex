@@ -1,3 +1,8 @@
+# Log access is separate from admin access. Set a password before opening logs.
+log_password: ""
+change_history_enabled: true
+log_retention_days: 100
+
 # =============================================================================
 # RADIMO CORTEX CONFIGURATION
 # =============================================================================
