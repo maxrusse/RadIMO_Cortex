@@ -3,8 +3,8 @@ from lib.log_retention import RetentionFileHandler as RotatingFileHandler
 import os
 import sys
 
-# Basic configuration
-bind = "0.0.0.0:5035"
+# Match the production listener; systemd command-line options take precedence.
+bind = "127.0.0.1:5035"
 workers = 1
 worker_class = "gevent"
 worker_connections = 1000
@@ -33,9 +33,9 @@ def on_starting(server):
     logger.info(f"Python version: {sys.version}")
 def when_ready(server):
     logger.info("Gunicorn server is ready")
-    logger.info(f"Listening at: {bind}")
-    logger.info(f"Worker class: {worker_class}")
-    logger.info(f"Number of workers: {workers}")
+    logger.info(f"Listening at: {server.cfg.bind}")
+    logger.info(f"Worker class: {server.cfg.worker_class}")
+    logger.info(f"Number of workers: {server.cfg.workers}")
 def on_exit(server):
     logger.info("Gunicorn server is stopping")
 def pre_request(worker, req):
