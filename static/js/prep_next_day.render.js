@@ -790,7 +790,9 @@ function renderEditModalContent() {
   </table>
 </div>
 <div style="display: flex; justify-content: flex-end; margin-top: 0.75rem;">
-  <button class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()">Add Shift / Gap</button>
+  <span id="modal-add-preview-status" role="status" style="font-size:0.8rem; margin-right:0.5rem;"></span>
+  <button id="modal-add-preview-retry" class="btn btn-small" type="button" onclick="onModalTaskChange()" hidden>Erneut laden</button>
+  <button id="modal-add-submit" class="btn btn-small btn-success" type="button" onclick="addShiftFromModal()" disabled>Add Shift / Gap</button>
 </div>
   </div>
 </details>`;

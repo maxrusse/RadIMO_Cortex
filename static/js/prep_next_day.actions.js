@@ -1275,6 +1275,8 @@ function replaceDraftShiftPreviewState(shiftIdx, preview) {
   });
 }
 
+const editShiftPreviewRequests = new WeakMap();
+
 async function refreshEditShiftFromPreview(shiftIdx, taskName, trainingEnabled = null) {
   const { tab, groupIdx } = currentEditEntry || {};
   const group = entriesData[tab]?.[groupIdx];
@@ -1283,17 +1285,32 @@ async function refreshEditShiftFromPreview(shiftIdx, taskName, trainingEnabled =
   const shift = editPlanDraft.shifts[shiftIdx];
   const taskConfig = getTaskConfigByName(taskName);
   if (!taskConfig) return;
+  const draft = editPlanDraft;
+  const entry = currentEditEntry;
+  const requestId = (editShiftPreviewRequests.get(shift) || 0) + 1;
+  editShiftPreviewRequests.set(shift, requestId);
+  const stateAtRequest = JSON.stringify(shift);
+  const isCurrent = () => currentEditEntry === entry && editPlanDraft === draft
+    && draft.shifts[shiftIdx] === shift && editShiftPreviewRequests.get(shift) === requestId
+    && JSON.stringify(shift) === stateAtRequest;
 
-  const preview = taskConfig.type === 'gap'
-    ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
-    : await fetchTaskPreview(tab, {
-        worker: group.worker,
-        task: taskName,
-        training: trainingEnabled !== null ? Boolean(trainingEnabled) : (shift.training !== false),
-        mode: 'edit',
-        current_shift: shift,
-      });
+  let preview;
+  try {
+    preview = taskConfig.type === 'gap'
+      ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
+      : await fetchTaskPreview(tab, {
+          worker: group.worker,
+          task: taskName,
+          training: trainingEnabled !== null ? Boolean(trainingEnabled) : (shift.training !== false),
+          mode: 'edit',
+          current_shift: shift,
+        });
+  } catch (error) {
+    if (!isCurrent()) return;
+    throw error;
+  }
 
+  if (!isCurrent()) return;
   replaceDraftShiftPreviewState(shiftIdx, preview);
   markDraftShiftMaterialized(shiftIdx);
   renderEditModalContent();
@@ -1333,6 +1350,28 @@ async function refreshAddWorkerTaskPreview(idx) {
   applyPreviewToAddWorkerTask(task, preview);
 }
 
+function setModalAddPreviewState(taskSelect, state) {
+  if (document.getElementById('modal-add-task') !== taskSelect) return;
+  taskSelect.dataset.previewState = state;
+  const form = taskSelect.closest('.edit-modal-add-shift');
+  form?.querySelectorAll('input, select, button').forEach(control => {
+    if (control === taskSelect) return;
+    control.disabled = state !== 'ready'
+      || (control.id === 'modal-add-training' && isGapTask(taskSelect.value));
+  });
+  const retry = document.getElementById('modal-add-preview-retry');
+  if (retry) {
+    retry.hidden = state !== 'failed';
+    retry.disabled = state !== 'failed';
+  }
+  const status = document.getElementById('modal-add-preview-status');
+  if (status) status.textContent = state === 'loading'
+    ? window.RadimoUI.text('Loading shift defaults…', 'Schichtvorbelegung wird geladen …')
+    : state === 'failed'
+      ? window.RadimoUI.text('Defaults could not be loaded. Please retry.', 'Vorbelegung konnte nicht geladen werden. Bitte erneut laden.')
+      : '';
+}
+
 async function refreshModalAddFormPreview() {
   const { tab, groupIdx } = currentEditEntry || {};
   const group = entriesData[tab]?.[groupIdx];
@@ -1342,44 +1381,59 @@ async function refreshModalAddFormPreview() {
   const taskName = taskSelect?.value;
   const taskConfig = getTaskConfigByName(taskName);
   if (!taskConfig) return;
+  const entry = currentEditEntry;
+  const requestId = (Number(taskSelect.dataset.previewRequest) || 0) + 1;
+  taskSelect.dataset.previewRequest = String(requestId);
+  const isCurrent = () => currentEditEntry === entry
+    && document.getElementById('modal-add-task') === taskSelect
+    && taskSelect.dataset.previewRequest === String(requestId);
+  setModalAddPreviewState(taskSelect, 'loading');
 
   const trainingEl = document.getElementById('modal-add-training');
   const trainingEnabled = taskConfig.type === 'gap' ? false : (trainingEl ? trainingEl.checked : (taskConfig.training !== false));
-  const preview = taskConfig.type === 'gap'
-    ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
-    : await fetchTaskPreview(tab, {
-        worker: group.worker,
-        task: taskName,
-        training: trainingEnabled,
-        mode: 'new',
+  try {
+    const preview = taskConfig.type === 'gap'
+      ? buildGapPreviewFromTaskConfig(taskName, taskConfig, getTargetWeekdayName(tab))
+      : await fetchTaskPreview(tab, {
+          worker: group.worker,
+          task: taskName,
+          training: true, // Keep weighted base values available when toggling training.
+          mode: 'new',
+        });
+
+    if (!isCurrent()) return;
+    document.getElementById('modal-add-start').value = preview.start_time;
+    document.getElementById('modal-add-end').value = preview.end_time;
+    document.getElementById('modal-add-modifier').value = preview.modifier;
+
+    const countsEl = document.getElementById('modal-add-counts-hours');
+    if (countsEl) {
+      countsEl.checked = preview.counts_for_hours === true;
+      updateHoursToggleLabel(countsEl);
+    }
+
+    if (trainingEl) {
+      trainingEl.checked = trainingEnabled;
+      trainingEl.disabled = preview.row_type === 'gap';
+      updateTrainingToggleLabel(trainingEl);
+    }
+
+    const previewSkills = preview.skills_by_modality || {};
+    MODALITIES.forEach(mod => {
+      const modKey = mod.toLowerCase();
+      SKILLS.forEach(skill => {
+        const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
+        if (!el) return;
+        const value = previewSkills[modKey]?.[skill];
+        setModalAddSkillValue(el, value !== undefined ? value : 0, trainingEnabled);
       });
-
-  document.getElementById('modal-add-start').value = preview.start_time;
-  document.getElementById('modal-add-end').value = preview.end_time;
-  document.getElementById('modal-add-modifier').value = preview.modifier;
-
-  const countsEl = document.getElementById('modal-add-counts-hours');
-  if (countsEl) {
-    countsEl.checked = preview.counts_for_hours === true;
-    updateHoursToggleLabel(countsEl);
-  }
-
-  if (trainingEl) {
-    trainingEl.checked = preview.training === true;
-    trainingEl.disabled = preview.row_type === 'gap';
-    updateTrainingToggleLabel(trainingEl);
-  }
-
-  const previewSkills = preview.skills_by_modality || {};
-  MODALITIES.forEach(mod => {
-    const modKey = mod.toLowerCase();
-    SKILLS.forEach(skill => {
-      const el = document.getElementById(`modal-add-${modKey}-skill-${skill}`);
-      if (!el) return;
-      const value = previewSkills[modKey]?.[skill];
-      setModalAddSkillValue(el, value !== undefined ? value : 0, preview.training === true);
     });
-  });
+    setModalAddPreviewState(taskSelect, 'ready');
+  } catch (error) {
+    if (!isCurrent()) return;
+    setModalAddPreviewState(taskSelect, 'failed');
+    throw error;
+  }
 }
 
 async function onEditShiftTaskChange(shiftIdx, taskName, options = {}) {
@@ -1477,7 +1531,7 @@ async function updateShiftSkillFromModal(shiftIdx, modKey, skill, value) {
   const hasMaterializedSkill = SKILLS.some(
     skillName => normalizeSkillValueJS(modData.baseSkills?.[skillName] ?? modData.skills?.[skillName]) !== -1
   );
-  if (hasPersistedRow || hasMaterializedSkill) {
+  if (hasPersistedRow || modData.materialize === true || hasMaterializedSkill) {
     markDraftModalityMaterialized(shiftIdx, modKey);
   } else {
     modData.materialize = false;
@@ -1617,11 +1671,10 @@ function onModalAddSkillChange(selectEl) {
 }
 
 async function onModalAddTrainingChange(trainingEnabled) {
-  try {
-    await refreshModalAddFormPreview();
-  } catch (error) {
-    showMessage('error', error.message);
-  }
+  MODALITIES.forEach(mod => SKILLS.forEach(skill => {
+    const control = document.getElementById(`modal-add-${mod.toLowerCase()}-skill-${skill}`);
+    if (control) setModalAddSkillValue(control, control.dataset.baseValue ?? control.value, trainingEnabled);
+  }));
 }
 
 async function onModalTaskChange() {
@@ -1630,6 +1683,11 @@ async function onModalTaskChange() {
   if (!option || !option.value) {
     return;
   }
+  const taskConfig = getTaskConfigByName(option.value);
+  const training = document.getElementById('modal-add-training');
+  // A gap disables training; a subsequent work task starts with its own default.
+  if (training && training.disabled && taskSelect.dataset.previewState === 'ready'
+      && taskConfig?.type !== 'gap') training.checked = taskConfig?.training !== false;
   try {
     await refreshModalAddFormPreview();
   } catch (error) {
@@ -1762,6 +1820,10 @@ async function addShiftFromModal() {
     showMessage('error', 'Please pick a role/task');
     return;
   }
+  if (taskSelect.dataset.previewState !== 'ready') {
+    showMessage('info', window.RadimoUI.text('Wait until the shift defaults have loaded.', 'Bitte warten, bis die Schichtvorbelegung geladen ist.'));
+    return;
+  }
 
   // All modalities are always active
   const selectedModalities = MODALITIES.map(m => m.toLowerCase());
@@ -1891,6 +1953,7 @@ async function saveModalChanges() {
       return;
     }
     const persistedShifts = (editPlanDraft.shifts || []).map(serializeWorkerPlanShift);
+    const savedWorker = editPlanDraft.worker;
     await postJsonWithSnapshot(tab, applyEndpoint, {
       worker: editPlanDraft.worker,
       shifts: persistedShifts,
@@ -1901,8 +1964,15 @@ async function saveModalChanges() {
     });
     clearEditPlanDraft();
     closeModal(true);
-    showMessage('success', 'Worker entries updated');
     await loadData();
+    const savedGroup = entriesData[tab]?.find(item => item.worker === savedWorker);
+    const filter = tableFilters[tab] || {};
+    if (dataLoaded[tab] && savedGroup && (filter.modality || filter.skill || filter.hideZero)
+        && !groupHasActiveSkills(savedGroup, filter)) {
+      showMessage('info', window.RadimoUI.text('Saved. This worker is hidden by the current filters.', 'Gespeichert. Die Person wird durch die aktuellen Filter ausgeblendet.'));
+    } else {
+      showMessage('success', 'Worker entries updated');
+    }
   } catch (error) {
     if (error.isConflict) {
       const workerName = editPlanDraft?.worker || group.worker;
