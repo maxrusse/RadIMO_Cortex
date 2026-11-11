@@ -161,3 +161,8 @@ Passwortwechsel und „Sysadmin abmelden“ sperren die geschützten Bereiche er
 
 CSV-Upload/Import sowie Heute und Planung bleiben auf Admin-Ebene. Die Liste
 vorbereiteter Tage enthält nur Datum und Kennzeichnung des aktiven Dateistands.
+
+Die öffentliche Demo-Vorlage verwendet für `access_password`, `admin_password`
+und `sysadmin_password` jeweils `radimo`. Die aktive lokale `config.yaml` bleibt
+ungetrackt. Bei einem Paket ohne aktive Konfiguration wird die vorhandene
+Serverkonfiguration beim Deployment erhalten; die Demo-Datei ersetzt sie nicht.

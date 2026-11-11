@@ -1,5 +1,5 @@
-# Log access is separate from admin access. Set a password before opening logs.
-sysadmin_password: ""
+# Public demo passwords only; maintain real credentials in local config.yaml.
+sysadmin_password: "radimo" # DEMO ONLY - change for live
 change_history_enabled: true
 log_retention_days: 100
 

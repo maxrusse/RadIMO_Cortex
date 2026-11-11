@@ -64,3 +64,11 @@ bereits im CTSBZ8-Archiv (Dateistand 18.11.2024). Cortex behielt ihn bis zum
 Stand 9b53c5a; Commit 376bdaa vom 31.07.2026 entfernte ihn. Das Designupdate
 vom 15.10.2026 übernahm die API-only-Funktion in den Live-Verlauf. Die alte und
 die wiederhergestellte Funktion wurden auf HTTP mit echtem Einfügen verglichen.
+
+## r6: Paket ohne aktive Konfiguration
+
+Die r6-ZIP enthält keine `config.yaml`. Das Deployment erhält die vorhandene
+Serverdatei und schützt sie auch vor Löschung beim Codesynchronisieren.
+`config.demo.yaml` bleibt als öffentliche Vorlage enthalten; Zugang-, Admin-
+und Sysadmin-Passwort lauten dort wie gewünscht jeweils `radimo`. Diese Vorlage
+ersetzt niemals automatisch eine bestehende aktive Serverkonfiguration.
