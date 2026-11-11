@@ -33,7 +33,8 @@ function countActiveBySkillAndModality(groups) {
 function isCoverageButtonVisible(skill, modKey) {
   const modality = MODALITY_SETTINGS[modKey] || {};
   const settings = SKILL_SETTINGS[skill] || {};
-  const includes = (values, value) => values.map(item => String(item).toLowerCase()).includes(value.toLowerCase());
+  // Configuration membership is case-sensitive on the live assignment pages.
+  const includes = (values, value) => values.includes(value);
   return (modality.valid_skills == null || includes(modality.valid_skills, skill))
     && !includes(modality.hidden_skills || [], skill)
     && (settings.valid_modalities == null || includes(settings.valid_modalities, modKey))

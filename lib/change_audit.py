@@ -186,7 +186,7 @@ def read_entries(path, day=None, limit=50, offset=0):
         return [], 0
 
 
-def install_audit(blueprint, path_provider):
+def install_audit(blueprint, path_provider, sysadmin_access=None):
     @blueprint.before_request
     def prepare_change_audit():
         from config import APP_CONFIG
@@ -205,7 +205,8 @@ def install_audit(blueprint, path_provider):
             'action_label': ACTION_LABELS.get(endpoint.removeprefix('routes.'), 'Änderung'),
             'method': request.method,
             'path': request.path,
-            'actor_role': ('admin' if session.get('admin_logged_in') else
+            'actor_role': ('sysadmin' if sysadmin_access and sysadmin_access() else
+                           'admin' if session.get('admin_logged_in') else
                            'basic' if session.get('access_granted') else 'shared / unverified'),
             'parameters': clean(dict(request.view_args or {})),
             'query': clean(request.args.to_dict(flat=False)),

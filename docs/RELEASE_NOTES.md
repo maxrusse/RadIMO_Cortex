@@ -28,3 +28,21 @@ Datei wurde der bisherige Passwortwert unverändert unter `sysadmin_password`
 
 Dienst `radimo-cortex`, System-Python und Port 5035 bleiben erhalten. Es werden
 keine Betriebssystem- oder Abhängigkeitspakete installiert oder aktualisiert.
+
+## Korrekturen aus dem vertieften Review
+
+- Normales Abmelden sperrt Sysadmin für alle Sitzungsarten, auch bei deaktiviertem
+  Admin-Passwortschutz. Veraltete Sysadmin-Tokens erhalten keine erhöhte Auditrolle.
+- Authentifizierte Sysadmin-Aktionen erscheinen im Änderungsverlauf als Sysadmin.
+- Die Kopfzeile bleibt nach dem Entsperren auch bei 768 Pixeln vollständig erreichbar.
+- Spaltenüberschriften bleiben beim Scrollen der langen Mitarbeitertabellen sichtbar
+  und folgen der horizontalen Tabellenposition. Während Bearbeitungs- und
+  Pausendialogen bleiben sie verborgen; Sortieren ist dann gesperrt, damit ein
+  offener Entwurf weiterhin zur ursprünglichen Person gehört.
+- Abdeckungswarnungen verwenden exakt dieselbe Groß-/Kleinschreibung der
+  Konfigurationslisten wie die tatsächlichen Zuweisungsbuttons.
+
+- Dialoge berechnen ihre Abdeckung auch nach Seitenscrollen und unmittelbar
+  beim Öffnen neu. Tabellenaktionen hinter einem geöffneten Editor bleiben
+  dadurch vollständig gesperrt; ein anderer Eintrag kann den Entwurf nicht
+  über einen unbedeckten Streifen am oberen Fensterrand ersetzen.

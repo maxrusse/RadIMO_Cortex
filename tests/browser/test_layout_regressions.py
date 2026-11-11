@@ -166,3 +166,150 @@ def test_yaml_editor_is_separate_and_loads_only_after_expansion(page):
     assert p.locator('#save-full-config').is_disabled()
     p.locator('#advanced-config-ack').check()
     assert p.locator('#save-full-config').is_enabled()
+
+
+@pytest.mark.parametrize('path', ['/prep-today', '/prep-tomorrow', '/worker-load'])
+def test_unlocked_header_fits_narrow_viewport(page, path):
+    p = page(path, sysadmin=True)
+    p.set_viewport_size({'width': 768, 'height': 900})
+    assert p.locator('button.app-header__session').inner_text() == 'Sysadmin abmelden'
+    assert p.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    controls = p.locator('.app-header__actions a, .app-header__actions button, .system-menu summary')
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        if control.is_visible():
+            box = control.bounding_box()
+            assert box['x'] >= 0 and box['x'] + box['width'] <= 768
+            assert control.evaluate('''el=>{const r=el.getBoundingClientRect();
+                return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}''')
+
+
+@pytest.mark.parametrize('tab,path', [('today','/prep-today'), ('tomorrow','/prep-tomorrow')])
+def test_headers_follow_page_and_horizontal_table_scrolling(page, tab, path):
+    p = page(path)
+    seed_schedule(p, tab)
+    table = p.locator(f'#edit-table-{tab}')
+    wrapper = table.locator('..')
+    floating = p.locator(f'.prep-floating-header[data-table="edit-table-{tab}"]')
+    assert not floating.is_visible()
+    p.evaluate('window.scrollTo(0,600)')
+    floating.wait_for(state='visible')
+    assert 0 <= floating.bounding_box()['y'] <= 1
+    assert floating.locator('thead tr').count() == 2
+    save_preview(p, 'headers-scrolled-' + tab)
+    wrapper.evaluate("el=>{el.style.maxWidth='400px';el.scrollLeft=100;}")
+    p.wait_for_function('''tab=>{
+      const wrapper=document.getElementById('edit-table-'+tab).parentElement;
+      const header=document.querySelector('.prep-floating-header[data-table="edit-table-'+tab+'"]');
+      return wrapper.scrollLeft > 0 && Math.abs(wrapper.scrollLeft-header.scrollLeft)<1;
+    }''', arg=tab)
+    for index in (0,1,-1):
+        actual=table.locator('thead tr').first.locator('th').nth(index).bounding_box()
+        copy=floating.locator('thead tr').first.locator('th').nth(index).bounding_box()
+        assert abs(actual['x']-copy['x']) < 2
+        assert abs(actual['width']-copy['width']) < 2
+    wrapper.evaluate('el=>{el.scrollLeft=0}')
+    p.wait_for_function("""tab => document.querySelector(`.prep-floating-header[data-table="edit-table-${tab}"]`).scrollLeft === 0""", arg=tab)
+    previous=p.evaluate('tab=>sortState[tab].direction',tab)
+    floating.locator('th.sortable.sort-asc, th.sortable.sort-desc').first.click()
+    p.wait_for_function('''({tab,previous})=>sortState[tab].direction!==previous''', arg={'tab':tab,'previous':previous})
+    p.evaluate('window.scrollTo(0,0)')
+    floating.wait_for(state='hidden')
+
+
+@pytest.mark.parametrize('mod_rules,skill_rules', [
+    ({'valid_skills':['NOTFALL']}, {}),
+    ({'valid_skills':['notfall'],'hidden_skills':['NOTFALL']}, {}),
+    ({'valid_skills':['notfall']}, {'valid_modalities':['XRAY']}),
+    ({'valid_skills':['notfall']}, {'hidden_modalities':['XRAY']}),
+])
+def test_coverage_visibility_matches_live_buttons_exactly(page,monkeypatch,mod_rules,skill_rules):
+    from unittest.mock import patch
+    import routes
+    from app import app
+    p=page('/prep-today')
+    p.evaluate('''({mod,skill})=>{
+        Object.assign(MODALITY_SETTINGS.xray,mod);
+        SKILL_SETTINGS.notfall=skill;
+    }''', {'mod':mod_rules,'skill':skill_rules})
+    monkeypatch.setitem(routes.MODALITY_SETTINGS,'xray', {**routes.MODALITY_SETTINGS['xray'],**mod_rules})
+    monkeypatch.setitem(routes.SKILL_SETTINGS,'notfall', {**routes.SKILL_SETTINGS['notfall'],**skill_rules})
+    with patch.object(routes,'is_access_protection_enabled',return_value=False):
+        response=app.test_client().get('/?modality=xray')
+    assert response.status_code==200
+    visible='id="skill-btn-notfall"' in response.get_data(as_text=True)
+    assert p.evaluate("isCoverageButtonVisible('notfall','xray')") == visible
+
+
+@pytest.mark.parametrize('tab,path', [('today','/prep-today'), ('tomorrow','/prep-tomorrow')])
+def test_floating_header_cannot_reorder_worker_while_modal_is_open(page,tab,path):
+    p=page(path)
+    seed_schedule(p,tab)
+    p.evaluate('() => {updatePrepOverlayTop(); window.scrollTo(0,600);}')
+    floating=p.locator(f'.prep-floating-header[data-table="edit-table-{tab}"]')
+    floating.wait_for(state='visible')
+    p.evaluate('tab=>openEditModal(tab,15)',tab)
+    assert p.locator('#edit-modal').is_visible()
+    p.wait_for_function("getComputedStyle(document.getElementById('edit-modal')).top === '0px'")
+    assert not floating.is_visible()
+    expected=p.evaluate('editPlanDraft.worker')
+    p.evaluate("tab=>{sortEntries(tab,'worker');sortEntries(tab,'worker');}",tab)
+    assert p.evaluate('tab=>entriesData[tab][currentEditEntry.groupIdx].worker',tab)==expected
+    p.evaluate('''async () => {window.confirm=()=>false; await deleteShiftFromModal(0);}''')
+    assert p.evaluate('editPlanDraft.worker')==expected
+    assert p.evaluate('editPlanDraft.shifts.length')==1
+    p.evaluate('closeModal(true)')
+    floating.wait_for(state='visible')
+    p.evaluate("document.getElementById('break-popup').classList.add('show')")
+    assert not floating.is_visible()
+    p.evaluate("tab=>{sortEntries(tab,'worker');sortEntries(tab,'worker');}",tab)
+    assert p.evaluate('tab=>entriesData[tab][0].worker',tab).startswith('Synthetic 00')
+    p.evaluate("document.getElementById('break-popup').classList.remove('show')")
+    floating.wait_for(state='visible')
+    p.evaluate("tab=>{sortEntries(tab,'worker');sortEntries(tab,'worker');}",tab)
+    assert p.evaluate('tab=>entriesData[tab][0].worker',tab).startswith('Synthetic 34')
+
+
+@pytest.mark.parametrize('tab,path', [('today','/prep-today'), ('tomorrow','/prep-tomorrow')])
+def test_dialog_masks_body_controls_when_opened_immediately_after_scroll(page,tab,path):
+    p=page(path)
+    seed_schedule(p,tab)
+    top=p.evaluate('''tab=>{
+      window.scrollTo(0,0); updatePrepOverlayTop();
+      window.scrollTo(0,600); openEditModal(tab,15);
+      return getComputedStyle(document.getElementById('edit-modal')).top;
+    }''',tab)
+    assert top=='0px'
+    hit_tests=p.locator(f'#edit-table-{tab} tbody .row-action').evaluate_all('''buttons=>{
+      const visible=buttons.filter(button=>{const r=button.getBoundingClientRect();
+        return r.top+r.height/2>=0 && r.top+r.height/2<innerHeight;});
+      return {checked:visible.length,exposed:visible.filter(button=>{const r=button.getBoundingClientRect();
+        return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}).length};
+    }''')
+    assert hit_tests['checked']>0
+    assert hit_tests['exposed']==0
+
+
+@pytest.mark.parametrize('tab,path', [('today','/prep-today'), ('tomorrow','/prep-tomorrow')])
+def test_header_resynchronizes_after_modal_resize_and_cancel(page,tab,path):
+    p=page(path)
+    seed_schedule(p,tab)
+    table=p.locator(f'#edit-table-{tab}')
+    wrapper=table.locator('..')
+    wrapper.evaluate("el=>{el.style.maxWidth='400px';el.scrollLeft=100;}")
+    p.evaluate('window.scrollTo(0,600)')
+    floating=p.locator(f'.prep-floating-header[data-table="edit-table-{tab}"]')
+    floating.wait_for(state='visible')
+    p.evaluate('tab=>openEditModal(tab,15)',tab)
+    floating.wait_for(state='hidden')
+    p.set_viewport_size({'width':900,'height':900})
+    p.evaluate('closeModal(true)')
+    floating.wait_for(state='visible')
+    p.wait_for_function('''tab=>{
+      const source=document.getElementById('edit-table-'+tab).parentElement;
+      const clone=document.querySelector('.prep-floating-header[data-table="edit-table-'+tab+'"]');
+      return source.scrollLeft>0 && source.scrollLeft===clone.scrollLeft;
+    }''',arg=tab)
+    first=table.locator('thead th').first.bounding_box()
+    cloned=floating.locator('thead th').first.bounding_box()
+    assert abs(first['x']-cloned['x'])<2

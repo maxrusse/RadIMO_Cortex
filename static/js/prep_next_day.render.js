@@ -110,6 +110,9 @@ function applyEditModeUI(tab) {
 
 // Sort entries by column while keeping worker rows grouped
 function sortEntries(tab, column) {
+  // A modal draft refers to its worker group by index. Do not reorder those
+  // groups until the dialog is closed, including calls outside the table UI.
+  if (currentEditEntry || document.querySelector('.modal-overlay.show, .break-popup-overlay.show')) return;
   const state = sortState[tab];
   if (state.column === column) {
     state.direction = state.direction === 'asc' ? 'desc' : 'asc';

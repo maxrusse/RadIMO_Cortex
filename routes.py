@@ -143,7 +143,8 @@ from balancer import (
 
 # Create Blueprint
 routes = Blueprint('routes', __name__)
-install_audit(routes, lambda: LOG_ROOT / 'changes.jsonl')
+install_audit(routes, lambda: LOG_ROOT / 'changes.jsonl',
+              sysadmin_access=lambda: _has_log_access())
 
 
 @routes.after_app_request
@@ -3022,10 +3023,12 @@ def logout() -> Any:
     """
     modality = resolve_modality_from_request()
 
+    # Sysadmin access must be revoked even when admin protection is disabled
+    # and no explicit admin login flag exists in the session.
+    session.pop('logs_access', None)
     if session.get('admin_logged_in'):
         # Admin logout - clear admin session, go to login page
         session.pop('admin_logged_in', None)
-        session.pop('logs_access', None)
         return redirect(url_for('routes.login', modality=modality))
 
     if session.get('access_granted'):

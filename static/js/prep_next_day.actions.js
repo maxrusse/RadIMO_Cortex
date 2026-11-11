@@ -1176,6 +1176,7 @@ function openEditModal(tab, groupIdx) {
   setEditPlanDraftFromGroup(group, { force: true });
   setModalMode('edit-plan');
   renderEditModalContent();
+  updatePrepOverlayTop();
   document.getElementById('edit-modal').classList.add('show');
 }
 
@@ -2156,6 +2157,7 @@ function openAddWorkerModal(tab) {
   renderAddWorkerModalContent();
   setModalMode('add-worker');
   document.getElementById('modal-title').textContent = tab === 'today' ? 'Add Worker (Today)' : 'Add Worker (Tomorrow)';
+  updatePrepOverlayTop();
   document.getElementById('edit-modal').classList.add('show');
 }
 
@@ -2410,6 +2412,7 @@ async function saveAddWorkerModal() {
         setModalMode('edit-plan');
         if (reopenEditModalForWorker(tab, existingWorker)) {
           document.getElementById('modal-title').textContent = `Edit Worker (${tab === 'today' ? 'Today' : 'Tomorrow'})`;
+          updatePrepOverlayTop();
           document.getElementById('edit-modal').classList.add('show');
           showMessage('info', window.RadimoUI.text(`${getWorkerDisplayName(existingWorker)} already exists. Opened Edit Worker instead.`, `${getWorkerDisplayName(existingWorker)} existiert bereits. Stattdessen wurde „Bearbeiten“ geöffnet.`));
         }
@@ -2537,6 +2540,7 @@ function onQuickGapFromModal() {
     return;
   }
   // Show break duration popup
+  updatePrepOverlayTop();
   document.getElementById('break-popup').classList.add('show');
   document.getElementById('break-custom-minutes').value = '';
   clearBreakPresets();
@@ -2680,8 +2684,10 @@ function updatePrepOverlayTop() {
   const header = document.querySelector('.app-header');
   if (!header) return;
   const bottom = Math.max(0, header.getBoundingClientRect().bottom);
-  document.documentElement.style.setProperty('--prep-overlay-top', `${Math.ceil(bottom + 8)}px`);
+  document.documentElement.style.setProperty('--prep-overlay-top', `${bottom > 0 ? Math.ceil(bottom + 8) : 0}px`);
 }
+
+window.addEventListener('scroll', updatePrepOverlayTop, { passive: true });
 
 // Initialize edit mode UI and load current tab (lazy loading)
 updatePrepOverlayTop();

@@ -158,6 +158,7 @@ body.theme-admin {
 
 .app-header__main {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   min-height: 52px;
@@ -200,6 +201,8 @@ body.theme-admin {
 
 .app-header__actions {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 0.35rem;
   margin-left: auto;
@@ -207,6 +210,8 @@ body.theme-admin {
 
 .app-nav {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 0.15rem;
 }

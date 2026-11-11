@@ -97,11 +97,20 @@ def test_sysadmin_password_validation_and_unset_password(admin_client,monkeypatc
     assert admin_client.post('/sysadmin/login',data={'password':''}).status_code==200
 
 
-def test_admin_logout_also_locks_sysadmin(admin_client):
+@pytest.mark.parametrize('session_flags', [
+    {'admin_logged_in': True}, {'access_granted': True}, {},
+])
+def test_logout_locks_sysadmin_for_every_session_type(admin_client, monkeypatch, session_flags):
+    monkeypatch.setitem(APP_CONFIG, 'admin_access_protection_enabled', False)
+    with admin_client.session_transaction() as session:
+        session.clear()
+        session.update(session_flags)
     unlock(admin_client)
+    assert admin_client.get('/admin/settings').status_code == 200
     admin_client.get('/logout')
     with admin_client.session_transaction() as session:
         assert not session.get('logs_access')
+    assert admin_client.get('/admin/settings').status_code == 302
 
 
 def test_sysadmin_login_requires_both_levels_for_admin_tools():
@@ -109,3 +118,20 @@ def test_sysadmin_login_requires_both_levels_for_admin_tools():
     assert client.post('/sysadmin/login',data={'password':'test-log-password','next':'/admin/tools'}).status_code==302
     with patch.object(routes,'is_admin_protection_enabled',return_value=True):
         assert '/login?' in client.get('/admin/tools').location
+
+
+@pytest.mark.parametrize('valid', [True, False])
+def test_audit_recognizes_only_current_sysadmin_tokens(tmp_path, monkeypatch, valid):
+    monkeypatch.setitem(APP_CONFIG, 'admin_access_protection_enabled', False)
+    monkeypatch.setitem(APP_CONFIG, 'change_history_enabled', True)
+    monkeypatch.setattr(routes, 'LOG_ROOT', tmp_path)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['logs_access'] = routes._log_password_fingerprint() if valid else 'expired'
+    with patch.object(routes, '_schedule_gunicorn_reload', return_value=4321) as reload:
+        response = client.post('/api/admin/runtime/reload', json={'confirmation': 'reload'})
+        assert response.status_code == (202 if valid else 401)
+        assert reload.call_count == int(valid)
+    entries, count = routes.read_entries(tmp_path / 'changes.jsonl')
+    assert count == 1
+    assert entries[0]['actor_role'] == ('sysadmin' if valid else 'shared / unverified')

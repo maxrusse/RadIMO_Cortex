@@ -94,7 +94,7 @@
             {% if entry.schedule_capture_failed %}<p>Vorher-/Nachher-Details konnten nicht erfasst werden. Die Änderung wurde gespeichert.</p>{% endif %}
             <strong>Antwort / Ergebnisdetails</strong><pre data-no-i18n>{{ entry.result|tojson(indent=2) }}</pre>
           </details></td>
-          <td>{{ {'admin': 'Admin', 'basic': 'Basiszugang', 'system': 'System', 'shared / unverified': 'Gemeinsamer Zugang / nicht verifiziert'}.get(entry.actor_role, entry.actor_role) }}</td>
+          <td>{{ {'sysadmin': 'Sysadmin', 'admin': 'Admin', 'basic': 'Basiszugang', 'system': 'System', 'shared / unverified': 'Gemeinsamer Zugang / nicht verifiziert'}.get(entry.actor_role, entry.actor_role) }}</td>
           <td><span class="ui-badge {{ 'ui-badge--ok' if entry.outcome == 'success' else 'ui-badge--error' if entry.outcome == 'failed' else '' }}">{{ {'success': 'Erfolgreich', 'failed': 'Fehlgeschlagen', 'partial': 'Teilweise ausgeführt', 'redirected': 'Weitergeleitet'}.get(entry.outcome, entry.outcome) }}</span> <small>{{ entry.status or '' }}</small></td>
         </tr>
       {% else %}

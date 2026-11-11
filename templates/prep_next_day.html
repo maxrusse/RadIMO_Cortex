@@ -674,6 +674,18 @@
       overflow-x: auto;
     }
 
+    .prep-floating-header {
+      position: fixed;
+      top: 0;
+      z-index: 50;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    body:has(.modal-overlay.show, .break-popup-overlay.show, dialog[open]) .prep-floating-header {
+      display: none !important;
+    }
+
     .compact-grid .header-top th { height: 25px; }
     .compact-grid .header-sub th { top: 25px; }
     .compact-grid thead th[rowspan] { z-index: 11; }
@@ -1217,6 +1229,7 @@
   <script src="{{ url_for('static', filename='js/prep_next_day.config.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.state.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.render.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/prep_table_header.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.coverage.js') }}"></script>
   <script src="{{ url_for('static', filename='js/prep_next_day.actions.js') }}"></script>
 {% endblock %}
