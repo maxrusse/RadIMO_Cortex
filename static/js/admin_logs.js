@@ -168,7 +168,10 @@
   copyButton.addEventListener('click', async () => {
     try {
       const visible = Array.from(preview.querySelectorAll('.log-line:not(.log-line--hidden)')).map(line => line.textContent).join('');
-      await navigator.clipboard.writeText(visible);
+      if (!await window.RadimoClipboard.copy(visible)) {
+        preview.focus();
+        return;
+      }
       copyButton.textContent = t('Copied');
       setTimeout(() => { copyButton.textContent = t('Copy'); }, 1200);
     } catch (_) {

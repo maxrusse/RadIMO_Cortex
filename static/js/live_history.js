@@ -42,12 +42,7 @@
 
   async function copy(text) {
     if (!text) return false;
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (error) {
-      return false;
-    }
+    return window.RadimoClipboard.copy(text);
   }
 
   function render() {
@@ -71,9 +66,19 @@
     const status = document.getElementById('liveCopyStatus');
     if (!status) return;
     status.className = `live-result__copy ${ok ? 'is-ok' : 'is-error'}`;
-    status.textContent = ok
-      ? `✓ ${abbreviation} ${t('copied')}`
-      : `${t('Copy not possible')} · ${abbreviation}`;
+    if (ok) {
+      status.textContent = `✓ ${abbreviation} ${t('copied')}`;
+      return;
+    }
+    status.textContent = `${t('Copy not possible')} · `;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'live-history__copy';
+    retry.dataset.copyAbbreviation = abbreviation;
+    retry.textContent = `${abbreviation} ⧉`;
+    retry.title = t('Copy abbreviation');
+    retry.setAttribute('aria-label', `${t('Copy abbreviation')}: ${abbreviation}`);
+    status.appendChild(retry);
   }
 
   /**
@@ -93,11 +98,14 @@
   }
 
   document.addEventListener('click', async event => {
-    const button = event.target.closest('[data-history-copy]');
+    const button = event.target.closest('[data-history-copy], [data-copy-abbreviation]');
     if (!button) return;
-    const entry = load()[Number(button.dataset.historyCopy)];
-    if (!entry) return;
-    const ok = await copy(entry.abbreviation);
+    const retry = button.hasAttribute('data-copy-abbreviation');
+    const abbreviation = retry ? button.dataset.copyAbbreviation
+      : load()[Number(button.dataset.historyCopy)]?.abbreviation;
+    if (!abbreviation) return;
+    const ok = await copy(abbreviation);
+    if (retry) setCopyStatus(ok, abbreviation);
     button.classList.toggle('is-copied', ok);
     setTimeout(() => button.classList.remove('is-copied'), 1200);
   });

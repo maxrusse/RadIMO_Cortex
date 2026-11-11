@@ -46,3 +46,21 @@ keine Betriebssystem- oder Abhängigkeitspakete installiert oder aktualisiert.
   beim Öffnen neu. Tabellenaktionen hinter einem geöffneten Editor bleiben
   dadurch vollständig gesperrt; ein anderer Eintrag kann den Entwurf nicht
   über einen unbedeckten Streifen am oberen Fensterrand ersetzen.
+
+## Zwischenablage: bewährten Kopierweg wiederhergestellt
+
+Der früher lokal genutzte Textfeld-/`execCommand('copy')`-Weg ergänzt wieder die
+moderne Clipboard-API. Damit funktioniert das Kopieren auch auf internen
+HTTP-Seiten, wo die moderne API fehlt, sowie bei abgewiesenem modernem Zugriff.
+Beide Live-Ansichten, Verlauf und Protokollvorschau verwenden denselben Helfer.
+
+Ein fehlgeschlagener Kopierversuch wird nicht als Erfolg gemeldet. Der aktuelle
+Ergebnisbereich bietet dann einen erneuten Kopierversuch, ohne eine weitere
+Person zuzuweisen. Temporäre Textfelder werden entfernt und vorheriger Fokus
+sowie Textauswahl wiederhergestellt.
+
+Historischer Abgleich: Der alte lokale RadIMO-Code verwendet den Ersatzweg
+bereits im CTSBZ8-Archiv (Dateistand 18.11.2024). Cortex behielt ihn bis zum
+Stand 9b53c5a; Commit 376bdaa vom 31.07.2026 entfernte ihn. Das Designupdate
+vom 15.10.2026 übernahm die API-only-Funktion in den Live-Verlauf. Die alte und
+die wiederhergestellte Funktion wurden auf HTTP mit echtem Einfügen verglichen.

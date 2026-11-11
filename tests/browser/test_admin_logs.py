@@ -42,6 +42,7 @@ def log_page():
                 writeText: async text => { window.copiedText = text; }
             }, configurable: true});
         }''')
+        page.add_script_tag(path=str(ROOT / 'static/js/clipboard.js'))
         page.add_script_tag(path=str(ROOT / 'static/js/admin_logs.js'))
         yield page
         browser.close()
@@ -75,3 +76,16 @@ def test_copy_obeys_filter_and_is_disabled_without_matches(log_page):
     page.evaluate("deliver(1, '[INFO] no errors')")
     page.wait_for_function("document.querySelector('#refresh-preview').disabled === false")
     assert page.locator('#copy-preview').is_disabled()
+
+
+def test_plain_http_log_copy_uses_legacy_fallback(log_page):
+    page=log_page
+    page.evaluate("() => {Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});}")
+    page.locator('#tab-technical').click()
+    page.evaluate("deliver(0, '[INFO] do not copy\\n[ERROR] COPY_THIS')")
+    page.wait_for_function("document.querySelector('#refresh-preview').disabled === false")
+    page.locator('[data-level="error"]').click()
+    page.locator('#copy-preview').click()
+    page.evaluate("() => {const input=document.createElement('textarea');input.id='clipboard-paste';document.body.appendChild(input);}")
+    target=page.locator('#clipboard-paste');target.focus();target.press('Control+V')
+    assert target.input_value()=='[ERROR] COPY_THIS\n'

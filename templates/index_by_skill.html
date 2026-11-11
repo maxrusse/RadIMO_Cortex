@@ -473,7 +473,7 @@
     }
 
     async function copyTextToClipboard(text) {
-      await navigator.clipboard.writeText(text);
+      return window.RadimoClipboard.copy(text);
     }
 
     // Keep the minimum cooldown, but never unlock before the request has settled.
