@@ -146,3 +146,18 @@ shift/gap rule shapes, including `match`, `type`, `day_part`/`day_parts`,
 Use full `skill_modality` values in `skill_overrides`; starting a rule with
 `all: -1` and explicitly reopening permitted combinations makes the resulting
 pool clear. Do not invent modality-only or skill-only shorthand keys.
+
+## Sysadmin-Zugang
+
+`sysadmin_password` schützt Einstellungen, YAML-Editor, Dateiverwaltung, System
+mit Anwendungsreload und Protokolle zusätzlich zur Admin-Anmeldung. Die
+zugehörigen APIs verlangen denselben Zugang. Das Passwort wird ausschließlich
+in YAML geändert; ein Passwortfeld in den normalen Einstellungen gibt es nicht.
+
+Bestehende Konfigurationen funktionieren weiter: Wenn `sysadmin_password` leer
+oder nicht vorhanden ist, wird das bisherige `log_password` als Übergang
+akzeptiert. Sobald ein Sysadmin-Passwort gesetzt ist, hat es Vorrang.
+Passwortwechsel und „Sysadmin abmelden“ sperren die geschützten Bereiche erneut.
+
+CSV-Upload/Import sowie Heute und Planung bleiben auf Admin-Ebene. Die Liste
+vorbereiteter Tage enthält nur Datum und Kennzeichnung des aktiven Dateistands.

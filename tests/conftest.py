@@ -29,6 +29,7 @@ def isolate_change_history(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def log_test_password(monkeypatch):
     from config import APP_CONFIG
+    monkeypatch.setitem(APP_CONFIG, 'sysadmin_password', '')
     monkeypatch.setitem(APP_CONFIG, 'log_password', 'test-log-password')
 
 

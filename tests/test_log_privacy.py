@@ -75,21 +75,14 @@ def test_log_config_defaults():
     assert config['log_password'] == ''
 
 
-def test_password_settings_never_echo_secret_and_blank_preserves_it(tmp_path, monkeypatch):
+def test_log_password_can_only_be_changed_through_protected_yaml(tmp_path, monkeypatch):
     config = tmp_path / 'config.yaml'
     config.write_text('log_password: old\n')
     monkeypatch.setattr(routes, 'CONFIG_FILE_PATH', config)
-    with patch.object(routes, '_replace_config_file', return_value={}):
-        result = routes._replace_general_config_settings({'log_password': 'new\\secret'})
-        assert 'log_password' not in result['settings']
-    assert 'new\\\\secret' in routes._patch_top_level_yaml_scalars('log_password: old\n', {'log_password': 'new\\secret'})
-    with patch.object(routes, '_replace_config_file') as replace:
-        routes._replace_general_config_settings({'log_password': ''})
-        assert b'log_password: old' in replace.call_args.args[0]
-    for days in [0, -1, True, 1.5, 'invalid', 999999999]:
-        with pytest.raises(ValueError):
-            routes._replace_general_config_settings({'log_retention_days': days})
-
+    for password in ('new', '', None):
+        with pytest.raises(ValueError, match='geschützten YAML'):
+            routes._replace_general_config_settings({'log_password': password})
+    assert config.read_text() == 'log_password: old\n'
 
 @pytest.mark.parametrize('days', [0, -1, True, 'invalid', 1.5, 999999999])
 def test_full_yaml_config_rejects_invalid_retention(days):

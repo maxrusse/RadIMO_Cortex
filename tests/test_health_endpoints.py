@@ -73,6 +73,9 @@ class TestHealthEndpoints(unittest.TestCase):
             "timestamp": "2026-02-10T12:00:00+01:00",
         }
 
+        with self.client.session_transaction() as session:
+            session["admin_logged_in"] = True
+            session["logs_access"] = routes_module._log_password_fingerprint()
         response = self.client.get("/status")
 
         self.assertEqual(response.status_code, 200)

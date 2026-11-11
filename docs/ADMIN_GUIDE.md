@@ -55,3 +55,20 @@ The Weight Matrix stores normal and strict assignment weights in `data/button_we
 Use `/healthz` for a basic health response and `/readyz` (or **Status**) for readiness details. Logs provides current and rotated `gunicorn.log`, `selection.log`, `flow_balance.log`, and `import.log`; `selection.log` is the primary application log and `import.log` records CSV/preload and generated-schedule JSON events, including parse failures.
 
 At the configured daily reset time (`scheduler.daily_reset_time`, demo: `07:30`), the app promotes the staged day and resets daily counters. Review Today and readiness on the next workday; Planning may also be loaded lazily when requested.
+
+## Sysadmin-Bereich
+
+Unter Verwaltung stehen Dateien/Backups, System mit Reload, Einstellungen und
+Protokolle hinter dem zusätzlichen Sysadmin-Passwort. Die normale Admin-Anmeldung
+allein reicht für diese Seiten und APIs nicht. Nach dem Entsperren kann der
+Zugang über „Sysadmin abmelden“ wieder geschlossen werden.
+
+Die vollständige YAML-Konfiguration liegt unter Einstellungen > Erweiterte
+Administration. `sysadmin_password` wird nur dort oder direkt in der Server-YAML
+geändert. Das frühere `log_password` bleibt für bestehende Dateien als Übergang
+kompatibel. CSV-Upload/Import bleibt im normalen Admin-Bereich.
+
+Heute/Planung zeigen die vollständige Mitarbeitertabelle ohne eigenen vertikalen
+Scrollbereich. Stift- und Papierkorbsymbole öffnen Bearbeiten bzw. Löschen.
+Die rechte Aktionsspalte bleibt beim horizontalen Scrollen erreichbar.
+Abdeckungswarnungen berücksichtigen nur tatsächlich konfigurierte Zuweisungsbuttons.

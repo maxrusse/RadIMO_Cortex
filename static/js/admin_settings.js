@@ -26,7 +26,6 @@
   function generalPayload() {
     const data = new FormData(form);
     return {
-      log_password: String(data.get('log_password') || ''),
       change_history_enabled: data.has('change_history_enabled'),
       log_retention_days: Number(data.get('log_retention_days')),
       default_language: data.get('default_language'),
@@ -38,7 +37,7 @@
     };
   }
 
-  form.addEventListener('submit', async event => {
+  form?.addEventListener('submit', async event => {
     event.preventDefault();
     const payload = generalPayload();
     if (initialSettings.admin_access_protection_enabled && !payload.admin_access_protection_enabled) {
@@ -57,8 +56,6 @@
       }));
       const detail = [result.backup_path ? `Backup: ${result.backup_path}` : '', result.ready === false ? 'Readiness is not green.' : ''].filter(Boolean).join(' · ');
       showMessage(result.restart_required || result.ready === false ? 'warning' : 'success', 'Settings saved.', detail);
-      delete payload.log_password;
-      form.elements.log_password.value = '';
       Object.assign(initialSettings, payload);
     } catch (error) {
       showMessage('error', error.message || 'Settings could not be saved.');
@@ -85,6 +82,7 @@
     }
   }
 
+  if (!advanced) return;
   advanced.addEventListener('toggle', () => { if (advanced.open) loadYaml(); });
   acknowledgement.addEventListener('change', () => {
     saveFullButton.disabled = !yamlLoaded || !acknowledgement.checked || editor.disabled;

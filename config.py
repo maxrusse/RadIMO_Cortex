@@ -131,7 +131,10 @@ def _build_app_config(raw_config: Optional[Dict[str, Any]] = None) -> Dict[str, 
         raise ValueError('change_history_enabled must be true or false')
     if not isinstance(raw_config.get('log_password', ''), str):
         raise ValueError('log_password must be a string')
+    if not isinstance(raw_config.get('sysadmin_password', ''), str):
+        raise ValueError('sysadmin_password must be a string')
     config: Dict[str, Any] = {
+        'sysadmin_password': raw_config.get('sysadmin_password', ''),
         'log_password': raw_config.get('log_password', ''),
         'change_history_enabled': history_enabled,
         'log_retention_days': int(retention_days),

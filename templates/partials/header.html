@@ -32,16 +32,21 @@
           <div class="system-menu__group">
             <span class="system-menu__label">Schedule data</span>
             <a href="{{ url_for('routes.upload_file', modality=_menu_mod) }}"{% if active_page == 'upload' %} aria-current="page"{% endif %}>Import</a>
-            <a href="{{ url_for('routes.admin_files_page') }}"{% if active_tool == 'files' %} aria-current="page"{% endif %}>Files &amp; backups</a>
           </div>
           <div class="system-menu__group">
-            <span class="system-menu__label">System</span>
+            <span class="system-menu__label">Sysadmin</span>
+            <a href="{{ url_for('routes.admin_files_page') }}"{% if active_tool == 'files' %} aria-current="page"{% endif %}>Files &amp; backups</a>
             <a href="{{ url_for('routes.admin_tools_page') }}"{% if active_tool in ['overview', 'status'] %} aria-current="page"{% endif %}>System status</a>
             <a href="{{ url_for('routes.admin_logs_page') }}"{% if active_tool == 'logs' %} aria-current="page"{% endif %}>Logs</a>
             <a href="{{ url_for('routes.admin_settings_page') }}"{% if active_tool == 'settings' %} aria-current="page"{% endif %}>Settings</a>
           </div>
         </div>
       </details>
+      {% endif %}
+      {% if sysadmin_unlocked %}
+      <form method="post" action="{{ url_for('routes.logs_logout') }}">
+        <button class="app-header__session" type="submit" style="border:0;background:transparent;font:inherit;cursor:pointer;">Sysadmin abmelden</button>
+      </form>
       {% endif %}
       <span class="app-header__divider" aria-hidden="true"></span>
       {% if is_admin %}

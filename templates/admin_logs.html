@@ -56,7 +56,7 @@
 
   {% set present_logs = sources|selectattr('exists')|list|length %}
   <div class="ops-shell">
-  <form method="post" action="{{ url_for('routes.logs_logout') }}"><button class="ui-btn ui-btn--secondary" type="submit">Log-Zugang abmelden</button></form>
+  <form method="post" action="{{ url_for('routes.logs_logout') }}"><button class="ui-btn ui-btn--secondary" type="submit">Sysadmin abmelden</button></form>
   <div class="ops-page-head">
     <span></span>
     <span class="ops-badge {{ '' if present_logs == sources|length else 'ops-badge--warning' }}">{{ present_logs }}/{{ sources|length }} sources online</span>

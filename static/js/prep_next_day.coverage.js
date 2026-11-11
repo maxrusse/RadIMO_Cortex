@@ -29,7 +29,18 @@ function countActiveBySkillAndModality(groups) {
   return counts;
 }
 
-// Plain warning line: which modality × skill combinations nobody covers (1 or w) on this day.
+// Use the same visibility rules as the assignment buttons on the live pages.
+function isCoverageButtonVisible(skill, modKey) {
+  const modality = MODALITY_SETTINGS[modKey] || {};
+  const settings = SKILL_SETTINGS[skill] || {};
+  const includes = (values, value) => values.map(item => String(item).toLowerCase()).includes(value.toLowerCase());
+  return (modality.valid_skills == null || includes(modality.valid_skills, skill))
+    && !includes(modality.hidden_skills || [], skill)
+    && (settings.valid_modalities == null || includes(settings.valid_modalities, modKey))
+    && !includes(settings.hidden_modalities || [], modKey);
+}
+
+// Warn only for configured assignment buttons without an active worker.
 function renderCoverageGaps(tab) {
   const container = document.getElementById(`coverage-gaps-${tab}`);
   if (!container) return;
@@ -42,7 +53,7 @@ function renderCoverageGaps(tab) {
   const parts = [];
   MODALITIES.forEach(mod => {
     const modKey = mod.toLowerCase();
-    const missing = SKILLS.filter(skill => counts[skill][modKey] === 0);
+    const missing = SKILLS.filter(skill => isCoverageButtonVisible(skill, modKey) && counts[skill][modKey] === 0);
     if (!missing.length) return;
     const modLabel = (MODALITY_SETTINGS[modKey]?.label || mod).toUpperCase();
     parts.push(`<span class="prep-coverage__group"><span class="prep-coverage__mod" style="--mod-color:${getModalityColor(modKey)}">${escapeHtml(modLabel)}</span> ${escapeHtml(missing.join(', '))}</span>`);
@@ -143,7 +154,7 @@ async function renderPreparedDays() {
   if (!container) return;
   const t = text => window.RadimoI18n?.t(text) || text;
   try {
-    const response = await fetch('/api/admin/files/manifest');
+    const response = await fetch('/api/prep-next-day/prepared-days');
     if (!response.ok) return;
     const payload = await response.json();
     const manifest = payload.manifest || payload;

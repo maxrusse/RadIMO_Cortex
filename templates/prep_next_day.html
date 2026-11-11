@@ -655,6 +655,11 @@
 
     /* Action buttons cell */
     .action-cell {
+      width: 1%;
+      position: sticky;
+      right: 0;
+      z-index: 2;
+      background: #fff;
       white-space: nowrap;
     }
 
@@ -663,10 +668,10 @@
     }
 
     /* ---- New design: scope bar, toolbar, coverage ---- */
-    /* The matrix scrolls inside its own area so both header rows stay visible. */
+    /* Show every worker; the page scrolls vertically, the matrix only horizontally. */
     .prep-editor .table-container {
-      max-height: calc(100vh - 210px);
-      overflow: auto;
+      max-height: none;
+      overflow-x: auto;
     }
 
     .compact-grid .header-top th { height: 25px; }
@@ -937,10 +942,12 @@
     }
 
     .action-cell .row-action {
-      min-height: 22px;
-      padding: 0.1rem 0.45rem;
-      font-size: 0.7rem;
+      width: 28px;
+      min-height: 28px;
+      padding: 4px;
     }
+
+    .row-action svg { width: 16px; height: 16px; pointer-events: none; }
 
     .action-cell__hint { color: var(--c-faint); font-size: 0.7rem; }
 

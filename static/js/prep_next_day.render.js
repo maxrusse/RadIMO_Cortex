@@ -188,7 +188,7 @@ function renderTableHeader(tab) {
   }
 
   headerHtml += '<th rowspan="2" class="modifier-col">Load Mod.</th>';
-  headerHtml += '<th rowspan="2">Actions</th>';
+  headerHtml += '<th rowspan="2" class="action-cell">Actions</th>';
   headerHtml += '</tr>';
 
   // Second header row: sub-columns (3-char labels for compactness)
@@ -489,8 +489,8 @@ function renderTable(tab) {
         } else {
           tr.innerHTML += `
             <td rowspan="${totalRows}" class="action-cell" style="vertical-align: middle;">
-              <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm row-action" onclick="openEditModal('${tab}', ${gIdx})" title="Edit">Edit</button>
-              <button type="button" class="ui-btn ui-btn--danger-outline ui-btn--sm row-action" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="Delete all">Delete</button>
+              <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm row-action" onclick="openEditModal('${tab}', ${gIdx})" title="${escapeHtml(window.RadimoUI.text('Edit', 'Bearbeiten'))}" aria-label="${escapeHtml(window.RadimoUI.text('Edit', 'Bearbeiten'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5Z M14 5l5 5"/></svg></button>
+              <button type="button" class="ui-btn ui-btn--danger-outline ui-btn--sm row-action" onclick="deleteWorkerEntries('${tab}', ${gIdx})" title="${escapeHtml(window.RadimoUI.text('Delete all', 'Alle Einträge löschen'))}" aria-label="${escapeHtml(window.RadimoUI.text('Delete all', 'Alle Einträge löschen'))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7"/></svg></button>
             </td>`;
         }
       }

@@ -714,10 +714,12 @@ def _build_admin_files_manifest() -> dict[str, Any]:
         },
     ]
 
+    unlocked = _has_log_access()
     return {
-        'targets': targets,
+        'targets': [entry for entry in targets if unlocked or entry['key'] != 'config'],
         'staged_days': _list_staged_day_files(),
-        'managed_backups': _list_managed_file_backups(),
+        'managed_backups': [entry for entry in _list_managed_file_backups()
+                            if unlocked or entry['target'] != 'config'],
         'backup_paths': {
             'admin_files': str(ADMIN_FILE_BACKUP_DIR.resolve()),
             'skill_roster': str(SKILL_ROSTER_BACKUP_DIR.resolve()),
@@ -902,7 +904,6 @@ GENERAL_CONFIG_FIELDS = (
     'skill_roster_auto_import',
     'access_protection_enabled',
     'admin_access_protection_enabled',
-    'log_password',
     'change_history_enabled',
     'log_retention_days',
 )
@@ -947,6 +948,8 @@ def _patch_top_level_yaml_scalars(raw_text: str, updates: dict[str, Any]) -> str
 def _replace_general_config_settings(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError('Settings payload must be an object')
+    if 'log_password' in data or 'sysadmin_password' in data:
+        raise ValueError('Sysadmin-Passwort nur in der geschützten YAML-Konfiguration ändern')
 
     raw_bytes = CONFIG_FILE_PATH.read_bytes()
     current = _validate_yaml_payload(raw_bytes)
@@ -987,11 +990,6 @@ def _replace_general_config_settings(data: dict[str, Any]) -> dict[str, Any]:
     if isinstance(days, bool) or not str(days).isdigit() or not 1 <= int(days) <= 36500:
         raise ValueError('log_retention_days must be an integer between 1 and 36500')
     updates['log_retention_days'] = int(days)
-    password = data.get('log_password')
-    if password is not None and not isinstance(password, str):
-        raise ValueError('log_password must be a string')
-    if password:
-        updates['log_password'] = password
     patched_text = _patch_top_level_yaml_scalars(raw_bytes.decode('utf-8'), updates)
     result = _replace_config_file(patched_text.encode('utf-8'))
     return {**result, 'settings': {key: value for key, value in updates.items() if key != 'log_password'}}
@@ -2386,41 +2384,59 @@ def enforce_log_retention():
         current_app.logger.exception('Log retention maintenance failed')
 
 
+def _sysadmin_password():
+    # Existing installations keep working without a bundled config replacement.
+    return str(APP_CONFIG.get('sysadmin_password') or APP_CONFIG.get('log_password') or '')
+
+
 def _log_password_fingerprint():
     return hmac.new(str(APP_CONFIG['secret_key']).encode(),
-                    str(APP_CONFIG.get('log_password', '')).encode(), hashlib.sha256).hexdigest()
+                    _sysadmin_password().encode(), hashlib.sha256).hexdigest()
+
+
+def _has_log_access():
+    return bool(_sysadmin_password()) and hmac.compare_digest(
+        str(session.get('logs_access', '')), _log_password_fingerprint())
 
 
 def logs_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not APP_CONFIG.get('log_password') or not hmac.compare_digest(
-            str(session.get('logs_access', '')), _log_password_fingerprint()
-        ):
+        if not _has_log_access():
             if request.path.startswith('/api/'):
-                return jsonify(success=False, error='Log-Passwort erforderlich'), 401
-            return redirect(url_for('routes.logs_login'))
+                return jsonify(success=False, error='Sysadmin-Passwort erforderlich'), 401
+            return redirect(url_for('routes.logs_login', next=request.path))
         response = current_app.make_response(f(*args, **kwargs))
         response.headers['Cache-Control'] = 'no-store'
         return response
     return decorated
 
 
+sysadmin_required = logs_required
+
+
 @routes.route('/logs/login', methods=['GET', 'POST'])
+@routes.route('/sysadmin/login', methods=['GET', 'POST'])
 def logs_login():
     error = None
+    requested_next = request.form.get('next') or request.args.get('next')
+    allowed = {url_for('routes.' + endpoint) for endpoint in (
+        'admin_advanced_config_page', 'admin_settings_page', 'admin_files_page',
+        'admin_tools_page', 'admin_logs_page', 'status_page')}
+    login_next = requested_next if requested_next in allowed else url_for('routes.admin_logs_page')
     if request.method == 'POST':
-        configured = str(APP_CONFIG.get('log_password') or '')
+        configured = _sysadmin_password()
         supplied = request.form.get('password', '')
         if configured and hmac.compare_digest(supplied.encode(), configured.encode()):
             session['logs_access'] = _log_password_fingerprint()
-            return redirect(url_for('routes.admin_logs_page'))
-        error = 'Falsches Passwort' if configured else 'Bitte zuerst ein Log-Passwort in den Einstellungen festlegen.'
-    return render_template('login.html', login_type='logs', passwordless=False,
-                           error=error, modality=resolve_modality_from_request())
+            return redirect(login_next)
+        error = 'Falsches Passwort' if configured else 'Bitte zuerst sysadmin_password in config.yaml auf dem Server festlegen.'
+    return render_template('login.html', login_type='sysadmin', passwordless=False,
+                           error=error, login_next=login_next, modality=resolve_modality_from_request())
 
 
 @routes.route('/logs/logout', methods=['POST'])
+@routes.route('/sysadmin/logout', methods=['POST'])
 def logs_logout():
     session.pop('logs_access', None)
     return redirect(url_for('routes.logs_login'))
@@ -2647,6 +2663,7 @@ def inject_modality_settings() -> dict[str, Any]:
         'is_access_protection_enabled': is_access_protection_enabled(),
         'is_admin_protection_enabled': is_admin_protection_enabled(),
         'has_basic_access': has_basic_access(),
+        'sysadmin_unlocked': _has_log_access(),
         'is_authenticated': is_authenticated(),
         'default_language': APP_CONFIG.get('default_language', 'de'),
     }
@@ -3008,6 +3025,7 @@ def logout() -> Any:
     if session.get('admin_logged_in'):
         # Admin logout - clear admin session, go to login page
         session.pop('admin_logged_in', None)
+        session.pop('logs_access', None)
         return redirect(url_for('routes.login', modality=modality))
 
     if session.get('access_granted'):
@@ -3068,6 +3086,8 @@ def readyz() -> Any:
 
 
 @routes.route('/status')
+@admin_required
+@sysadmin_required
 def status_page() -> Any:
     health_payload = _build_health_payload()
     readiness_payload, readiness_http_status = _build_readiness_payload(
@@ -3105,6 +3125,7 @@ def _schedule_gunicorn_reload(delay_seconds: float = 0.5) -> int:
 
 @routes.route('/admin/tools')
 @admin_required
+@sysadmin_required
 def admin_tools_page() -> Any:
     readiness_payload, readiness_http_status = _build_readiness_payload(
         context='admin_tools_page',
@@ -3126,6 +3147,7 @@ def admin_tools_page() -> Any:
 
 @routes.route('/api/admin/runtime/reload', methods=['POST'])
 @admin_required
+@sysadmin_required
 def admin_runtime_reload() -> Any:
     payload = request.get_json(silent=True) or {}
     if payload.get('confirmation') != 'reload':
@@ -3146,9 +3168,22 @@ def admin_runtime_reload() -> Any:
 
 @routes.route('/admin/settings')
 @admin_required
+@sysadmin_required
 def admin_settings_page() -> Any:
+    return _render_settings_page(False)
+
+
+@routes.route('/admin/settings/advanced')
+@admin_required
+@logs_required
+def admin_advanced_config_page() -> Any:
+    return _render_settings_page(True)
+
+
+def _render_settings_page(advanced_mode):
     return render_template(
         'admin_settings.html',
+        advanced_mode=advanced_mode,
         settings={
             'change_history_enabled': APP_CONFIG.get('change_history_enabled', True),
             'log_retention_days': APP_CONFIG.get('log_retention_days', 100),
@@ -3169,6 +3204,7 @@ def admin_settings_page() -> Any:
 
 @routes.route('/api/admin/config/general', methods=['POST'])
 @admin_required
+@sysadmin_required
 def admin_config_general_update() -> Any:
     try:
         result = _replace_general_config_settings(request.get_json(silent=True) or {})
@@ -3300,6 +3336,7 @@ def download_logs() -> Any:
 
 @routes.route('/admin/files')
 @admin_required
+@sysadmin_required
 def admin_files_page() -> Any:
     return render_template(
         'admin_files.html',
@@ -3312,6 +3349,7 @@ def admin_files_page() -> Any:
 
 @routes.route('/api/admin/files/manifest', methods=['GET'])
 @admin_required
+@sysadmin_required
 def admin_files_manifest() -> Any:
     return jsonify({
         'success': True,
@@ -3319,8 +3357,18 @@ def admin_files_manifest() -> Any:
     })
 
 
+@routes.route('/api/prep-next-day/prepared-days', methods=['GET'])
+@admin_required
+def prepared_planning_days() -> Any:
+    return jsonify(staged_days=[
+        {'target_date': entry['target_date'], 'is_canonical': entry['is_canonical']}
+        for entry in _list_staged_day_files()
+    ])
+
+
 @routes.route('/api/admin/files/download', methods=['GET'])
 @admin_required
+@sysadmin_required
 def admin_files_download() -> Any:
     target = (request.args.get('target') or '').strip().lower()
     if target == 'config':
@@ -3358,6 +3406,7 @@ def admin_files_download() -> Any:
 
 @routes.route('/api/admin/files/upload', methods=['POST'])
 @admin_required
+@sysadmin_required
 def admin_files_upload() -> Any:
     target = (request.form.get('target') or '').strip().lower()
     uploaded_file = request.files.get('file')
@@ -3411,6 +3460,7 @@ def admin_files_upload() -> Any:
 
 @routes.route('/api/admin/files/restore', methods=['POST'])
 @admin_required
+@sysadmin_required
 def admin_files_restore() -> Any:
     data = request.get_json(silent=True) or {}
     target = str(data.get('target', '')).strip().lower()
@@ -3463,6 +3513,7 @@ def admin_files_restore() -> Any:
 
 @routes.route('/api/admin/files/reload', methods=['POST'])
 @admin_required
+@sysadmin_required
 def admin_files_reload() -> Any:
     data = request.get_json(silent=True) or {}
     target = str(data.get('target', '')).strip().lower()

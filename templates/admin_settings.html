@@ -30,6 +30,7 @@
   {% set header_links = header_nav.links %}
   {% include 'partials/header.html' %}
 
+  {% if not advanced_mode %}
   <div class="settings-layout">
     <section class="settings-card" aria-labelledby="general-settings-title">
       <h2 id="general-settings-title">General settings</h2>
@@ -71,7 +72,6 @@
             <label class="toggle-option"><input type="checkbox" name="admin_access_protection_enabled"{% if settings.admin_access_protection_enabled %} checked{% endif %}> Protect admin pages with admin password</label>
           </fieldset>
         </div>
-        <div class="field"><label for="log-password">Separates Log-Passwort</label><input id="log-password" name="log_password" type="password" autocomplete="new-password" placeholder="Leer lassen: unverändert"><p>Erforderlich für Log-Ansicht und Downloads.</p></div>
         <label><input type="checkbox" name="change_history_enabled"{% if settings.change_history_enabled %} checked{% endif %}> Änderungsverlauf erfassen</label>
         <div class="field"><label for="log-retention">Aufbewahrung der Protokolle (Tage)</label><input id="log-retention" name="log_retention_days" type="number" min="1" max="36500" required value="{{ settings.log_retention_days }}"></div>
         <div class="toolbar">
@@ -80,16 +80,18 @@
       </form>
     </section>
 
-    <aside class="settings-card" aria-labelledby="config-file-title">
-      <h2 id="config-file-title">Configuration file</h2>
-      <code class="path">{{ config_file.path }}</code>
-      <p class="field-help" style="margin-top:.4rem;">{{ config_file.modified or 'unavailable' }} · {{ config_file.size_bytes or 0 }} bytes</p>
-      <div class="toolbar">
-        <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_files_download', target='config') }}">Download YAML</a>
-        <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_files_page') }}">Backups</a>
-      </div>
+    <aside class="settings-card">
+      <details>
+        <summary>Erweiterte Administration</summary>
+        <p class="field-help">YAML-Konfiguration nur mit separatem Sysadmin-Passwort öffnen.</p>
+        <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_advanced_config_page') }}">Geschützte Konfiguration öffnen</a>
+      </details>
     </aside>
   </div>
+  {% else %}
+  <p><a href="{{ url_for('routes.admin_settings_page') }}">Zurück zu den Einstellungen</a></p>
+  <p>Geschützte Administration · Sysadmin-Passwort ausschließlich in config.yaml ändern.</p>
+  <a class="ui-btn ui-btn--secondary" href="{{ url_for('routes.admin_files_download', target='config') }}">Download YAML</a>
 
   <details class="settings-card advanced" id="advanced-config">
     <summary>Advanced YAML</summary>
@@ -103,6 +105,8 @@
       </div>
     </div>
   </details>
+
+  {% endif %}
 
   <script id="admin-settings-config" type="application/json">{{ settings|tojson }}</script>
   <script src="{{ url_for('static', filename='js/admin_settings.js') }}"></script>
