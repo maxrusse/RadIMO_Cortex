@@ -77,7 +77,7 @@
     }
 
     .load-table .num,
-    .weight-value { text-align: right; font-variant-numeric: tabular-nums; }
+    .load-table .weight-value { text-align: right; font-variant-numeric: tabular-nums; }
 
     .sortable { cursor: pointer; user-select: none; }
     .sortable:hover { color: var(--c-ink); }
@@ -346,7 +346,7 @@
             <th class="sortable num" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">Correction</th>
             <th class="sortable num" data-sort="weight" onclick="sortTable('global', 'weight')">Total</th>
             <th class="sortable num" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
-            <th class="sortable dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')" title="Weight per worked hour compared with the median of all workers with enough hours. Filters only select rows; totals stay global.">Deviation from median</th>
+            <th class="sortable num dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')" title="Weight per worked hour compared with the median of all workers with enough hours. Filters only select rows; totals stay global.">Deviation from median</th>
           </tr>
         </thead>
         <tbody id="tbody-global"></tbody>

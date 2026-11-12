@@ -438,6 +438,17 @@ function getCellDerivedWeight(worker, modality, skill) {
   return getCellCount(worker, modality, skill) * getConfiguredSkillModalityWeight(skill, modality);
 }
 
+function assignmentWeightCell(worker, modality, skill) {
+  const count = getCellCount(worker, modality, skill);
+  if (!count) return '<td class="is-zero">–</td>';
+  const details = worker.modalities?.[modality]?.skill_weight_details?.[skill];
+  if (!details || details.count !== count || !Number.isFinite(details.weight)) {
+    return `<td title="${escapeHtml(t('Historical booking weights are incomplete.'))}">${count} / –</td>`;
+  }
+  const label = details.exact ? t('Count / booked weight') : t('Count / approximate weight; historical entries use requested weights.');
+  return `<td title="${escapeHtml(label)}">${count} / ${details.exact ? '' : '≈'}${formatValue(details.weight, 2)}</td>`;
+}
+
 function getDerivedWorkerCount(worker) {
   return MODALITIES.reduce(function(total, modality) {
     return total + SKILLS.reduce(function(skillTotal, skill) {
@@ -1166,6 +1177,7 @@ function buildWorkerDetailRow(workerId) {
     <div class="worker-detail" onclick="event.stopPropagation()">
       <div class="worker-detail__box">
         <h4>${escapeHtml(t('Assignments by modality and skill'))}</h4>
+        <p class="log-detail">${escapeHtml(t('Count / booked weight. ≈ uses historical requested weights; personal factors may differ.'))}</p>
         <div data-part="matrix"></div>
       </div>
       <div class="worker-detail__box">
@@ -1205,11 +1217,7 @@ function refreshWorkerDetailData(row) {
   SKILLS.forEach(function(skill) {
     matrix += `<tr><td>${escapeHtml(getSkillLabel(skill))}</td>`;
     MODALITIES.forEach(function(mod) {
-      const count = getCellCount(worker, mod, skill);
-      const weight = getCellDerivedWeight(worker, mod, skill);
-      matrix += count
-        ? `<td title="${escapeHtml(t('count × configured weight'))}">${count} · ${formatValue(weight, 2)}</td>`
-        : '<td class="is-zero">–</td>';
+      matrix += assignmentWeightCell(worker, mod, skill);
     });
     matrix += '</tr>';
   });

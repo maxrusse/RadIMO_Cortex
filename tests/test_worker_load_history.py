@@ -18,6 +18,10 @@ def test_worker_load_keeps_recorded_balances_after_schedule_removal(monkeypatch,
     monkeypatch.setattr(routes, "global_worker_data", {
         "assignments_per_mod": {"ct": {"assigned": {"A": 3}}, "mr": None},
         "manual_weight_totals": {"corrected": -1.0},
+        "recent_distributions": [
+            {"canonical_id": "assigned", "actual_modality": "ct", "actual_skill": "A",
+             "weight": 1.0, "booked_weight": 2.0} for _ in range(3)
+        ],
     })
     frame = pd.DataFrame([{
         "PPL": "assigned", "start_time": pd.Timestamp("2026-10-15 07:00"),
@@ -44,6 +48,9 @@ def test_worker_load_keeps_recorded_balances_after_schedule_removal(monkeypatch,
     assert workers["assigned"]["skills"] == {"A": 3}
     assert workers["assigned"]["skill_weights"] == {"A": 6.0}
     assert workers["assigned"]["modalities"]["ct"]["assignment_total"] == 3
+    assert workers["assigned"]["modalities"]["ct"]["skill_weight_details"]["A"] == {
+        "count": 3, "weight": 6.0, "exact": True,
+    }
     assert workers["assigned"]["modalities"]["ct"]["start_time"] == ""
     assert workers["assigned"]["global_weight"] == 6.0
     assert workers["corrected"]["manual_adjustment"] == -1.0

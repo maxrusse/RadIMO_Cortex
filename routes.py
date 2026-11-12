@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import signal
@@ -1881,6 +1882,7 @@ def _record_recent_distribution(
     overflowed: bool,
     unresolved: bool,
     task_label: Optional[str],
+    booked_weight: Optional[float] = None,
 ) -> None:
     recent_events = global_worker_data.setdefault('recent_distributions', [])
     if not isinstance(recent_events, list):
@@ -1896,6 +1898,7 @@ def _record_recent_distribution(
         'actual_skill': normalize_skill(actual_skill) or actual_skill,
         'actual_modality': normalize_modality(actual_modality) or actual_modality,
         'weight': round(float(flow_weight or 0.0), 4),
+        'booked_weight': round(float(booked_weight), 4) if booked_weight is not None else None,
         'overflowed': bool(overflowed),
         'unresolved': bool(unresolved),
         'task_label': task_label or '',
@@ -4543,6 +4546,7 @@ def _finalize_assignment_candidate(
             strict=use_strict_weights,
         )
     candidate_shift_modifier = candidate.get('Modifier', 1.0)
+    balance_before = get_global_base_weighted_count(get_canonical_worker_id(person))
     canonical_id = update_global_assignment(
         person,
         actual_skill,
@@ -4586,6 +4590,7 @@ def _finalize_assignment_candidate(
         overflowed=overflowed,
         unresolved=unresolved,
         task_label=task_label,
+        booked_weight=get_global_base_weighted_count(canonical_id) - balance_before,
     )
 
     # Record skill-modality usage for analytics
@@ -5204,6 +5209,28 @@ def worker_load_monitor() -> Any:
     )
 
 
+def _assignment_weight_details() -> dict:
+    """Keep actual booking deltas distinct from legacy requested weights."""
+    details = {}
+    for event in global_worker_data.get('recent_distributions', []) or []:
+        key = (event.get('canonical_id'), event.get('actual_modality'), event.get('actual_skill'))
+        bucket = details.setdefault(key, {'count': 0, 'weight': 0.0, 'exact': True})
+        booked = event.get('booked_weight')
+        value = booked if booked is not None else event.get('weight')
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(value):
+            continue
+        bucket['count'] += 1
+        bucket['weight'] += value
+        bucket['exact'] = bucket['exact'] and booked is not None
+    for bucket in details.values():
+        bucket['weight'] = round(bucket['weight'], 4)
+    return details
+
+
 @routes.route('/api/worker-load/data', methods=['GET'])
 @admin_required
 def get_worker_load_data() -> Any:
@@ -5211,6 +5238,7 @@ def get_worker_load_data() -> Any:
     current_dt = get_local_now()
     global_hours_map = calculate_global_work_hours_now(current_dt)
     worker_name_display_style = get_worker_name_display_style()
+    assignment_weight_details = _assignment_weight_details()
 
     # Collect all unique workers across all modalities
     all_workers = {}  # canonical_id -> {name, shift_info, modality_data}
@@ -5321,6 +5349,11 @@ def get_worker_load_data() -> Any:
         hours_worked_now = round(float(global_hours_map.get(canonical_id, 0.0)), 4)
         worker_data['hours_worked_now'] = hours_worked_now
         worker_data['weight_per_hour'] = round(worker_data['global_weight'] / hours_worked_now, 4) if hours_worked_now > 0 else 0.0
+        for mod_key, mod_data in worker_data['modalities'].items():
+            mod_data['skill_weight_details'] = {
+                skill: assignment_weight_details.get((canonical_id, mod_key, skill))
+                for skill in SKILL_COLUMNS
+            }
 
         # Aggregate per-skill totals across modalities
         for skill in SKILL_COLUMNS:

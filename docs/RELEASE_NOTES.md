@@ -1,3 +1,19 @@
+# Update vom 12.11.2026: Buchungsgewichte in Personendetails (r8)
+
+Unter Auslastung zeigt die aufgeklappte Tabelle „Anzahl / gebuchtes Gewicht“
+statt Anzahl und nachträglich berechnetem Normalgewicht. Neue Buchungen speichern
+den tatsächlichen Gewichtszuwachs einschließlich Strict und persönlicher Faktoren.
+Ältere Verlaufseinträge werden mit ihrem Anfragegewicht als Näherung (≈) angezeigt;
+bei unvollständigem Verlauf wird kein Gewicht behauptet (Anzahl / –).
+Korrekturen bleiben separat und ändern keine Zuweisungszahlen.
+
+Numerische Spaltenüberschriften und Werte in der kompakten Auslastungstabelle
+sind einheitlich rechtsbündig. Die große Matrixansicht „Gewicht“ bleibt eine
+aus Anzahl und aktuellem Normalgewicht abgeleitete Ansicht.
+
+Das r8-Paket enthält keine aktive `config.yaml`. Serverkonfiguration und
+Laufzeitdaten bleiben erhalten; es werden keine Abhängigkeiten installiert.
+
 # Update vom 12.11.2026: Zeitlinie im Zeitplan (r7)
 
 Die rote Zeitlinie im Zeitplan aktualisiert sich jede Sekunde. Ihre Position
