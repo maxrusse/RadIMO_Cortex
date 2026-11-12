@@ -500,6 +500,7 @@ vendor_mappings:
     # Set all: -1 to exclude other modalities, then enable the target one(s).
 
     - match: "SBZ: Privatbefundung"
+      exclude_from_compact_stats: true
       type: "shift"
       day_parts: [VM, VMNM]
       times:
@@ -598,6 +599,7 @@ vendor_mappings:
 
 
     - match: "Kinderarzt"
+      exclude_from_compact_stats: true
       label: "Kinderarzt"
       type: "shift"
       times:

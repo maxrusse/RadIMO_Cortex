@@ -129,6 +129,7 @@
     .dev-bar__fill.is-low { background: #7fa8d1; }
     .dev-wrap { display: grid; grid-template-columns: 1fr 4.2rem; align-items: center; gap: 0.5rem; }
     .dev-label { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+    .dev-absolute { display: block; font-size: var(--fs-xs); font-weight: 400; white-space: nowrap; }
 
     /* Expanded detail row */
     .detail-row > td { padding: 0 !important; background: #fbfcfe !important; border-bottom: 2px solid var(--c-primary) !important; white-space: normal !important; }
@@ -346,7 +347,7 @@
             <th class="sortable num" data-sort="manual_adjustment" onclick="sortTable('global', 'manual_adjustment')">Correction</th>
             <th class="sortable num" data-sort="weight" onclick="sortTable('global', 'weight')">Total</th>
             <th class="sortable num" data-sort="weight_per_hour" onclick="sortTable('global', 'weight_per_hour')">Weight / Hour</th>
-            <th class="sortable num dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')" title="Weight per worked hour compared with the median of all workers with enough hours. Filters only select rows; totals stay global.">Deviation from median</th>
+            <th class="sortable num dev-cell" data-sort="deviation" onclick="sortTable('global', 'deviation')"><span>Deviation from median</span><small class="dev-absolute">% · <span>Weight / Hour</span></small></th>
           </tr>
         </thead>
         <tbody id="tbody-global"></tbody>

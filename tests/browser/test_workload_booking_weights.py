@@ -22,12 +22,13 @@ def test_detail_cell_uses_slash_and_actual_strict_total():
         }''')
         cell = page.locator('#row td')
         assert cell.inner_text() == '2 / 3.20'
-        assert cell.get_attribute('title') == 'Count / booked weight'
+        assert cell.get_attribute('title') is None
         page.evaluate('draw({count:2,weight:3.2,exact:false})')
         assert cell.inner_text() == '2 / 3.20'
-        assert 'historical' in cell.get_attribute('title')
+        assert cell.get_attribute('title') is None
         page.evaluate('draw({count:1,weight:1.6,exact:true})')
         assert cell.inner_text() == '2 / –'
+        assert cell.get_attribute('title') is None
         page.evaluate('draw(null)')
         assert cell.inner_text() == '2 / –'
         browser.close()

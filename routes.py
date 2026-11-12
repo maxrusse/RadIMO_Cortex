@@ -234,6 +234,7 @@ def _build_task_roles() -> list[dict[str, Any]]:
             'skill_overrides': skill_overrides,
             'modifier': rule.get('modifier', 1.0),
             'counts_for_hours': counts_for_hours,
+            'exclude_from_compact_stats': rule.get('exclude_from_compact_stats') is True,
             'allow_roster_exclusion_override': bool(rule.get('allow_roster_exclusion_override', False)),
         })
 
@@ -5231,6 +5232,18 @@ def _assignment_weight_details() -> dict:
     return details
 
 
+def _compact_excluded_role_names() -> set[str]:
+    """Configured role labels as persisted in the live schedule's task column."""
+    names = set()
+    for rule in APP_CONFIG.get('medweb_mapping', {}).get('rules', []):
+        if rule.get('exclude_from_compact_stats') is True:
+            names.update(str(rule[key]).strip() for key in ('match', 'label') if rule.get(key))
+    for entry in APP_CONFIG.get('synthetic_shifts', []):
+        if entry.get('exclude_from_compact_stats') is True:
+            names.update(str(entry[key]).strip() for key in ('use_shift', 'label') if entry.get(key))
+    return names
+
+
 @routes.route('/api/worker-load/data', methods=['GET'])
 @admin_required
 def get_worker_load_data() -> Any:
@@ -5239,6 +5252,8 @@ def get_worker_load_data() -> Any:
     global_hours_map = calculate_global_work_hours_now(current_dt)
     worker_name_display_style = get_worker_name_display_style()
     assignment_weight_details = _assignment_weight_details()
+    excluded_role_names = _compact_excluded_role_names()
+    compact_excluded_ids = set()
 
     # Collect all unique workers across all modalities
     all_workers = {}  # canonical_id -> {name, shift_info, modality_data}
@@ -5252,6 +5267,12 @@ def get_worker_load_data() -> Any:
         mod_assignments = global_worker_data.get('assignments_per_mod', {}).get(modality, {}) or {}
 
         for idx, row in df.iterrows():
+            tasks = row.get('tasks', '')
+            task_names = set(_parse_tasks(tasks))
+            if isinstance(tasks, str):
+                task_names.add(tasks.strip())
+            if task_names & excluded_role_names:
+                compact_excluded_ids.add(get_canonical_worker_id(row['PPL']))
             worker_name = row['PPL']
             canonical_id = get_canonical_worker_id(worker_name)
 
@@ -5342,6 +5363,7 @@ def get_worker_load_data() -> Any:
 
     # Add global weighted counts and assignments
     for canonical_id, worker_data in all_workers.items():
+        worker_data['exclude_from_compact_stats'] = canonical_id in compact_excluded_ids
         worker_data['balance_weight'] = round(float(get_global_base_weighted_count(canonical_id)), 4)
         worker_data['manual_adjustment'] = round(float(get_manual_weight_adjustment(canonical_id)), 4)
         worker_data['global_weight'] = round(float(get_global_weighted_count(canonical_id)), 4)
@@ -5393,7 +5415,8 @@ def get_worker_load_data() -> Any:
     max_weight_per_hour = max((w.get('weight_per_hour', 0.0) for w in all_workers.values()), default=0.0)
     valid_workers = [
         worker for worker in all_workers.values()
-        if float(worker.get('hours_worked_now', 0.0) or 0.0) >= VALID_WORKER_THRESHOLD_HOURS
+        if not worker.get('exclude_from_compact_stats')
+        and float(worker.get('hours_worked_now', 0.0) or 0.0) >= VALID_WORKER_THRESHOLD_HOURS
     ]
     valid_workers.sort(key=lambda worker: float(worker.get('weight_per_hour', 0.0) or 0.0))
 

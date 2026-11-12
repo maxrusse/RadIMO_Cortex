@@ -1,3 +1,21 @@
+# Update vom 12.11.2026: Kompakt-Auswertung und Medianabweichung (r9)
+
+Rollen können mit `exclude_from_compact_stats: true` aus der Kompakt-Auswertung
+ausgenommen werden. Hat eine Person am Tag eine solche Rolle, entfällt sie
+vollständig aus Kompakt, dessen Summen und Medianvergleich. Matrix, Tagesbild,
+Protokoll, gespeicherte Buchungen und Zuweisungslogik bleiben erhalten.
+In der Demo-Vorlage ist dies für „SBZ: Privatbefundung“ und „Kinderarzt“ gesetzt.
+
+Die Medianabweichung zeigt weiter Prozent und die bisherige Balkenskalierung.
+Zusätzlich steht darunter die absolute Differenz in Gewicht pro Stunde.
+Die Gewichtszellen in den Personendetails verwenden keine Hovertexte mehr.
+
+Das r9-Paket enthält auf ausdrücklichen Wunsch die angepasste Live-Konfiguration
+`config_live_20261112.yaml` als aktive `app/config.yaml`. Diese ersetzt nach
+vollständigem Backup die Serverkonfiguration. Zugangsdaten bleiben ausschließlich
+im privaten Paket; die öffentliche Demo-Vorlage behält ihre drei radimo-Passwörter.
+Es werden keine Betriebssystem- oder Abhängigkeitspakete aktualisiert.
+
 # Update vom 12.11.2026: Buchungsgewichte in Personendetails (r8)
 
 Unter Auslastung zeigt die aufgeklappte Tabelle „Anzahl / gebuchtes Gewicht“

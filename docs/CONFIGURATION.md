@@ -166,3 +166,29 @@ Die öffentliche Demo-Vorlage verwendet für `access_password`, `admin_password`
 und `sysadmin_password` jeweils `radimo`. Die aktive lokale `config.yaml` bleibt
 ungetrackt. Bei einem Paket ohne aktive Konfiguration wird die vorhandene
 Serverkonfiguration beim Deployment erhalten; die Demo-Datei ersetzt sie nicht.
+
+### Rollen aus der Kompakt-Auswertung ausschließen
+
+Unter `vendor_mappings.medweb.rules` kann eine Rolle
+`exclude_from_compact_stats: true` erhalten. Standard ist `false`.
+Beispiel innerhalb einer bestehenden Regel:
+
+```yaml
+- match: "SBZ: Privatbefundung"
+  exclude_from_compact_stats: true
+  type: "shift"
+  # übrige Rollenparameter wie bisher
+```
+
+Sobald eine Person diese Rolle im Live-Tagesplan hat, entfällt die ganze Person
+aus Auslastung → Kompakt einschließlich Summen und Medianvergleich, auch bei
+zusätzlichen normalen Rollen. Rollen werden über die gespeicherten Tätigkeitsnamen
+(`match` beziehungsweise `label`) zugeordnet. Nach Planänderungen wird der
+Ausschluss neu ausgewertet. Die Regel entfernt keine Buchungen, Gewichte oder
+Stunden. Matrix, Tagesbild und Protokoll zeigen die Daten weiterhin vollständig.
+Ein synthetischer Eintrag kann das Feld ebenfalls tragen; seine `use_shift`- oder
+`label`-Rolle wird dann aus Kompakt ausgeschlossen.
+
+Die Abweichung vom Median zeigt weiterhin Prozent. Die zusätzliche Zeile `/h`
+bezeichnet `Gewicht pro Stunde der Person − Median Gewicht pro Stunde`.
+Mindeststunden, Vergleichsgruppe und prozentuale Balkenskalierung bleiben erhalten.

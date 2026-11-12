@@ -116,6 +116,10 @@ function getFilteredWorkers() {
   });
 }
 
+function getCompactWorkers(workers = workersData) {
+  return workers.filter(worker => worker.exclude_from_compact_stats !== true);
+}
+
 function getValidWorkers(workers) {
   const threshold = getValidWorkerThresholdHours();
   return workers.filter(function(worker) {
@@ -374,7 +378,7 @@ function getSortValue(worker, column, tableType) {
   if (column === 'weight_per_hour') return Number(worker.weight_per_hour || 0);
   if (column === 'hours') return Number(worker.hours_worked_now || 0);
   if (column === 'deviation') {
-    const deviation = getWorkerDeviation(worker, getRatioBenchmark(workersData));
+    const deviation = getWorkerDeviation(worker, getRatioBenchmark(getCompactWorkers()));
     return deviation === null ? -Infinity : deviation;
   }
   return 0;
@@ -443,10 +447,9 @@ function assignmentWeightCell(worker, modality, skill) {
   if (!count) return '<td class="is-zero">–</td>';
   const details = worker.modalities?.[modality]?.skill_weight_details?.[skill];
   if (!details || details.count !== count || !Number.isFinite(details.weight)) {
-    return `<td title="${escapeHtml(t('Historical booking weights are incomplete.'))}">${count} / –</td>`;
+    return `<td>${count} / –</td>`;
   }
-  const label = details.exact ? t('Count / booked weight') : t('Count / weight; historical entries use requested weights.');
-  return `<td title="${escapeHtml(label)}">${count} / ${formatValue(details.weight, 2)}</td>`;
+  return `<td>${count} / ${formatValue(details.weight, 2)}</td>`;
 }
 
 function getDerivedWorkerCount(worker) {
@@ -477,6 +480,13 @@ function formatDeviation(deviation) {
   return `${percent > 0 ? '+' : ''}${percent} %`;
 }
 
+function formatAbsoluteDeviation(worker, benchmark) {
+  if (getWorkerDeviation(worker, benchmark) === null) return '–';
+  const value = Number(worker.weight_per_hour || 0) - benchmark;
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded > 0 ? '+' : ''}${formatValue(rounded, 2)} /h`;
+}
+
 function deviationBar(deviation) {
   if (deviation === null) return '<div class="dev-bar"></div>';
   const clamped = Math.max(-1, Math.min(1, deviation));
@@ -495,10 +505,10 @@ function renderGlobalTable() {
   const thresholdEl = document.getElementById('valid-threshold');
   if (thresholdEl) thresholdEl.textContent = formatValue(getValidWorkerThresholdHours(), 1);
 
-  const filteredWorkers = getFilteredWorkers();
+  const filteredWorkers = getCompactWorkers(getFilteredWorkers());
   // Keep the worker with an open detail/correction form visible even if a filter would hide it.
   const expandedWorker = expandedWorkerId ? findWorker(expandedWorkerId) : null;
-  if (expandedWorker && !filteredWorkers.includes(expandedWorker)) filteredWorkers.push(expandedWorker);
+  if (expandedWorker && !expandedWorker.exclude_from_compact_stats && !filteredWorkers.includes(expandedWorker)) filteredWorkers.push(expandedWorker);
   const sorted = sortWorkers(filteredWorkers, 'global');
   const preservedDetail = document.querySelector('#tbody-global tr.detail-row');
   if (!sorted.length) {
@@ -506,7 +516,7 @@ function renderGlobalTable() {
     return;
   }
 
-  const benchmark = getRatioBenchmark(workersData);
+  const benchmark = getRatioBenchmark(getCompactWorkers());
   let html = '';
   let totals = { hours: 0, balance: 0, manual: 0, weight: 0 };
 
@@ -533,7 +543,7 @@ function renderGlobalTable() {
       <td class="weight-value ${manualAdjustment > 0 ? 'text-red' : (manualAdjustment < 0 ? 'text-green' : 'text-muted')}">${manualAdjustment > 0 ? '+' : ''}${formatValue(manualAdjustment, 2)}</td>
       <td class="weight-value">${formatValue(weight, 2)}</td>
       <td class="weight-value ${ratioColor.text}">${formatValue(ratio, 2)}</td>
-      <td class="dev-cell"><div class="dev-wrap">${deviationBar(deviation)}<span class="dev-label ${ratioColor.text}">${formatDeviation(deviation)}</span></div></td>
+      <td class="dev-cell"><div class="dev-wrap">${deviationBar(deviation)}<span class="dev-label ${ratioColor.text}">${formatDeviation(deviation)}<small class="dev-absolute">${formatAbsoluteDeviation(worker, benchmark)}</small></span></div></td>
     </tr>`;
     if (isOpen) html += `<tr class="detail-placeholder" data-worker-id="${escapeHtml(workerId)}"></tr>`;
   });
