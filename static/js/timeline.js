@@ -388,18 +388,19 @@ const TimelineChart = (function() {
     if (existing) existing.remove();
 
     const now = new Date();
-    const currentHour = now.getHours() + now.getMinutes() / 60;
+    const currentHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
 
     // Only show if within timeline bounds
     if (currentHour < TIMELINE_START || currentHour > TIMELINE_END) return;
 
     const percent = ((currentHour - TIMELINE_START) / TIMELINE_HOURS) * 100;
 
-    const workerColWidth = getComputedStyle(document.documentElement).getPropertyValue('--worker-col-width') || '180px';
     const line = document.createElement('div');
     line.id = lineId;
     line.className = 'current-time-line';
-    line.style.left = `calc(${workerColWidth.trim()} + (100% - ${workerColWidth.trim()}) * ${percent / 100})`;
+    // Resolve the width on this grid: Schedule overrides the shared root width.
+    // Keeping the variable in CSS also tracks viewport-dependent column widths.
+    line.style.left = `calc(var(--worker-col-width, 180px) + (100% - var(--worker-col-width, 180px)) * ${percent / 100})`;
 
     gridEl.appendChild(line);
   }

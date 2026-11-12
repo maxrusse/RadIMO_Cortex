@@ -97,6 +97,8 @@ function isValidTimelineEntry(entry, skillColumns) {
  * @returns {void}
  */
 function buildTimeline() {
+  window.clearInterval(currentTimeIntervalId);
+  window.clearInterval(presentTimeIntervalId);
   const grid = document.getElementById('timeline-grid');
   const header = document.getElementById('time-header');
 
@@ -184,11 +186,10 @@ function buildTimeline() {
   });
 
   // Set up time update interval
-  if (currentTimeIntervalId) {
-    window.clearInterval(currentTimeIntervalId);
-  }
   currentTimeIntervalId = window.setInterval(function() {
     TimelineChart.updateCurrentTimeLine(grid, 'current-time-line');
+  }, 1000);
+  presentTimeIntervalId = window.setInterval(function() {
     presentWorkers = computePresentWorkers(timelineData);
     markPresentRows();
   }, 60000);
@@ -196,6 +197,7 @@ function buildTimeline() {
 }
 
 let presentWorkers = new Set();
+let presentTimeIntervalId = null;
 
 /**
  * Workers with a shift segment (not a gap) covering the current time.

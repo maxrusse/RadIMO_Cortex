@@ -1,3 +1,12 @@
+# Update vom 12.11.2026: Zeitlinie im Zeitplan (r7)
+
+Die rote Zeitlinie im Zeitplan aktualisiert sich jede Sekunde. Ihre Position
+berücksichtigt die tatsächliche Breite der Namensspalte, auch nach einer
+Änderung der Fenstergröße. Die Anwesenheitsprüfung bleibt im Minutentakt.
+
+Das r7-Updatepaket enthält keine aktive `config.yaml`; die vorhandene
+Serverkonfiguration bleibt erhalten. Es installiert keine Abhängigkeiten.
+
 # Update vom 11.11.2026: Oberfläche und Sysadmin-Zugang
 
 - Verwaltung öffnet vor dem Seiteninhalt.
