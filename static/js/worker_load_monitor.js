@@ -1177,7 +1177,7 @@ function buildWorkerDetailRow(workerId) {
     <div class="worker-detail" onclick="event.stopPropagation()">
       <div class="worker-detail__box">
         <h4>${escapeHtml(t('Assignments by modality and skill'))}</h4>
-        <p class="log-detail">${escapeHtml(t('Count / booked weight. ≈ uses historical requested weights; personal factors may differ.'))}</p>
+        <p class="log-detail">${escapeHtml(t('Count / booked weight. ≈ uses historical requested weights; personal factors may differ.'))} ${escapeHtml(t('– = booking weight is incomplete or unavailable.'))}</p>
         <div data-part="matrix"></div>
       </div>
       <div class="worker-detail__box">

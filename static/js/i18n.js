@@ -572,6 +572,7 @@
     ['Count / approximate weight; historical entries use requested weights.', 'Anzahl / ungefähres Gewicht; ältere Einträge verwenden Anfragegewichte.'],
     ['Historical booking weights are incomplete.', 'Historische Buchungsgewichte sind unvollständig.'],
     ['Count / booked weight. ≈ uses historical requested weights; personal factors may differ.', 'Anzahl / gebuchtes Gewicht. ≈ verwendet historische Anfragegewichte; persönliche Faktoren können abweichen.'],
+    ['– = booking weight is incomplete or unavailable.', '– = Buchungsgewicht unvollständig oder nicht verfügbar.'],
     ['Recent assignments', 'Letzte Zuweisungen'],
     ['Corrections today', 'Korrekturen heute'],
     ['Book correction', 'Korrektur buchen'],
