@@ -3,8 +3,8 @@
 Unter Auslastung zeigt die aufgeklappte Tabelle „Anzahl / gebuchtes Gewicht“
 statt Anzahl und nachträglich berechnetem Normalgewicht. Neue Buchungen speichern
 den tatsächlichen Gewichtszuwachs einschließlich Strict und persönlicher Faktoren.
-Ältere Verlaufseinträge werden mit ihrem Anfragegewicht als Näherung (≈) angezeigt;
-bei unvollständigem Verlauf wird kein Gewicht behauptet (Anzahl / –).
+Ältere Verlaufseinträge verwenden ihr gespeichertes Anfragegewicht; die Legende
+erklärt diesen Unterschied. Bei unvollständigem Verlauf steht Anzahl / –.
 Korrekturen bleiben separat und ändern keine Zuweisungszahlen.
 
 Numerische Spaltenüberschriften und Werte in der kompakten Auslastungstabelle

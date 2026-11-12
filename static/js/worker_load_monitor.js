@@ -445,8 +445,8 @@ function assignmentWeightCell(worker, modality, skill) {
   if (!details || details.count !== count || !Number.isFinite(details.weight)) {
     return `<td title="${escapeHtml(t('Historical booking weights are incomplete.'))}">${count} / –</td>`;
   }
-  const label = details.exact ? t('Count / booked weight') : t('Count / approximate weight; historical entries use requested weights.');
-  return `<td title="${escapeHtml(label)}">${count} / ${details.exact ? '' : '≈'}${formatValue(details.weight, 2)}</td>`;
+  const label = details.exact ? t('Count / booked weight') : t('Count / weight; historical entries use requested weights.');
+  return `<td title="${escapeHtml(label)}">${count} / ${formatValue(details.weight, 2)}</td>`;
 }
 
 function getDerivedWorkerCount(worker) {
@@ -1177,7 +1177,7 @@ function buildWorkerDetailRow(workerId) {
     <div class="worker-detail" onclick="event.stopPropagation()">
       <div class="worker-detail__box">
         <h4>${escapeHtml(t('Assignments by modality and skill'))}</h4>
-        <p class="log-detail">${escapeHtml(t('Count / booked weight. ≈ uses historical requested weights; personal factors may differ.'))} ${escapeHtml(t('– = booking weight is incomplete or unavailable.'))}</p>
+        <p class="log-detail">${escapeHtml(t('Count / weight. New entries: booked weight. Older entries: requested weight; personal factors may differ.'))} ${escapeHtml(t('– = booking weight is incomplete or unavailable.'))}</p>
         <div data-part="matrix"></div>
       </div>
       <div class="worker-detail__box">

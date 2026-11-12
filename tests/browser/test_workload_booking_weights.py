@@ -24,7 +24,7 @@ def test_detail_cell_uses_slash_and_actual_strict_total():
         assert cell.inner_text() == '2 / 3.20'
         assert cell.get_attribute('title') == 'Count / booked weight'
         page.evaluate('draw({count:2,weight:3.2,exact:false})')
-        assert cell.inner_text() == '2 / ≈3.20'
+        assert cell.inner_text() == '2 / 3.20'
         assert 'historical' in cell.get_attribute('title')
         page.evaluate('draw({count:1,weight:1.6,exact:true})')
         assert cell.inner_text() == '2 / –'
